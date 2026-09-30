@@ -1,1 +1,1 @@
-# kingside-chess
+# kingside-chess - Шахматный сайт, созданный при помощи нейросетей типа "deepseek".
