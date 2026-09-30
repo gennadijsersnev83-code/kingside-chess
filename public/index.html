@@ -661,7 +661,7 @@
   <section id="arenasScreen" class="screen">
     <div class="arenasHeader">
       <h1>Турниры</h1>
-      <button class="primary" onclick="refreshArenas()">↻ Обновить</button>
+      <button class="primary" onclick="refreshArenas(true)">↻ Обновить</button>
     </div>
     <div class="arenasGridWrap" id="arenasGridWrap">
       <div class="arenasEmpty">Загрузка расписания...</div>
@@ -856,7 +856,10 @@
 (function() {
   'use strict';
 
-  const socket = io();
+  const socket = io({
+    transports: ['websocket'],
+    upgrade: false
+  });
 
   let me = null;
   let myColor = 'w';
@@ -876,8 +879,15 @@
   let currentArenaId = null;
   let currentArenaState = null;
   let arenaPageRefreshHandle = null;
+  let arenaGamesRefreshHandle = null;
   let currentGameIsArena = false;
   let currentArenaName = null;
+
+  let lastArenasHash = '';
+  let lastArenaStateHash = '';
+  let lastArenaGamesHash = '';
+  let lastBoardHash = '';
+  let loadArenaPageBusy = false;
 
   let moveHistory = [];
   let moveFens = [];
@@ -1114,6 +1124,10 @@
 
   function renderBoard() {
     const fenToShow = (viewIndex >= 0 && viewIndex < moveFens.length) ? moveFens[viewIndex] : currentFen;
+    const hash = fenToShow + '|' + (selected ? selected.join(',') : '') + '|' + viewIndex + '|' + (lastMove ? lastMove.from.join(',') + lastMove.to.join(',') : '') + '|' + myColor + '|' + boardFlipped + '|' + legalMoves.map(m => m.join(',')).join(';');
+    if (hash === lastBoardHash) return;
+    lastBoardHash = hash;
+
     const state = parseFen(fenToShow);
     const boardEl = document.getElementById('board');
     boardEl.innerHTML = '';
@@ -1294,7 +1308,7 @@
       a.classList.toggle('active', a.dataset.nav === name);
     });
     if (name === 'lobby') refreshLobbies();
-    if (name === 'arenas') refreshArenas();
+    if (name === 'arenas') refreshArenas(true);
   }
   window.navTo = navTo;
 
@@ -1407,6 +1421,7 @@
       opponentName = '—'; opponentRating = null;
       currentGameIsArena = false;
       currentArenaName = null;
+      lastBoardHash = '';
       resetGameUI();
       hideGameResultBar();
       navTo('game');
@@ -1435,6 +1450,7 @@
     gameEnded = false;
     currentGameIsArena = false;
     currentArenaName = null;
+    lastBoardHash = '';
     document.getElementById('chatMessages').innerHTML = '';
   }
 
@@ -1523,7 +1539,7 @@
   }
   window.offerDraw = offerDraw;
 
-  function flipBoard() { boardFlipped = !boardFlipped; renderBoard(); }
+  function flipBoard() { boardFlipped = !boardFlipped; lastBoardHash = ''; renderBoard(); }
   window.flipBoard = flipBoard;
 
   function showDrawOfferDialog(from) {
@@ -1680,12 +1696,16 @@
     });
   }
 
-  // ===================== АРЕНЫ =====================
-  function refreshArenas() {
+  // ===================== АРЕНЫ (ОПТИМИЗИРОВАНО) =====================
+  function refreshArenas(force) {
+    if (!force && !document.getElementById('arenasScreen').classList.contains('active')) return;
     socket.emit('getArenas', (list) => {
       arenasCache = list || [];
       socket.emit('getMyArenaStates', (states) => {
         arenaStatesCache = states || {};
+        const hash = JSON.stringify(arenasCache) + '|' + JSON.stringify(arenaStatesCache);
+        if (hash === lastArenasHash && !force) return;
+        lastArenasHash = hash;
         renderArenasGrid();
       });
     });
@@ -1696,11 +1716,14 @@
           arenasCache = list || [];
           socket.emit('getMyArenaStates', (states) => {
             arenaStatesCache = states || {};
+            const hash = JSON.stringify(arenasCache) + '|' + JSON.stringify(arenaStatesCache);
+            if (hash === lastArenasHash) return;
+            lastArenasHash = hash;
             renderArenasGrid();
           });
         });
       }
-    }, 15000);
+    }, 20000);
   }
   window.refreshArenas = refreshArenas;
 
@@ -1713,16 +1736,6 @@
     const m = Math.floor(total / 60);
     const s = total % 60;
     return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
-  }
-  function formatDurationHuman(ms) {
-    const s = Math.floor(ms / 1000);
-    if (s < 60) return s + ' сек';
-    const m = Math.floor(s / 60);
-    if (m < 60) return m + ' мин';
-    const h = Math.floor(m / 60);
-    const mm = m % 60;
-    if (h < 24) return h + ' ч ' + (mm ? mm + ' мин' : '');
-    return Math.floor(h / 24) + ' дн';
   }
 
   function renderArenasGrid() {
@@ -1800,34 +1813,49 @@
     show('arenaPageScreen');
     document.querySelectorAll('#mainNav a').forEach(a => a.classList.remove('active'));
     document.getElementById('arenaChatMessages').innerHTML = '';
+    lastArenaStateHash = '';
+    lastArenaGamesHash = '';
     loadArenaPage();
     if (arenaPageRefreshHandle) clearInterval(arenaPageRefreshHandle);
     arenaPageRefreshHandle = setInterval(() => {
       if (document.getElementById('arenaPageScreen').classList.contains('active')) {
         loadArenaPage();
       }
-    }, 3000);
+    }, 5000);
+    if (arenaGamesRefreshHandle) clearInterval(arenaGamesRefreshHandle);
+    arenaGamesRefreshHandle = setInterval(() => {
+      if (document.getElementById('arenaPageScreen').classList.contains('active')) {
+        renderArenaGamesList();
+      }
+    }, 10000);
   }
   window.openArenaPage = openArenaPage;
 
   function loadArenaPage() {
     if (!currentArenaId) return;
+    if (loadArenaPageBusy) return;
+    loadArenaPageBusy = true;
     const arena = arenasCache.find(a => a.id === currentArenaId);
     if (!arena) {
       socket.emit('getArenas', (list) => {
         arenasCache = list || [];
+        loadArenaPageBusy = false;
         const a2 = arenasCache.find(x => x.id === currentArenaId);
         if (a2) loadArenaPage();
       });
       return;
     }
     socket.emit('getArenaState', { arenaId: currentArenaId }, (state) => {
+      loadArenaPageBusy = false;
       currentArenaState = state;
       renderArenaPage(arena, state);
       updateArenaJoinButton(state);
       renderArenaPairingBox(state);
-      renderArenaParticipants(arena, state);
-      renderArenaGamesList();
+      const stateHash = JSON.stringify(state.participants) + '|' + state.paused + '|' + state.phase;
+      if (stateHash !== lastArenaStateHash) {
+        lastArenaStateHash = stateHash;
+        renderArenaParticipants(arena, state);
+      }
     });
   }
 
@@ -1965,6 +1993,9 @@
     const el = document.getElementById('arenaGamesList');
     if (!el) return;
     socket.emit('getArenaGames', { arenaId: currentArenaId }, (list) => {
+      const hash = JSON.stringify(list);
+      if (hash === lastArenaGamesHash) return;
+      lastArenaGamesHash = hash;
       if (!list || !list.length) {
         el.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>';
         return;
@@ -2008,8 +2039,9 @@
     if (!currentArenaId) return;
     socket.emit('joinArena', { arenaId: currentArenaId }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
+      lastArenaStateHash = '';
       loadArenaPage();
-      refreshArenas();
+      refreshArenas(true);
     });
   }
   window.joinCurrentArena = joinCurrentArena;
@@ -2018,8 +2050,9 @@
     if (!currentArenaId) return;
     socket.emit('pauseArena', { arenaId: currentArenaId }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
+      lastArenaStateHash = '';
       loadArenaPage();
-      refreshArenas();
+      refreshArenas(true);
     });
   }
   window.pauseCurrentArena = pauseCurrentArena;
@@ -2029,8 +2062,9 @@
     if (!confirm('Отменить участие?')) return;
     socket.emit('leaveArena', { arenaId: currentArenaId }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
+      lastArenaStateHash = '';
       loadArenaPage();
-      refreshArenas();
+      refreshArenas(true);
     });
   }
   window.leaveCurrentArena = leaveCurrentArena;
@@ -2071,22 +2105,14 @@
     document.getElementById('topClock').classList.toggle('low', oppTime <= 20);
     document.getElementById('bottomClock').classList.toggle('low', myTime <= 20);
   }
-  function startLocalTicker() {
-    if (localTimerHandle) clearInterval(localTimerHandle);
-    localTimerHandle = setInterval(() => {
-      if (!gameActive || gameEnded) return;
-      const state = parseFen(currentFen);
-      if (state.turn === myColor) myTime = Math.max(0, myTime - 1);
-      else oppTime = Math.max(0, oppTime - 1);
-      updateTimers();
-    }, 1000);
-  }
 
   socket.on('onlineCount', n => {
     const el = document.getElementById('online');
     if (el) el.textContent = n;
   });
-  socket.on('lobbiesUpdate', () => refreshLobbies());
+  socket.on('lobbiesUpdate', () => {
+    if (document.getElementById('lobbyScreen').classList.contains('active')) refreshLobbies();
+  });
 
   socket.on('gameStart', ({ color, opponent, opponentRating: oppRating, time, inc: gameInc, lobbyId: id, fen, chat, arenaId, arenaName }) => {
     if (id) lobbyId = id;
@@ -2104,6 +2130,7 @@
     currentGameIsArena = !!arenaId;
     currentArenaId = arenaId || null;
     currentArenaName = arenaName || null;
+    lastBoardHash = '';
 
     document.getElementById('bottomName').textContent = me.username;
     document.getElementById('bottomRating').textContent = me.rating;
@@ -2126,7 +2153,6 @@
     renderBoard();
     renderMoves();
     updateTimers();
-    startLocalTicker();
   });
 
   socket.on('boardUpdate', ({ fen, san }) => {
@@ -2178,19 +2204,26 @@
   });
 
   socket.on('arenaUpdate', ({ arenaId }) => {
-    if (currentArenaId === arenaId) loadArenaPage();
-    refreshArenas();
+    if (currentArenaId === arenaId) {
+      lastArenaStateHash = '';
+      if (document.getElementById('arenaPageScreen').classList.contains('active')) loadArenaPage();
+    }
+    if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas();
   });
   socket.on('arenaStarted', ({ arenaId }) => {
-    if (currentArenaId === arenaId) loadArenaPage();
-    refreshArenas();
+    if (currentArenaId === arenaId) {
+      lastArenaStateHash = '';
+      if (document.getElementById('arenaPageScreen').classList.contains('active')) loadArenaPage();
+    }
+    if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas();
   });
   socket.on('arenaFinished', ({ arenaId, arenaName, top3 }) => {
     if (currentArenaId === arenaId) {
-      loadArenaPage();
+      lastArenaStateHash = '';
+      if (document.getElementById('arenaPageScreen').classList.contains('active')) loadArenaPage();
       if (top3 && top3.length) showArenaWinnerBanner(top3);
     }
-    refreshArenas();
+    if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas();
   });
 
   document.getElementById('password').addEventListener('keydown', (e) => {
