@@ -8,10 +8,9 @@ const crypto = require('crypto');
 const app = express();
 const server = http.createServer(app);
 
-// Socket.io: принудительно WebSocket, чтобы не было лагов на Render
+// Socket.io: пробуем WebSocket, если не получится — polling (Render часто режет ws)
 const io = new Server(server, {
   cors: { origin: '*' },
-  transports: ['websocket'],
   pingTimeout: 60000,
   pingInterval: 25000
 });
@@ -105,7 +104,6 @@ const arenas = new Map();
 function broadcastOnline() { io.emit('onlineCount', online.size); }
 function broadcastLobbies() { io.emit('lobbiesUpdate'); }
 
-// Сброс залипших isPlaying
 function cleanupStuckPlaying() {
   for (const state of arenas.values()) {
     for (const p of state.participants.values()) {
@@ -709,6 +707,22 @@ io.on('connection', (socket) => {
     socket.lobbyId = id;
     cb({ ok: true, id });
     broadcastLobbies();
+  });
+
+  // Отмена своего лобби (хост уходит из зала ожидания)
+  socket.on('cancelLobby', ({ id }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
+    const l = lobbies.get(id);
+    if (!l) return cb({ ok: false, msg: 'Лобби не найдено' });
+    if (l.host !== socket.username) return cb({ ok: false, msg: 'Это не ваше лобби' });
+    if (l.started) return cb({ ok: false, msg: 'Партия уже началась' });
+    io.to(id).emit('opponentLeft');
+    lobbies.delete(id);
+    socketToLobby.delete(socket.id);
+    socket.lobbyId = null;
+    broadcastLobbies();
+    cb({ ok: true });
   });
 
   socket.on('joinLobby', ({ id }, cb) => {
