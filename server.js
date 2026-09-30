@@ -7,7 +7,14 @@ const crypto = require('crypto');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+
+// Socket.io: принудительно WebSocket, чтобы не было лагов на Render
+const io = new Server(server, {
+  cors: { origin: '*' },
+  transports: ['websocket'],
+  pingTimeout: 60000,
+  pingInterval: 25000
+});
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -98,7 +105,7 @@ const arenas = new Map();
 function broadcastOnline() { io.emit('onlineCount', online.size); }
 function broadcastLobbies() { io.emit('lobbiesUpdate'); }
 
-// Сброс залипших isPlaying у всех арен, если лобби нет или оно завершено
+// Сброс залипших isPlaying
 function cleanupStuckPlaying() {
   for (const state of arenas.values()) {
     for (const p of state.participants.values()) {
@@ -626,10 +633,12 @@ io.on('connection', (socket) => {
       return cb({ ok: false, msg: 'Логин: буквы, цифры, _ и -' });
     }
     if (password.length < 3) return cb({ ok: false, msg: 'Пароль минимум 3 символа' });
+    if (password.length > 128) return cb({ ok: false, msg: 'Пароль слишком длинный' });
 
     let user = db.users[username];
     if (user) {
       if (!verifyPassword(password, user.salt, user.passwordHash)) {
+        console.warn(`[auth] неверный пароль для ${username}`);
         return cb({ ok: false, msg: 'Неверный пароль' });
       }
     } else {
@@ -1011,12 +1020,11 @@ io.on('connection', (socket) => {
 loadDB();
 getArenaSchedule(72);
 
-const PORT = process.env.PORT || 80;
+const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log('==================================================');
   console.log('  Kingside — сервер запущен');
-  console.log(`  Локально:  http://kingside`);
-  console.log(`  По сети:   http://<ваш-IP>`);
+  console.log(`  Локально:  http://localhost:${PORT}`);
   console.log(`  Порт:      ${PORT}`);
   console.log(`  База:      ${DB_PATH}`);
   console.log('==================================================');
