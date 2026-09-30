@@ -8,21 +8,20 @@ const crypto = require('crypto');
 const app = express();
 const server = http.createServer(app);
 
-// Socket.io: только WebSocket. Railway отлично его держит, polling не нужен.
+// Socket.io: пробуем WebSocket, если не получится — polling (Railway держит ws, Render иногда режет)
 const io = new Server(server, {
   cors: { origin: '*' },
-  transports: ['websocket'],
-  pingTimeout: 30000,
-  pingInterval: 20000,
-  upgrade: false
+  transports: ['websocket', 'polling'],
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ======================= ХРАНИЛИЩЕ =======================
-// Railway: постоянный диск в /app/data.
-// Локально: data.json рядом с сервером.
-// Render: /data (если диск подключён) — иначе тоже работает, но данные сбросятся.
+// Railway: постоянный Volume в /app/data.
+// Render: /data (если подключён диск, но на Free его нет).
+// Локально: data.json рядом с server.js.
 const DB_PATH = process.env.RAILWAY_ENVIRONMENT
   ? path.join('/app/data', 'data.json')
   : (process.env.RENDER ? '/data/data.json' : path.join(__dirname, 'data.json'));
@@ -32,7 +31,9 @@ let db = { users: {}, games: [] };
 function loadDB() {
   try {
     const dir = path.dirname(DB_PATH);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     if (fs.existsSync(DB_PATH)) {
       const raw = fs.readFileSync(DB_PATH, 'utf8');
       const parsed = JSON.parse(raw);
@@ -51,26 +52,22 @@ function loadDB() {
 }
 
 let saveTimer = null;
-let saveDirty = false;
 function saveDB() {
-  saveDirty = true;
   if (saveTimer) return;
   saveTimer = setTimeout(() => {
     saveTimer = null;
-    if (!saveDirty) return;
-    saveDirty = false;
-    try { fs.writeFileSync(DB_PATH, JSON.stringify(db), 'utf8'); }
+    try { fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), 'utf8'); }
     catch (err) { console.error('[DB] Ошибка записи:', err.message); }
-  }, 500);
+  }, 150);
 }
 function saveDBNow() {
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
-  saveDirty = false;
   try {
     const dir = path.dirname(DB_PATH);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(DB_PATH, JSON.stringify(db), 'utf8');
-  } catch (err) { console.error('[DB] Ошибка записи:', err.message); }
+    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), 'utf8');
+  }
+  catch (err) { console.error('[DB] Ошибка записи:', err.message); }
 }
 
 // ======================= ПАРОЛИ =======================
@@ -97,7 +94,7 @@ function eloDelta(myRating, oppRating, score, k) {
 
 // ======================= УТИЛИТЫ =======================
 function genId() {
-  return Math.random().toString(36).slice(2, 10);
+  return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6);
 }
 function publicUser(name) {
   const u = db.users[name];
@@ -136,7 +133,7 @@ function cleanupStuckPlaying() {
     }
   }
 }
-setInterval(cleanupStuckPlaying, 10000);
+setInterval(cleanupStuckPlaying, 5000);
 
 // ======================= ФИНАЛИЗАЦИЯ ПАРТИИ =======================
 function finishGame(lobbyId, result, reason) {
@@ -188,9 +185,10 @@ function finishGame(lobbyId, result, reason) {
     whiteBefore, blackBefore, whiteAfter, blackAfter,
     finishedAt: Date.now()
   });
-  if (db.games.length > 5000) db.games.splice(0, db.games.length - 5000);
+  if (db.games.length > 10000) db.games.splice(0, db.games.length - 10000);
 
   saveDBNow();
+  console.log(`[game] ${whiteName}(${whiteBefore}→${whiteAfter}) vs ${blackName}(${blackBefore}→${blackAfter}) = ${result} (${reason})`);
 
   const isArena = !!l.arenaId;
   io.to(lobbyId).emit('gameEnded', {
@@ -212,7 +210,7 @@ function finishGame(lobbyId, result, reason) {
         const bp = st.participants.get(blackName);
         if (wp) { wp.isPlaying = false; wp.lobbyId = null; if (!wp.paused) wp.waitingSince = Date.now(); }
         if (bp) { bp.isPlaying = false; bp.lobbyId = null; if (!bp.paused) bp.waitingSince = Date.now(); }
-        io.to('arena:' + l.arenaId).emit('arenaUpdate', { arenaId: l.arenaId });
+        io.emit('arenaUpdate', { arenaId: l.arenaId });
       }
     }
   }
@@ -221,7 +219,7 @@ function finishGame(lobbyId, result, reason) {
     io.to(lobbyId).socketsLeave(lobbyId);
     lobbies.delete(lobbyId);
     broadcastLobbies();
-  }, 3000);
+  }, 5000);
 }
 
 // ======================= АРЕНЫ =======================
@@ -332,6 +330,11 @@ function scheduleArena(state) {
   } else {
     finishArena(state);
   }
+
+  setInterval(() => {
+    if (state.finished) return;
+    io.emit('arenaUpdate', { arenaId: state.id });
+  }, 10000);
 }
 
 function isAvailableForPairing(p) {
@@ -347,7 +350,7 @@ function tryPair(state) {
   if (state.finished || state.phase !== 'live') return;
 
   const waiting = [];
-  for (const [, p] of state.participants.entries()) {
+  for (const [username, p] of state.participants.entries()) {
     if (!isAvailableForPairing(p)) continue;
     if (!p.waitingSince) p.waitingSince = Date.now();
     waiting.push(p);
@@ -473,7 +476,10 @@ function calcArenaPoints(p, result) {
 
 function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   const state = arenas.get(arenaId);
-  if (!state) return;
+  if (!state) {
+    console.warn(`[arena] handleArenaGameEnd: арена ${arenaId} не найдена`);
+    return;
+  }
 
   const whiteP = state.participants.get(whiteName);
   const blackP = state.participants.get(blackName);
@@ -484,23 +490,33 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
     return;
   }
 
-  if (!whiteP || !blackP) return;
+  if (!whiteP || !blackP) {
+    console.warn(`[arena] handleArenaGameEnd: участники не найдены в ${arenaId}`);
+    return;
+  }
 
   if (result === 'w') {
-    whiteP.score += calcArenaPoints(whiteP, 'win');
+    const pts = calcArenaPoints(whiteP, 'win');
+    whiteP.score += pts;
     whiteP.wins++;
     blackP.losses++;
     calcArenaPoints(blackP, 'loss');
+    console.log(`[arena] ${whiteName} +${pts} (серия ${whiteP.winStreak})`);
   } else if (result === 'b') {
-    blackP.score += calcArenaPoints(blackP, 'win');
+    const pts = calcArenaPoints(blackP, 'win');
+    blackP.score += pts;
     blackP.wins++;
     whiteP.losses++;
     calcArenaPoints(whiteP, 'loss');
+    console.log(`[arena] ${blackName} +${pts} (серия ${blackP.winStreak})`);
   } else {
-    whiteP.score += calcArenaPoints(whiteP, 'draw');
-    blackP.score += calcArenaPoints(blackP, 'draw');
+    const wp = calcArenaPoints(whiteP, 'draw');
+    const bp = calcArenaPoints(blackP, 'draw');
+    whiteP.score += wp;
+    blackP.score += bp;
     whiteP.draws++;
     blackP.draws++;
+    console.log(`[arena] ничья: ${whiteName} +${wp}, ${blackName} +${bp}`);
   }
 
   whiteP.isPlaying = false; blackP.isPlaying = false;
@@ -509,7 +525,7 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   if (!blackP.paused) blackP.waitingSince = Date.now();
 
   setTimeout(() => tryPair(state), 1000);
-  io.to('arena:' + arenaId).emit('arenaUpdate', { arenaId });
+  io.emit('arenaUpdate', { arenaId });
 }
 
 function finishArena(state) {
@@ -534,7 +550,7 @@ function finishArena(state) {
     wins: p.wins, draws: p.draws, losses: p.losses, rating: p.rating
   }));
 
-  console.log(`[arena] ФИНИШ ${state.name}`);
+  console.log(`[arena] ФИНИШ ${state.name}. Топ-3: ${state.top3.map(p=>p.username+'('+p.score+')').join(', ')}`);
 
   io.emit('arenaChatMessage', {
     system: true,
@@ -546,13 +562,13 @@ function finishArena(state) {
 
   state.cleanupTimer = setTimeout(() => {
     arenas.delete(state.id);
-  }, 30 * 60 * 1000);
+  }, 2 * 60 * 60 * 1000);
 }
 
 function getArenaSchedule(hoursAhead) {
-  hoursAhead = hoursAhead || 48;
+  hoursAhead = hoursAhead || 72;
   const now = Date.now();
-  const finishedCutoff = now - 60 * 60 * 1000;
+  const finishedCutoff = now - 2 * 60 * 60 * 1000;
   const end = now + hoursAhead * 3600 * 1000;
   const result = [];
 
@@ -562,7 +578,7 @@ function getArenaSchedule(hoursAhead) {
     const step = stepFor(tpl);
     let safety = 0;
 
-    while (t <= end && safety < 200) {
+    while (t <= end && safety < 600) {
       safety++;
       const endsAt = t + tpl.durationMin * 60 * 1000;
       let status;
@@ -599,7 +615,6 @@ function getArenaSchedule(hoursAhead) {
 }
 
 // ======================= ТИКЕР ТАЙМЕРОВ =======================
-// Шлём обновление раз в 3 секунды, а не каждую секунду — меньше нагрузки.
 setInterval(() => {
   const now = Date.now();
   for (const [id, lobby] of lobbies.entries()) {
@@ -611,10 +626,7 @@ setInterval(() => {
     lobby.lastTick = now;
     if (side === 'w') lobby.timeW = Math.max(0, lobby.timeW - elapsed);
     else              lobby.timeB = Math.max(0, lobby.timeB - elapsed);
-    // Отправляем раз в 3 секунды
-    if (elapsed >= 3 || lobby.timeW <= 10 || lobby.timeB <= 10) {
-      io.to(id).emit('timeUpdate', { timeW: lobby.timeW, timeB: lobby.timeB });
-    }
+    io.to(id).emit('timeUpdate', { timeW: lobby.timeW, timeB: lobby.timeB });
     if (lobby.timeW <= 0) finishGame(id, 'b', 'Время');
     else if (lobby.timeB <= 0) finishGame(id, 'w', 'Время');
   }
@@ -622,7 +634,7 @@ setInterval(() => {
 
 // ======================= SOCKET.IO =======================
 io.on('connection', (socket) => {
-  console.log(`[socket] +${socket.id}`);
+  console.log(`[socket] подключён ${socket.id}`);
 
   socket.on('register', ({ username, password }, cb) => {
     if (typeof cb !== 'function') return;
@@ -639,6 +651,7 @@ io.on('connection', (socket) => {
     let user = db.users[username];
     if (user) {
       if (!verifyPassword(password, user.salt, user.passwordHash)) {
+        console.warn(`[auth] неверный пароль для ${username}`);
         return cb({ ok: false, msg: 'Неверный пароль' });
       }
     } else {
@@ -835,7 +848,7 @@ io.on('connection', (socket) => {
 
   socket.on('getArenas', (cb) => {
     if (typeof cb !== 'function') return;
-    cb(getArenaSchedule(48));
+    cb(getArenaSchedule(72));
   });
 
   socket.on('getMyArenaStates', (cb) => {
@@ -901,12 +914,9 @@ io.on('connection', (socket) => {
 
   socket.on('getArenaGames', ({ arenaId }, cb) => {
     if (typeof cb !== 'function') return;
-    const state = arenas.get(arenaId);
-    if (!state || !state.activeLobbies) return cb([]);
     const list = [];
-    for (const id of state.activeLobbies) {
-      const l = lobbies.get(id);
-      if (!l || l.finished) continue;
+    for (const [id, l] of lobbies.entries()) {
+      if (l.arenaId !== arenaId || l.finished) continue;
       list.push({
         lobbyId: id,
         white: l.hostColor === 'w' ? l.host : l.guest,
@@ -937,8 +947,9 @@ io.on('connection', (socket) => {
       paused: false,
       waitingSince: Date.now()
     });
+    console.log(`[arena] ${socket.username} зарегался на ${state.name}`);
 
-    io.to('arena:' + arenaId).emit('arenaChatMessage', {
+    io.emit('arenaChatMessage', {
       system: true,
       text: `${socket.username} присоединился к арене`,
       ts: Date.now()
@@ -952,11 +963,16 @@ io.on('connection', (socket) => {
     const state = arenas.get(arenaId);
     if (!state) return cb({ ok: false, msg: 'Арена не найдена' });
     if (state.phase !== 'waiting') {
-      return cb({ ok: false, msg: 'Нельзя сняться после старта арены' });
+      return cb({ ok: false, msg: 'Нельзя сняться после старта арены — используйте паузу' });
     }
     const p = state.participants.get(socket.username);
     if (p && !p.isPlaying) {
       state.participants.delete(socket.username);
+      io.emit('arenaChatMessage', {
+        system: true,
+        text: `${socket.username} покинул арену`,
+        ts: Date.now()
+      });
       io.emit('arenaUpdate', { arenaId });
     }
     cb({ ok: true });
@@ -1000,7 +1016,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    console.log(`[socket] -${socket.id}`);
+    console.log(`[socket] отключён ${socket.id} (${socket.username || '—'})`);
     online.delete(socket.id);
     if (socket.username) {
       for (const state of arenas.values()) {
@@ -1018,6 +1034,7 @@ io.on('connection', (socket) => {
           const winner = myColor === 'w' ? 'b' : 'w';
           finishGame(lobbyId, winner, 'Соперник отключился');
         } else {
+          io.to(lobbyId).emit('opponentLeft');
           lobbies.delete(lobbyId);
           io.emit('lobbiesUpdate');
         }
@@ -1029,12 +1046,13 @@ io.on('connection', (socket) => {
 
 // ======================= ЗАПУСК =======================
 loadDB();
-getArenaSchedule(48);
+getArenaSchedule(72);
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log('==================================================');
   console.log('  Kingside — сервер запущен');
+  console.log(`  Локально:  http://localhost:${PORT}`);
   console.log(`  Порт:      ${PORT}`);
   console.log(`  База:      ${DB_PATH}`);
   console.log('==================================================');
