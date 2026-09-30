@@ -148,6 +148,48 @@
   .arenaRow .mode { font-size: 12px; color: var(--muted); text-align: center; }
   .arenaEmpty { padding: 40px 20px; text-align: center; color: var(--muted); font-size: 13px; }
 
+  /* Быстрый старт */
+  .quickGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+  @media (max-width: 640px) { .quickGrid { grid-template-columns: repeat(2, 1fr); } }
+  .quickBtn {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px 8px;
+    color: var(--text-bright);
+    cursor: pointer;
+    transition: .15s;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    min-height: 76px;
+  }
+  .quickBtn:hover {
+    background: var(--panel-hover);
+    border-color: var(--accent);
+    transform: translateY(-1px);
+  }
+  .quickBtn .qb-time {
+    font-size: 22px;
+    font-weight: 300;
+    color: var(--text-bright);
+    letter-spacing: 0.5px;
+  }
+  .quickBtn .qb-name {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+  }
+  .quickBtn.custom .qb-time { font-size: 16px; color: var(--accent); }
+
   .arenasHeader {
     display: flex; justify-content: space-between; align-items: center;
     margin: 0 0 16px 0;
@@ -641,7 +683,7 @@
       <div class="sideCol">
         <div class="sideCard" onclick="switchLobbyTab('create')">
           <div class="t">🔥 Быстрый старт</div>
-          <div class="s">Создать лобби и ждать соперника</div>
+          <div class="s">Выбрать контроль времени</div>
         </div>
         <div class="sideCard" onclick="navTo('arenas')">
           <div class="t">⚡ Активные арены</div>
@@ -650,7 +692,7 @@
       </div>
       <div>
         <div class="tabs">
-          <button class="active" data-tab="create" onclick="switchLobbyTab('create')">Создать игру</button>
+          <button class="active" data-tab="create" onclick="switchLobbyTab('create')">Быстрый старт</button>
           <button data-tab="waiting" onclick="switchLobbyTab('waiting')">Зал ожидания</button>
         </div>
         <div class="arenaList" id="lobbyTabContent"></div>
@@ -857,9 +899,48 @@
   'use strict';
 
   const socket = io({
-    transports: ['websocket'],
-    upgrade: false
+    transports: ['websocket', 'polling'],
+    upgrade: true,
+    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000
   });
+
+  // ===================== ЗВУКИ (Web Audio API) =====================
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  let audioCtx = null;
+  function ensureAudio() {
+    if (!audioCtx) audioCtx = new AudioCtx();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+  function playTone(freq, dur, type, vol, delay) {
+    try {
+      const ctx = ensureAudio();
+      const t0 = ctx.currentTime + (delay || 0);
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type || 'sine';
+      osc.frequency.setValueAtTime(freq, t0);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(vol || 0.15, t0 + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + dur + 0.02);
+    } catch (e) {}
+  }
+  function sndMove()    { playTone(320, 0.055, 'triangle', 0.18); playTone(180, 0.04, 'sine', 0.10, 0.005); }
+  function sndCapture() { playTone(220, 0.07, 'square', 0.16); playTone(140, 0.05, 'sine', 0.10, 0.01); }
+  function sndCheck()   { playTone(880, 0.09, 'sine', 0.18); playTone(1320, 0.12, 'sine', 0.12, 0.05); }
+  function sndMate()    { playTone(440, 0.18, 'sine', 0.22); playTone(330, 0.20, 'sine', 0.20, 0.12); playTone(220, 0.35, 'sine', 0.18, 0.26); }
+  function sndDraw()    { playTone(440, 0.14, 'sine', 0.16); playTone(440, 0.14, 'sine', 0.16, 0.18); }
+  function sndWin()     { playTone(660, 0.10, 'sine', 0.18); playTone(880, 0.12, 'sine', 0.18, 0.09); playTone(1320, 0.20, 'sine', 0.16, 0.20); }
+  function sndLose()    { playTone(330, 0.16, 'sine', 0.18); playTone(220, 0.22, 'sine', 0.16, 0.12); }
+  function sndStart()   { playTone(523, 0.10, 'sine', 0.18); playTone(659, 0.12, 'sine', 0.16, 0.09); playTone(784, 0.16, 'sine', 0.14, 0.18); }
+
+  window.addEventListener('pointerdown', () => ensureAudio(), { once: true });
 
   let me = null;
   let myColor = 'w';
@@ -871,7 +952,6 @@
   let currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
   let selected = null;
   let legalMoves = [];
-  let localTimerHandle = null;
   let currentLobbyTab = 'create';
   let arenasCache = [];
   let arenasRefreshHandle = null;
@@ -1227,6 +1307,7 @@
 
   function makeMove(from, to) {
     const state = parseFen(currentFen);
+    const isCapture = !!state.board[to[0]][to[1]];
     const san = toSAN(state, from, to);
     const nextState = applyMoveToCopy(state, from, to);
     const newFen = toFen(nextState);
@@ -1237,6 +1318,7 @@
     renderMoves();
     renderBoard();
     socket.emit('move', { lobbyId, fen: newFen, turn: nextState.turn, san });
+    if (isCapture) sndCapture(); else sndMove();
     checkGameEnd(nextState);
   }
 
@@ -1285,8 +1367,13 @@
   function checkGameEnd(state) {
     const sideToMoveWhite = state.turn === 'w';
     if (!hasAnyLegalMove(state, sideToMoveWhite)) {
-      if (inCheck(state, sideToMoveWhite)) endGame(sideToMoveWhite ? 'b' : 'w', 'Мат', true, currentGameIsArena);
-      else endGame(null, 'Пат', true, currentGameIsArena);
+      if (inCheck(state, sideToMoveWhite)) {
+        sndMate();
+        endGame(sideToMoveWhite ? 'b' : 'w', 'Мат', true, currentGameIsArena);
+      } else {
+        sndDraw();
+        endGame(null, 'Пат', true, currentGameIsArena);
+      }
     }
   }
 
@@ -1353,21 +1440,33 @@
     const el = document.getElementById('lobbyTabContent');
     if (currentLobbyTab === 'create') {
       el.innerHTML = `
-        <div style="padding: 20px 16px;">
-          <div style="margin-bottom: 12px; color: var(--text-bright); font-weight: 500;">Создайте партию и дождитесь соперника:</div>
-          <div class="row" style="margin: 0;">
-            <select id="timeControl" style="min-width: 200px;">
-              <option value="1">1 мин — Пуля</option>
-              <option value="3">3 мин — Блиц</option>
-              <option value="5" selected>5 мин — Блиц</option>
-              <option value="10">10 мин — Рапид</option>
-              <option value="30">30 мин — Классика</option>
-            </select>
-            <label style="color:var(--muted);font-size:13px;display:flex;align-items:center;gap:6px;">
-              Инкремент:
-              <input id="inc" type="number" value="2" min="0" max="60" style="width:70px;"> сек
-            </label>
-            <button class="primary" onclick="createLobby()" style="padding: 10px 24px;">Создать</button>
+        <div style="padding: 16px;">
+          <div style="margin-bottom: 14px; color: var(--text-bright); font-weight: 500; font-size: 14px;">Быстрый старт — выберите контроль времени</div>
+          <div class="quickGrid">
+            ${[
+              {t:1,i:0,name:'Пуля'},{t:2,i:1,name:'Пуля'},{t:3,i:0,name:'Блиц'},
+              {t:3,i:2,name:'Блиц'},{t:5,i:0,name:'Блиц'},{t:5,i:3,name:'Блиц'},
+              {t:10,i:0,name:'Рапид'},{t:10,i:5,name:'Рапид'},{t:15,i:10,name:'Рапид'},
+              {t:30,i:0,name:'Классика'},{t:30,i:20,name:'Классика'}
+            ].map(({t,i,name}) => `
+              <button class="quickBtn" onclick="quickStart(${t},${i})">
+                <div class="qb-time">${t}+${i}</div>
+                <div class="qb-name">${name}</div>
+              </button>
+            `).join('')}
+            <button class="quickBtn custom" onclick="showCustomGame()">
+              <div class="qb-time">Своя</div>
+              <div class="qb-name">игра</div>
+            </button>
+          </div>
+          <div id="customGamePanel" style="display:none; margin-top:14px; padding:14px; background:var(--panel-2); border-radius:6px;">
+            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+              <label style="color:var(--muted);font-size:13px;">Минуты:</label>
+              <input id="customMin" type="number" value="5" min="1" max="60" style="width:70px;">
+              <label style="color:var(--muted);font-size:13px;">Инкремент:</label>
+              <input id="customInc" type="number" value="0" min="0" max="60" style="width:70px;">
+              <button class="primary" onclick="createCustomLobby()" style="padding:8px 18px;">Создать</button>
+            </div>
           </div>
         </div>
       `;
@@ -1375,30 +1474,42 @@
       socket.emit('getLobbies', (list) => {
         el.innerHTML = '';
         if (!list || !list.length) {
-          el.innerHTML = '<div class="arenaEmpty">Нет активных лобби.</div>';
+          el.innerHTML = '<div class="arenaEmpty">Нет активных вызовов. Создайте свой во вкладке «Быстрый старт».</div>';
           return;
         }
         list.forEach(l => {
+          const isMine = me && l.host === me.username;
           const row = document.createElement('div');
           row.className = 'arenaRow';
+          row.style.cursor = isMine ? 'pointer' : 'default';
           row.innerHTML = `
             <div class="icon blitz">♟</div>
-            <div class="name">${escapeHtml(l.host)}</div>
+            <div class="name">${escapeHtml(l.host)}${isMine ? ' <span style="color:var(--accent);font-size:11px;">(ваш вызов — нажмите, чтобы отменить)</span>' : ''}</div>
             <div class="time">${l.time}+${l.inc}</div>
             <div class="mode">${l.status === 'waiting' ? 'ожидание' : 'идёт'}</div>
             <div></div>
           `;
-          if (l.status === 'waiting' && me && l.host !== me.username) {
+          if (l.status === 'waiting' && !isMine) {
             const btn = document.createElement('button');
             btn.className = 'primary';
             btn.textContent = 'Играть';
-            btn.onclick = () => {
+            btn.onclick = (e) => {
+              e.stopPropagation();
               socket.emit('joinLobby', { id: l.id }, (r) => {
                 if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; }
                 lobbyId = r.id || l.id;
               });
             };
             row.querySelector('div:last-child').appendChild(btn);
+          }
+          if (isMine && l.status === 'waiting') {
+            row.onclick = () => {
+              if (!confirm('Отменить свой вызов?')) return;
+              socket.emit('cancelLobby', { id: l.id }, (r) => {
+                if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; }
+                refreshLobbies();
+              });
+            };
           }
           el.appendChild(row);
         });
@@ -1408,10 +1519,9 @@
   function refreshLobbies() {
     if (document.getElementById('lobbyScreen').classList.contains('active')) renderLobbyTab();
   }
-  function createLobby() {
-    const time = +document.getElementById('timeControl').value;
-    const incVal = +document.getElementById('inc').value || 0;
-    socket.emit('createLobby', { time, inc: incVal }, (res) => {
+
+  function quickStart(time, inc) {
+    socket.emit('createLobby', { time, inc }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
       lobbyId = res.id;
       myColor = 'w';
@@ -1429,9 +1539,25 @@
       renderMoves();
       document.getElementById('statusBar').className = 'statusGreen';
       document.getElementById('statusBar').textContent = 'Ожидание соперника...';
+      // Переключим вкладку на «Зал ожидания», чтобы игрок увидел свой вызов
+      currentLobbyTab = 'waiting';
+      switchLobbyTab('waiting');
     });
   }
-  window.createLobby = createLobby;
+  window.quickStart = quickStart;
+
+  function showCustomGame() {
+    const p = document.getElementById('customGamePanel');
+    if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none';
+  }
+  window.showCustomGame = showCustomGame;
+
+  function createCustomLobby() {
+    const t = +document.getElementById('customMin').value || 5;
+    const i = +document.getElementById('customInc').value || 0;
+    quickStart(t, i);
+  }
+  window.createCustomLobby = createCustomLobby;
 
   function resetGameUI() {
     document.getElementById('topName').textContent = '—';
@@ -1512,7 +1638,6 @@
     if (gameEnded) return;
     gameEnded = true;
     gameActive = false;
-    if (localTimerHandle) { clearInterval(localTimerHandle); localTimerHandle = null; }
     if (typeof isArena === 'boolean') currentGameIsArena = isArena;
     showGameResultBar(winner, reason);
     if (!fromServer) socket.emit('gameOver', { lobbyId, result: winner || 'draw' });
@@ -1696,7 +1821,7 @@
     });
   }
 
-  // ===================== АРЕНЫ (ОПТИМИЗИРОВАНО) =====================
+  // ===================== АРЕНЫ =====================
   function refreshArenas(force) {
     if (!force && !document.getElementById('arenasScreen').classList.contains('active')) return;
     socket.emit('getArenas', (list) => {
@@ -2153,6 +2278,7 @@
     renderBoard();
     renderMoves();
     updateTimers();
+    sndStart();
   });
 
   socket.on('boardUpdate', ({ fen, san }) => {
@@ -2163,6 +2289,12 @@
     renderMoves();
     renderBoard();
     const state = parseFen(currentFen);
+    if (san) {
+      if (san.includes('#')) sndMate();
+      else if (san.includes('+')) sndCheck();
+      else if (san.includes('x')) sndCapture();
+      else sndMove();
+    }
     checkGameEnd(state);
   });
 
@@ -2178,6 +2310,11 @@
     let winner = null;
     if (result === 'w') winner = 'w';
     else if (result === 'b') winner = 'b';
+    if (reason !== 'Мат' && reason !== 'Пат') {
+      if (!winner) sndDraw();
+      else if (winner === myColor) sndWin();
+      else sndLose();
+    }
     if (typeof isArena === 'boolean') currentGameIsArena = isArena;
     if (arenaId) currentArenaId = arenaId;
     endGame(winner, reason, true, currentGameIsArena);
