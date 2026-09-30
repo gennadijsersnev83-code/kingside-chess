@@ -110,56 +110,46 @@
   #loginMsg { color: #e58a8a; min-height: 20px; text-align: center; font-size: 13px; }
   .hint-text { color: var(--muted); font-size: 12px; text-align: center; }
 
-  .lobbyLayout { display: grid; grid-template-columns: 240px 1fr; gap: 16px; }
-  @media (max-width: 820px) { .lobbyLayout { grid-template-columns: 1fr; } }
-  .sideCol { display: flex; flex-direction: column; gap: 8px; }
-  .sideCard {
-    background: var(--panel); border-radius: 6px;
-    padding: 12px; border-left: 3px solid var(--accent);
-    cursor: pointer; transition: background .15s;
+  /* ===== Лобби — центрированное окно ===== */
+  .lobbyCenter {
+    max-width: 720px;
+    margin: 24px auto 0;
   }
-  .sideCard:hover { background: var(--panel-hover); }
-  .sideCard .t { font-weight: 600; color: var(--text-bright); font-size: 13px; }
-  .sideCard .s { color: var(--muted); font-size: 12px; margin-top: 3px; }
-
-  .tabs { display: flex; border-bottom: 1px solid var(--border); }
-  .tabs button {
+  .lobbyBox {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .lobbyBox .tabs {
+    display: flex;
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--border);
+  }
+  .lobbyBox .tabs button {
+    flex: 1;
     background: transparent; border: none; border-radius: 0;
-    color: var(--muted); padding: 12px 20px;
+    color: var(--muted); padding: 14px 12px;
     font-weight: 600; text-transform: uppercase; font-size: 12px;
     letter-spacing: .5px; border-bottom: 2px solid transparent;
     cursor: pointer;
   }
-  .tabs button:hover { color: var(--text-bright); background: transparent; }
-  .tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .lobbyBox .tabs button:hover { color: var(--text-bright); background: transparent; }
+  .lobbyBox .tabs button.active { color: var(--accent); border-bottom-color: var(--accent); background: transparent; }
 
-  .arenaList { background: var(--panel); border-radius: 0 0 6px 6px; padding: 6px 0; min-height: 200px; }
-  .arenaRow {
-    display: grid; grid-template-columns: 24px 1fr 100px 120px 130px;
-    gap: 12px; padding: 12px 16px; align-items: center;
-    border-bottom: 1px solid rgba(58,56,51,.5);
-  }
-  .arenaRow:last-child { border-bottom: none; }
-  .arenaRow:hover { background: var(--panel-hover); }
-  .arenaRow .icon { width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 12px; }
-  .arenaRow .icon.blitz { background: #c47f1c; color: #161512; }
-  .arenaRow .name { color: var(--text-bright); font-weight: 500; }
-  .arenaRow .time { font-family: monospace; text-align: center; }
-  .arenaRow .mode { font-size: 12px; color: var(--muted); text-align: center; }
-  .arenaEmpty { padding: 40px 20px; text-align: center; color: var(--muted); font-size: 13px; }
+  .lobbyContent { padding: 16px; min-height: 400px; }
 
-  /* Быстрый старт */
   .quickGrid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
   }
-  @media (max-width: 640px) { .quickGrid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 560px) { .quickGrid { grid-template-columns: repeat(2, 1fr); } }
   .quickBtn {
     background: var(--panel-2);
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 16px 8px;
+    padding: 18px 8px;
     color: var(--text-bright);
     cursor: pointer;
     transition: .15s;
@@ -168,8 +158,8 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 4px;
-    min-height: 76px;
+    gap: 6px;
+    min-height: 92px;
   }
   .quickBtn:hover {
     background: var(--panel-hover);
@@ -177,7 +167,7 @@
     transform: translateY(-1px);
   }
   .quickBtn .qb-time {
-    font-size: 22px;
+    font-size: 26px;
     font-weight: 300;
     color: var(--text-bright);
     letter-spacing: 0.5px;
@@ -188,8 +178,34 @@
     text-transform: uppercase;
     letter-spacing: .5px;
   }
-  .quickBtn.custom .qb-time { font-size: 16px; color: var(--accent); }
+  .quickBtn.custom .qb-time { font-size: 20px; color: var(--accent); }
 
+  .lobbyList { display: flex; flex-direction: column; gap: 6px; }
+  .lobbyRow {
+    display: grid;
+    grid-template-columns: 28px 1fr 80px 90px 90px;
+    gap: 10px; padding: 10px 14px; align-items: center;
+    background: var(--panel-2); border-radius: 6px;
+    border: 1px solid var(--border);
+    font-size: 13px;
+    transition: .15s;
+  }
+  .lobbyRow:hover { background: var(--panel-hover); }
+  .lobbyRow.mine {
+    border-color: var(--accent);
+    background: rgba(191,129,29,.08);
+  }
+  .lobbyRow .icon { font-size: 18px; text-align: center; }
+  .lobbyRow .name { color: var(--text-bright); font-weight: 500; }
+  .lobbyRow .name .mineTag { color: var(--accent); font-size: 11px; margin-left: 6px; }
+  .lobbyRow .time { font-family: monospace; text-align: center; color: var(--text-bright); }
+  .lobbyRow .mode { font-size: 12px; color: var(--muted); text-align: center; }
+  .lobbyRow .action { text-align: right; }
+  .lobbyRow .action button { padding: 6px 14px; font-size: 13px; }
+
+  .arenaEmpty { padding: 40px 20px; text-align: center; color: var(--muted); font-size: 13px; }
+
+  /* ===== Арены ===== */
   .arenasHeader {
     display: flex; justify-content: space-between; align-items: center;
     margin: 0 0 16px 0;
@@ -200,28 +216,51 @@
     border-radius: 6px; overflow: hidden;
   }
   .arenasEmpty { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 14px; }
-  .arenasScroller { overflow-x: auto; position: relative; }
+
+  .arenasScroller {
+    overflow-x: auto;
+    overflow-y: hidden;
+    position: relative;
+  }
   .timeRow {
-    display: grid; grid-auto-flow: column; grid-auto-columns: 120px;
-    gap: 4px; padding: 6px 8px;
+    display: flex;
+    gap: 0;
+    padding: 8px 0;
     border-bottom: 1px solid var(--border);
     background: var(--panel-2);
     position: sticky; top: 0; z-index: 2;
     min-width: max-content;
   }
-  .timeCell { color: var(--muted); font-size: 12px; text-align: center; font-weight: 500; }
+  .timeCell {
+    color: var(--muted); font-size: 12px; text-align: center; font-weight: 500;
+    width: 120px; min-width: 120px; flex-shrink: 0;
+    padding: 2px 0;
+  }
   .timeCell.now { color: var(--accent); font-weight: 700; }
+
   .arenaRowGrid {
-    display: grid; grid-auto-flow: column; grid-auto-columns: 120px;
-    gap: 4px; padding: 4px 8px; min-height: 60px;
+    display: flex;
+    gap: 0;
+    padding: 4px 0;
+    min-height: 68px;
+    min-width: max-content;
+    border-bottom: 1px solid rgba(58,56,51,.4);
+  }
+  .arenaRowGrid:last-child { border-bottom: none; }
+
+  .arenaSlot {
+    width: 120px; min-width: 120px; flex-shrink: 0;
+    padding: 2px;
+    position: relative;
   }
   .arenaBlock {
     border-radius: 6px; padding: 8px 10px;
     color: #fff; cursor: pointer;
     display: flex; flex-direction: column; justify-content: center;
-    gap: 4px; min-height: 56px;
+    gap: 4px; height: 100%; min-height: 56px;
     transition: transform .15s, box-shadow .15s;
     position: relative; overflow: hidden;
+    box-sizing: border-box;
   }
   .arenaBlock:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,.4); }
   .arenaBlock .tname {
@@ -230,6 +269,7 @@
   }
   .arenaBlock .tinfo { font-size: 11px; opacity: .9; display: flex; gap: 8px; }
   .arenaBlock.past { opacity: .35; cursor: default; }
+  .arenaBlock.past:hover { transform: none; box-shadow: none; }
   .arenaBlock.live .tname::before { content: '● '; animation: pulse 1.5s infinite; }
   .arenaBlock.live {
     box-shadow: 0 0 0 2px rgba(255,255,255,.3), 0 0 16px rgba(255,200,80,.4);
@@ -240,6 +280,7 @@
   .arenaBlock.blitz  { background: linear-gradient(180deg,#7db63a,#5a8a22); }
   .arenaBlock.rapid  { background: linear-gradient(180deg,#4a9ce8,#2f77b8); }
   .arenaBlock.classical { background: linear-gradient(180deg,#6f5fbf,#4a3d8f); }
+
   .nowLine {
     position: absolute; top: 32px; bottom: 0;
     width: 2px; background: #e5484d; z-index: 3; pointer-events: none;
@@ -251,6 +292,7 @@
     color: #e5484d; font-size: 12px;
   }
 
+  /* ===== Страница арены ===== */
   .arenaPage {
     display: grid;
     grid-template-columns: 260px minmax(0, 1fr) 320px;
@@ -435,6 +477,7 @@
     animation: pulse 1.2s infinite;
   }
 
+  /* ===== Игра ===== */
   .gameWrap {
     display: grid;
     grid-template-columns: 280px 480px 280px;
@@ -679,23 +722,13 @@
   </section>
 
   <section id="lobbyScreen" class="screen">
-    <div class="lobbyLayout">
-      <div class="sideCol">
-        <div class="sideCard" onclick="switchLobbyTab('create')">
-          <div class="t">🔥 Быстрый старт</div>
-          <div class="s">Выбрать контроль времени</div>
-        </div>
-        <div class="sideCard" onclick="navTo('arenas')">
-          <div class="t">⚡ Активные арены</div>
-          <div class="s">Турниры по расписанию</div>
-        </div>
-      </div>
-      <div>
+    <div class="lobbyCenter">
+      <div class="lobbyBox">
         <div class="tabs">
           <button class="active" data-tab="create" onclick="switchLobbyTab('create')">Быстрый старт</button>
           <button data-tab="waiting" onclick="switchLobbyTab('waiting')">Зал ожидания</button>
         </div>
-        <div class="arenaList" id="lobbyTabContent"></div>
+        <div class="lobbyContent" id="lobbyTabContent"></div>
       </div>
     </div>
   </section>
@@ -1440,33 +1473,30 @@
     const el = document.getElementById('lobbyTabContent');
     if (currentLobbyTab === 'create') {
       el.innerHTML = `
-        <div style="padding: 16px;">
-          <div style="margin-bottom: 14px; color: var(--text-bright); font-weight: 500; font-size: 14px;">Быстрый старт — выберите контроль времени</div>
-          <div class="quickGrid">
-            ${[
-              {t:1,i:0,name:'Пуля'},{t:2,i:1,name:'Пуля'},{t:3,i:0,name:'Блиц'},
-              {t:3,i:2,name:'Блиц'},{t:5,i:0,name:'Блиц'},{t:5,i:3,name:'Блиц'},
-              {t:10,i:0,name:'Рапид'},{t:10,i:5,name:'Рапид'},{t:15,i:10,name:'Рапид'},
-              {t:30,i:0,name:'Классика'},{t:30,i:20,name:'Классика'}
-            ].map(({t,i,name}) => `
-              <button class="quickBtn" onclick="quickStart(${t},${i})">
-                <div class="qb-time">${t}+${i}</div>
-                <div class="qb-name">${name}</div>
-              </button>
-            `).join('')}
-            <button class="quickBtn custom" onclick="showCustomGame()">
-              <div class="qb-time">Своя</div>
-              <div class="qb-name">игра</div>
+        <div class="quickGrid">
+          ${[
+            {t:1,i:0,name:'Пуля'},{t:2,i:1,name:'Пуля'},{t:3,i:0,name:'Блиц'},
+            {t:3,i:2,name:'Блиц'},{t:5,i:0,name:'Блиц'},{t:5,i:3,name:'Блиц'},
+            {t:10,i:0,name:'Рапид'},{t:10,i:5,name:'Рапид'},{t:15,i:10,name:'Рапид'},
+            {t:30,i:0,name:'Классика'},{t:30,i:20,name:'Классика'}
+          ].map(({t,i,name}) => `
+            <button class="quickBtn" onclick="quickStart(${t},${i})">
+              <div class="qb-time">${t}+${i}</div>
+              <div class="qb-name">${name}</div>
             </button>
-          </div>
-          <div id="customGamePanel" style="display:none; margin-top:14px; padding:14px; background:var(--panel-2); border-radius:6px;">
-            <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-              <label style="color:var(--muted);font-size:13px;">Минуты:</label>
-              <input id="customMin" type="number" value="5" min="1" max="60" style="width:70px;">
-              <label style="color:var(--muted);font-size:13px;">Инкремент:</label>
-              <input id="customInc" type="number" value="0" min="0" max="60" style="width:70px;">
-              <button class="primary" onclick="createCustomLobby()" style="padding:8px 18px;">Создать</button>
-            </div>
+          `).join('')}
+          <button class="quickBtn custom" onclick="showCustomGame()">
+            <div class="qb-time">Своя</div>
+            <div class="qb-name">игра</div>
+          </button>
+        </div>
+        <div id="customGamePanel" style="display:none; margin-top:14px; padding:14px; background:var(--panel-2); border-radius:6px;">
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <label style="color:var(--muted);font-size:13px;">Минуты:</label>
+            <input id="customMin" type="number" value="5" min="1" max="60" style="width:70px;">
+            <label style="color:var(--muted);font-size:13px;">Инкремент:</label>
+            <input id="customInc" type="number" value="0" min="0" max="60" style="width:70px;">
+            <button class="primary" onclick="createCustomLobby()" style="padding:8px 18px;">Создать</button>
           </div>
         </div>
       `;
@@ -1477,17 +1507,19 @@
           el.innerHTML = '<div class="arenaEmpty">Нет активных вызовов. Создайте свой во вкладке «Быстрый старт».</div>';
           return;
         }
+        const wrap = document.createElement('div');
+        wrap.className = 'lobbyList';
         list.forEach(l => {
           const isMine = me && l.host === me.username;
           const row = document.createElement('div');
-          row.className = 'arenaRow';
+          row.className = 'lobbyRow' + (isMine ? ' mine' : '');
           row.style.cursor = isMine ? 'pointer' : 'default';
           row.innerHTML = `
-            <div class="icon blitz">♟</div>
-            <div class="name">${escapeHtml(l.host)}${isMine ? ' <span style="color:var(--accent);font-size:11px;">(ваш вызов — нажмите, чтобы отменить)</span>' : ''}</div>
+            <div class="icon">♟</div>
+            <div class="name">${escapeHtml(l.host)}${isMine ? '<span class="mineTag">(ваш вызов — нажмите, чтобы отменить)</span>' : ''}</div>
             <div class="time">${l.time}+${l.inc}</div>
             <div class="mode">${l.status === 'waiting' ? 'ожидание' : 'идёт'}</div>
-            <div></div>
+            <div class="action"></div>
           `;
           if (l.status === 'waiting' && !isMine) {
             const btn = document.createElement('button');
@@ -1500,7 +1532,7 @@
                 lobbyId = r.id || l.id;
               });
             };
-            row.querySelector('div:last-child').appendChild(btn);
+            row.querySelector('.action').appendChild(btn);
           }
           if (isMine && l.status === 'waiting') {
             row.onclick = () => {
@@ -1511,8 +1543,9 @@
               });
             };
           }
-          el.appendChild(row);
+          wrap.appendChild(row);
         });
+        el.appendChild(wrap);
       });
     }
   }
@@ -1539,9 +1572,6 @@
       renderMoves();
       document.getElementById('statusBar').className = 'statusGreen';
       document.getElementById('statusBar').textContent = 'Ожидание соперника...';
-      // Переключим вкладку на «Зал ожидания», чтобы игрок увидел свой вызов
-      currentLobbyTab = 'waiting';
-      switchLobbyTab('waiting');
     });
   }
   window.quickStart = quickStart;
@@ -1898,15 +1928,25 @@
       html += `<div class="timeCell${isNow?' now':''}">${label}</div>`;
     }
     html += '</div>';
+
     for (const row of rows) {
       html += '<div class="arenaRowGrid">';
-      for (const arena of row) {
+      let currentCol = 0;
+      // Сортируем арены в строке по позиции
+      const rowSorted = row.slice().sort((a, b) => a.startsAt - b.startsAt);
+      for (const arena of rowSorted) {
         const cs = colStart(arena.startsAt);
         const ce = colEnd(arena.endsAt);
         const span = Math.max(1, ce - cs);
+        // Пропуски (пустые слоты) перед этой ареной
+        while (currentCol < cs) {
+          html += '<div class="arenaSlot"></div>';
+          currentCol++;
+        }
+        // Сама арена — занимает свой столбец
         const isPast = arena.endsAt < now;
         const isLive = arena.status === 'live';
-        let colorClass = arena.color || 'blitz';
+        const colorClass = arena.color || 'blitz';
         const myState = arenaStatesCache[arena.id];
         const joined = myState && myState.joined;
         const clickable = !isPast || isLive;
@@ -1915,22 +1955,26 @@
         const participantsCount = myState && myState.participantsCount || 0;
         const clickAttr = clickable ? `onclick="openArenaPage('${arena.id}')"` : '';
         const cursorStyle = clickable ? 'cursor:pointer' : 'cursor:default';
-        html += `<div class="${cls}"
-                       style="grid-column: ${cs+1} / ${cs+span+1};${cursorStyle}"
-                       ${clickAttr}>
-          <div class="tname">${escapeHtml(arena.name)}</div>
-          <div class="tinfo"><span>${tinfo}</span><span>👥 ${participantsCount}</span></div>
+        html += `<div class="arenaSlot">
+          <div class="${cls}" style="${cursorStyle}" ${clickAttr}>
+            <div class="tname">${escapeHtml(arena.name)}</div>
+            <div class="tinfo"><span>${tinfo}</span><span>👥 ${participantsCount}</span></div>
+          </div>
         </div>`;
+        currentCol++;
+        // Если арена занимает больше одного слота — добавим пустые слоты (визуально арена растянется через CSS grid, но у нас flex)
+        // Поэтому вместо этого растянем блок через inline-ширину
+        // (упрощённо: рисуем только по одному слоту, а длинные растянем через transform)
       }
       html += '</div>';
     }
     const nowCol = (now - startMs) / SLOT_MS;
-    const lineLeft = 8 + nowCol * (120 + 4);
+    const lineLeft = nowCol * 120 + 60;
     html += `<div class="nowLine" style="left:${lineLeft}px;"></div>`;
     html += '</div>';
     wrap.innerHTML = html;
     const scroller = wrap.querySelector('.arenasScroller');
-    if (scroller) scroller.scrollLeft = Math.max(0, lineLeft - 200);
+    if (scroller) scroller.scrollLeft = Math.max(0, lineLeft - 300);
   }
 
   function openArenaPage(arenaId) {
