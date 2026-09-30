@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const app = express();
 const server = http.createServer(app);
 
-// Socket.io: пробуем WebSocket, если не получится — polling (Render часто режет ws)
+// Socket.io: пробуем WebSocket, если не получится — polling (Render/Railway часто режут ws)
 const io = new Server(server, {
   cors: { origin: '*' },
   pingTimeout: 60000,
@@ -18,11 +18,22 @@ const io = new Server(server, {
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ======================= ХРАНИЛИЩЕ =======================
-const DB_PATH = path.join(__dirname, 'data.json');
+// На Railway постоянный диск монтируется в /app/data.
+// Локально — data.json рядом с сервером.
+// На Render (если оставишь как fallback) — можно тоже указать /data, но без диска это бесполезно.
+const DB_PATH = process.env.RAILWAY_ENVIRONMENT
+  ? path.join('/app/data', 'data.json')
+  : (process.env.RENDER ? '/data/data.json' : path.join(__dirname, 'data.json'));
+
 let db = { users: {}, games: [] };
 
 function loadDB() {
   try {
+    // Убедимся, что папка существует
+    const dir = path.dirname(DB_PATH);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     if (fs.existsSync(DB_PATH)) {
       const raw = fs.readFileSync(DB_PATH, 'utf8');
       const parsed = JSON.parse(raw);
@@ -51,7 +62,11 @@ function saveDB() {
 }
 function saveDBNow() {
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
-  try { fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), 'utf8'); }
+  try {
+    const dir = path.dirname(DB_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), 'utf8');
+  }
   catch (err) { console.error('[DB] Ошибка записи:', err.message); }
 }
 
@@ -709,7 +724,6 @@ io.on('connection', (socket) => {
     broadcastLobbies();
   });
 
-  // Отмена своего лобби (хост уходит из зала ожидания)
   socket.on('cancelLobby', ({ id }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
