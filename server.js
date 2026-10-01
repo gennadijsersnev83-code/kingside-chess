@@ -18,11 +18,14 @@ const io = new Server(server, {
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ======================= БАЗА ДАННЫХ =======================
+// Railway требует SSL для подключения к Postgres.
+// rejectUnauthorized: false — потому что у Railway самоподписанный сертификат.
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
+// Обёртка для логов с текстом ошибки
 async function initDB() {
   try {
     await pool.query(`
@@ -30,7 +33,6 @@ async function initDB() {
         username TEXT PRIMARY KEY,
         password_hash TEXT NOT NULL,
         salt TEXT NOT NULL,
-        role TEXT NOT NULL DEFAULT 'user',
         rating INTEGER NOT NULL DEFAULT 1200,
         wins INTEGER NOT NULL DEFAULT 0,
         losses INTEGER NOT NULL DEFAULT 0,
@@ -39,9 +41,6 @@ async function initDB() {
         created_at BIGINT NOT NULL
       );
     `);
-    // Добавляем колонку role, если таблица была создана старой версией
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';`);
-
     await pool.query(`
       CREATE TABLE IF NOT EXISTS games (
         id SERIAL PRIMARY KEY,
@@ -75,7 +74,6 @@ async function loadDB() {
       db.users[row.username] = {
         passwordHash: row.password_hash,
         salt: row.salt,
-        role: row.role || 'user',
         rating: row.rating,
         wins: row.wins,
         losses: row.losses,
@@ -83,12 +81,6 @@ async function loadDB() {
         games: row.games,
         createdAt: Number(row.created_at)
       };
-    }
-    // PeshkaSasha — админ
-    if (db.users['PeshkaSasha'] && db.users['PeshkaSasha'].role !== 'admin') {
-      db.users['PeshkaSasha'].role = 'admin';
-      await pool.query(`UPDATE users SET role = 'admin' WHERE username = 'PeshkaSasha'`);
-      console.log('[DB] PeshkaSasha назначен администратором');
     }
     console.log(`[DB] Загружено: ${Object.keys(db.users).length} игроков`);
   } catch (err) {
@@ -101,16 +93,15 @@ async function saveUser(username) {
   if (!u) return;
   try {
     await pool.query(
-      `INSERT INTO users (username, password_hash, salt, role, rating, wins, losses, draws, games, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO users (username, password_hash, salt, rating, wins, losses, draws, games, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (username) DO UPDATE SET
-         role = EXCLUDED.role,
          rating = EXCLUDED.rating,
          wins = EXCLUDED.wins,
          losses = EXCLUDED.losses,
          draws = EXCLUDED.draws,
          games = EXCLUDED.games`,
-      [username, u.passwordHash, u.salt, u.role || 'user', u.rating, u.wins, u.losses, u.draws, u.games, u.createdAt]
+      [username, u.passwordHash, u.salt, u.rating, u.wins, u.losses, u.draws, u.games, u.createdAt]
     );
   } catch (err) {
     console.error(`[DB] saveUser(${username}) ошибка:`, err.message || err.code || err);
@@ -166,7 +157,6 @@ function publicUser(name) {
   if (!u) return null;
   return {
     username: name,
-    role: u.role || 'user',
     rating: u.rating,
     wins: u.wins,
     losses: u.losses,
@@ -174,11 +164,6 @@ function publicUser(name) {
     games: u.games,
     createdAt: u.createdAt
   };
-}
-function canDeleteMessages(username) {
-  const u = db.users[username];
-  if (!u) return false;
-  return u.role === 'admin' || u.role === 'moderator';
 }
 
 // ======================= ХРАНИЛИЩА В ПАМЯТИ =======================
@@ -336,36 +321,15 @@ async function finishGame(lobbyId, result, reason) {
 }
 
 // ======================= АРЕНЫ =======================
-// Много шаблонов — турниры разных форматов идут часто
 const ARENA_TEMPLATES = [
-  // Пуля
-  { id: 'bullet-1-0-halfhour', name: 'Получасовая пуля 1+0', description: '1+0 · рейтинговая',
+  { id: 'bullet-halfhour', name: 'Получасовая пуля', description: '1+0 · рейтинговая',
     timeControl: 1, increment: 0, durationMin: 25, repeat: 'every30', color: 'bullet' },
-  { id: 'bullet-2-1-hourly', name: 'Ежечасная пуля 2+1', description: '2+1 · рейтинговая',
-    timeControl: 2, increment: 1, durationMin: 30, repeat: 'hourly', color: 'bullet' },
-  { id: 'bullet-1-0-evening', name: 'Вечерняя пуля 1+0', description: '1+0 · рейтинговая',
-    timeControl: 1, increment: 0, durationMin: 20, repeat: 'daily', startHour: 21, color: 'bullet' },
-  // Блиц
-  { id: 'blitz-3-0-hourly', name: 'Ежечасный блиц 3+0', description: '3+0 · рейтинговая',
-    timeControl: 3, increment: 0, durationMin: 40, repeat: 'hourly', color: 'blitz' },
-  { id: 'blitz-3-2-hourly', name: 'Ежечасная блиц-арена 3+2', description: '3+2 · рейтинговая',
+  { id: 'blitz-hourly', name: 'Ежечасная блиц-арена', description: '3+2 · рейтинговая',
     timeControl: 3, increment: 2, durationMin: 50, repeat: 'hourly', color: 'blitz' },
-  { id: 'blitz-5-0-hourly', name: 'Ежечасный блиц 5+0', description: '5+0 · рейтинговая',
-    timeControl: 5, increment: 0, durationMin: 60, repeat: 'hourly', color: 'blitz' },
-  { id: 'blitz-5-3-evening', name: 'Вечерний блиц 5+3', description: '5+3 · рейтинговая',
-    timeControl: 5, increment: 3, durationMin: 60, repeat: 'daily', startHour: 19, color: 'blitz' },
-  // Рапид
-  { id: 'rapid-10-0-daily', name: 'Ежедневная рапид-арена 10+0', description: '10+0 · рейтинговая',
+  { id: 'rapid-daily', name: 'Ежедневная рапид-арена', description: '10+0 · рейтинговая',
     timeControl: 10, increment: 0, durationMin: 90, repeat: 'daily', startHour: 20, color: 'rapid' },
-  { id: 'rapid-10-5-daily', name: 'Ежедневный рапид 10+5', description: '10+5 · рейтинговая',
-    timeControl: 10, increment: 5, durationMin: 90, repeat: 'daily', startHour: 18, color: 'rapid' },
-  { id: 'rapid-15-10-weekend', name: 'Рапид 15+10 по выходным', description: '15+10 · рейтинговая',
-    timeControl: 15, increment: 10, durationMin: 120, repeat: 'weekly', weekday: 6, startHour: 14, color: 'rapid' },
-  // Классика
-  { id: 'classical-30-0-weekly', name: 'Воскресная классика 30+0', description: '30+0 · классика',
-    timeControl: 30, increment: 0, durationMin: 180, repeat: 'weekly', weekday: 0, startHour: 18, color: 'classical' },
-  { id: 'classical-30-20-weekly', name: 'Классика 30+20 по субботам', description: '30+20 · классика',
-    timeControl: 30, increment: 20, durationMin: 180, repeat: 'weekly', weekday: 6, startHour: 18, color: 'classical' }
+  { id: 'weekly-classical', name: 'Воскресная классика', description: '30+0 · классика',
+    timeControl: 30, increment: 0, durationMin: 180, repeat: 'weekly', weekday: 0, startHour: 18, color: 'classical' }
 ];
 
 function nextStartFor(tpl, now) {
@@ -670,9 +634,8 @@ function finishArena(state) {
   state.cleanupTimer = setTimeout(() => arenas.delete(state.id), 2 * 60 * 60 * 1000);
 }
 
-// Расписание на 4 часа вперёд (как просил)
 function getArenaSchedule(hoursAhead) {
-  hoursAhead = hoursAhead || 4;
+  hoursAhead = hoursAhead || 48;
   const now = Date.now();
   const finishedCutoff = now - 60 * 60 * 1000;
   const end = now + hoursAhead * 3600 * 1000;
@@ -707,7 +670,6 @@ function getArenaSchedule(hoursAhead) {
       };
       result.push(instance);
 
-      // Создаём состояние заранее — на будущие можно зарегаться
       if (status === 'live' || (status === 'upcoming' && t - now < 24 * 3600 * 1000)) {
         getOrCreateArenaState(instance);
       }
@@ -793,7 +755,7 @@ io.on('connection', (socket) => {
       const salt = newSalt();
       const passwordHash = hashPassword(password, salt);
       db.users[username] = {
-        passwordHash, salt, role: 'user', rating: 1200,
+        passwordHash, salt, rating: 1200,
         wins: 0, losses: 0, draws: 0, games: 0,
         createdAt: Date.now()
       };
@@ -1032,27 +994,10 @@ io.on('connection', (socket) => {
     if (typeof text !== 'string') return;
     text = text.trim().slice(0, 300);
     if (!text) return;
-    const u = db.users[socket.username];
-    const msg = {
-      id: genId(),
-      user: socket.username,
-      role: u ? (u.role || 'user') : 'user',
-      text, ts: Date.now()
-    };
+    const msg = { user: socket.username, text, ts: Date.now() };
     l.chat.push(msg);
-    if (l.chat.length > 50) l.chat.shift();
+    if (l.chat.length > 20) l.chat.shift();
     io.to(lobbyId).emit('chatMessage', msg);
-  });
-
-  socket.on('deleteChatMessage', ({ lobbyId, messageId }) => {
-    if (!socket.username) return;
-    if (!canDeleteMessages(socket.username)) return;
-    const l = lobbies.get(lobbyId);
-    if (!l) return;
-    const idx = l.chat.findIndex(m => m.id === messageId);
-    if (idx === -1) return;
-    l.chat.splice(idx, 1);
-    io.to(lobbyId).emit('chatMessageDeleted', { messageId });
   });
 
   socket.on('drawOffer', ({ lobbyId }) => {
@@ -1078,7 +1023,7 @@ io.on('connection', (socket) => {
 
   socket.on('getArenas', (cb) => {
     if (typeof cb !== 'function') return;
-    cb(getArenaSchedule(4));
+    cb(getArenaSchedule(48));
   });
 
   socket.on('getMyArenaStates', (cb) => {
@@ -1119,7 +1064,6 @@ io.on('connection', (socket) => {
     const participants = [...state.participants.values()].map(p => ({
       username: p.username, rating: p.rating, score: p.score,
       wins: p.wins, draws: p.draws, losses: p.losses,
-      role: db.users[p.username] ? (db.users[p.username].role || 'user') : 'user',
       winStreak: p.winStreak || 0,
       drawStreak: p.drawStreak || 0,
       paused: !!p.paused,
@@ -1242,20 +1186,7 @@ io.on('connection', (socket) => {
     if (typeof text !== 'string') return;
     text = text.trim().slice(0, 300);
     if (!text) return;
-    const u = db.users[socket.username];
-    io.emit('arenaChatMessage', {
-      user: socket.username,
-      role: u ? (u.role || 'user') : 'user',
-      text,
-      ts: Date.now(),
-      id: genId()
-    });
-  });
-
-  socket.on('deleteArenaChatMessage', ({ arenaId, messageId }) => {
-    if (!socket.username) return;
-    if (!canDeleteMessages(socket.username)) return;
-    io.emit('arenaChatMessageDeleted', { arenaId, messageId });
+    io.emit('arenaChatMessage', { user: socket.username, text, ts: Date.now() });
   });
 
   socket.on('disconnect', () => {
@@ -1294,9 +1225,9 @@ io.on('connection', (socket) => {
     await loadDB();
   } catch (err) {
     console.error('[DB] Не удалось инициализировать базу данных:', err.message || err.code || err);
-    console.error('Проверь переменную DATABASE_URL в Variables сервиса.');
+    console.error('Проверь, что в сервисе kingside-chess добавлена переменная DATABASE_URL со значением Internal Database URL из Postgres-кубика.');
   }
-  getArenaSchedule(4);
+  getArenaSchedule(48);
 
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, '0.0.0.0', () => {
