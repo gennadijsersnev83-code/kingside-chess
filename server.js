@@ -18,9 +18,6 @@ const io = new Server(server, {
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ======================= ХРАНИЛИЩЕ =======================
-// Railway Volume: /app/data/data.json
-// Render: /data/data.json (если диск есть)
-// Локально: ./data.json
 const DB_PATH = process.env.RAILWAY_ENVIRONMENT
   ? path.join('/app/data', 'data.json')
   : (process.env.RENDER ? '/data/data.json' : path.join(__dirname, 'data.json'));
@@ -113,9 +110,22 @@ const lobbies = new Map();
 const socketToLobby = new Map();
 const arenas = new Map();
 
+function countActiveLobbies() {
+  let n = 0;
+  for (const l of lobbies.values()) {
+    if (l.finished) continue;
+    if (l.started) n++;
+  }
+  return n;
+}
+
 function broadcastOnline() {
   io.emit('onlineCount', online.size);
-  io.emit('stats', { online: online.size, games: db.games.length });
+  io.emit('stats', {
+    online: online.size,
+    games: db.games.length,
+    activeGames: countActiveLobbies()
+  });
 }
 function broadcastLobbies() { io.emit('lobbiesUpdate'); }
 
@@ -133,7 +143,38 @@ function cleanupStuckPlaying() {
     }
   }
 }
-setInterval(cleanupStuckPlaying, 5000);
+setInterval(cleanupStuckPlaying, 10000);
+
+// ======================= СПИСОК ТЕКУЩИХ ПАРТИЙ (для просмотра) =======================
+function buildGamesList() {
+  const list = [];
+  for (const [id, l] of lobbies.entries()) {
+    if (l.finished || !l.started) continue;
+    const whiteName = l.hostColor === 'w' ? l.host : l.guest;
+    const blackName = l.hostColor === 'b' ? l.host : l.guest;
+    const whiteU = db.users[whiteName];
+    const blackU = db.users[blackName];
+    list.push({
+      id,
+      white: whiteName,
+      black: blackName,
+      whiteRating: whiteU ? whiteU.rating : null,
+      blackRating: blackU ? blackU.rating : null,
+      timeW: l.timeW,
+      timeB: l.timeB,
+      turn: l.turn,
+      timeControl: l.time,
+      increment: l.inc,
+      isArena: !!l.arenaId,
+      arenaName: l.arenaName || null,
+      fen: l.fen,
+      lastMoveSan: l.chat && l.chat.length ? null : null
+    });
+  }
+  // Сортируем: сначала турнирные, потом обычные
+  list.sort((a, b) => (b.isArena ? 1 : 0) - (a.isArena ? 1 : 0));
+  return list;
+}
 
 // ======================= ФИНАЛИЗАЦИЯ ПАРТИИ =======================
 function finishGame(lobbyId, result, reason) {
@@ -198,17 +239,7 @@ function finishGame(lobbyId, result, reason) {
 
   if (l.arenaId) {
     try { handleArenaGameEnd(l.arenaId, lobbyId, result, whiteName, blackName); }
-    catch (e) {
-      console.error('[arena] handleArenaGameEnd ошибка:', e.message);
-      const st = arenas.get(l.arenaId);
-      if (st) {
-        const wp = st.participants.get(whiteName);
-        const bp = st.participants.get(blackName);
-        if (wp) { wp.isPlaying = false; wp.lobbyId = null; if (!wp.paused) wp.waitingSince = Date.now(); }
-        if (bp) { bp.isPlaying = false; bp.lobbyId = null; if (!bp.paused) bp.waitingSince = Date.now(); }
-        io.emit('arenaUpdate', { arenaId: l.arenaId });
-      }
-    }
+    catch (e) { console.error('[arena] handleArenaGameEnd ошибка:', e.message); }
   }
 
   setTimeout(() => {
@@ -217,7 +248,11 @@ function finishGame(lobbyId, result, reason) {
     broadcastLobbies();
   }, 5000);
 
-  io.emit('stats', { online: online.size, games: db.games.length });
+  io.emit('stats', {
+    online: online.size,
+    games: db.games.length,
+    activeGames: countActiveLobbies()
+  });
 }
 
 // ======================= АРЕНЫ =======================
@@ -289,7 +324,8 @@ function getOrCreateArenaState(instance) {
     top3: null,
     pairingInterval: null,
     cleanupTimer: null,
-    pairingNow: null
+    pairingNow: null,
+    activeLobbies: new Set()
   };
   arenas.set(instance.id, state);
   scheduleArena(state);
@@ -325,11 +361,6 @@ function scheduleArena(state) {
 
   if (endDelay > 0) setTimeout(() => finishArena(state), endDelay);
   else finishArena(state);
-
-  setInterval(() => {
-    if (state.finished) return;
-    io.emit('arenaUpdate', { arenaId: state.id });
-  }, 10000);
 }
 
 function isAvailableForPairing(p) {
@@ -415,11 +446,10 @@ function createArenaPairing(state, a, b) {
     arenaId: state.id,
     arenaName: state.name
   });
+  state.activeLobbies.add(lobbyId);
 
   a.isPlaying = true; a.lobbyId = lobbyId;
   b.isPlaying = true; b.lobbyId = lobbyId;
-
-  console.log(`[arena] ${state.name}: ${a.username}(${a.score}) vs ${b.username}(${b.score})`);
 
   const aSocket = io.sockets.sockets.get(a.socketId);
   const bSocket = io.sockets.sockets.get(b.socketId);
@@ -443,6 +473,11 @@ function createArenaPairing(state, a, b) {
     });
   }
   io.emit('arenaUpdate', { arenaId: state.id });
+  io.emit('stats', {
+    online: online.size,
+    games: db.games.length,
+    activeGames: countActiveLobbies()
+  });
 }
 
 // ======================= СИСТЕМА ОЧКОВ =======================
@@ -467,15 +502,16 @@ function calcArenaPoints(p, result) {
 function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   const state = arenas.get(arenaId);
   if (!state) return;
+  state.activeLobbies.delete(lobbyId);
+
   const whiteP = state.participants.get(whiteName);
   const blackP = state.participants.get(blackName);
 
-  if (state.finished) {
+  if (state.finished || !whiteP || !blackP) {
     if (whiteP) { whiteP.isPlaying = false; whiteP.lobbyId = null; }
     if (blackP) { blackP.isPlaying = false; blackP.lobbyId = null; }
     return;
   }
-  if (!whiteP || !blackP) return;
 
   if (result === 'w') {
     whiteP.score += calcArenaPoints(whiteP, 'win');
@@ -534,9 +570,9 @@ function finishArena(state) {
 }
 
 function getArenaSchedule(hoursAhead) {
-  hoursAhead = hoursAhead || 72;
+  hoursAhead = hoursAhead || 48;
   const now = Date.now();
-  const finishedCutoff = now - 2 * 60 * 60 * 1000;
+  const finishedCutoff = now - 60 * 60 * 1000;
   const end = now + hoursAhead * 3600 * 1000;
   const result = [];
 
@@ -546,7 +582,7 @@ function getArenaSchedule(hoursAhead) {
     const step = stepFor(tpl);
     let safety = 0;
 
-    while (t <= end && safety < 600) {
+    while (t <= end && safety < 200) {
       safety++;
       const endsAt = t + tpl.durationMin * 60 * 1000;
       let status;
@@ -578,7 +614,6 @@ function getArenaSchedule(hoursAhead) {
   return result.sort((a, b) => a.startsAt - b.startsAt);
 }
 
-// Топ-3 активных арен по числу участников — для боковой панели главной
 function getTopLiveArenas() {
   const now = Date.now();
   const list = [];
@@ -627,9 +662,12 @@ setInterval(() => {
 io.on('connection', (socket) => {
   console.log(`[socket] подключён ${socket.id}`);
 
-  // При подключении сразу отдаём счётчики
   socket.emit('onlineCount', online.size);
-  socket.emit('stats', { online: online.size, games: db.games.length });
+  socket.emit('stats', {
+    online: online.size,
+    games: db.games.length,
+    activeGames: countActiveLobbies()
+  });
 
   socket.on('register', ({ username, password }, cb) => {
     if (typeof cb !== 'function') return;
@@ -683,12 +721,50 @@ io.on('connection', (socket) => {
 
   socket.on('getStats', (cb) => {
     if (typeof cb !== 'function') return;
-    cb({ online: online.size, games: db.games.length });
+    cb({ online: online.size, games: db.games.length, activeGames: countActiveLobbies() });
   });
 
   socket.on('getTopArenas', (cb) => {
     if (typeof cb !== 'function') return;
     cb(getTopLiveArenas());
+  });
+
+  // Список текущих партий для просмотра
+  socket.on('getLiveGames', (cb) => {
+    if (typeof cb !== 'function') return;
+    cb(buildGamesList());
+  });
+
+  // Подписка на просмотр конкретной партии
+  socket.on('watchGame', ({ id }, cb) => {
+    const l = lobbies.get(id);
+    if (!l || l.finished || !l.started) {
+      if (typeof cb === 'function') cb({ ok: false, msg: 'Партия недоступна' });
+      return;
+    }
+    socket.join('watch:' + id);
+    const whiteName = l.hostColor === 'w' ? l.host : l.guest;
+    const blackName = l.hostColor === 'b' ? l.host : l.guest;
+    if (typeof cb === 'function') cb({
+      ok: true,
+      game: {
+        id,
+        white: whiteName, black: blackName,
+        whiteRating: db.users[whiteName] ? db.users[whiteName].rating : null,
+        blackRating: db.users[blackName] ? db.users[blackName].rating : null,
+        timeW: l.timeW, timeB: l.timeB,
+        turn: l.turn,
+        timeControl: l.time,
+        increment: l.inc,
+        fen: l.fen,
+        isArena: !!l.arenaId,
+        arenaName: l.arenaName || null
+      }
+    });
+  });
+
+  socket.on('unwatchGame', ({ id }) => {
+    socket.leave('watch:' + id);
   });
 
   socket.on('getLobbies', (cb) => {
@@ -779,6 +855,11 @@ io.on('connection', (socket) => {
 
     cb({ ok: true, id });
     broadcastLobbies();
+    io.emit('stats', {
+      online: online.size,
+      games: db.games.length,
+      activeGames: countActiveLobbies()
+    });
   });
 
   socket.on('move', ({ lobbyId, fen, turn, san }) => {
@@ -802,6 +883,8 @@ io.on('connection', (socket) => {
 
     io.to(lobbyId).emit('boardUpdate', { fen, turn: newTurn, san: san || null });
     io.to(lobbyId).emit('timeUpdate', { timeW: l.timeW, timeB: l.timeB });
+    socket.to('watch:' + lobbyId).emit('boardUpdate', { fen, turn: newTurn, san: san || null });
+    socket.to('watch:' + lobbyId).emit('timeUpdate', { timeW: l.timeW, timeB: l.timeB });
   });
 
   socket.on('resign', ({ lobbyId }) => {
@@ -852,7 +935,7 @@ io.on('connection', (socket) => {
 
   socket.on('getArenas', (cb) => {
     if (typeof cb !== 'function') return;
-    cb(getArenaSchedule(72));
+    cb(getArenaSchedule(48));
   });
 
   socket.on('getMyArenaStates', (cb) => {
@@ -1049,7 +1132,7 @@ io.on('connection', (socket) => {
 
 // ======================= ЗАПУСК =======================
 loadDB();
-getArenaSchedule(72);
+getArenaSchedule(48);
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
