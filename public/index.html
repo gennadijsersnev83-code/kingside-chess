@@ -14,7 +14,7 @@
     --accent: #bf811d; --accent-2: #d99c33;
     --green: #629924; --green-2: #7dbe30; --red: #a53030;
     --light-sq: #e8d9b8; --dark-sq: #8b6f47; --yellow-sq: #f7ec74;
-    --gold: #ffd54f; --silver: #c0c0c0; --bronze: #cd7f32;
+    --gold: #ffd54f;
     --role-admin: #e5484d; --role-mod: #4a9ce8; --role-dev: #a56ce8;
   }
   html, body { height: 100%; margin: 0; }
@@ -179,92 +179,32 @@
 
   .arenaEmpty { padding: 40px 20px; text-align: center; color: var(--muted); font-size: 13px; }
 
-  .watchWrap {
-    display: grid;
-    grid-template-columns: 320px 1fr;
-    gap: 16px;
-    max-width: 1100px;
-    margin: 0 auto;
-    align-items: start;
-  }
+  .watchWrap { display: grid; grid-template-columns: 320px 1fr; gap: 16px; max-width: 1100px; margin: 0 auto; align-items: start; }
   @media (max-width: 900px) { .watchWrap { grid-template-columns: 1fr; } }
-  .watchList {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
-    overflow: hidden;
-  }
-  .watchListHeader {
-    padding: 12px 14px; background: var(--panel-2); border-bottom: 1px solid var(--border);
-    font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; font-weight: 700;
-    display: flex; justify-content: space-between; align-items: center;
-  }
+  .watchList { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .watchListHeader { padding: 12px 14px; background: var(--panel-2); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; font-weight: 700; display: flex; justify-content: space-between; align-items: center; }
   .watchListBody { padding: 8px; max-height: 600px; overflow-y: auto; }
-  .watchRow {
-    background: var(--panel-2);
-    border-radius: 6px;
-    padding: 10px 12px;
-    margin-bottom: 6px;
-    cursor: pointer;
-    border-left: 3px solid var(--accent);
-    transition: .15s;
-  }
+  .watchRow { background: var(--panel-2); border-radius: 6px; padding: 10px 12px; margin-bottom: 6px; cursor: pointer; border-left: 3px solid var(--accent); transition: .15s; }
   .watchRow:hover { background: var(--panel-hover); transform: translateX(2px); }
   .watchRow.isArena { border-left-color: var(--green-2); }
-  .watchRow .wrPlayers {
-    display: flex; justify-content: space-between; align-items: center;
-    font-size: 13px; color: var(--text-bright); font-weight: 500;
-    margin-bottom: 4px;
-  }
+  .watchRow .wrPlayers { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text-bright); font-weight: 500; margin-bottom: 4px; }
   .watchRow .wrPlayers .prat { color: var(--muted); font-weight: 400; font-size: 11px; margin-left: 6px; }
-  .watchRow .wrMeta {
-    display: flex; justify-content: space-between;
-    font-size: 11px; color: var(--muted);
-  }
+  .watchRow .wrMeta { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
   .watchRow .wrMeta b { color: var(--text-bright); }
-  .watchRow .liveDot {
-    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
-    background: #ff5555; margin-right: 6px;
-    animation: pulse 1.2s infinite;
-    vertical-align: middle;
-  }
-  .watchBoard {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
-    padding: 16px;
-  }
-  .watchBoard .wbHeader {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 12px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--border);
-  }
-  .watchBoard .wbHeader .wbTitle {
-    font-size: 16px; color: var(--text-bright); font-weight: 600;
-  }
+  .watchRow .liveDot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #ff5555; margin-right: 6px; animation: pulse 1.2s infinite; vertical-align: middle; }
+  .watchBoard { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 16px; }
+  .watchBoard .wbHeader { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+  .watchBoard .wbHeader .wbTitle { font-size: 16px; color: var(--text-bright); font-weight: 600; }
   .watchBoard .wbHeader .wbSub { font-size: 12px; color: var(--muted); margin-top: 2px; }
   .watchBoard .wbPlayers { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
-  .watchBoard .wbPlayer {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 6px 10px; border-radius: 4px;
-    background: var(--panel-2);
-    font-size: 13px;
-  }
+  .watchBoard .wbPlayer { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; border-radius: 4px; background: var(--panel-2); font-size: 13px; }
   .watchBoard .wbPlayer.active { border: 1px solid var(--green); }
   .watchBoard .wbPlayer .name { color: var(--text-bright); font-weight: 600; }
   .watchBoard .wbPlayer .rating { color: var(--muted); font-size: 12px; margin-left: 6px; }
   .watchBoard .wbPlayer .time { font-family: monospace; font-size: 18px; font-weight: 700; color: var(--text-bright); }
-  .watchBoard .wbBoardWrap {
-    width: 100%; aspect-ratio: 1/1; max-width: 480px; margin: 0 auto 12px;
-    position: relative;
-  }
-  .watchBoard .wbBoard {
-    display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr);
-    width: 100%; height: 100%;
-    border: 3px solid #0a0a0a; border-radius: 4px;
-    box-shadow: 0 8px 30px rgba(0,0,0,.5);
-    user-select: none; -webkit-user-select: none; overflow: hidden;
-  }
-  .watchBoard .wbEmpty {
-    padding: 80px 20px; text-align: center; color: var(--muted); font-size: 14px;
-  }
+  .watchBoard .wbBoardWrap { width: 100%; aspect-ratio: 1/1; max-width: 480px; margin: 0 auto 12px; position: relative; }
+  .watchBoard .wbBoard { display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr); width: 100%; height: 100%; border: 3px solid #0a0a0a; border-radius: 4px; box-shadow: 0 8px 30px rgba(0,0,0,.5); user-select: none; -webkit-user-select: none; overflow: hidden; }
+  .watchBoard .wbEmpty { padding: 80px 20px; text-align: center; color: var(--muted); font-size: 14px; }
 
   .arenasHeader { display: flex; justify-content: space-between; align-items: center; margin: 0 0 16px 0; }
   .arenasHeader h1 { font-weight: 300; font-size: 32px; color: var(--text-bright); margin: 0; }
@@ -272,51 +212,58 @@
   .arenasEmpty { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 14px; }
   .arenasScroller { overflow-x: auto; overflow-y: hidden; position: relative; }
   .timeRow {
-    display: flex; padding: 10px 0; border-bottom: 1px solid var(--border);
+    display: flex; padding: 8px 0; border-bottom: 1px solid var(--border);
     background: var(--panel-2); position: sticky; top: 0; z-index: 2;
     min-width: max-content;
   }
   .timeCell {
-    color: var(--muted); font-size: 12px; text-align: center; font-weight: 500;
+    color: var(--muted); font-size: 11px; text-align: center; font-weight: 500;
     width: 180px; min-width: 180px; flex-shrink: 0;
     padding: 2px 0;
   }
   .timeCell.now { color: var(--accent); font-weight: 700; }
   .arenaRowGrid {
-    display: flex; padding: 6px 0; min-height: 96px; min-width: max-content;
-    border-bottom: 1px solid rgba(58,56,51,.4);
+    position: relative;
+    height: 52px;
+    min-width: max-content;
+    border-bottom: 1px solid rgba(58,56,51,.35);
   }
   .arenaRowGrid:last-child { border-bottom: none; }
-  .arenaSlot { width: 180px; min-width: 180px; flex-shrink: 0; padding: 3px; position: relative; }
   .arenaBlock {
-    border-radius: 8px; padding: 12px 14px;
-    color: #fff; cursor: pointer;
+    position: absolute;
+    top: 4px; bottom: 4px;
+    border-radius: 6px;
+    padding: 4px 8px;
+    color: #fff;
+    cursor: pointer;
     display: flex; flex-direction: column; justify-content: center;
-    gap: 6px; height: 100%; min-height: 84px;
-    transition: transform .15s, box-shadow .15s;
-    position: relative; overflow: hidden; box-sizing: border-box;
+    gap: 1px;
+    transition: transform .15s, box-shadow .15s, filter .15s;
+    overflow: hidden;
+    box-sizing: border-box;
   }
-  .arenaBlock:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,.4); }
+  .arenaBlock:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.4); filter: brightness(1.08); }
   .arenaBlock .tname {
-    font-size: 15px; font-weight: 700;
+    font-size: 12px; font-weight: 700; line-height: 1.15;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .arenaBlock .tinfo {
-    font-size: 12px; opacity: .9;
-    display: flex; justify-content: space-between; gap: 8px;
+    font-size: 10px; opacity: .9; line-height: 1.1;
+    display: flex; justify-content: space-between; gap: 6px;
+    white-space: nowrap; overflow: hidden;
   }
-  .arenaBlock.past { opacity: .35; cursor: default; }
-  .arenaBlock.past:hover { transform: none; box-shadow: none; }
+  .arenaBlock.past { opacity: .35; cursor: default; filter: saturate(.5); }
+  .arenaBlock.past:hover { transform: none; box-shadow: none; filter: saturate(.5); }
   .arenaBlock.live .tname::before { content: '● '; animation: pulse 1.5s infinite; }
-  .arenaBlock.live { box-shadow: 0 0 0 2px rgba(255,255,255,.3), 0 0 16px rgba(255,200,80,.4); }
+  .arenaBlock.live { box-shadow: 0 0 0 2px rgba(255,255,255,.3), 0 0 12px rgba(255,200,80,.35); }
   .arenaBlock.joined { outline: 2px solid #fff; outline-offset: -2px; }
   @keyframes pulse { 50% { opacity: .4 } }
   .arenaBlock.bullet { background: linear-gradient(180deg,#c94a3a,#a53030); }
   .arenaBlock.blitz  { background: linear-gradient(180deg,#7db63a,#5a8a22); }
   .arenaBlock.rapid  { background: linear-gradient(180deg,#4a9ce8,#2f77b8); }
   .arenaBlock.classical { background: linear-gradient(180deg,#6f5fbf,#4a3d8f); }
-  .nowLine { position: absolute; top: 40px; bottom: 0; width: 2px; background: #e5484d; z-index: 3; pointer-events: none; }
-  .nowLine::before { content: '▼'; position: absolute; top: -14px; left: 50%; transform: translateX(-50%); color: #e5484d; font-size: 12px; }
+  .nowLine { position: absolute; top: 32px; bottom: 0; width: 2px; background: #e5484d; z-index: 3; pointer-events: none; }
+  .nowLine::before { content: '▼'; position: absolute; top: -12px; left: 50%; transform: translateX(-50%); color: #e5484d; font-size: 10px; }
 
   .arenaPage { display: grid; grid-template-columns: 260px 1fr 320px; gap: 16px; align-items: start; max-width: 1200px; margin: 0 auto; }
   @media (max-width: 1100px) { .arenaPage { grid-template-columns: 1fr; } }
@@ -333,7 +280,7 @@
   .arenaChatBox { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; display: flex; flex-direction: column; height: 320px; overflow: hidden; }
   .arenaChatHeader { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; color: var(--text-bright); }
   .arenaChatMessages { flex: 1; overflow-y: auto; padding: 8px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
-  .arenaChatMessages .msg { line-height: 1.35; word-wrap: break-word; color: var(--text-bright); position: relative; padding-right: 4px; border-radius: 3px; }
+  .arenaChatMessages .msg { line-height: 1.35; word-wrap: break-word; color: var(--text-bright); position: relative; }
   .arenaChatMessages .msg .u { color: var(--accent); font-weight: 600; }
   .arenaChatMessages .msg .t { color: var(--muted); font-size: 11px; margin-left: 4px; }
   .arenaChatMessages .sys { color: var(--muted); font-size: 12px; font-style: italic; }
@@ -469,7 +416,7 @@
   #chatMessages .msg:hover .modBtn { opacity: 1; }
   #chatMessages .msg .modBtn:hover { color: #ff8080; }
   .modMenu {
-    position: absolute;
+    position: fixed;
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -524,11 +471,15 @@
   .roleBadge.admin { color: var(--role-admin); }
   .roleBadge.mod { color: var(--role-mod); }
   .roleBadge.dev { color: var(--role-dev); }
-  .catRatingsGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
-  .catCard {
-    background: var(--panel-2); border: 1px solid var(--border);
-    border-radius: 6px; padding: 10px 12px; text-align: center;
+  .muteBadge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 10px;
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .5px;
+    border: 1px solid #ff9c3a; color: #ff9c3a;
   }
+  .catRatingsGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+  .catCard { background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; text-align: center; }
   .catCard .catName { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 4px; }
   .catCard .catIcon { font-size: 20px; margin-bottom: 2px; }
   .catCard .catRating { font-size: 22px; font-weight: 700; color: var(--text-bright); }
@@ -836,6 +787,7 @@
   let lobbyId = null;
   let opponentName = '—';
   let opponentRating = null;
+  let opponentIsAdmin = false;
   let currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
   let selected = null;
   let legalMoves = [];
@@ -1096,6 +1048,22 @@
     return san;
   }
 
+  // ============ HTML-РЕНДЕР НИКА ============
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+  }
+  function nickHtml(username, isAdminFlag) {
+    if (!username) return '';
+    // Флаг isAdmin может прийти с сервера явно; иначе подстраховка по нику 'admin'
+    const admin = (typeof isAdminFlag === 'boolean' ? isAdminFlag : (username === 'admin'));
+    const crown = admin ? '<span class="crown">👑</span>' : '';
+    return crown + escapeHtml(username);
+  }
+  function nickAdminFromCache(username) {
+    // Быстрая проверка на хардкод — если у нас нет флага с сервера
+    return username === 'admin';
+  }
+
   // ============ ОТРИСОВКА ДОСКИ ============
   function renderBoard() {
     const fenToShow = (viewIndex >= 0 && viewIndex < moveFens.length) ? moveFens[viewIndex] : currentFen;
@@ -1306,19 +1274,11 @@
   }
   window.doLogin = doLogin;
 
-  function nickHtml(username) {
-    if (!username) return '';
-    if (username === 'admin') {
-      return `<span class="crown">👑</span>${escapeHtml(username)}`;
-    }
-    return escapeHtml(username);
-  }
   function updateTopbarUser() {
     if (!me) return;
     document.getElementById('userBtn').style.display = 'flex';
     document.getElementById('logoutBtn').style.display = 'block';
-    const crown = me.isAdmin ? '<span class="crown">👑</span>' : '';
-    document.getElementById('userName').innerHTML = crown + escapeHtml(me.username) + ' (' + me.rating + ')';
+    document.getElementById('userName').innerHTML = nickHtml(me.username, me.isAdmin) + ' (' + me.rating + ')';
     document.getElementById('userAvatar').textContent = me.username.charAt(0).toUpperCase();
   }
   function logout() { location.reload(); }
@@ -1448,9 +1408,8 @@
       currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
       moveHistory = []; moveFens = []; viewIndex = -1; lastMove = null;
       gameActive = false; gameEnded = false; boardFlipped = false;
-      opponentName = '—'; opponentRating = null;
-      currentGameIsArena = false;
-      currentArenaName = null;
+      opponentName = '—'; opponentRating = null; opponentIsAdmin = false;
+      currentGameIsArena = false; currentArenaName = null;
       lastBoardHash = '';
       resetGameUI();
       hideGameResultBar();
@@ -1479,7 +1438,7 @@
     document.getElementById('topRating').textContent = '';
     document.getElementById('topDot').className = 'dot';
     document.getElementById('topTime').textContent = '--:--';
-    document.getElementById('bottomName').innerHTML = me ? nickHtml(me.username) : '—';
+    document.getElementById('bottomName').innerHTML = me ? nickHtml(me.username, me.isAdmin) : '—';
     document.getElementById('bottomRating').textContent = me ? me.rating : '';
     document.getElementById('bottomDot').className = 'dot';
     document.getElementById('bottomTime').textContent = '--:--';
@@ -1575,7 +1534,7 @@
     document.getElementById('drawDeclineBtn').onclick = () => { socket.emit('drawDecline', { lobbyId }); overlay.remove(); };
   }
 
-  // ============ ЧАТ ПАРТИИ + МОДЕРАЦИЯ ============
+  // ============ ЧАТ + МОДЕРАЦИЯ ============
   function renderChatMsg(msg) {
     const box = document.getElementById('chatMessages');
     const div = document.createElement('div');
@@ -1584,15 +1543,21 @@
     const time = new Date(msg.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     let modHtml = '';
     if (me && me.isMod) {
-      modHtml = `<span class="modBtn" onclick="openModMenu(event,'${msg.id}','${escapeHtml(msg.user)}')" title="Модерация">⚙</span>`;
+      modHtml = `<span class="modBtn" data-mod-btn="1" title="Модерация">⚙</span>`;
     }
-    div.innerHTML = `<span class="u">${nickHtml(msg.user)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
+    div.innerHTML = `<span class="u">${nickHtml(msg.user, msg.user === 'admin')}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
+    if (me && me.isMod) {
+      const btn = div.querySelector('.modBtn');
+      if (btn) {
+        btn.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          openModMenu(ev, msg.id, msg.user, 'game', lobbyId);
+        });
+      }
+    }
     box.appendChild(div);
     while (box.children.length > 50) box.removeChild(box.firstChild);
     box.scrollTop = box.scrollHeight;
-  }
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   }
   function sendChat(e) {
     e.preventDefault();
@@ -1604,57 +1569,60 @@
   }
   window.sendChat = sendChat;
 
-  // Меню модерации
+  // ============ МЕНЮ МОДЕРАЦИИ ============
   let modMenuEl = null;
   function closeModMenu() {
     if (modMenuEl) { modMenuEl.remove(); modMenuEl = null; }
   }
-  window.openModMenu = function(ev, msgId, username) {
-    ev.stopPropagation();
+  function openModMenu(ev, msgId, username, scope, scopeId) {
     closeModMenu();
     if (!me || !me.isMod) return;
     const rect = ev.target.getBoundingClientRect();
     const menu = document.createElement('div');
     menu.className = 'modMenu';
-    menu.style.left = Math.min(window.innerWidth - 200, rect.left) + 'px';
-    menu.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+    menu.style.left = Math.min(window.innerWidth - 200, Math.max(8, rect.left - 60)) + 'px';
+    menu.style.top = Math.min(window.innerHeight - 300, rect.bottom + 4) + 'px';
     menu.innerHTML = `
       <div class="lbl">Сообщение</div>
-      <button id="modDelBtn">🗑 Удалить сообщение</button>
+      <button data-act="del">🗑 Удалить сообщение</button>
       <div class="sep"></div>
       <div class="lbl">Игрок: ${escapeHtml(username)}</div>
-      <button id="modMute5">🔇 Мут 5 минут</button>
-      <button id="modMute30">🔇 Мут 30 минут</button>
-      <button id="modMute60">🔇 Мут 1 час</button>
-      <button id="modMute1440">🔇 Мут 1 сутки</button>
-      <button id="modUnmuteBtn">🔊 Снять мут</button>
+      <button data-act="mute" data-min="5">🔇 Мут 5 минут</button>
+      <button data-act="mute" data-min="30">🔇 Мут 30 минут</button>
+      <button data-act="mute" data-min="60">🔇 Мут 1 час</button>
+      <button data-act="mute" data-min="1440">🔇 Мут 1 сутки</button>
+      <button data-act="unmute">🔊 Снять мут</button>
     `;
     document.body.appendChild(menu);
     modMenuEl = menu;
-    menu.querySelector('#modDelBtn').onclick = () => {
-      socket.emit('modDeleteMessage', { lobbyId, msgId }, (r) => {
-        if (!r || !r.ok) alert((r && r.msg) || 'Ошибка');
-        closeModMenu();
-      });
-    };
-    const mute = (minutes) => {
-      socket.emit('modMuteUser', { username, minutes }, (r) => {
-        if (!r || !r.ok) alert((r && r.msg) || 'Ошибка');
-        closeModMenu();
-      });
-    };
-    menu.querySelector('#modMute5').onclick = () => mute(5);
-    menu.querySelector('#modMute30').onclick = () => mute(30);
-    menu.querySelector('#modMute60').onclick = () => mute(60);
-    menu.querySelector('#modMute1440').onclick = () => mute(1440);
-    menu.querySelector('#modUnmuteBtn').onclick = () => {
-      socket.emit('modUnmuteUser', { username }, (r) => {
-        if (!r || !r.ok) alert((r && r.msg) || 'Ошибка');
-        closeModMenu();
-      });
-    };
-  };
-  document.addEventListener('click', closeModMenu);
+
+    menu.addEventListener('click', (e) => {
+      const act = e.target.dataset.act;
+      if (act === 'del') {
+        const evName = scope === 'arena' ? 'modDeleteArenaMessage' : 'modDeleteMessage';
+        const payload = scope === 'arena' ? { arenaId: scopeId, msgId } : { lobbyId: scopeId, msgId };
+        socket.emit(evName, payload, (r) => {
+          if (!r || !r.ok) alert((r && r.msg) || 'Ошибка');
+          closeModMenu();
+        });
+      } else if (act === 'mute') {
+        const minutes = +e.target.dataset.min;
+        socket.emit('modMuteUser', { username, minutes }, (r) => {
+          if (!r || !r.ok) alert((r && r.msg) || 'Ошибка');
+          closeModMenu();
+        });
+      } else if (act === 'unmute') {
+        socket.emit('modUnmuteUser', { username }, (r) => {
+          if (!r || !r.ok) alert((r && r.msg) || 'Ошибка');
+          closeModMenu();
+        });
+      }
+    });
+  }
+  window.openModMenu = openModMenu;
+  document.addEventListener('click', (e) => {
+    if (modMenuEl && !modMenuEl.contains(e.target)) closeModMenu();
+  });
 
   // ============ ПРОСМОТР ПАРТИЙ ============
   function refreshWatchList(force) {
@@ -1670,8 +1638,8 @@
       }
       box.innerHTML = list.map(g => {
         const cls = 'watchRow' + (g.isArena ? ' isArena' : '');
-        const whiteName = nickHtml(g.white);
-        const blackName = nickHtml(g.black);
+        const whiteName = nickHtml(g.white, g.whiteIsAdmin);
+        const blackName = nickHtml(g.black, g.blackIsAdmin);
         const whiteR = g.whiteRating ? ` <span class="prat">(${g.whiteRating})</span>` : '';
         const blackR = g.blackRating ? ` <span class="prat">(${g.blackRating})</span>` : '';
         const arenaTag = g.isArena ? ` · ${escapeHtml(g.arenaName || 'турнир')}` : '';
@@ -1756,11 +1724,11 @@
       </div>
       <div class="wbPlayers">
         <div class="wbPlayer ${blackActive ? 'active' : ''}">
-          <span><span class="name">⚫ ${nickHtml(g.black)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}</span>
+          <span><span class="name">⚫ ${nickHtml(g.black, g.blackIsAdmin)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}</span>
           <span class="time">${formatTime(g.timeB)}</span>
         </div>
         <div class="wbPlayer ${whiteActive ? 'active' : ''}">
-          <span><span class="name">⚪ ${nickHtml(g.white)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}</span>
+          <span><span class="name">⚪ ${nickHtml(g.white, g.whiteIsAdmin)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}</span>
           <span class="time">${formatTime(g.timeW)}</span>
         </div>
       </div>
@@ -1792,16 +1760,24 @@
   window.openProfileView = openProfileView;
 
   function renderProfilePage(user, games, history) {
-    document.getElementById('pAvatarBig').textContent = user.username.charAt(0).toUpperCase();
-    const crownHtml = user.isAdmin ? '<span class="pCrown">👑</span>' : '';
-    document.getElementById('pAvatarBig').innerHTML = crownHtml + user.username.charAt(0).toUpperCase();
-    document.getElementById('pName').innerHTML = nickHtml(user.username);
-    // Бейджи ролей
+    // Аватар
+    document.getElementById('pAvatarBig').innerHTML =
+      (user.isAdmin ? '<span class="pCrown">👑</span>' : '') + user.username.charAt(0).toUpperCase();
+
+    // Ник
+    document.getElementById('pName').innerHTML = nickHtml(user.username, user.isAdmin);
+
+    // Бейджи
     const badges = [];
     if (user.role === 'admin') badges.push('<span class="roleBadge admin">👑 Админ</span>');
     if (user.role === 'moderator') badges.push('<span class="roleBadge mod">🛡 Модератор</span>');
     if (user.username === 'admin') badges.push('<span class="roleBadge dev">⚙ Разраб</span>');
+    if (user.mutedUntil && user.mutedUntil > Date.now()) {
+      const mins = Math.ceil((user.mutedUntil - Date.now()) / 60000);
+      badges.push(`<span class="muteBadge">🔇 Мут ${mins} мин</span>`);
+    }
     document.getElementById('pRoleBadges').innerHTML = badges.join(' ');
+
     const date = new Date(user.createdAt);
     document.getElementById('pSub').textContent = `На сайте с ${date.toLocaleDateString('ru-RU')} · ${user.games} партий`;
     document.getElementById('pRating').textContent = user.rating;
@@ -1891,7 +1867,7 @@
       const catBadge = g.category ? `<span style="color:var(--muted);font-size:11px;margin-left:4px;">[${g.category}]</span>` : '';
       const row = document.createElement('div');
       row.className = 'gameRow';
-      row.innerHTML = `<span class="res ${resClass}">${resChar}</span><span class="opp">${iAmWhite ? '⚪' : '⚫'} против <b>${nickHtml(opp)}</b>${catBadge}</span><span class="delta ${deltaClass}">${deltaStr} (${myAfter})</span><span class="date">${dateStr}</span>`;
+      row.innerHTML = `<span class="res ${resClass}">${resChar}</span><span class="opp">${iAmWhite ? '⚪' : '⚫'} против <b>${nickHtml(opp, opp === 'admin')}</b>${catBadge}</span><span class="delta ${deltaClass}">${deltaStr} (${myAfter})</span><span class="date">${dateStr}</span>`;
       el.appendChild(row);
     });
   }
@@ -1950,12 +1926,16 @@
       return;
     }
     const now = Date.now();
-    const SLOT_MS = 10 * 60 * 1000;
-    const COLS = 36;
+    const SLOT_MS = 10 * 60 * 1000;   // 10 минут на деление
+    const SLOT_PX = 180;              // 180px на 10 минут = 18px/мин
+    const COLS = 36;                  // 6 часов вперёд
     const startMs = Math.floor((now - SLOT_MS) / SLOT_MS) * SLOT_MS;
     const endMs = startMs + COLS * SLOT_MS;
+
     const visible = arenasCache.filter(a => a.endsAt > startMs && a.startsAt < endMs);
     const sorted = visible.slice().sort((a, b) => a.startsAt - b.startsAt);
+
+    // Укладка в дорожки: кладём в первую, где предыдущий закончился <= start
     const rows = [];
     for (const arena of sorted) {
       let placed = false;
@@ -1965,26 +1945,27 @@
       }
       if (!placed) rows.push([arena]);
     }
-    function colStart(ts) { return Math.max(0, Math.round((ts - startMs) / SLOT_MS)); }
-    function colEnd(ts) { return Math.min(COLS, Math.ceil((ts - startMs) / SLOT_MS)); }
+
+    const toPx = (ts) => ((ts - startMs) / SLOT_MS) * SLOT_PX;
+    const rowWidth = COLS * SLOT_PX;
 
     let html = '<div class="arenasScroller">';
+
+    // Шкала времени
     html += '<div class="timeRow">';
     for (let i = 0; i < COLS; i++) {
       const t = startMs + i * SLOT_MS;
-      const label = fmtHHMM(t);
       const isNow = Math.abs(t - now) < SLOT_MS / 2;
-      html += `<div class="timeCell${isNow?' now':''}">${label}</div>`;
+      html += `<div class="timeCell${isNow?' now':''}">${fmtHHMM(t)}</div>`;
     }
     html += '</div>';
+
+    // Дорожки с блоками
     for (const row of rows) {
-      html += '<div class="arenaRowGrid">';
-      let currentCol = 0;
-      const rowSorted = row.slice().sort((a, b) => a.startsAt - b.startsAt);
-      for (const arena of rowSorted) {
-        const cs = colStart(arena.startsAt);
-        const ce = colEnd(arena.endsAt);
-        while (currentCol < cs) { html += '<div class="arenaSlot"></div>'; currentCol++; }
+      html += `<div class="arenaRowGrid" style="width:${rowWidth}px;">`;
+      for (const arena of row) {
+        const left = toPx(arena.startsAt);
+        const width = Math.max(30, toPx(arena.endsAt) - left);
         const isPast = arena.endsAt < now;
         const isLive = arena.status === 'live';
         const colorClass = arena.color || 'blitz';
@@ -1993,22 +1974,26 @@
         const clickable = !isPast || isLive;
         const cls = `arenaBlock ${colorClass}${isPast && !isLive ? ' past' : ''}${isLive ? ' live' : ''}${joined ? ' joined' : ''}`;
         const tinfo = `${arena.timeControl}+${arena.increment}`;
-        const participantsCount = myState && myState.participantsCount || 0;
+        const participantsCount = (myState && myState.participantsCount) || 0;
         const clickAttr = clickable ? `onclick="openArenaPage('${arena.id}')"` : '';
         const cursorStyle = clickable ? 'cursor:pointer' : 'cursor:default';
-        html += `<div class="arenaSlot"><div class="${cls}" style="${cursorStyle}" ${clickAttr}><div class="tname">${escapeHtml(arena.name)}</div><div class="tinfo"><span>${tinfo}</span><span>👥 ${participantsCount}</span></div></div></div>`;
-        currentCol++;
-        while (currentCol < ce) { html += '<div class="arenaSlot"></div>'; currentCol++; }
+        const showInfo = width >= 100;
+        html += `<div class="${cls}" style="left:${left}px; width:${width}px; ${cursorStyle}" ${clickAttr} title="${escapeHtml(arena.name)} · ${tinfo}">
+          <div class="tname">${escapeHtml(arena.name)}</div>
+          ${showInfo ? `<div class="tinfo"><span>${tinfo}</span><span>👥 ${participantsCount}</span></div>` : ''}
+        </div>`;
       }
       html += '</div>';
     }
-    const nowCol = (now - startMs) / SLOT_MS;
-    const lineLeft = nowCol * 180 + 90;
-    html += `<div class="nowLine" style="left:${lineLeft}px;"></div>`;
+
+    // Красная линия «сейчас»
+    const nowLeft = toPx(now);
+    html += `<div class="nowLine" style="left:${nowLeft}px;"></div>`;
     html += '</div>';
+
     wrap.innerHTML = html;
     const scroller = wrap.querySelector('.arenasScroller');
-    if (scroller) scroller.scrollLeft = Math.max(0, lineLeft - 300);
+    if (scroller) scroller.scrollLeft = Math.max(0, nowLeft - 300);
   }
 
   function openArenaPage(arenaId) {
@@ -2122,7 +2107,7 @@
       let streakTag = '';
       if (p.winStreak >= 3) streakTag = `<span class="streak">🔥${p.winStreak}</span>`;
       else if (p.drawStreak >= 2) streakTag = `<span class="streak">½${p.drawStreak}</span>`;
-      return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''}"><span class="place ${placeCls}">${place}</span><span class="pname">${nickHtml(p.username)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
+      return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''}"><span class="place ${placeCls}">${place}</span><span class="pname">${nickHtml(p.username, p.isAdmin)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
     }).join('');
   }
   function filterArenaParticipants() {
@@ -2141,7 +2126,7 @@
       if (hash === lastArenaGamesHash) return;
       lastArenaGamesHash = hash;
       if (!list || !list.length) { el.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>'; return; }
-      el.innerHTML = list.map(g => `<div class="arenaGameCard"><div class="names"><div><span class="liveDot"></span>${nickHtml(g.white)}</div><div style="padding-left:14px;">${nickHtml(g.black)}</div></div><div class="meta"><span>${g.moveCount} ходов</span><span>${formatTime(g.timeW)} · ${formatTime(g.timeB)}</span></div></div>`).join('');
+      el.innerHTML = list.map(g => `<div class="arenaGameCard"><div class="names"><div><span class="liveDot"></span>${nickHtml(g.white, g.whiteIsAdmin)}</div><div style="padding-left:14px;">${nickHtml(g.black, g.blackIsAdmin)}</div></div><div class="meta"><span>${g.moveCount} ходов</span><span>${formatTime(g.timeW)} · ${formatTime(g.timeB)}</span></div></div>`).join('');
     });
   }
 
@@ -2154,7 +2139,7 @@
     podium.innerHTML = order.map(i => {
       const p = top3[i];
       if (!p) return '';
-      return `<div class="awbItem ${medals[i]}"><div class="place">${places[i]}</div><div class="n">${nickHtml(p.username)}</div><div class="s">${p.score}</div></div>`;
+      return `<div class="awbItem ${medals[i]}"><div class="place">${places[i]}</div><div class="n">${nickHtml(p.username, p.username === 'admin')}</div><div class="s">${p.score}</div></div>`;
     }).join('');
     banner.style.display = 'block';
   }
@@ -2211,9 +2196,21 @@
       const time = new Date(msg.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
       let modHtml = '';
       if (me && me.isMod) {
-        modHtml = `<span class="modBtn" onclick="openModMenu(event,'${msg.id}','${escapeHtml(msg.user)}')" title="Модерация">⚙</span>`;
+        modHtml = `<span class="modBtn" title="Модерация">⚙</span>`;
       }
-      div.innerHTML = `<span class="u">${nickHtml(msg.user)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
+      div.innerHTML = `<span class="u">${nickHtml(msg.user, msg.user === 'admin')}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
+      if (me && me.isMod) {
+        const btn = div.querySelector('.modBtn');
+        if (btn) {
+          btn.style.marginLeft = '6px';
+          btn.style.cursor = 'pointer';
+          btn.style.color = 'var(--muted)';
+          btn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            openModMenu(ev, msg.id, msg.user, 'arena', currentArenaId);
+          });
+        }
+      }
     }
     box.appendChild(div);
     while (box.children.length > 60) box.removeChild(box.firstChild);
@@ -2227,7 +2224,7 @@
     document.getElementById('bottomClock').classList.toggle('low', myTime <= 20);
   }
 
-  // ============ СОБЫТИЯ СЕРВЕРА ============
+  // ============ СОБЫТИЯ ============
   socket.on('onlineCount', () => {});
   socket.on('stats', (s) => {
     if (!s) return;
@@ -2250,6 +2247,7 @@
     inc = gameInc || 0;
     opponentName = opponent || 'Соперник';
     opponentRating = oppRating || null;
+    opponentIsAdmin = opponentName === 'admin';
     myTime = time * 60;
     oppTime = time * 60;
     currentFen = fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
@@ -2261,11 +2259,11 @@
     currentArenaId = arenaId || null;
     currentArenaName = arenaName || null;
     lastBoardHash = '';
-    document.getElementById('bottomName').innerHTML = nickHtml(me.username);
+    document.getElementById('bottomName').innerHTML = nickHtml(me.username, me.isAdmin);
     document.getElementById('bottomRating').textContent = me.rating;
     document.getElementById('bottomDot').className = 'dot ' + (myColor === 'w' ? 'w' : 'b');
     document.getElementById('bottomTime').textContent = formatTime(time * 60);
-    document.getElementById('topName').innerHTML = nickHtml(opponentName);
+    document.getElementById('topName').innerHTML = nickHtml(opponentName, opponentIsAdmin);
     document.getElementById('topRating').textContent = opponentRating || '';
     document.getElementById('topDot').className = 'dot ' + (myColor === 'w' ? 'b' : 'w');
     document.getElementById('topTime').textContent = formatTime(time * 60);
@@ -2328,17 +2326,24 @@
   });
 
   socket.on('chatMessage', (msg) => renderChatMsg(msg));
+
+  // Удаление сообщения (модерация) — с любого чата
   socket.on('chatMessageDeleted', ({ msgId }) => {
     const el = document.querySelector(`#chatMessages .msg[data-msg-id="${msgId}"]`);
     if (el) el.remove();
     const el2 = document.querySelector(`#arenaChatMessages .msg[data-msg-id="${msgId}"]`);
     if (el2) el2.remove();
   });
+
   socket.on('chatError', ({ msg }) => { alert(msg); });
+
   socket.on('modAction', (info) => {
-    // Уведомление о действиях модерации (можно дополнить)
+    if (!info) return;
     if (info.action === 'mute' && me && info.target === me.username) {
       alert(`Вы заглушены на ${info.minutes} мин. модератором ${info.by}.`);
+    }
+    if (info.action === 'unmute' && me && info.target === me.username) {
+      alert('С вас снят мут.');
     }
   });
 
@@ -2371,7 +2376,7 @@
     if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas();
   });
 
-  // Периодический polling для просмотра
+  // Периодический polling
   topArenasRefreshHandle = setInterval(() => {
     if (document.getElementById('lobbyScreen').classList.contains('active')) {
       refreshTopArenas();
