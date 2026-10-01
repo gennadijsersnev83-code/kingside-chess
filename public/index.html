@@ -14,6 +14,8 @@
     --accent: #bf811d; --accent-2: #d99c33;
     --green: #629924; --green-2: #7dbe30; --red: #a53030;
     --light-sq: #e8d9b8; --dark-sq: #8b6f47; --yellow-sq: #f7ec74;
+    --gold: #ffd54f; --silver: #c0c0c0; --bronze: #cd7f32;
+    --role-admin: #e5484d; --role-mod: #4a9ce8; --role-dev: #a56ce8;
   }
   html, body { height: 100%; margin: 0; }
   body {
@@ -54,6 +56,7 @@
     display: flex; align-items: center; justify-content: center;
     font-size: 11px; font-weight: 700;
   }
+  .crown { color: var(--gold); margin-right: 2px; text-shadow: 0 0 4px rgba(255,213,79,.6); }
   main { max-width: 1200px; margin: 0 auto; padding: 20px 16px; }
   .screen { display: none; }
   .screen.active { display: block; }
@@ -176,7 +179,6 @@
 
   .arenaEmpty { padding: 40px 20px; text-align: center; color: var(--muted); font-size: 13px; }
 
-  /* === Просмотр партий === */
   .watchWrap {
     display: grid;
     grid-template-columns: 320px 1fr;
@@ -264,7 +266,6 @@
     padding: 80px 20px; text-align: center; color: var(--muted); font-size: 14px;
   }
 
-  /* === Арены — крупные блоки === */
   .arenasHeader { display: flex; justify-content: space-between; align-items: center; margin: 0 0 16px 0; }
   .arenasHeader h1 { font-weight: 300; font-size: 32px; color: var(--text-bright); margin: 0; }
   .arenasGridWrap { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
@@ -332,7 +333,7 @@
   .arenaChatBox { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; display: flex; flex-direction: column; height: 320px; overflow: hidden; }
   .arenaChatHeader { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; color: var(--text-bright); }
   .arenaChatMessages { flex: 1; overflow-y: auto; padding: 8px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
-  .arenaChatMessages .msg { line-height: 1.35; word-wrap: break-word; color: var(--text-bright); }
+  .arenaChatMessages .msg { line-height: 1.35; word-wrap: break-word; color: var(--text-bright); position: relative; padding-right: 4px; border-radius: 3px; }
   .arenaChatMessages .msg .u { color: var(--accent); font-weight: 600; }
   .arenaChatMessages .msg .t { color: var(--muted); font-size: 11px; margin-left: 4px; }
   .arenaChatMessages .sys { color: var(--muted); font-size: 12px; font-style: italic; }
@@ -394,7 +395,6 @@
   .arenaGameCard .meta { color: var(--muted); font-size: 11px; display: flex; justify-content: space-between; margin-top: 4px; }
   .arenaGameCard .liveDot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #ff5555; margin-right: 5px; animation: pulse 1.2s infinite; }
 
-  /* Игра */
   .gameWrap { display: grid; grid-template-columns: 280px 480px 280px; gap: 16px; align-items: start; justify-content: center; margin: 0 auto; }
   @media (max-width: 1120px) { .gameWrap { grid-template-columns: 240px minmax(0, 1fr) 260px; } }
   @media (max-width: 940px) { .gameWrap { grid-template-columns: 1fr; max-width: 520px; } .col-chat { order: 3; } .col-info { order: 2; } .col-board { order: 1; } }
@@ -462,9 +462,32 @@
   #chatTabs .tabBtn { flex: 1; background: transparent; border: none; border-radius: 0; padding: 10px; font-size: 13px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
   #chatTabs .tabBtn.active { color: var(--text-bright); border-bottom-color: var(--accent); background: var(--panel-2); }
   #chatMessages { flex: 1; overflow-y: auto; padding: 8px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
-  #chatMessages .msg { line-height: 1.35; word-wrap: break-word; color: var(--text-bright); }
+  #chatMessages .msg { line-height: 1.35; word-wrap: break-word; color: var(--text-bright); position: relative; border-radius: 3px; padding: 1px 3px; }
   #chatMessages .msg .u { color: var(--accent); font-weight: 600; }
   #chatMessages .msg .t { color: var(--muted); font-size: 11px; margin-left: 4px; }
+  #chatMessages .msg .modBtn { color: var(--muted); margin-left: 6px; cursor: pointer; font-size: 11px; opacity: 0; transition: opacity .15s; }
+  #chatMessages .msg:hover .modBtn { opacity: 1; }
+  #chatMessages .msg .modBtn:hover { color: #ff8080; }
+  .modMenu {
+    position: absolute;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 0;
+    z-index: 200;
+    box-shadow: 0 4px 16px rgba(0,0,0,.5);
+    min-width: 180px;
+    font-size: 13px;
+  }
+  .modMenu button {
+    display: block; width: 100%; text-align: left;
+    background: transparent; border: none; border-radius: 0;
+    color: var(--text-bright); padding: 8px 14px;
+    cursor: pointer; font-size: 13px;
+  }
+  .modMenu button:hover { background: var(--panel-hover); color: #ff8080; }
+  .modMenu .sep { height: 1px; background: var(--border); margin: 4px 0; }
+  .modMenu .lbl { color: var(--muted); font-size: 11px; padding: 6px 14px 2px; text-transform: uppercase; letter-spacing: .5px; }
   #chatForm { display: flex; border-top: 1px solid var(--border); }
   #chatForm input { flex: 1; border: none; border-radius: 0; background: transparent; padding: 10px 12px; font-size: 13px; }
   #chatForm button { border-radius: 0; padding: 0 16px; font-size: 14px; border: none; background: transparent; color: var(--muted); cursor: pointer; }
@@ -487,9 +510,33 @@
 
   .profilePage { max-width: 900px; margin: 0 auto; }
   .profileHead { display: flex; align-items: center; gap: 20px; padding: 20px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; }
-  .profileAvatar { width: 72px; height: 72px; border-radius: 50%; background: var(--accent); color: #161512; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 700; flex-shrink: 0; }
-  .profileHead .nameBlock h2 { margin: 0 0 4px; color: var(--text-bright); }
+  .profileAvatar { width: 72px; height: 72px; border-radius: 50%; background: var(--accent); color: #161512; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 700; flex-shrink: 0; position: relative; }
+  .profileAvatar .pCrown { position: absolute; top: -20px; left: 50%; transform: translateX(-50%); font-size: 28px; }
+  .profileHead .nameBlock h2 { margin: 0 0 4px; color: var(--text-bright); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .profileHead .nameBlock .sub { color: var(--muted); font-size: 13px; }
+  .roleBadge {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 2px 8px; border-radius: 10px;
+    font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .5px;
+    border: 1px solid currentColor;
+  }
+  .roleBadge.admin { color: var(--role-admin); }
+  .roleBadge.mod { color: var(--role-mod); }
+  .roleBadge.dev { color: var(--role-dev); }
+  .catRatingsGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+  .catCard {
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 10px 12px; text-align: center;
+  }
+  .catCard .catName { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); margin-bottom: 4px; }
+  .catCard .catIcon { font-size: 20px; margin-bottom: 2px; }
+  .catCard .catRating { font-size: 22px; font-weight: 700; color: var(--text-bright); }
+  .catCard.classical { border-top: 3px solid #6f5fbf; }
+  .catCard.rapid     { border-top: 3px solid #4a9ce8; }
+  .catCard.blitz     { border-top: 3px solid #7db63a; }
+  .catCard.bullet    { border-top: 3px solid #c94a3a; }
+  @media (max-width: 600px) { .catRatingsGrid { grid-template-columns: repeat(2, 1fr); } }
 </style>
 </head>
 <body>
@@ -642,15 +689,19 @@
       <div class="profileHead">
         <div class="profileAvatar" id="pAvatarBig">?</div>
         <div class="nameBlock">
-          <h2 id="pName">—</h2>
+          <h2>
+            <span id="pName">—</span>
+            <span id="pRoleBadges"></span>
+          </h2>
           <div class="sub" id="pSub">—</div>
         </div>
         <div style="margin-left:auto;">
           <button class="secondary" onclick="navTo('lobby')">← На главную</button>
         </div>
       </div>
+      <div class="catRatingsGrid" id="catRatingsGrid"></div>
       <div class="statsGrid">
-        <div class="statBox"><div class="v" id="pRating">—</div><div class="l">Рейтинг</div></div>
+        <div class="statBox"><div class="v" id="pRating">—</div><div class="l">Рейтинг (осн.)</div></div>
         <div class="statBox"><div class="v" id="pGames">—</div><div class="l">Партий</div></div>
         <div class="statBox"><div class="v" id="pWins">—</div><div class="l">Побед</div></div>
         <div class="statBox"><div class="v" id="pWinrate">—</div><div class="l">Winrate</div></div>
@@ -792,7 +843,6 @@
   let arenasCache = [];
   let arenasRefreshHandle = null;
   let topArenasRefreshHandle = null;
-  let watchRefreshHandle = null;
   let arenaStatesCache = {};
   let currentArenaId = null;
   let currentArenaState = null;
@@ -820,7 +870,6 @@
   // Просмотр
   let watchingGameId = null;
   let watchingGame = null;
-  let watchingLastMove = null;
 
   const EMOJI = {
     'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
@@ -1047,7 +1096,7 @@
     return san;
   }
 
-  // ============ ОТРИСОВКА ДОСКИ (игра) ============
+  // ============ ОТРИСОВКА ДОСКИ ============
   function renderBoard() {
     const fenToShow = (viewIndex >= 0 && viewIndex < moveFens.length) ? moveFens[viewIndex] : currentFen;
     const hash = fenToShow + '|' + (selected ? selected.join(',') : '') + '|' + viewIndex + '|' + (lastMove ? lastMove.from.join(',') + lastMove.to.join(',') : '') + '|' + myColor + '|' + boardFlipped + '|' + legalMoves.map(m => m.join(',')).join(';');
@@ -1257,11 +1306,19 @@
   }
   window.doLogin = doLogin;
 
+  function nickHtml(username) {
+    if (!username) return '';
+    if (username === 'admin') {
+      return `<span class="crown">👑</span>${escapeHtml(username)}`;
+    }
+    return escapeHtml(username);
+  }
   function updateTopbarUser() {
     if (!me) return;
     document.getElementById('userBtn').style.display = 'flex';
     document.getElementById('logoutBtn').style.display = 'block';
-    document.getElementById('userName').textContent = me.username + ' (' + me.rating + ')';
+    const crown = me.isAdmin ? '<span class="crown">👑</span>' : '';
+    document.getElementById('userName').innerHTML = crown + escapeHtml(me.username) + ' (' + me.rating + ')';
     document.getElementById('userAvatar').textContent = me.username.charAt(0).toUpperCase();
   }
   function logout() { location.reload(); }
@@ -1350,7 +1407,7 @@
           const row = document.createElement('div');
           row.className = 'lobbyRow' + (isMine ? ' mine' : '');
           row.style.cursor = isMine ? 'pointer' : 'default';
-          row.innerHTML = `<div class="icon">♟</div><div class="name">${escapeHtml(l.host)}${isMine ? '<span class="mineTag">(ваш вызов — нажмите, чтобы отменить)</span>' : ''}</div><div class="time">${l.time}+${l.inc}</div><div class="mode">${l.status === 'waiting' ? 'ожидание' : 'идёт'}</div><div class="action"></div>`;
+          row.innerHTML = `<div class="icon">♟</div><div class="name">${nickHtml(l.host)}${isMine ? '<span class="mineTag">(ваш вызов — нажмите, чтобы отменить)</span>' : ''}</div><div class="time">${l.time}+${l.inc}</div><div class="mode">${l.status === 'waiting' ? 'ожидание' : 'идёт'}</div><div class="action"></div>`;
           if (l.status === 'waiting' && !isMine) {
             const btn = document.createElement('button');
             btn.className = 'primary';
@@ -1422,7 +1479,7 @@
     document.getElementById('topRating').textContent = '';
     document.getElementById('topDot').className = 'dot';
     document.getElementById('topTime').textContent = '--:--';
-    document.getElementById('bottomName').textContent = me ? me.username : '—';
+    document.getElementById('bottomName').innerHTML = me ? nickHtml(me.username) : '—';
     document.getElementById('bottomRating').textContent = me ? me.rating : '';
     document.getElementById('bottomDot').className = 'dot';
     document.getElementById('bottomTime').textContent = '--:--';
@@ -1518,14 +1575,20 @@
     document.getElementById('drawDeclineBtn').onclick = () => { socket.emit('drawDecline', { lobbyId }); overlay.remove(); };
   }
 
+  // ============ ЧАТ ПАРТИИ + МОДЕРАЦИЯ ============
   function renderChatMsg(msg) {
     const box = document.getElementById('chatMessages');
     const div = document.createElement('div');
     div.className = 'msg';
+    div.dataset.msgId = msg.id || '';
     const time = new Date(msg.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-    div.innerHTML = `<span class="u">${escapeHtml(msg.user)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>`;
+    let modHtml = '';
+    if (me && me.isMod) {
+      modHtml = `<span class="modBtn" onclick="openModMenu(event,'${msg.id}','${escapeHtml(msg.user)}')" title="Модерация">⚙</span>`;
+    }
+    div.innerHTML = `<span class="u">${nickHtml(msg.user)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
     box.appendChild(div);
-    while (box.children.length > 20) box.removeChild(box.firstChild);
+    while (box.children.length > 50) box.removeChild(box.firstChild);
     box.scrollTop = box.scrollHeight;
   }
   function escapeHtml(s) {
@@ -1541,6 +1604,58 @@
   }
   window.sendChat = sendChat;
 
+  // Меню модерации
+  let modMenuEl = null;
+  function closeModMenu() {
+    if (modMenuEl) { modMenuEl.remove(); modMenuEl = null; }
+  }
+  window.openModMenu = function(ev, msgId, username) {
+    ev.stopPropagation();
+    closeModMenu();
+    if (!me || !me.isMod) return;
+    const rect = ev.target.getBoundingClientRect();
+    const menu = document.createElement('div');
+    menu.className = 'modMenu';
+    menu.style.left = Math.min(window.innerWidth - 200, rect.left) + 'px';
+    menu.style.top = (rect.bottom + window.scrollY + 4) + 'px';
+    menu.innerHTML = `
+      <div class="lbl">Сообщение</div>
+      <button id="modDelBtn">🗑 Удалить сообщение</button>
+      <div class="sep"></div>
+      <div class="lbl">Игрок: ${escapeHtml(username)}</div>
+      <button id="modMute5">🔇 Мут 5 минут</button>
+      <button id="modMute30">🔇 Мут 30 минут</button>
+      <button id="modMute60">🔇 Мут 1 час</button>
+      <button id="modMute1440">🔇 Мут 1 сутки</button>
+      <button id="modUnmuteBtn">🔊 Снять мут</button>
+    `;
+    document.body.appendChild(menu);
+    modMenuEl = menu;
+    menu.querySelector('#modDelBtn').onclick = () => {
+      socket.emit('modDeleteMessage', { lobbyId, msgId }, (r) => {
+        if (!r || !r.ok) alert((r && r.msg) || 'Ошибка');
+        closeModMenu();
+      });
+    };
+    const mute = (minutes) => {
+      socket.emit('modMuteUser', { username, minutes }, (r) => {
+        if (!r || !r.ok) alert((r && r.msg) || 'Ошибка');
+        closeModMenu();
+      });
+    };
+    menu.querySelector('#modMute5').onclick = () => mute(5);
+    menu.querySelector('#modMute30').onclick = () => mute(30);
+    menu.querySelector('#modMute60').onclick = () => mute(60);
+    menu.querySelector('#modMute1440').onclick = () => mute(1440);
+    menu.querySelector('#modUnmuteBtn').onclick = () => {
+      socket.emit('modUnmuteUser', { username }, (r) => {
+        if (!r || !r.ok) alert((r && r.msg) || 'Ошибка');
+        closeModMenu();
+      });
+    };
+  };
+  document.addEventListener('click', closeModMenu);
+
   // ============ ПРОСМОТР ПАРТИЙ ============
   function refreshWatchList(force) {
     socket.emit('getLiveGames', (list) => {
@@ -1555,8 +1670,8 @@
       }
       box.innerHTML = list.map(g => {
         const cls = 'watchRow' + (g.isArena ? ' isArena' : '');
-        const whiteName = escapeHtml(g.white);
-        const blackName = escapeHtml(g.black);
+        const whiteName = nickHtml(g.white);
+        const blackName = nickHtml(g.black);
         const whiteR = g.whiteRating ? ` <span class="prat">(${g.whiteRating})</span>` : '';
         const blackR = g.blackRating ? ` <span class="prat">(${g.blackRating})</span>` : '';
         const arenaTag = g.isArena ? ` · ${escapeHtml(g.arenaName || 'турнир')}` : '';
@@ -1586,7 +1701,6 @@
     if (watchingGameId) socket.emit('unwatchGame', { id: watchingGameId });
     watchingGameId = id;
     watchingGame = null;
-    watchingLastMove = null;
     lastWatchBoardHash = '';
     socket.emit('watchGame', { id }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось начать просмотр'); watchingGameId = null; return; }
@@ -1642,11 +1756,11 @@
       </div>
       <div class="wbPlayers">
         <div class="wbPlayer ${blackActive ? 'active' : ''}">
-          <span><span class="name">⚫ ${escapeHtml(g.black)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}</span>
+          <span><span class="name">⚫ ${nickHtml(g.black)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}</span>
           <span class="time">${formatTime(g.timeB)}</span>
         </div>
         <div class="wbPlayer ${whiteActive ? 'active' : ''}">
-          <span><span class="name">⚪ ${escapeHtml(g.white)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}</span>
+          <span><span class="name">⚪ ${nickHtml(g.white)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}</span>
           <span class="time">${formatTime(g.timeW)}</span>
         </div>
       </div>
@@ -1679,7 +1793,15 @@
 
   function renderProfilePage(user, games, history) {
     document.getElementById('pAvatarBig').textContent = user.username.charAt(0).toUpperCase();
-    document.getElementById('pName').textContent = user.username;
+    const crownHtml = user.isAdmin ? '<span class="pCrown">👑</span>' : '';
+    document.getElementById('pAvatarBig').innerHTML = crownHtml + user.username.charAt(0).toUpperCase();
+    document.getElementById('pName').innerHTML = nickHtml(user.username);
+    // Бейджи ролей
+    const badges = [];
+    if (user.role === 'admin') badges.push('<span class="roleBadge admin">👑 Админ</span>');
+    if (user.role === 'moderator') badges.push('<span class="roleBadge mod">🛡 Модератор</span>');
+    if (user.username === 'admin') badges.push('<span class="roleBadge dev">⚙ Разраб</span>');
+    document.getElementById('pRoleBadges').innerHTML = badges.join(' ');
     const date = new Date(user.createdAt);
     document.getElementById('pSub').textContent = `На сайте с ${date.toLocaleDateString('ru-RU')} · ${user.games} партий`;
     document.getElementById('pRating').textContent = user.rating;
@@ -1687,6 +1809,29 @@
     document.getElementById('pWins').textContent = user.wins;
     const winrate = user.games ? Math.round((user.wins / user.games) * 100) : 0;
     document.getElementById('pWinrate').textContent = winrate + '%';
+
+    // Раздельные рейтинги
+    const catEl = document.getElementById('catRatingsGrid');
+    if (user.categories) {
+      const cats = [
+        { key: 'classical', name: 'Классика', icon: '🐢' },
+        { key: 'rapid',     name: 'Рапид',    icon: '⏱' },
+        { key: 'blitz',     name: 'Блиц',     icon: '⚡' },
+        { key: 'bullet',    name: 'Пуля',     icon: '🔫' }
+      ];
+      catEl.innerHTML = cats.map(c => {
+        const r = user.categories[c.key] || { rating: user.rating, games: 0 };
+        return `<div class="catCard ${c.key}">
+          <div class="catIcon">${c.icon}</div>
+          <div class="catName">${c.name}</div>
+          <div class="catRating">${r.rating}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:2px;">${r.games || 0} партий</div>
+        </div>`;
+      }).join('');
+    } else {
+      catEl.innerHTML = '';
+    }
+
     renderRatingChart(history);
     renderGamesList(games, user.username);
   }
@@ -1743,9 +1888,10 @@
       const dateStr = date.toLocaleDateString('ru-RU') + ' ' + date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
       const deltaStr = delta > 0 ? '+' + delta : (delta < 0 ? '' + delta : '0');
       const deltaClass = delta > 0 ? 'up' : (delta < 0 ? 'down' : '');
+      const catBadge = g.category ? `<span style="color:var(--muted);font-size:11px;margin-left:4px;">[${g.category}]</span>` : '';
       const row = document.createElement('div');
       row.className = 'gameRow';
-      row.innerHTML = `<span class="res ${resClass}">${resChar}</span><span class="opp">${iAmWhite ? '⚪' : '⚫'} против <b>${escapeHtml(opp)}</b></span><span class="delta ${deltaClass}">${deltaStr} (${myAfter})</span><span class="date">${dateStr}</span>`;
+      row.innerHTML = `<span class="res ${resClass}">${resChar}</span><span class="opp">${iAmWhite ? '⚪' : '⚫'} против <b>${nickHtml(opp)}</b>${catBadge}</span><span class="delta ${deltaClass}">${deltaStr} (${myAfter})</span><span class="date">${dateStr}</span>`;
       el.appendChild(row);
     });
   }
@@ -1976,7 +2122,7 @@
       let streakTag = '';
       if (p.winStreak >= 3) streakTag = `<span class="streak">🔥${p.winStreak}</span>`;
       else if (p.drawStreak >= 2) streakTag = `<span class="streak">½${p.drawStreak}</span>`;
-      return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''}"><span class="place ${placeCls}">${place}</span><span class="pname">${escapeHtml(p.username)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
+      return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''}"><span class="place ${placeCls}">${place}</span><span class="pname">${nickHtml(p.username)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
     }).join('');
   }
   function filterArenaParticipants() {
@@ -1995,7 +2141,7 @@
       if (hash === lastArenaGamesHash) return;
       lastArenaGamesHash = hash;
       if (!list || !list.length) { el.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>'; return; }
-      el.innerHTML = list.map(g => `<div class="arenaGameCard"><div class="names"><div><span class="liveDot"></span>${escapeHtml(g.white)}</div><div style="padding-left:14px;">${escapeHtml(g.black)}</div></div><div class="meta"><span>${g.moveCount} ходов</span><span>${formatTime(g.timeW)} · ${formatTime(g.timeB)}</span></div></div>`).join('');
+      el.innerHTML = list.map(g => `<div class="arenaGameCard"><div class="names"><div><span class="liveDot"></span>${nickHtml(g.white)}</div><div style="padding-left:14px;">${nickHtml(g.black)}</div></div><div class="meta"><span>${g.moveCount} ходов</span><span>${formatTime(g.timeW)} · ${formatTime(g.timeB)}</span></div></div>`).join('');
     });
   }
 
@@ -2008,7 +2154,7 @@
     podium.innerHTML = order.map(i => {
       const p = top3[i];
       if (!p) return '';
-      return `<div class="awbItem ${medals[i]}"><div class="place">${places[i]}</div><div class="n">${escapeHtml(p.username)}</div><div class="s">${p.score}</div></div>`;
+      return `<div class="awbItem ${medals[i]}"><div class="place">${places[i]}</div><div class="n">${nickHtml(p.username)}</div><div class="s">${p.score}</div></div>`;
     }).join('');
     banner.style.display = 'block';
   }
@@ -2061,8 +2207,13 @@
     if (msg.system) { div.className = 'msg sys'; div.textContent = msg.text; }
     else {
       div.className = 'msg';
+      div.dataset.msgId = msg.id || '';
       const time = new Date(msg.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-      div.innerHTML = `<span class="u">${escapeHtml(msg.user)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>`;
+      let modHtml = '';
+      if (me && me.isMod) {
+        modHtml = `<span class="modBtn" onclick="openModMenu(event,'${msg.id}','${escapeHtml(msg.user)}')" title="Модерация">⚙</span>`;
+      }
+      div.innerHTML = `<span class="u">${nickHtml(msg.user)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
     }
     box.appendChild(div);
     while (box.children.length > 60) box.removeChild(box.firstChild);
@@ -2077,7 +2228,7 @@
   }
 
   // ============ СОБЫТИЯ СЕРВЕРА ============
-  socket.on('onlineCount', () => { /* счётчик в шапке убран */ });
+  socket.on('onlineCount', () => {});
   socket.on('stats', (s) => {
     if (!s) return;
     const e1 = document.getElementById('statOnline');
@@ -2110,11 +2261,11 @@
     currentArenaId = arenaId || null;
     currentArenaName = arenaName || null;
     lastBoardHash = '';
-    document.getElementById('bottomName').textContent = me.username;
+    document.getElementById('bottomName').innerHTML = nickHtml(me.username);
     document.getElementById('bottomRating').textContent = me.rating;
     document.getElementById('bottomDot').className = 'dot ' + (myColor === 'w' ? 'w' : 'b');
     document.getElementById('bottomTime').textContent = formatTime(time * 60);
-    document.getElementById('topName').textContent = opponentName;
+    document.getElementById('topName').innerHTML = nickHtml(opponentName);
     document.getElementById('topRating').textContent = opponentRating || '';
     document.getElementById('topDot').className = 'dot ' + (myColor === 'w' ? 'b' : 'w');
     document.getElementById('topTime').textContent = formatTime(time * 60);
@@ -2177,6 +2328,20 @@
   });
 
   socket.on('chatMessage', (msg) => renderChatMsg(msg));
+  socket.on('chatMessageDeleted', ({ msgId }) => {
+    const el = document.querySelector(`#chatMessages .msg[data-msg-id="${msgId}"]`);
+    if (el) el.remove();
+    const el2 = document.querySelector(`#arenaChatMessages .msg[data-msg-id="${msgId}"]`);
+    if (el2) el2.remove();
+  });
+  socket.on('chatError', ({ msg }) => { alert(msg); });
+  socket.on('modAction', (info) => {
+    // Уведомление о действиях модерации (можно дополнить)
+    if (info.action === 'mute' && me && info.target === me.username) {
+      alert(`Вы заглушены на ${info.minutes} мин. модератором ${info.by}.`);
+    }
+  });
+
   socket.on('opponentLeft', () => {
     if (!gameActive) return;
     alert('Соперник отключился');
@@ -2206,16 +2371,7 @@
     if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas();
   });
 
-  // === Обновление сцены просмотра по событиям от сервера ===
-  socket.on('boardUpdate', (payload) => {
-    // Игровые — уже обработано выше. Дублирующее событие может прийти в "watch:" комнату?
-    // Игнорируем, потому что сервер не шлёт одновременно обоим.
-  });
-  socket.on('timeUpdate', () => {
-    // Обновление сцены просмотра делаем через периодический polling ниже.
-  });
-
-  // Каждые 5 секунд обновляем список и сцену, если мы на странице просмотра
+  // Периодический polling для просмотра
   topArenasRefreshHandle = setInterval(() => {
     if (document.getElementById('lobbyScreen').classList.contains('active')) {
       refreshTopArenas();
@@ -2229,7 +2385,6 @@
             watchingGame = res.game;
             renderWatchBoard();
           } else {
-            // Партия закончилась
             stopWatching();
             refreshWatchList(true);
           }
