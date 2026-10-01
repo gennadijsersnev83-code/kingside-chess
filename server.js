@@ -39,8 +39,9 @@ async function initDB() {
         created_at BIGINT NOT NULL
       );
     `);
-    // Добавляем колонку role, если старая таблица без неё
+    // Добавляем колонку role, если таблица была создана старой версией
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'user';`);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS games (
         id SERIAL PRIMARY KEY,
@@ -83,13 +84,11 @@ async function loadDB() {
         createdAt: Number(row.created_at)
       };
     }
-    // Назначаем администратора PeshkaSasha
-    if (db.users['PeshkaSasha']) {
-      if (db.users['PeshkaSasha'].role !== 'admin') {
-        db.users['PeshkaSasha'].role = 'admin';
-        await pool.query(`UPDATE users SET role = 'admin' WHERE username = 'PeshkaSasha'`);
-        console.log('[DB] PeshkaSasha назначен администратором');
-      }
+    // PeshkaSasha — админ
+    if (db.users['PeshkaSasha'] && db.users['PeshkaSasha'].role !== 'admin') {
+      db.users['PeshkaSasha'].role = 'admin';
+      await pool.query(`UPDATE users SET role = 'admin' WHERE username = 'PeshkaSasha'`);
+      console.log('[DB] PeshkaSasha назначен администратором');
     }
     console.log(`[DB] Загружено: ${Object.keys(db.users).length} игроков`);
   } catch (err) {
@@ -175,11 +174,6 @@ function publicUser(name) {
     games: u.games,
     createdAt: u.createdAt
   };
-}
-function isPrivileged(username) {
-  const u = db.users[username];
-  if (!u) return false;
-  return u.role === 'admin' || u.role === 'moderator' || u.role === 'developer';
 }
 function canDeleteMessages(username) {
   const u = db.users[username];
@@ -342,7 +336,7 @@ async function finishGame(lobbyId, result, reason) {
 }
 
 // ======================= АРЕНЫ =======================
-// Расширенный список шаблонов — больше турниров, разные режимы.
+// Много шаблонов — турниры разных форматов идут часто
 const ARENA_TEMPLATES = [
   // Пуля
   { id: 'bullet-1-0-halfhour', name: 'Получасовая пуля 1+0', description: '1+0 · рейтинговая',
@@ -676,7 +670,7 @@ function finishArena(state) {
   state.cleanupTimer = setTimeout(() => arenas.delete(state.id), 2 * 60 * 60 * 1000);
 }
 
-// 4 часа вперёд — как ты просил.
+// Расписание на 4 часа вперёд (как просил)
 function getArenaSchedule(hoursAhead) {
   hoursAhead = hoursAhead || 4;
   const now = Date.now();
@@ -713,7 +707,7 @@ function getArenaSchedule(hoursAhead) {
       };
       result.push(instance);
 
-      // Создаём состояние арены заранее — чтобы на будущие можно было зарегаться
+      // Создаём состояние заранее — на будущие можно зарегаться
       if (status === 'live' || (status === 'upcoming' && t - now < 24 * 3600 * 1000)) {
         getOrCreateArenaState(instance);
       }
@@ -1038,10 +1032,11 @@ io.on('connection', (socket) => {
     if (typeof text !== 'string') return;
     text = text.trim().slice(0, 300);
     if (!text) return;
+    const u = db.users[socket.username];
     const msg = {
       id: genId(),
       user: socket.username,
-      role: db.users[socket.username] ? (db.users[socket.username].role || 'user') : 'user',
+      role: u ? (u.role || 'user') : 'user',
       text, ts: Date.now()
     };
     l.chat.push(msg);
@@ -1241,17 +1236,16 @@ io.on('connection', (socket) => {
     cb({ ok: true, paused: p.paused });
   });
 
-  // Чат арены с id и role
   socket.on('arenaChat', ({ arenaId, text }) => {
     const state = arenas.get(arenaId);
     if (!state || !socket.username) return;
     if (typeof text !== 'string') return;
     text = text.trim().slice(0, 300);
     if (!text) return;
-    const role = db.users[socket.username] ? (db.users[socket.username].role || 'user') : 'user';
+    const u = db.users[socket.username];
     io.emit('arenaChatMessage', {
       user: socket.username,
-      role,
+      role: u ? (u.role || 'user') : 'user',
       text,
       ts: Date.now(),
       id: genId()
@@ -1259,7 +1253,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('deleteArenaChatMessage', ({ arenaId, messageId }) => {
-    if (!socket.username || !canDeleteMessages(socket.username)) return;
+    if (!socket.username) return;
+    if (!canDeleteMessages(socket.username)) return;
     io.emit('arenaChatMessageDeleted', { arenaId, messageId });
   });
 
