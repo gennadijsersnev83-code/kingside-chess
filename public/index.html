@@ -14,7 +14,6 @@
     --accent: #bf811d; --accent-2: #d99c33;
     --green: #629924; --green-2: #7dbe30; --red: #a53030;
     --light-sq: #e8d9b8; --dark-sq: #8b6f47; --yellow-sq: #f7ec74;
-    --admin: #e5484d; --mod: #6ee7a0; --dev: #58a6ff;
   }
   html, body { height: 100%; margin: 0; }
   body {
@@ -177,6 +176,7 @@
 
   .arenaEmpty { padding: 40px 20px; text-align: center; color: var(--muted); font-size: 13px; }
 
+  /* === Просмотр партий === */
   .watchWrap {
     display: grid;
     grid-template-columns: 320px 1fr;
@@ -264,6 +264,7 @@
     padding: 80px 20px; text-align: center; color: var(--muted); font-size: 14px;
   }
 
+  /* === Арены — крупные блоки === */
   .arenasHeader { display: flex; justify-content: space-between; align-items: center; margin: 0 0 16px 0; }
   .arenasHeader h1 { font-weight: 300; font-size: 32px; color: var(--text-bright); margin: 0; }
   .arenasGridWrap { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
@@ -331,7 +332,7 @@
   .arenaChatBox { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; display: flex; flex-direction: column; height: 320px; overflow: hidden; }
   .arenaChatHeader { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: 600; color: var(--text-bright); }
   .arenaChatMessages { flex: 1; overflow-y: auto; padding: 8px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
-  .arenaChatMessages .msg { line-height: 1.35; word-wrap: break-word; color: var(--text-bright); position: relative; padding-right: 20px; }
+  .arenaChatMessages .msg { line-height: 1.35; word-wrap: break-word; color: var(--text-bright); }
   .arenaChatMessages .msg .u { color: var(--accent); font-weight: 600; }
   .arenaChatMessages .msg .t { color: var(--muted); font-size: 11px; margin-left: 4px; }
   .arenaChatMessages .sys { color: var(--muted); font-size: 12px; font-style: italic; }
@@ -352,30 +353,10 @@
   .arenaSearch { flex: 1; max-width: 260px; }
   .arenaSearch input { width: 100%; padding: 6px 12px; font-size: 13px; }
   .arenaJoinBtn { padding: 10px 28px; font-weight: 700; letter-spacing: .5px; }
-
-  /* Фиксированная таблица участников */
-  .arenaParticipantsTable {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
-    overflow: hidden;
-    width: 100%;
-    min-width: 640px;
-    max-width: 100%;
-  }
-  .arenaTableHeader {
-    display: grid; grid-template-columns: 40px 1fr 70px 90px 60px;
-    gap: 10px; padding: 10px 14px;
-    background: var(--panel-2); border-bottom: 1px solid var(--border);
-    font-size: 11px; color: var(--muted);
-    text-transform: uppercase; letter-spacing: .5px; font-weight: 600;
-    min-height: 40px;
-  }
-  .arenaTableBody { max-height: 500px; min-height: 220px; overflow-y: auto; }
-  .arenaTableRow {
-    display: grid; grid-template-columns: 40px 1fr 70px 90px 60px;
-    gap: 10px; padding: 8px 14px; align-items: center;
-    font-size: 13px; border-bottom: 1px solid rgba(58,56,51,.4);
-    min-height: 36px;
-  }
+  .arenaParticipantsTable { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .arenaTableHeader { display: grid; grid-template-columns: 40px 1fr 70px 90px 60px; gap: 10px; padding: 10px 14px; background: var(--panel-2); border-bottom: 1px solid var(--border); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; font-weight: 600; }
+  .arenaTableBody { max-height: 500px; overflow-y: auto; }
+  .arenaTableRow { display: grid; grid-template-columns: 40px 1fr 70px 90px 60px; gap: 10px; padding: 8px 14px; align-items: center; font-size: 13px; border-bottom: 1px solid rgba(58,56,51,.4); }
   .arenaTableRow:last-child { border-bottom: none; }
   .arenaTableRow:hover { background: var(--panel-hover); }
   .arenaTableRow.me { background: rgba(191,129,29,.12); border-left: 3px solid var(--accent); }
@@ -413,6 +394,7 @@
   .arenaGameCard .meta { color: var(--muted); font-size: 11px; display: flex; justify-content: space-between; margin-top: 4px; }
   .arenaGameCard .liveDot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #ff5555; margin-right: 5px; animation: pulse 1.2s infinite; }
 
+  /* Игра */
   .gameWrap { display: grid; grid-template-columns: 280px 480px 280px; gap: 16px; align-items: start; justify-content: center; margin: 0 auto; }
   @media (max-width: 1120px) { .gameWrap { grid-template-columns: 240px minmax(0, 1fr) 260px; } }
   @media (max-width: 940px) { .gameWrap { grid-template-columns: 1fr; max-width: 520px; } .col-chat { order: 3; } .col-info { order: 2; } .col-board { order: 1; } }
@@ -480,33 +462,12 @@
   #chatTabs .tabBtn { flex: 1; background: transparent; border: none; border-radius: 0; padding: 10px; font-size: 13px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; }
   #chatTabs .tabBtn.active { color: var(--text-bright); border-bottom-color: var(--accent); background: var(--panel-2); }
   #chatMessages { flex: 1; overflow-y: auto; padding: 8px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }
-  #chatMessages .msg { line-height: 1.35; word-wrap: break-word; color: var(--text-bright); position: relative; padding-right: 20px; }
+  #chatMessages .msg { line-height: 1.35; word-wrap: break-word; color: var(--text-bright); }
   #chatMessages .msg .u { color: var(--accent); font-weight: 600; }
   #chatMessages .msg .t { color: var(--muted); font-size: 11px; margin-left: 4px; }
   #chatForm { display: flex; border-top: 1px solid var(--border); }
   #chatForm input { flex: 1; border: none; border-radius: 0; background: transparent; padding: 10px 12px; font-size: 13px; }
   #chatForm button { border-radius: 0; padding: 0 16px; font-size: 14px; border: none; background: transparent; color: var(--muted); cursor: pointer; }
-
-  /* Плашки ролей */
-  .role-badge {
-    display: inline-block; padding: 1px 6px; border-radius: 3px;
-    font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .5px; margin-left: 6px; vertical-align: middle;
-  }
-  .role-badge.admin { background: rgba(229,72,77,.18); color: var(--admin); border: 1px solid rgba(229,72,77,.4); }
-  .role-badge.moderator { background: rgba(110,231,160,.18); color: var(--mod); border: 1px solid rgba(110,231,160,.4); }
-  .role-badge.developer { background: rgba(88,166,255,.18); color: var(--dev); border: 1px solid rgba(88,166,255,.4); }
-  .role-crown { font-size: 12px; margin-left: 4px; cursor: help; }
-  .role-crown.admin { color: #ffd54f; text-shadow: 0 0 6px rgba(255,213,79,.6); }
-  .role-crown.moderator { color: var(--mod); }
-  .role-crown.developer { color: var(--dev); }
-  .chat-del-btn {
-    position: absolute; top: 0; right: 0;
-    background: transparent; border: none;
-    color: var(--muted); cursor: pointer; font-size: 12px;
-    padding: 0 4px; border-radius: 3px;
-  }
-  .chat-del-btn:hover { color: #ff7b7b; background: transparent; }
 
   .statsGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0; }
   .statBox { background: var(--panel-2); border-radius: 6px; padding: 12px; text-align: center; }
@@ -527,9 +488,8 @@
   .profilePage { max-width: 900px; margin: 0 auto; }
   .profileHead { display: flex; align-items: center; gap: 20px; padding: 20px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; }
   .profileAvatar { width: 72px; height: 72px; border-radius: 50%; background: var(--accent); color: #161512; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 700; flex-shrink: 0; }
-  .profileHead .nameBlock h2 { margin: 0 0 4px; color: var(--text-bright); display: flex; align-items: center; gap: 8px; }
+  .profileHead .nameBlock h2 { margin: 0 0 4px; color: var(--text-bright); }
   .profileHead .nameBlock .sub { color: var(--muted); font-size: 13px; }
-  .profileRoleLine { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
 </style>
 </head>
 <body>
@@ -682,9 +642,8 @@
       <div class="profileHead">
         <div class="profileAvatar" id="pAvatarBig">?</div>
         <div class="nameBlock">
-          <h2 id="pName">—<span id="pRoleBadge"></span></h2>
+          <h2 id="pName">—</h2>
           <div class="sub" id="pSub">—</div>
-          <div class="profileRoleLine" id="pRoleLine"></div>
         </div>
         <div style="margin-left:auto;">
           <button class="secondary" onclick="navTo('lobby')">← На главную</button>
@@ -783,30 +742,6 @@
     reconnectionAttempts: 10,
     reconnectionDelay: 1000
   });
-
-  // ============ РОЛИ ============
-  function roleIcon(role) {
-    if (role === 'admin') return '<span class="role-crown admin" title="Администратор">👑</span>';
-    if (role === 'moderator') return '<span class="role-crown moderator" title="Модератор">🛡</span>';
-    if (role === 'developer') return '<span class="role-crown developer" title="Разработчик">⚙</span>';
-    return '';
-  }
-  function roleBadge(role) {
-    if (role === 'admin') return '<span class="role-badge admin">Админ</span>';
-    if (role === 'moderator') return '<span class="role-badge moderator">Модератор</span>';
-    if (role === 'developer') return '<span class="role-badge developer">Разраб</span>';
-    return '';
-  }
-  function roleLabel(role) {
-    if (role === 'admin') return 'Администратор';
-    if (role === 'moderator') return 'Модератор';
-    if (role === 'developer') return 'Разработчик';
-    return '';
-  }
-  function canModerate() {
-    if (!me) return false;
-    return me.role === 'admin' || me.role === 'moderator';
-  }
 
   // ============ ЗВУКИ ============
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -1112,6 +1047,7 @@
     return san;
   }
 
+  // ============ ОТРИСОВКА ДОСКИ (игра) ============
   function renderBoard() {
     const fenToShow = (viewIndex >= 0 && viewIndex < moveFens.length) ? moveFens[viewIndex] : currentFen;
     const hash = fenToShow + '|' + (selected ? selected.join(',') : '') + '|' + viewIndex + '|' + (lastMove ? lastMove.from.join(',') + lastMove.to.join(',') : '') + '|' + myColor + '|' + boardFlipped + '|' + legalMoves.map(m => m.join(',')).join(';');
@@ -1325,7 +1261,7 @@
     if (!me) return;
     document.getElementById('userBtn').style.display = 'flex';
     document.getElementById('logoutBtn').style.display = 'block';
-    document.getElementById('userName').innerHTML = escapeHtml(me.username) + ' (' + me.rating + ') ' + roleIcon(me.role);
+    document.getElementById('userName').textContent = me.username + ' (' + me.rating + ')';
     document.getElementById('userAvatar').textContent = me.username.charAt(0).toUpperCase();
   }
   function logout() { location.reload(); }
@@ -1586,23 +1522,12 @@
     const box = document.getElementById('chatMessages');
     const div = document.createElement('div');
     div.className = 'msg';
-    div.dataset.messageId = msg.id || '';
     const time = new Date(msg.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-    const delBtn = canModerate() && msg.id
-      ? `<button class="chat-del-btn" title="Удалить сообщение" onclick="deleteChatMessage('${msg.id}')">✕</button>`
-      : '';
-    div.innerHTML = `${delBtn}<span class="u">${escapeHtml(msg.user)}</span>${roleIcon(msg.role)}: ${escapeHtml(msg.text)} <span class="t">${time}</span>`;
+    div.innerHTML = `<span class="u">${escapeHtml(msg.user)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>`;
     box.appendChild(div);
-    while (box.children.length > 30) box.removeChild(box.firstChild);
+    while (box.children.length > 20) box.removeChild(box.firstChild);
     box.scrollTop = box.scrollHeight;
   }
-  function deleteChatMessage(id) {
-    if (!lobbyId) return;
-    if (!confirm('Удалить это сообщение?')) return;
-    socket.emit('deleteChatMessage', { lobbyId, messageId: id });
-  }
-  window.deleteChatMessage = deleteChatMessage;
-
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   }
@@ -1616,6 +1541,7 @@
   }
   window.sendChat = sendChat;
 
+  // ============ ПРОСМОТР ПАРТИЙ ============
   function refreshWatchList(force) {
     socket.emit('getLiveGames', (list) => {
       const box = document.getElementById('watchListBody');
@@ -1736,6 +1662,7 @@
   }
   window.stopWatching = stopWatching;
 
+  // ============ ПРОФИЛЬ ============
   function openOpponentProfile() { if (opponentName && opponentName !== '—') openProfileView(opponentName); }
   window.openOpponentProfile = openOpponentProfile;
 
@@ -1752,18 +1679,9 @@
 
   function renderProfilePage(user, games, history) {
     document.getElementById('pAvatarBig').textContent = user.username.charAt(0).toUpperCase();
-    const role = user.role || 'user';
-    document.getElementById('pName').innerHTML = escapeHtml(user.username) + roleIcon(role);
-    document.getElementById('pRoleBadge').innerHTML = roleBadge(role);
+    document.getElementById('pName').textContent = user.username;
     const date = new Date(user.createdAt);
     document.getElementById('pSub').textContent = `На сайте с ${date.toLocaleDateString('ru-RU')} · ${user.games} партий`;
-    const roleLabelText = roleLabel(role);
-    const roleLine = document.getElementById('pRoleLine');
-    if (roleLabelText) {
-      roleLine.innerHTML = `<span style="color:var(--muted);font-size:12px;">Полномочия:</span> <span style="color:var(--text-bright);font-weight:600;font-size:13px;">${roleLabelText}</span>`;
-    } else {
-      roleLine.innerHTML = '<span style="color:var(--muted);font-size:12px;">Полномочия: обычный игрок</span>';
-    }
     document.getElementById('pRating').textContent = user.rating;
     document.getElementById('pGames').textContent = user.games;
     document.getElementById('pWins').textContent = user.wins;
@@ -1832,6 +1750,7 @@
     });
   }
 
+  // ============ АРЕНЫ ============
   function refreshArenas(force) {
     if (!force && !document.getElementById('arenasScreen').classList.contains('active')) return;
     socket.emit('getArenas', (list) => {
@@ -1919,7 +1838,6 @@
       for (const arena of rowSorted) {
         const cs = colStart(arena.startsAt);
         const ce = colEnd(arena.endsAt);
-        const span = Math.max(1, ce - cs);
         while (currentCol < cs) { html += '<div class="arenaSlot"></div>'; currentCol++; }
         const isPast = arena.endsAt < now;
         const isLive = arena.status === 'live';
@@ -1932,9 +1850,9 @@
         const participantsCount = myState && myState.participantsCount || 0;
         const clickAttr = clickable ? `onclick="openArenaPage('${arena.id}')"` : '';
         const cursorStyle = clickable ? 'cursor:pointer' : 'cursor:default';
-        const widthPx = span * 180 - 6;
-        html += `<div class="arenaSlot" style="width:${widthPx}px;min-width:${widthPx}px;flex-shrink:0;"><div class="${cls}" style="${cursorStyle}" ${clickAttr}><div class="tname">${escapeHtml(arena.name)}</div><div class="tinfo"><span>${tinfo}</span><span>👥 ${participantsCount}</span></div></div></div>`;
-        currentCol += span;
+        html += `<div class="arenaSlot"><div class="${cls}" style="${cursorStyle}" ${clickAttr}><div class="tname">${escapeHtml(arena.name)}</div><div class="tinfo"><span>${tinfo}</span><span>👥 ${participantsCount}</span></div></div></div>`;
+        currentCol++;
+        while (currentCol < ce) { html += '<div class="arenaSlot"></div>'; currentCol++; }
       }
       html += '</div>';
     }
@@ -2055,11 +1973,10 @@
       const totalGames = (p.wins || 0) + (p.draws || 0) + (p.losses || 0);
       const greenDot = p.online ? '<span class="pgreen">●</span>' : '';
       const pauseTag = p.paused ? '<span class="ppause">⏸ пауза</span>' : '';
-      const roleMark = roleIcon(p.role || 'user');
       let streakTag = '';
       if (p.winStreak >= 3) streakTag = `<span class="streak">🔥${p.winStreak}</span>`;
       else if (p.drawStreak >= 2) streakTag = `<span class="streak">½${p.drawStreak}</span>`;
-      return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''}"><span class="place ${placeCls}">${place}</span><span class="pname">${escapeHtml(p.username)}${roleMark}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
+      return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''}"><span class="place ${placeCls}">${place}</span><span class="pname">${escapeHtml(p.username)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
     }).join('');
   }
   function filterArenaParticipants() {
@@ -2140,31 +2057,17 @@
 
   function renderArenaChatMsg(msg) {
     const box = document.getElementById('arenaChatMessages');
-    if (msg.system) {
-      const div = document.createElement('div');
-      div.className = 'msg sys';
-      div.textContent = msg.text;
-      box.appendChild(div);
-    } else {
-      const div = document.createElement('div');
+    const div = document.createElement('div');
+    if (msg.system) { div.className = 'msg sys'; div.textContent = msg.text; }
+    else {
       div.className = 'msg';
-      div.dataset.messageId = msg.id || '';
       const time = new Date(msg.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-      const delBtn = canModerate() && msg.id
-        ? `<button class="chat-del-btn" title="Удалить сообщение" onclick="deleteArenaChatMessage('${msg.id}')">✕</button>`
-        : '';
-      div.innerHTML = `${delBtn}<span class="u">${escapeHtml(msg.user)}</span>${roleIcon(msg.role)}: ${escapeHtml(msg.text)} <span class="t">${time}</span>`;
-      box.appendChild(div);
+      div.innerHTML = `<span class="u">${escapeHtml(msg.user)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>`;
     }
+    box.appendChild(div);
     while (box.children.length > 60) box.removeChild(box.firstChild);
     box.scrollTop = box.scrollHeight;
   }
-  function deleteArenaChatMessage(id) {
-    if (!currentArenaId) return;
-    if (!confirm('Удалить это сообщение?')) return;
-    socket.emit('deleteArenaChatMessage', { arenaId: currentArenaId, messageId: id });
-  }
-  window.deleteArenaChatMessage = deleteArenaChatMessage;
 
   function updateTimers() {
     document.getElementById('topTime').textContent = formatTime(oppTime);
@@ -2173,7 +2076,8 @@
     document.getElementById('bottomClock').classList.toggle('low', myTime <= 20);
   }
 
-  socket.on('onlineCount', () => {});
+  // ============ СОБЫТИЯ СЕРВЕРА ============
+  socket.on('onlineCount', () => { /* счётчик в шапке убран */ });
   socket.on('stats', (s) => {
     if (!s) return;
     const e1 = document.getElementById('statOnline');
@@ -2206,7 +2110,7 @@
     currentArenaId = arenaId || null;
     currentArenaName = arenaName || null;
     lastBoardHash = '';
-    document.getElementById('bottomName').innerHTML = escapeHtml(me.username) + roleIcon(me.role);
+    document.getElementById('bottomName').textContent = me.username;
     document.getElementById('bottomRating').textContent = me.rating;
     document.getElementById('bottomDot').className = 'dot ' + (myColor === 'w' ? 'w' : 'b');
     document.getElementById('bottomTime').textContent = formatTime(time * 60);
@@ -2273,11 +2177,6 @@
   });
 
   socket.on('chatMessage', (msg) => renderChatMsg(msg));
-  socket.on('chatMessageDeleted', ({ messageId }) => {
-    const box = document.getElementById('chatMessages');
-    const el = box.querySelector(`[data-message-id="${messageId}"]`);
-    if (el) el.remove();
-  });
   socket.on('opponentLeft', () => {
     if (!gameActive) return;
     alert('Соперник отключился');
@@ -2287,11 +2186,6 @@
   socket.on('connect_error', () => console.warn('Не удалось подключиться'));
 
   socket.on('arenaChatMessage', (msg) => { if (currentArenaId) renderArenaChatMsg(msg); });
-  socket.on('arenaChatMessageDeleted', ({ messageId }) => {
-    const box = document.getElementById('arenaChatMessages');
-    const el = box.querySelector(`[data-message-id="${messageId}"]`);
-    if (el) el.remove();
-  });
   socket.on('arenaUpdate', ({ arenaId }) => {
     if (currentArenaId === arenaId) { lastArenaStateHash = ''; if (document.getElementById('arenaPageScreen').classList.contains('active')) loadArenaPage(); }
     if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas();
@@ -2312,6 +2206,16 @@
     if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas();
   });
 
+  // === Обновление сцены просмотра по событиям от сервера ===
+  socket.on('boardUpdate', (payload) => {
+    // Игровые — уже обработано выше. Дублирующее событие может прийти в "watch:" комнату?
+    // Игнорируем, потому что сервер не шлёт одновременно обоим.
+  });
+  socket.on('timeUpdate', () => {
+    // Обновление сцены просмотра делаем через периодический polling ниже.
+  });
+
+  // Каждые 5 секунд обновляем список и сцену, если мы на странице просмотра
   topArenasRefreshHandle = setInterval(() => {
     if (document.getElementById('lobbyScreen').classList.contains('active')) {
       refreshTopArenas();
@@ -2325,6 +2229,7 @@
             watchingGame = res.game;
             renderWatchBoard();
           } else {
+            // Партия закончилась
             stopWatching();
             refreshWatchList(true);
           }
