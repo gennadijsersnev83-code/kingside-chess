@@ -17,16 +17,10 @@ const io = new Server(server, {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ======================= БАЗА ДАННЫХ =======================
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
-
-// Специальные аккаунты
-const ADMINS = new Set(['admin']);
-const MODERATORS = new Set([]);   // добавь ники сюда
-const DEVS = new Set(['admin']);  // выдаётся автоматически владельцу
+// ======================= РОЛИ =======================
+const ADMINS = new Set(['admin']);        // ← поменяй на свой ник
+const MODERATORS = new Set([]);           // ← ники модераторов
+const DEVS = new Set(['admin']);          // ← разрабы
 
 function roleOf(username) {
   if (ADMINS.has(username) || DEVS.has(username)) return 'admin';
@@ -35,6 +29,12 @@ function roleOf(username) {
 }
 function isAdmin(username) { return ADMINS.has(username) || DEVS.has(username); }
 function isMod(username) { return isAdmin(username) || MODERATORS.has(username); }
+
+// ======================= БАЗА ДАННЫХ =======================
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
 
 async function initDB() {
   try {
@@ -51,8 +51,7 @@ async function initDB() {
         created_at BIGINT NOT NULL
       );
     `);
-    // === Миграции для раздельных рейтингов (обратная совместимость) ===
-    // Добавляем колонки, если их нет. Старые данные остаются целыми.
+    // Миграции (обратная совместимость)
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_classical INTEGER;`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_rapid INTEGER;`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_blitz INTEGER;`);
@@ -71,7 +70,7 @@ async function initDB() {
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS games_bullet INTEGER DEFAULT 0;`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS muted_until BIGINT DEFAULT 0;`);
 
-    // Инициализируем новые рейтинги значением общего рейтинга для старых юзеров
+    // Заполняем новые рейтинги для старых аккаунтов
     await pool.query(`UPDATE users SET rating_classical = rating WHERE rating_classical IS NULL;`);
     await pool.query(`UPDATE users SET rating_rapid     = rating WHERE rating_rapid     IS NULL;`);
     await pool.query(`UPDATE users SET rating_blitz     = rating WHERE rating_blitz     IS NULL;`);
@@ -107,9 +106,7 @@ async function initDB() {
 let db = { users: {}, games: [] };
 
 function emptyRatingBlock(base) {
-  return {
-    rating: base, wins: 0, losses: 0, draws: 0, games: 0
-  };
+  return { rating: base, wins: 0, losses: 0, games: 0 };
 }
 
 async function loadDB() {
@@ -127,7 +124,6 @@ async function loadDB() {
         games: row.games,
         createdAt: Number(row.created_at),
         mutedUntil: Number(row.muted_until || 0),
-        // Раздельные рейтинги
         categories: {
           classical: {
             rating: row.rating_classical != null ? row.rating_classical : row.rating,
@@ -166,7 +162,7 @@ async function saveUser(username) {
   const u = db.users[username];
   if (!u) return;
   const c = u.categories || {};
-  const get = (k, f) => c[k] ? c[k][f] : 0;
+  const get = (k, f) => (c[k] ? c[k][f] : 0);
   try {
     await pool.query(
       `INSERT INTO users (username, password_hash, salt, rating, wins, losses, draws, games, created_at,
@@ -256,8 +252,6 @@ function eloDelta(myRating, oppRating, score, k) {
   const expected = 1 / (1 + Math.pow(10, (oppRating - myRating) / 400));
   return Math.round(k * (score - expected));
 }
-
-// Определяем категорию по контролю времени
 function categoryOf(timeMin) {
   if (timeMin < 3) return 'bullet';
   if (timeMin < 10) return 'blitz';
@@ -283,11 +277,12 @@ function publicUser(name) {
     role: roleOf(name),
     isAdmin: isAdmin(name),
     isMod: isMod(name),
+    mutedUntil: u.mutedUntil || 0,
     categories: u.categories || null
   };
 }
 
-// ======================= ХРАНИЛИЩА В ПАМЯТИ =======================
+// ======================= ХРАНИЛИЩА =======================
 const online = new Map();
 const lobbies = new Map();
 const socketToLobby = new Map();
@@ -301,14 +296,9 @@ function countActiveLobbies() {
   }
   return n;
 }
-
 function broadcastOnline() {
   io.emit('onlineCount', online.size);
-  io.emit('stats', {
-    online: online.size,
-    games: db.games.length,
-    activeGames: countActiveLobbies()
-  });
+  io.emit('stats', { online: online.size, games: db.games.length, activeGames: countActiveLobbies() });
 }
 function broadcastLobbies() { io.emit('lobbiesUpdate'); }
 
@@ -342,6 +332,8 @@ function buildGamesList() {
       black: blackName,
       whiteRating: whiteU ? whiteU.rating : null,
       blackRating: blackU ? blackU.rating : null,
+      whiteIsAdmin: whiteU ? isAdmin(whiteName) : false,
+      blackIsAdmin: blackU ? isAdmin(blackName) : false,
       timeW: l.timeW, timeB: l.timeB,
       turn: l.turn,
       timeControl: l.time, increment: l.inc,
@@ -354,7 +346,7 @@ function buildGamesList() {
   return list;
 }
 
-// ======================= ФИНАЛИЗАЦИЯ ПАРТИИ =======================
+// ======================= ФИНАЛИЗАЦИЯ =======================
 async function finishGame(lobbyId, result, reason) {
   const l = lobbies.get(lobbyId);
   if (!l || l.finished) return;
@@ -369,7 +361,6 @@ async function finishGame(lobbyId, result, reason) {
   const whiteUser = db.users[whiteName];
   const blackUser = db.users[blackName];
 
-  // Категория партии по времени
   const cat = categoryOf(l.time);
   if (!whiteUser.categories) whiteUser.categories = {};
   if (!blackUser.categories) blackUser.categories = {};
@@ -393,7 +384,6 @@ async function finishGame(lobbyId, result, reason) {
   const whiteAfter = whiteBefore + whiteDelta;
   const blackAfter = blackBefore + blackDelta;
 
-  // Обновляем категорийный рейтинг
   wc.rating = whiteAfter;
   if (result === 'w') wc.wins++;
   else if (result === 'b') wc.losses++;
@@ -404,7 +394,6 @@ async function finishGame(lobbyId, result, reason) {
   else if (result === 'w') bc.losses++;
   bc.games++;
 
-  // Общие агрегаты
   whiteUser.rating = whiteAfter;
   if (result === 'w') whiteUser.wins++;
   else if (result === 'b') whiteUser.losses++;
@@ -459,24 +448,19 @@ async function finishGame(lobbyId, result, reason) {
     broadcastLobbies();
   }, 5000);
 
-  io.emit('stats', {
-    online: online.size,
-    games: db.games.length,
-    activeGames: countActiveLobbies()
-  });
+  io.emit('stats', { online: online.size, games: db.games.length, activeGames: countActiveLobbies() });
 }
 
 // ======================= АРЕНЫ =======================
-// Расписания выровнены по «сетке», чтобы между турнирами был чистый перерыв 3 минуты.
-// Правило: durationMin = период - 3. Так турниры стартуют в :00 и :30, идут 27 мин, пауза 3 мин.
+// durationMin = период - 3 → между турнирами одного типа всегда ровно 3 минуты паузы.
 const ARENA_TEMPLATES = [
   {
     id: 'bullet-halfhour',
     name: 'Получасовая пуля',
     description: '1+0 · рейтинговая',
     timeControl: 1, increment: 0,
-    durationMin: 27,            // 30 мин слот − 3 мин пауза
-    repeat: 'every30',          // старт каждые 30 минут (:00 и :30)
+    durationMin: 27,          // :00 → :27, пауза до :30
+    repeat: 'every30',
     color: 'bullet'
   },
   {
@@ -484,7 +468,7 @@ const ARENA_TEMPLATES = [
     name: 'Ежечасная блиц-арена',
     description: '3+2 · рейтинговая',
     timeControl: 3, increment: 2,
-    durationMin: 57,            // 60 мин слот − 3 мин пауза
+    durationMin: 57,          // :00 → :57, пауза до следующего :00
     repeat: 'hourly',
     color: 'blitz'
   },
@@ -493,8 +477,8 @@ const ARENA_TEMPLATES = [
     name: 'Двухчасовая рапид-арена',
     description: '10+0 · рейтинговая',
     timeControl: 10, increment: 0,
-    durationMin: 117,           // 120 мин слот − 3 мин пауза
-    repeat: 'every2h',          // старт каждые 2 часа (00:00, 02:00, ...)
+    durationMin: 117,         // :00 → :117 (1:57), пауза до следующего чётного часа
+    repeat: 'every2h',
     color: 'rapid'
   },
   {
@@ -502,8 +486,8 @@ const ARENA_TEMPLATES = [
     name: 'Классическая арена',
     description: '30+0 · классика',
     timeControl: 30, increment: 0,
-    durationMin: 237,           // 240 мин слот − 3 мин пауза
-    repeat: 'every4h',          // старт каждые 4 часа (00:00, 04:00, ...)
+    durationMin: 237,         // :00 → :237 (3:57), пауза до следующего 4-го часа
+    repeat: 'every4h',
     color: 'classical'
   }
 ];
@@ -524,34 +508,28 @@ function nextStartFor(tpl, now) {
     return c.getTime();
   }
   if (tpl.repeat === 'every2h') {
-    // Старт каждые 2 часа (00:00, 02:00, ...)
     c.setMinutes(0, 0, 0);
     const h = c.getHours();
-    const nextH = Math.ceil((h + 1) / 2) * 2; // 0,2,4,...
-    if (nextH === h) {
-      // Уже на чётном часу, но уже прошло — берём следующий чётный
-      c.setHours(h + 2, 0, 0, 0);
-    } else if (nextH > 24) {
-      c.setDate(c.getDate() + 1);
-      c.setHours(nextH - 24, 0, 0, 0);
-    } else {
-      c.setHours(nextH, 0, 0, 0);
+    let nextH = (Math.floor(h / 2) + 1) * 2;
+    if (h % 2 === 0 && c.getTime() > now) nextH = h;
+    if (nextH >= 24) {
+      const d = new Date(c); d.setDate(d.getDate() + 1); d.setHours(nextH - 24, 0, 0, 0);
+      return d.getTime();
     }
+    c.setHours(nextH, 0, 0, 0);
     if (c.getTime() <= now) c.setHours(c.getHours() + 2);
     return c.getTime();
   }
   if (tpl.repeat === 'every4h') {
     c.setMinutes(0, 0, 0);
     const h = c.getHours();
-    const nextH = Math.ceil((h + 1) / 4) * 4; // 0,4,8,12,16,20
-    if (nextH === h) {
-      c.setHours(h + 4, 0, 0, 0);
-    } else if (nextH >= 24) {
-      c.setDate(c.getDate() + 1);
-      c.setHours(nextH - 24, 0, 0, 0);
-    } else {
-      c.setHours(nextH, 0, 0, 0);
+    let nextH = (Math.floor(h / 4) + 1) * 4;
+    if (h % 4 === 0 && c.getTime() > now) nextH = h;
+    if (nextH >= 24) {
+      const d = new Date(c); d.setDate(d.getDate() + 1); d.setHours(nextH - 24, 0, 0, 0);
+      return d.getTime();
     }
+    c.setHours(nextH, 0, 0, 0);
     if (c.getTime() <= now) c.setHours(c.getHours() + 4);
     return c.getTime();
   }
@@ -733,14 +711,10 @@ function createArenaPairing(state, a, b) {
     });
   }
   io.emit('arenaUpdate', { arenaId: state.id });
-  io.emit('stats', {
-    online: online.size,
-    games: db.games.length,
-    activeGames: countActiveLobbies()
-  });
+  io.emit('stats', { online: online.size, games: db.games.length, activeGames: countActiveLobbies() });
 }
 
-// ======================= СИСТЕМА ОЧКОВ =======================
+// ======================= ОЧКИ АРЕНЫ =======================
 function calcArenaPoints(p, result) {
   if (result === 'win') {
     const streak = (p.winStreak || 0) + 1;
@@ -900,7 +874,7 @@ function getTopLiveArenas() {
   return list.slice(0, 3);
 }
 
-// ======================= ТИКЕР ТАЙМЕРОВ =======================
+// ======================= ТИКЕР =======================
 setInterval(() => {
   const now = Date.now();
   for (const [id, lobby] of lobbies.entries()) {
@@ -946,11 +920,7 @@ io.on('connection', (socket) => {
   console.log(`[socket] подключён ${socket.id}`);
 
   socket.emit('onlineCount', online.size);
-  socket.emit('stats', {
-    online: online.size,
-    games: db.games.length,
-    activeGames: countActiveLobbies()
-  });
+  socket.emit('stats', { online: online.size, games: db.games.length, activeGames: countActiveLobbies() });
 
   socket.on('register', async ({ username, password }, cb) => {
     if (typeof cb !== 'function') return;
@@ -1038,16 +1008,8 @@ io.on('connection', (socket) => {
     if (typeof cb !== 'function') return;
     cb({ online: online.size, games: db.games.length, activeGames: countActiveLobbies() });
   });
-
-  socket.on('getTopArenas', (cb) => {
-    if (typeof cb !== 'function') return;
-    cb(getTopLiveArenas());
-  });
-
-  socket.on('getLiveGames', (cb) => {
-    if (typeof cb !== 'function') return;
-    cb(buildGamesList());
-  });
+  socket.on('getTopArenas', (cb) => { if (typeof cb === 'function') cb(getTopLiveArenas()); });
+  socket.on('getLiveGames', (cb) => { if (typeof cb === 'function') cb(buildGamesList()); });
 
   socket.on('watchGame', ({ id }, cb) => {
     const l = lobbies.get(id);
@@ -1065,6 +1027,8 @@ io.on('connection', (socket) => {
         white: whiteName, black: blackName,
         whiteRating: db.users[whiteName] ? db.users[whiteName].rating : null,
         blackRating: db.users[blackName] ? db.users[blackName].rating : null,
+        whiteIsAdmin: db.users[whiteName] ? isAdmin(whiteName) : false,
+        blackIsAdmin: db.users[blackName] ? isAdmin(blackName) : false,
         timeW: l.timeW, timeB: l.timeB,
         turn: l.turn,
         timeControl: l.time, increment: l.inc,
@@ -1075,17 +1039,14 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('unwatchGame', ({ id }) => {
-    socket.leave('watch:' + id);
-  });
+  socket.on('unwatchGame', ({ id }) => { socket.leave('watch:' + id); });
 
   socket.on('getLobbies', (cb) => {
     if (typeof cb !== 'function') return;
     const list = [];
     for (const [id, l] of lobbies.entries()) {
       if (l.finished || l.arenaId) continue;
-      list.push({ id, host: l.host, time: l.time, inc: l.inc,
-                  status: l.guest ? 'playing' : 'waiting' });
+      list.push({ id, host: l.host, time: l.time, inc: l.inc, status: l.guest ? 'playing' : 'waiting' });
     }
     cb(list);
   });
@@ -1156,22 +1117,16 @@ io.on('connection', (socket) => {
 
     io.to(l.hostSocket).emit('gameStart', {
       color: l.hostColor, opponent: l.guest, opponentRating: guestRating,
-      time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat,
-      isArena: false
+      time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat, isArena: false
     });
     io.to(l.guestSocket).emit('gameStart', {
       color: l.guestColor, opponent: l.host, opponentRating: hostRating,
-      time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat,
-      isArena: false
+      time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat, isArena: false
     });
 
     cb({ ok: true, id });
     broadcastLobbies();
-    io.emit('stats', {
-      online: online.size,
-      games: db.games.length,
-      activeGames: countActiveLobbies()
-    });
+    io.emit('stats', { online: online.size, games: db.games.length, activeGames: countActiveLobbies() });
   });
 
   socket.on('move', ({ lobbyId, fen, turn, san }) => {
@@ -1212,10 +1167,10 @@ io.on('connection', (socket) => {
     finishGame(lobbyId, result, 'Завершено');
   });
 
+  // === ЧАТ ПАРТИИ ===
   socket.on('chatMessage', ({ lobbyId, text }) => {
     const l = lobbies.get(lobbyId);
     if (!l || !socket.username) return;
-    // Проверка мута
     const muteUntil = checkMute(socket.username);
     if (muteUntil > 0) {
       const mins = Math.ceil((muteUntil - Date.now()) / 60000);
@@ -1236,7 +1191,7 @@ io.on('connection', (socket) => {
     io.to(lobbyId).emit('chatMessage', msg);
   });
 
-  // === Модерация: удаление сообщения из чата партии ===
+  // === МОДЕРАЦИЯ ===
   socket.on('modDeleteMessage', ({ lobbyId, msgId }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     if (!isMod(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
@@ -1245,11 +1200,10 @@ io.on('connection', (socket) => {
     const idx = l.chat.findIndex(m => m.id === msgId);
     if (idx < 0) return cb({ ok: false, msg: 'Сообщение не найдено' });
     l.chat.splice(idx, 1);
-    io.to(lobbyId).emit('chatMessageDeleted', { msgId });
+    io.to(lobbyId).emit('chatMessageDeleted', { msgId, scope: 'game', lobbyId });
     cb({ ok: true });
   });
 
-  // === Модерация: мут игрока ===
   socket.on('modMuteUser', ({ username, minutes }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     if (!isMod(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
@@ -1259,14 +1213,9 @@ io.on('connection', (socket) => {
     }
     minutes = Math.max(1, Math.min(7 * 24 * 60, +minutes || 10));
     setMute(username, minutes);
-    io.emit('modAction', {
-      action: 'mute',
-      by: socket.username,
-      target: username,
-      minutes,
-      ts: Date.now()
-    });
-    cb({ ok: true });
+    const until = Date.now() + minutes * 60 * 1000;
+    io.emit('modAction', { action: 'mute', by: socket.username, target: username, minutes, until, ts: Date.now() });
+    cb({ ok: true, until });
   });
 
   socket.on('modUnmuteUser', ({ username }, cb) => {
@@ -1274,9 +1223,7 @@ io.on('connection', (socket) => {
     if (!isMod(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
     if (!db.users[username]) return cb({ ok: false, msg: 'Игрок не найден' });
     clearMute(username);
-    io.emit('modAction', {
-      action: 'unmute', by: socket.username, target: username, ts: Date.now()
-    });
+    io.emit('modAction', { action: 'unmute', by: socket.username, target: username, ts: Date.now() });
     cb({ ok: true });
   });
 
@@ -1307,10 +1254,7 @@ io.on('connection', (socket) => {
     socket.to(lobbyId).emit('drawDeclined');
   });
 
-  socket.on('getArenas', (cb) => {
-    if (typeof cb !== 'function') return;
-    cb(getArenaSchedule(48));
-  });
+  socket.on('getArenas', (cb) => { if (typeof cb === 'function') cb(getArenaSchedule(48)); });
 
   socket.on('getMyArenaStates', (cb) => {
     if (typeof cb !== 'function') return;
@@ -1354,6 +1298,7 @@ io.on('connection', (socket) => {
       drawStreak: p.drawStreak || 0,
       paused: !!p.paused,
       isPlaying: !!p.isPlaying,
+      isAdmin: isAdmin(p.username),
       online: p.socketId && io.sockets.sockets.has(p.socketId)
     })).sort((a, b) => b.score - a.score || b.rating - a.rating);
 
@@ -1382,6 +1327,8 @@ io.on('connection', (socket) => {
         lobbyId: id,
         white: l.hostColor === 'w' ? l.host : l.guest,
         black: l.hostColor === 'b' ? l.host : l.guest,
+        whiteIsAdmin: isAdmin(l.hostColor === 'w' ? l.host : l.guest),
+        blackIsAdmin: isAdmin(l.hostColor === 'b' ? l.host : l.guest),
         timeW: l.timeW, timeB: l.timeB,
         moveCount: l.fen ? (+l.fen.split(' ')[5] || 1) : 1
       });
@@ -1409,11 +1356,7 @@ io.on('connection', (socket) => {
       waitingSince: Date.now()
     });
 
-    io.emit('arenaChatMessage', {
-      system: true,
-      text: `${socket.username} присоединился к арене`,
-      ts: Date.now()
-    });
+    io.emit('arenaChatMessage', { system: true, text: `${socket.username} присоединился к арене`, ts: Date.now() });
     io.emit('arenaUpdate', { arenaId });
     cb({ ok: true });
   });
@@ -1428,11 +1371,7 @@ io.on('connection', (socket) => {
     const p = state.participants.get(socket.username);
     if (p && !p.isPlaying) {
       state.participants.delete(socket.username);
-      io.emit('arenaChatMessage', {
-        system: true,
-        text: `${socket.username} покинул арену`,
-        ts: Date.now()
-      });
+      io.emit('arenaChatMessage', { system: true, text: `${socket.username} покинул арену`, ts: Date.now() });
       io.emit('arenaUpdate', { arenaId });
     }
     cb({ ok: true });
@@ -1442,30 +1381,22 @@ io.on('connection', (socket) => {
     if (typeof cb !== 'function') cb = () => {};
     const state = arenas.get(arenaId);
     if (!state) return cb({ ok: false, msg: 'Арена не найдена' });
-    if (state.finished || state.phase === 'finished') {
-      return cb({ ok: false, msg: 'Арена завершена' });
-    }
+    if (state.finished || state.phase === 'finished') return cb({ ok: false, msg: 'Арена завершена' });
     const p = state.participants.get(socket.username);
     if (!p) return cb({ ok: false, msg: 'Вы не участвуете' });
 
     const activeLobby = p.lobbyId ? lobbies.get(p.lobbyId) : null;
     const reallyPlaying = activeLobby && !activeLobby.finished && activeLobby.started;
+    if (reallyPlaying) return cb({ ok: false, msg: 'Нельзя ставить паузу во время партии' });
 
-    if (reallyPlaying) {
-      return cb({ ok: false, msg: 'Нельзя ставить паузу во время партии' });
-    }
-
-    if (p.isPlaying) {
-      p.isPlaying = false;
-      p.lobbyId = null;
-    }
-
+    if (p.isPlaying) { p.isPlaying = false; p.lobbyId = null; }
     p.paused = !p.paused;
     if (!p.paused) p.waitingSince = Date.now();
     io.emit('arenaUpdate', { arenaId });
     cb({ ok: true, paused: p.paused });
   });
 
+  // === ЧАТ АРЕНЫ ===
   socket.on('arenaChat', ({ arenaId, text }) => {
     const state = arenas.get(arenaId);
     if (!state || !socket.username) return;
@@ -1478,12 +1409,32 @@ io.on('connection', (socket) => {
     if (typeof text !== 'string') return;
     text = text.trim().slice(0, 300);
     if (!text) return;
-    io.emit('arenaChatMessage', {
+    const msg = {
       id: 'a' + Date.now() + Math.random().toString(36).slice(2, 6),
       user: socket.username,
       text,
-      ts: Date.now()
-    });
+      ts: Date.now(),
+      arenaId
+    };
+    // Храним в истории арены, чтобы модерация могла удалять
+    if (!state.chat) state.chat = [];
+    state.chat.push(msg);
+    if (state.chat.length > 200) state.chat.shift();
+    io.emit('arenaChatMessage', msg);
+  });
+
+  // Модерация арена-чата (глобально по arenaId)
+  socket.on('modDeleteArenaMessage', ({ arenaId, msgId }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!isMod(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    const state = arenas.get(arenaId);
+    if (!state) return cb({ ok: false, msg: 'Арена не найдена' });
+    if (!state.chat) return cb({ ok: false, msg: 'Сообщение не найдено' });
+    const idx = state.chat.findIndex(m => m.id === msgId);
+    if (idx < 0) return cb({ ok: false, msg: 'Сообщение не найдено' });
+    state.chat.splice(idx, 1);
+    io.emit('chatMessageDeleted', { msgId, scope: 'arena', arenaId });
+    cb({ ok: true });
   });
 
   socket.on('disconnect', () => {
@@ -1531,7 +1482,6 @@ io.on('connection', (socket) => {
     console.log('  Kingside — сервер запущен');
     console.log(`  Локально:  http://localhost:${PORT}`);
     console.log(`  Порт:      ${PORT}`);
-    console.log(`  База:      PostgreSQL`);
     console.log('==================================================');
   });
 })();
