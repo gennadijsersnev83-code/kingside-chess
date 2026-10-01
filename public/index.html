@@ -42,8 +42,6 @@
   header.topbar nav a:hover { color: var(--text-bright); }
   header.topbar nav a.active { color: var(--accent); border-bottom-color: var(--accent); }
   header.topbar .right { display: flex; align-items: center; gap: 10px; }
-  header.topbar .online { font-size: 12px; color: var(--muted); white-space: nowrap; }
-  header.topbar .online b { color: var(--green); }
   header.topbar .userBtn {
     background: var(--panel); border: 1px solid var(--border);
     color: var(--text-bright); padding: 6px 10px; border-radius: 6px;
@@ -81,18 +79,15 @@
   #loginMsg { color: #e58a8a; min-height: 20px; text-align: center; font-size: 13px; }
   .hint-text { color: var(--muted); font-size: 12px; text-align: center; }
 
-  /* ==== Главная страница: фиксированная ширина, две колонки ==== */
   .homeWrap {
     display: grid;
     grid-template-columns: 280px 1fr 240px;
     gap: 20px;
-    max-width: 1100px;
+    max-width: 1140px;
     margin: 24px auto 0;
     align-items: start;
   }
-  @media (max-width: 940px) {
-    .homeWrap { grid-template-columns: 1fr; }
-  }
+  @media (max-width: 980px) { .homeWrap { grid-template-columns: 1fr; } }
   .homeLeft, .homeRight { display: flex; flex-direction: column; gap: 12px; }
   .sideTitle {
     font-size: 11px; color: var(--muted);
@@ -120,7 +115,6 @@
   }
   .topArenaCard.live { border-left-color: var(--green-2); }
   .topArenaCard.live .taInfo b { color: var(--green-2); }
-
   .statsBox {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -135,6 +129,7 @@
   .statsBox .statRow:last-child { border-bottom: none; }
   .statsBox .statRow .lbl { color: var(--muted); font-size: 12px; }
   .statsBox .statRow .val { color: var(--accent); font-weight: 700; font-size: 16px; }
+  .statsBox .statRow.live .val { color: var(--green-2); }
 
   .lobbyCenter { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   .lobbyCenter .tabs { display: flex; background: var(--panel-2); border-bottom: 1px solid var(--border); }
@@ -181,51 +176,134 @@
 
   .arenaEmpty { padding: 40px 20px; text-align: center; color: var(--muted); font-size: 13px; }
 
-  /* ==== Профиль как страница ==== */
-  .profilePage {
-    max-width: 900px; margin: 0 auto;
+  /* === Просмотр партий === */
+  .watchWrap {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 16px;
+    max-width: 1100px;
+    margin: 0 auto;
+    align-items: start;
   }
-  .profileHead {
-    display: flex; align-items: center; gap: 20px;
-    padding: 20px;
-    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
-    margin-bottom: 16px;
+  @media (max-width: 900px) { .watchWrap { grid-template-columns: 1fr; } }
+  .watchList {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    overflow: hidden;
   }
-  .profileAvatar {
-    width: 72px; height: 72px; border-radius: 50%;
-    background: var(--accent); color: #161512;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 32px; font-weight: 700; flex-shrink: 0;
+  .watchListHeader {
+    padding: 12px 14px; background: var(--panel-2); border-bottom: 1px solid var(--border);
+    font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; font-weight: 700;
+    display: flex; justify-content: space-between; align-items: center;
   }
-  .profileHead .nameBlock h2 { margin: 0 0 4px; color: var(--text-bright); }
-  .profileHead .nameBlock .sub { color: var(--muted); font-size: 13px; }
+  .watchListBody { padding: 8px; max-height: 600px; overflow-y: auto; }
+  .watchRow {
+    background: var(--panel-2);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    border-left: 3px solid var(--accent);
+    transition: .15s;
+  }
+  .watchRow:hover { background: var(--panel-hover); transform: translateX(2px); }
+  .watchRow.isArena { border-left-color: var(--green-2); }
+  .watchRow .wrPlayers {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 13px; color: var(--text-bright); font-weight: 500;
+    margin-bottom: 4px;
+  }
+  .watchRow .wrPlayers .prat { color: var(--muted); font-weight: 400; font-size: 11px; margin-left: 6px; }
+  .watchRow .wrMeta {
+    display: flex; justify-content: space-between;
+    font-size: 11px; color: var(--muted);
+  }
+  .watchRow .wrMeta b { color: var(--text-bright); }
+  .watchRow .liveDot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: #ff5555; margin-right: 6px;
+    animation: pulse 1.2s infinite;
+    vertical-align: middle;
+  }
+  .watchBoard {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 16px;
+  }
+  .watchBoard .wbHeader {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .watchBoard .wbHeader .wbTitle {
+    font-size: 16px; color: var(--text-bright); font-weight: 600;
+  }
+  .watchBoard .wbHeader .wbSub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .watchBoard .wbPlayers { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  .watchBoard .wbPlayer {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 10px; border-radius: 4px;
+    background: var(--panel-2);
+    font-size: 13px;
+  }
+  .watchBoard .wbPlayer.active { border: 1px solid var(--green); }
+  .watchBoard .wbPlayer .name { color: var(--text-bright); font-weight: 600; }
+  .watchBoard .wbPlayer .rating { color: var(--muted); font-size: 12px; margin-left: 6px; }
+  .watchBoard .wbPlayer .time { font-family: monospace; font-size: 18px; font-weight: 700; color: var(--text-bright); }
+  .watchBoard .wbBoardWrap {
+    width: 100%; aspect-ratio: 1/1; max-width: 480px; margin: 0 auto 12px;
+    position: relative;
+  }
+  .watchBoard .wbBoard {
+    display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(8, 1fr);
+    width: 100%; height: 100%;
+    border: 3px solid #0a0a0a; border-radius: 4px;
+    box-shadow: 0 8px 30px rgba(0,0,0,.5);
+    user-select: none; -webkit-user-select: none; overflow: hidden;
+  }
+  .watchBoard .wbEmpty {
+    padding: 80px 20px; text-align: center; color: var(--muted); font-size: 14px;
+  }
 
-  /* ==== Арены — фиксированные размеры ==== */
+  /* === Арены — крупные блоки === */
   .arenasHeader { display: flex; justify-content: space-between; align-items: center; margin: 0 0 16px 0; }
   .arenasHeader h1 { font-weight: 300; font-size: 32px; color: var(--text-bright); margin: 0; }
   .arenasGridWrap { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
   .arenasEmpty { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 14px; }
   .arenasScroller { overflow-x: auto; overflow-y: hidden; position: relative; }
   .timeRow {
-    display: flex; padding: 8px 0; border-bottom: 1px solid var(--border);
+    display: flex; padding: 10px 0; border-bottom: 1px solid var(--border);
     background: var(--panel-2); position: sticky; top: 0; z-index: 2;
     min-width: max-content;
   }
-  .timeCell { color: var(--muted); font-size: 12px; text-align: center; font-weight: 500; width: 120px; min-width: 120px; flex-shrink: 0; padding: 2px 0; }
+  .timeCell {
+    color: var(--muted); font-size: 12px; text-align: center; font-weight: 500;
+    width: 180px; min-width: 180px; flex-shrink: 0;
+    padding: 2px 0;
+  }
   .timeCell.now { color: var(--accent); font-weight: 700; }
-  .arenaRowGrid { display: flex; padding: 4px 0; min-height: 68px; min-width: max-content; border-bottom: 1px solid rgba(58,56,51,.4); }
+  .arenaRowGrid {
+    display: flex; padding: 6px 0; min-height: 96px; min-width: max-content;
+    border-bottom: 1px solid rgba(58,56,51,.4);
+  }
   .arenaRowGrid:last-child { border-bottom: none; }
-  .arenaSlot { width: 120px; min-width: 120px; flex-shrink: 0; padding: 2px; position: relative; }
+  .arenaSlot { width: 180px; min-width: 180px; flex-shrink: 0; padding: 3px; position: relative; }
   .arenaBlock {
-    border-radius: 6px; padding: 8px 10px; color: #fff; cursor: pointer;
+    border-radius: 8px; padding: 12px 14px;
+    color: #fff; cursor: pointer;
     display: flex; flex-direction: column; justify-content: center;
-    gap: 4px; height: 100%; min-height: 56px;
+    gap: 6px; height: 100%; min-height: 84px;
     transition: transform .15s, box-shadow .15s;
     position: relative; overflow: hidden; box-sizing: border-box;
   }
   .arenaBlock:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,.4); }
-  .arenaBlock .tname { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .arenaBlock .tinfo { font-size: 11px; opacity: .9; display: flex; gap: 8px; }
+  .arenaBlock .tname {
+    font-size: 15px; font-weight: 700;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .arenaBlock .tinfo {
+    font-size: 12px; opacity: .9;
+    display: flex; justify-content: space-between; gap: 8px;
+  }
   .arenaBlock.past { opacity: .35; cursor: default; }
   .arenaBlock.past:hover { transform: none; box-shadow: none; }
   .arenaBlock.live .tname::before { content: '● '; animation: pulse 1.5s infinite; }
@@ -236,18 +314,10 @@
   .arenaBlock.blitz  { background: linear-gradient(180deg,#7db63a,#5a8a22); }
   .arenaBlock.rapid  { background: linear-gradient(180deg,#4a9ce8,#2f77b8); }
   .arenaBlock.classical { background: linear-gradient(180deg,#6f5fbf,#4a3d8f); }
-  .nowLine { position: absolute; top: 32px; bottom: 0; width: 2px; background: #e5484d; z-index: 3; pointer-events: none; }
+  .nowLine { position: absolute; top: 40px; bottom: 0; width: 2px; background: #e5484d; z-index: 3; pointer-events: none; }
   .nowLine::before { content: '▼'; position: absolute; top: -14px; left: 50%; transform: translateX(-50%); color: #e5484d; font-size: 12px; }
 
-  /* Страница арены — фиксированные колонки */
-  .arenaPage {
-    display: grid;
-    grid-template-columns: 260px 1fr 320px;
-    gap: 16px;
-    align-items: start;
-    max-width: 1200px;
-    margin: 0 auto;
-  }
+  .arenaPage { display: grid; grid-template-columns: 260px 1fr 320px; gap: 16px; align-items: start; max-width: 1200px; margin: 0 auto; }
   @media (max-width: 1100px) { .arenaPage { grid-template-columns: 1fr; } }
   .arenaLeft, .arenaCenter, .arenaRight { min-width: 0; }
   .arenaLeft { display: flex; flex-direction: column; gap: 12px; }
@@ -414,6 +484,12 @@
   .gameRow .delta.down { color: #ff6b6b; }
   .gameRow .date { color: var(--muted); font-size: 12px; text-align: right; }
   .gameRow .opp { color: var(--text-bright); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .profilePage { max-width: 900px; margin: 0 auto; }
+  .profileHead { display: flex; align-items: center; gap: 20px; padding: 20px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; }
+  .profileAvatar { width: 72px; height: 72px; border-radius: 50%; background: var(--accent); color: #161512; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: 700; flex-shrink: 0; }
+  .profileHead .nameBlock h2 { margin: 0 0 4px; color: var(--text-bright); }
+  .profileHead .nameBlock .sub { color: var(--muted); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -422,12 +498,12 @@
   <div class="logo" onclick="navTo('lobby')"><span class="mark">♔</span> Kingside</div>
   <nav id="mainNav">
     <a data-nav="lobby" onclick="navTo('lobby')">Игра</a>
+    <a data-nav="watch" onclick="navTo('watch')">Смотреть партии</a>
     <a data-nav="arenas" onclick="navTo('arenas')">Арены</a>
     <a data-nav="learn" onclick="navTo('learn')">Обучение</a>
     <a data-nav="community" onclick="navTo('community')">Сообщество</a>
   </nav>
   <div class="right">
-    <div class="online">Онлайн: <b id="onlineTop">0</b></div>
     <button class="userBtn" id="userBtn" onclick="navTo('profile')" style="display:none">
       <span class="avatar" id="userAvatar">?</span>
       <span id="userName">—</span>
@@ -437,7 +513,6 @@
 </header>
 
 <main>
-  <!-- ЭКРАН ВХОДА -->
   <section id="loginScreen" class="screen active">
     <h2>Kingside — вход</h2>
     <div class="row">
@@ -451,7 +526,6 @@
     <p class="hint-text">Одинаковый логин — тот же аккаунт. Данные сохраняются.</p>
   </section>
 
-  <!-- ГЛАВНАЯ: слева топ-3 арены, по центру быстрый старт/зал, справа счётчики -->
   <section id="lobbyScreen" class="screen">
     <div class="homeWrap">
       <aside class="homeLeft">
@@ -472,12 +546,29 @@
         <div class="statsBox">
           <div class="statRow"><span class="lbl">Игроков на сайте</span><span class="val" id="statOnline">0</span></div>
           <div class="statRow"><span class="lbl">Партий на сайте</span><span class="val" id="statGames">0</span></div>
+          <div class="statRow live"><span class="lbl">Партий сейчас</span><span class="val" id="statActive">0</span></div>
         </div>
       </aside>
     </div>
   </section>
 
-  <!-- АРЕНЫ: фиксированная ширина -->
+  <section id="watchScreen" class="screen">
+    <div class="watchWrap">
+      <div class="watchList">
+        <div class="watchListHeader">
+          <span>👁 Текущие партии</span>
+          <button class="secondary" style="padding:4px 10px;font-size:12px;" onclick="refreshWatchList(true)">↻</button>
+        </div>
+        <div class="watchListBody" id="watchListBody">
+          <div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>
+        </div>
+      </div>
+      <div class="watchBoard" id="watchBoardBox">
+        <div class="wbEmpty">Выбери партию слева, чтобы посмотреть её в реальном времени</div>
+      </div>
+    </div>
+  </section>
+
   <section id="arenasScreen" class="screen">
     <div style="max-width:1100px; margin:0 auto;">
       <div class="arenasHeader">
@@ -490,7 +581,6 @@
     </div>
   </section>
 
-  <!-- СТРАНИЦА АРЕНЫ -->
   <section id="arenaPageScreen" class="screen">
     <div class="arenaPage">
       <aside class="arenaLeft">
@@ -547,7 +637,6 @@
     </div>
   </section>
 
-  <!-- ПРОФИЛЬ как страница -->
   <section id="profileScreen" class="screen">
     <div class="profilePage">
       <div class="profileHead">
@@ -654,7 +743,7 @@
     reconnectionDelay: 1000
   });
 
-  // ===================== ЗВУКИ =====================
+  // ============ ЗВУКИ ============
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   let audioCtx = null;
   function ensureAudio() {
@@ -703,6 +792,7 @@
   let arenasCache = [];
   let arenasRefreshHandle = null;
   let topArenasRefreshHandle = null;
+  let watchRefreshHandle = null;
   let arenaStatesCache = {};
   let currentArenaId = null;
   let currentArenaState = null;
@@ -714,7 +804,9 @@
   let lastArenaStateHash = '';
   let lastArenaGamesHash = '';
   let lastTopArenasHash = '';
+  let lastWatchHash = '';
   let lastBoardHash = '';
+  let lastWatchBoardHash = '';
   let loadArenaPageBusy = false;
   let moveHistory = [];
   let moveFens = [];
@@ -725,12 +817,17 @@
   let pendingDrawOffer = false;
   let profileViewing = null;
 
+  // Просмотр
+  let watchingGameId = null;
+  let watchingGame = null;
+  let watchingLastMove = null;
+
   const EMOJI = {
     'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
     'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
   };
 
-  // ===================== ШАХМАТНАЯ ЛОГИКА =====================
+  // ============ ШАХМАТЫ ============
   function parseFen(fen) {
     const parts = fen.split(' ');
     const board = Array.from({length:8}, () => Array(8).fill(null));
@@ -950,6 +1047,7 @@
     return san;
   }
 
+  // ============ ОТРИСОВКА ДОСКИ (игра) ============
   function renderBoard() {
     const fenToShow = (viewIndex >= 0 && viewIndex < moveFens.length) ? moveFens[viewIndex] : currentFen;
     const hash = fenToShow + '|' + (selected ? selected.join(',') : '') + '|' + viewIndex + '|' + (lastMove ? lastMove.from.join(',') + lastMove.to.join(',') : '') + '|' + myColor + '|' + boardFlipped + '|' + legalMoves.map(m => m.join(',')).join(';');
@@ -1128,12 +1226,13 @@
   }
   function navTo(name) {
     if (!me && name !== 'login') { show('loginScreen'); return; }
-    const map = { 'lobby': 'lobbyScreen', 'arenas': 'arenasScreen', 'arenaPage': 'arenaPageScreen', 'profile': 'profileScreen', 'learn': 'learnScreen', 'community': 'communityScreen', 'game': 'gameScreen', 'login': 'loginScreen' };
+    const map = { 'lobby': 'lobbyScreen', 'watch': 'watchScreen', 'arenas': 'arenasScreen', 'arenaPage': 'arenaPageScreen', 'profile': 'profileScreen', 'learn': 'learnScreen', 'community': 'communityScreen', 'game': 'gameScreen', 'login': 'loginScreen' };
     const screenId = map[name];
     if (!screenId) return;
     show(screenId);
     document.querySelectorAll('#mainNav a').forEach(a => a.classList.toggle('active', a.dataset.nav === name));
     if (name === 'lobby') { refreshLobbies(); refreshTopArenas(); refreshStats(); }
+    if (name === 'watch') { refreshWatchList(true); }
     if (name === 'arenas') refreshArenas(true);
     if (name === 'profile') {
       if (profileViewing) openProfileView(profileViewing);
@@ -1175,7 +1274,6 @@
   }
   window.switchLobbyTab = switchLobbyTab;
 
-  // ===== Топ-3 арены =====
   function refreshTopArenas() {
     socket.emit('getTopArenas', (list) => {
       const box = document.getElementById('topArenasBox');
@@ -1207,10 +1305,10 @@
       if (!s) return;
       const e1 = document.getElementById('statOnline');
       const e2 = document.getElementById('statGames');
+      const e3 = document.getElementById('statActive');
       if (e1) e1.textContent = s.online;
       if (e2) e2.textContent = s.games;
-      const top = document.getElementById('onlineTop');
-      if (top) top.textContent = s.online;
+      if (e3) e3.textContent = s.activeGames || 0;
     });
   }
   window.refreshStats = refreshStats;
@@ -1443,7 +1541,128 @@
   }
   window.sendChat = sendChat;
 
-  // ===================== ПРОФИЛЬ =====================
+  // ============ ПРОСМОТР ПАРТИЙ ============
+  function refreshWatchList(force) {
+    socket.emit('getLiveGames', (list) => {
+      const box = document.getElementById('watchListBody');
+      if (!box) return;
+      const hash = JSON.stringify(list);
+      if (hash === lastWatchHash && !force) return;
+      lastWatchHash = hash;
+      if (!list || !list.length) {
+        box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>';
+        return;
+      }
+      box.innerHTML = list.map(g => {
+        const cls = 'watchRow' + (g.isArena ? ' isArena' : '');
+        const whiteName = escapeHtml(g.white);
+        const blackName = escapeHtml(g.black);
+        const whiteR = g.whiteRating ? ` <span class="prat">(${g.whiteRating})</span>` : '';
+        const blackR = g.blackRating ? ` <span class="prat">(${g.blackRating})</span>` : '';
+        const arenaTag = g.isArena ? ` · ${escapeHtml(g.arenaName || 'турнир')}` : '';
+        const tw = formatTime(g.timeW);
+        const tb = formatTime(g.timeB);
+        return `<div class="${cls}" onclick="watchGame('${g.id}')">
+          <div class="wrPlayers">
+            <span><span class="liveDot"></span>⚪ ${whiteName}${whiteR}</span>
+            <span>${tw}</span>
+          </div>
+          <div class="wrPlayers">
+            <span>⚫ ${blackName}${blackR}</span>
+            <span>${tb}</span>
+          </div>
+          <div class="wrMeta">
+            <span>${g.timeControl}+${g.increment}${arenaTag}</span>
+            <span>ход: <b>${g.turn === 'w' ? 'белые' : 'чёрные'}</b></span>
+          </div>
+        </div>`;
+      }).join('');
+    });
+  }
+  window.refreshWatchList = refreshWatchList;
+
+  function watchGame(id) {
+    if (watchingGameId === id) return;
+    if (watchingGameId) socket.emit('unwatchGame', { id: watchingGameId });
+    watchingGameId = id;
+    watchingGame = null;
+    watchingLastMove = null;
+    lastWatchBoardHash = '';
+    socket.emit('watchGame', { id }, (res) => {
+      if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось начать просмотр'); watchingGameId = null; return; }
+      watchingGame = res.game;
+      renderWatchBoard();
+    });
+  }
+  window.watchGame = watchGame;
+
+  function renderWatchBoard() {
+    const box = document.getElementById('watchBoardBox');
+    if (!box) return;
+    if (!watchingGame) {
+      box.innerHTML = '<div class="wbEmpty">Выбери партию слева, чтобы посмотреть её в реальном времени</div>';
+      return;
+    }
+    const g = watchingGame;
+    const state = parseFen(g.fen);
+    const flip = g.white === me.username ? false : true;
+    const hash = g.id + '|' + g.fen + '|' + g.timeW + '|' + g.timeB + '|' + g.turn + '|' + flip;
+    if (hash === lastWatchBoardHash) return;
+    lastWatchBoardHash = hash;
+
+    const whiteActive = g.turn === 'w';
+    const blackActive = g.turn === 'b';
+
+    let squares = '';
+    for (let dr = 0; dr < 8; dr++) {
+      for (let dc = 0; dc < 8; dc++) {
+        const r = flip ? 7 - dr : dr;
+        const c = flip ? 7 - dc : dc;
+        const cls = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
+        const p = state.board[r][c];
+        let inner = '';
+        if (p) {
+          const isW = p === p.toUpperCase();
+          inner = `<span class="piece ${isW ? 'w' : 'b'}">${EMOJI[p]}</span>`;
+        }
+        let coords = '';
+        if (dr === 7) coords += `<span class="coord-f">${String.fromCharCode(97 + c)}</span>`;
+        if (dc === 0) coords += `<span class="coord-r">${8 - r}</span>`;
+        squares += `<div class="${cls}">${inner}${coords}</div>`;
+      }
+    }
+
+    box.innerHTML = `
+      <div class="wbHeader">
+        <div>
+          <div class="wbTitle">Партия ${g.isArena ? 'турнира' : ''}</div>
+          <div class="wbSub">${g.timeControl}+${g.increment}${g.arenaName ? ' · ' + escapeHtml(g.arenaName) : ''}</div>
+        </div>
+        <button class="secondary" onclick="stopWatching()">✕ Выйти из просмотра</button>
+      </div>
+      <div class="wbPlayers">
+        <div class="wbPlayer ${blackActive ? 'active' : ''}">
+          <span><span class="name">⚫ ${escapeHtml(g.black)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}</span>
+          <span class="time">${formatTime(g.timeB)}</span>
+        </div>
+        <div class="wbPlayer ${whiteActive ? 'active' : ''}">
+          <span><span class="name">⚪ ${escapeHtml(g.white)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}</span>
+          <span class="time">${formatTime(g.timeW)}</span>
+        </div>
+      </div>
+      <div class="wbBoardWrap"><div class="wbBoard">${squares}</div></div>
+    `;
+  }
+  function stopWatching() {
+    if (watchingGameId) socket.emit('unwatchGame', { id: watchingGameId });
+    watchingGameId = null;
+    watchingGame = null;
+    lastWatchBoardHash = '';
+    renderWatchBoard();
+  }
+  window.stopWatching = stopWatching;
+
+  // ============ ПРОФИЛЬ ============
   function openOpponentProfile() { if (opponentName && opponentName !== '—') openProfileView(opponentName); }
   window.openOpponentProfile = openOpponentProfile;
 
@@ -1531,7 +1750,7 @@
     });
   }
 
-  // ===================== АРЕНЫ =====================
+  // ============ АРЕНЫ ============
   function refreshArenas(force) {
     if (!force && !document.getElementById('arenasScreen').classList.contains('active')) return;
     socket.emit('getArenas', (list) => {
@@ -1558,7 +1777,7 @@
           });
         });
       }
-    }, 20000);
+    }, 30000);
   }
   window.refreshArenas = refreshArenas;
 
@@ -1571,6 +1790,10 @@
     const m = Math.floor(total / 60);
     const s = total % 60;
     return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  }
+  function formatTime(s) {
+    s = Math.max(0, Math.floor(s));
+    return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
   }
 
   function renderArenasGrid() {
@@ -1634,7 +1857,7 @@
       html += '</div>';
     }
     const nowCol = (now - startMs) / SLOT_MS;
-    const lineLeft = nowCol * 120 + 60;
+    const lineLeft = nowCol * 180 + 90;
     html += `<div class="nowLine" style="left:${lineLeft}px;"></div>`;
     html += '</div>';
     wrap.innerHTML = html;
@@ -1772,7 +1995,7 @@
       if (hash === lastArenaGamesHash) return;
       lastArenaGamesHash = hash;
       if (!list || !list.length) { el.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>'; return; }
-      el.innerHTML = list.map(g => `<div class="arenaGameCard"><div class="names"><div><span class="liveDot"></span>${escapeHtml(g.white)}</div><div style="padding-left:14px;">${escapeHtml(g.black)}</div></div><div class="meta"><span>${g.moveCount} ходов</span><span>${formatMMSS(g.timeW*1000)} · ${formatMMSS(g.timeB*1000)}</span></div></div>`).join('');
+      el.innerHTML = list.map(g => `<div class="arenaGameCard"><div class="names"><div><span class="liveDot"></span>${escapeHtml(g.white)}</div><div style="padding-left:14px;">${escapeHtml(g.black)}</div></div><div class="meta"><span>${g.moveCount} ходов</span><span>${formatTime(g.timeW)} · ${formatTime(g.timeB)}</span></div></div>`).join('');
     });
   }
 
@@ -1846,10 +2069,6 @@
     box.scrollTop = box.scrollHeight;
   }
 
-  function formatTime(s) {
-    s = Math.max(0, Math.floor(s));
-    return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
-  }
   function updateTimers() {
     document.getElementById('topTime').textContent = formatTime(oppTime);
     document.getElementById('bottomTime').textContent = formatTime(myTime);
@@ -1857,20 +2076,17 @@
     document.getElementById('bottomClock').classList.toggle('low', myTime <= 20);
   }
 
-  socket.on('onlineCount', n => {
-    const el = document.getElementById('onlineTop');
-    if (el) el.textContent = n;
-    const el2 = document.getElementById('statOnline');
-    if (el2) el2.textContent = n;
-  });
+  // ============ СОБЫТИЯ СЕРВЕРА ============
+  socket.on('onlineCount', () => { /* счётчик в шапке убран */ });
   socket.on('stats', (s) => {
     if (!s) return;
     const e1 = document.getElementById('statOnline');
     const e2 = document.getElementById('statGames');
-    const top = document.getElementById('onlineTop');
+    const e3 = document.getElementById('statActive');
     if (e1) e1.textContent = s.online;
     if (e2) e2.textContent = s.games;
-    if (top) top.textContent = s.online;
+    if (e3) e3.textContent = s.activeGames || 0;
+    if (document.getElementById('watchScreen').classList.contains('active')) refreshWatchList(false);
   });
 
   socket.on('lobbiesUpdate', () => {
@@ -1990,13 +2206,37 @@
     if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas();
   });
 
-  // Периодически обновляем топ-3 и счётчики, когда мы на главной
+  // === Обновление сцены просмотра по событиям от сервера ===
+  socket.on('boardUpdate', (payload) => {
+    // Игровые — уже обработано выше. Дублирующее событие может прийти в "watch:" комнату?
+    // Игнорируем, потому что сервер не шлёт одновременно обоим.
+  });
+  socket.on('timeUpdate', () => {
+    // Обновление сцены просмотра делаем через периодический polling ниже.
+  });
+
+  // Каждые 5 секунд обновляем список и сцену, если мы на странице просмотра
   topArenasRefreshHandle = setInterval(() => {
     if (document.getElementById('lobbyScreen').classList.contains('active')) {
       refreshTopArenas();
       refreshStats();
     }
-  }, 8000);
+    if (document.getElementById('watchScreen').classList.contains('active')) {
+      refreshWatchList(false);
+      if (watchingGameId) {
+        socket.emit('watchGame', { id: watchingGameId }, (res) => {
+          if (res && res.ok) {
+            watchingGame = res.game;
+            renderWatchBoard();
+          } else {
+            // Партия закончилась
+            stopWatching();
+            refreshWatchList(true);
+          }
+        });
+      }
+    }
+  }, 5000);
 
   document.getElementById('password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
 
