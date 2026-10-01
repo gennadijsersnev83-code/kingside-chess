@@ -19,7 +19,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ======================= РОЛИ =======================
 const ADMINS = new Set(['PeshkaSasha']);
-const MODERATORS = new Set(['Debian']);                 // ⬅ сюда добавляй ники модераторов
+const MODERATORS = new Set([]);
 const DEVS = new Set(['PeshkaSasha']);
 
 function roleOf(username) {
@@ -340,8 +340,8 @@ function buildGamesList() {
       blackRating: blackU ? blackU.rating : null,
       whiteIsAdmin: isAdmin(whiteName),
       blackIsAdmin: isAdmin(blackName),
-      whiteIsMod: isMod(whiteName),        // ⬅ ДОБАВЛЕНО
-      blackIsMod: isMod(blackName),        // ⬅ ДОБАВЛЕНО
+      whiteIsMod: isMod(whiteName),
+      blackIsMod: isMod(blackName),
       timeW: l.timeW, timeB: l.timeB,
       turn: l.turn,
       timeControl: l.time, increment: l.inc,
@@ -710,8 +710,8 @@ function createArenaPairing(state, a, b) {
     aSocket.join(lobbyId);
     aSocket.emit('gameStart', {
       color: hostColor, opponent: b.username, opponentRating: b.rating,
-      opponentIsAdmin: isAdmin(b.username),   // ⬅ ДОБАВЛЕНО
-      opponentIsMod: isMod(b.username),       // ⬅ ДОБАВЛЕНО
+      opponentIsAdmin: isAdmin(b.username),
+      opponentIsMod: isMod(b.username),
       time, inc, lobbyId,
       fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
       chat: [], arenaId: state.id, arenaName: state.name
@@ -721,8 +721,8 @@ function createArenaPairing(state, a, b) {
     bSocket.join(lobbyId);
     bSocket.emit('gameStart', {
       color: guestColor, opponent: a.username, opponentRating: a.rating,
-      opponentIsAdmin: isAdmin(a.username),   // ⬅ ДОБАВЛЕНО
-      opponentIsMod: isMod(a.username),       // ⬅ ДОБАВЛЕНО
+      opponentIsAdmin: isAdmin(a.username),
+      opponentIsMod: isMod(a.username),
       time, inc, lobbyId,
       fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
       chat: [], arenaId: state.id, arenaName: state.name
@@ -756,7 +756,6 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   if (!state) return;
   state.activeLobbies.delete(lobbyId);
 
-  // Сохраняем результат партии в историю арены (с финальной позицией)
   if (!state.finishedGames) state.finishedGames = [];
   const wU = db.users[whiteName];
   const bU = db.users[blackName];
@@ -768,8 +767,8 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
     blackRating: bU ? bU.rating : null,
     whiteIsAdmin: isAdmin(whiteName),
     blackIsAdmin: isAdmin(blackName),
-    whiteIsMod: isMod(whiteName),           // ⬅ ДОБАВЛЕНО
-    blackIsMod: isMod(blackName),           // ⬅ ДОБАВЛЕНО
+    whiteIsMod: isMod(whiteName),
+    blackIsMod: isMod(blackName),
     result,
     fen: l ? l.fen : 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
     turn: l ? l.turn : 'w',
@@ -1033,20 +1032,38 @@ io.on('connection', (socket) => {
       }));
 
       const historyRes = await pool.query(
-        `SELECT white, black, white_after, black_after, finished_at FROM games
-         WHERE white = $1 OR black = $1 ORDER BY finished_at ASC`,
+        `SELECT white, black, white_after, black_after, finished_at, category, time_control
+         FROM games WHERE white = $1 OR black = $1 ORDER BY finished_at ASC`,
         [username]
       );
+
+      const catOfTime = (t) => {
+        if (t < 3) return 'bullet';
+        if (t < 10) return 'blitz';
+        if (t < 30) return 'rapid';
+        return 'classical';
+      };
+
+      // Общая история (как раньше)
       const history = [{ ts: u.createdAt, rating: 1200 }];
+      // Раздельная история по 4 категориям
+      const historyByCat = {
+        classical: [{ ts: u.createdAt, rating: 1200 }],
+        rapid:     [{ ts: u.createdAt, rating: 1200 }],
+        blitz:     [{ ts: u.createdAt, rating: 1200 }],
+        bullet:    [{ ts: u.createdAt, rating: 1200 }]
+      };
+
       for (const r of historyRes.rows) {
         const isWhite = r.white === username;
-        history.push({
-          ts: Number(r.finished_at),
-          rating: isWhite ? r.white_after : r.black_after
-        });
+        const after = isWhite ? r.white_after : r.black_after;
+        const ts = Number(r.finished_at);
+        history.push({ ts, rating: after });
+        const cat = r.category || catOfTime(Number(r.time_control) || 0);
+        if (historyByCat[cat]) historyByCat[cat].push({ ts, rating: after });
       }
 
-      cb({ ok: true, user: publicUser(username), games, history });
+      cb({ ok: true, user: publicUser(username), games, history, historyByCat });
     } catch (err) {
       console.error('[DB] Ошибка загрузки профиля:', err.message || err.code || err);
       cb({ ok: false, msg: 'Ошибка базы данных' });
@@ -1078,8 +1095,8 @@ io.on('connection', (socket) => {
         blackRating: db.users[blackName] ? db.users[blackName].rating : null,
         whiteIsAdmin: isAdmin(whiteName),
         blackIsAdmin: isAdmin(blackName),
-        whiteIsMod: isMod(whiteName),      // ⬅ ДОБАВЛЕНО
-        blackIsMod: isMod(blackName),      // ⬅ ДОБАВЛЕНО
+        whiteIsMod: isMod(whiteName),
+        blackIsMod: isMod(blackName),
         timeW: l.timeW, timeB: l.timeB,
         turn: l.turn,
         timeControl: l.time, increment: l.inc,
@@ -1099,8 +1116,8 @@ io.on('connection', (socket) => {
       if (l.finished || l.arenaId) continue;
       list.push({
         id, host: l.host, time: l.time, inc: l.inc,
-        hostIsAdmin: isAdmin(l.host),      // ⬅ ДОБАВЛЕНО
-        hostIsMod: isMod(l.host),          // ⬅ ДОБАВЛЕНО
+        hostIsAdmin: isAdmin(l.host),
+        hostIsMod: isMod(l.host),
         status: l.guest ? 'playing' : 'waiting'
       });
     }
@@ -1173,14 +1190,14 @@ io.on('connection', (socket) => {
 
     io.to(l.hostSocket).emit('gameStart', {
       color: l.hostColor, opponent: l.guest, opponentRating: guestRating,
-      opponentIsAdmin: isAdmin(l.guest),    // ⬅ ДОБАВЛЕНО
-      opponentIsMod: isMod(l.guest),        // ⬅ ДОБАВЛЕНО
+      opponentIsAdmin: isAdmin(l.guest),
+      opponentIsMod: isMod(l.guest),
       time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat, isArena: false
     });
     io.to(l.guestSocket).emit('gameStart', {
       color: l.guestColor, opponent: l.host, opponentRating: hostRating,
-      opponentIsAdmin: isAdmin(l.host),     // ⬅ ДОБАВЛЕНО
-      opponentIsMod: isMod(l.host),         // ⬅ ДОБАВЛЕНО
+      opponentIsAdmin: isAdmin(l.host),
+      opponentIsMod: isMod(l.host),
       time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat, isArena: false
     });
 
@@ -1242,8 +1259,8 @@ io.on('connection', (socket) => {
     const msg = {
       id: 'm' + Date.now() + Math.random().toString(36).slice(2, 6),
       user: socket.username,
-      userIsAdmin: isAdmin(socket.username),   // ⬅ ДОБАВЛЕНО
-      userIsMod: isMod(socket.username),       // ⬅ ДОБАВЛЕНО
+      userIsAdmin: isAdmin(socket.username),
+      userIsMod: isMod(socket.username),
       text,
       ts: Date.now()
     };
@@ -1360,7 +1377,7 @@ io.on('connection', (socket) => {
       paused: !!p.paused,
       isPlaying: !!p.isPlaying,
       isAdmin: isAdmin(p.username),
-      isMod: isMod(p.username),                    // ⬅ ДОБАВЛЕНО
+      isMod: isMod(p.username),
       online: p.socketId && io.sockets.sockets.has(p.socketId)
     })).sort((a, b) => b.score - a.score || b.rating - a.rating);
 
@@ -1397,7 +1414,6 @@ io.on('connection', (socket) => {
     if (state) state.chatViewers.delete(socket.id);
   });
 
-  // === ПАРТИИ АРЕНЫ: активные + история ===
   socket.on('getArenaGames', ({ arenaId }, cb) => {
     if (typeof cb !== 'function') return;
     const state = arenas.get(arenaId);
@@ -1416,8 +1432,8 @@ io.on('connection', (socket) => {
           white: wName, black: bName,
           whiteIsAdmin: isAdmin(wName),
           blackIsAdmin: isAdmin(bName),
-          whiteIsMod: isMod(wName),           // ⬅ ДОБАВЛЕНО
-          blackIsMod: isMod(bName),           // ⬅ ДОБАВЛЕНО
+          whiteIsMod: isMod(wName),
+          blackIsMod: isMod(bName),
           whiteRating: wU ? wU.rating : null,
           blackRating: bU ? bU.rating : null,
           timeW: l.timeW, timeB: l.timeB,
@@ -1436,8 +1452,8 @@ io.on('connection', (socket) => {
           lobbyId: null,
           white: g.white, black: g.black,
           whiteIsAdmin: g.whiteIsAdmin, blackIsAdmin: g.blackIsAdmin,
-          whiteIsMod: isMod(g.white),        // ⬅ ДОБАВЛЕНО (на случай если старых записей нет)
-          blackIsMod: isMod(g.black),        // ⬅ ДОБАВЛЕНО
+          whiteIsMod: isMod(g.white),
+          blackIsMod: isMod(g.black),
           whiteRating: g.whiteRating, blackRating: g.blackRating,
           result: g.result,
           fen: g.fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
@@ -1570,8 +1586,8 @@ io.on('connection', (socket) => {
     const msg = {
       id: 'a' + Date.now() + Math.random().toString(36).slice(2, 6),
       user: socket.username,
-      userIsAdmin: isAdmin(socket.username),   // ⬅ ДОБАВЛЕНО
-      userIsMod: isMod(socket.username),       // ⬅ ДОБАВЛЕНО
+      userIsAdmin: isAdmin(socket.username),
+      userIsMod: isMod(socket.username),
       text,
       ts: Date.now(),
       arenaId
