@@ -230,9 +230,7 @@
   .awbItem .n { color:var(--text-bright); font-weight:600; margin:2px 0; font-size:13px; }
   .awbItem .s { color:var(--accent); font-weight:700; font-size:16px; }
 
-  /* ============================================================
-     ФИКСИРОВАННАЯ СЕТКА АРЕНЫ: 280 / 480 / 300 = 1060 + 32 gap
-     ============================================================ */
+  /* ФИКСИРОВАННАЯ СЕТКА АРЕНЫ */
   .arenaPage {
     display: grid;
     grid-template-columns: 280px 480px 300px;
@@ -257,9 +255,164 @@
     .arenaLeft, .arenaCenter, .arenaRight { width: 100%; min-width: 0; max-width: none; }
   }
 
-  .arenaRightCol { flex: 1 1 auto; min-height: 420px; display: flex; flex-direction: column; }
+  /* Панель справа: партия лидеров сверху + список прошлых */
+  .arenaRightCol {
+    height: 576px; min-height: 576px; max-height: 576px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .arenaGamesHeader {
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: .5px;
+    font-weight: 700;
+  }
 
-  /* Общая защита от скачков */
+  /* Мини-превью партии лидеров */
+  .arenaTopGame {
+    flex: 0 0 auto;
+    padding: 8px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    box-sizing: border-box;
+  }
+  .arenaTopGameEmpty {
+    padding: 30px 10px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .arenaTopGamePlayers {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: var(--text-bright);
+    padding: 1px 2px;
+  }
+  .arenaTopGamePlayers .playerRow {
+    display: flex; align-items: center; gap: 4px;
+    min-width: 0; overflow: hidden;
+  }
+  .arenaTopGamePlayers .playerRow .name {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .arenaTopGamePlayers .playerRow .prat {
+    color: var(--muted); font-size: 11px; flex-shrink: 0;
+  }
+  .arenaTopGamePlayers .time {
+    font-family: 'Roboto Mono','Menlo',monospace;
+    font-weight: 700;
+    font-size: 12px;
+    color: var(--text-bright);
+    background: var(--panel-2);
+    padding: 1px 6px;
+    border-radius: 3px;
+    min-width: 44px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  .arenaTopGameBoard {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    grid-template-rows: repeat(8, 1fr);
+    aspect-ratio: 1 / 1;
+    width: 100%;
+    border: 2px solid #0a0a0a;
+    border-radius: 3px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,.4);
+    user-select: none;
+  }
+  .arenaTopGameBoard .sq {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .arenaTopGameBoard .sq.light { background: var(--light-sq); }
+  .arenaTopGameBoard .sq.dark { background: var(--dark-sq); }
+  .arenaTopGameBoard .sq .piece {
+    font-size: 18px;
+    line-height: 1;
+    pointer-events: none;
+    position: relative;
+    z-index: 1;
+  }
+  .arenaTopGameBoard .sq .piece.w {
+    color: #fff;
+    text-shadow: -1px -1px 0 #1a1a1a, 1px -1px 0 #1a1a1a, -1px 1px 0 #1a1a1a, 1px 1px 0 #1a1a1a;
+  }
+  .arenaTopGameBoard .sq .piece.b {
+    color: #1e1e1e;
+    text-shadow: -1px -1px 0 #ddd, 1px -1px 0 #ddd, -1px 1px 0 #ddd, 1px 1px 0 #ddd;
+  }
+  .arenaTopGameLink {
+    text-align: center;
+    font-size: 11px;
+    color: var(--accent);
+    cursor: pointer;
+    padding: 3px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+  .arenaTopGameLink:hover { background: var(--panel-hover); }
+
+  /* Список прошлых партий */
+  .arenaGamesList {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .arenaGamesList::-webkit-scrollbar { width: 6px; }
+  .arenaGamesList::-webkit-scrollbar-track { background: transparent; }
+  .arenaGamesList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  .arenaGamesList::-webkit-scrollbar-thumb:hover { background: #4a4740; }
+  .arenaGameCard {
+    background: var(--panel-2);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 11px;
+    border-left: 3px solid var(--accent);
+    flex-shrink: 0;
+  }
+  .arenaGameCard .row1 {
+    display: flex; justify-content: space-between; align-items: center;
+    color: var(--text-bright); font-weight: 600;
+    overflow: hidden;
+  }
+  .arenaGameCard .row1 .res {
+    font-weight: 700; flex-shrink: 0; margin-left: 6px;
+  }
+  .arenaGameCard .row1 .res.w { color: #6ee787; }
+  .arenaGameCard .row1 .res.d { color: var(--accent); }
+  .arenaGameCard .name {
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    min-width: 0; flex: 1;
+  }
+  .arenaGameCard .name .rating { color: var(--muted); font-weight: 400; font-size: 10px; }
+  .arenaGameCard .row2 {
+    color: var(--muted); font-size: 10px; margin-top: 2px;
+    display: flex; justify-content: space-between;
+  }
+
   .arenaPage * { min-width: 0; }
   .arenaPage button { flex-shrink: 0; }
 
@@ -533,8 +686,14 @@
       </main>
       <aside class="arenaRight">
         <div class="arenaRightCol">
-          <div class="arenaGamesHeader">ИГРЫ АРЕНЫ</div>
-          <div class="arenaGamesList" id="arenaGamesList"><div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div></div>
+          <div class="arenaGamesHeader">🎯 ПАРТИЯ ЛИДЕРОВ</div>
+          <div class="arenaTopGame" id="arenaTopGame">
+            <div class="arenaTopGameEmpty">Сейчас никто не играет</div>
+          </div>
+          <div class="arenaGamesHeader" style="border-top:1px solid var(--border);">🏆 ПРОШЛЫЕ ПАРТИИ ЛИДЕРОВ</div>
+          <div class="arenaGamesList" id="arenaGamesList">
+            <div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>
+          </div>
         </div>
       </aside>
     </div>
@@ -1680,7 +1839,7 @@
     if (arenaStatusTickHandle) clearInterval(arenaStatusTickHandle);
     arenaStatusTickHandle = setInterval(tickArenaStatus, 1000);
     if (arenaGamesRefreshHandle) clearInterval(arenaGamesRefreshHandle);
-    arenaGamesRefreshHandle = setInterval(() => { if (document.getElementById('arenaPageScreen').classList.contains('active')) renderArenaGamesList(); }, 10000);
+    arenaGamesRefreshHandle = setInterval(() => { if (document.getElementById('arenaPageScreen').classList.contains('active')) renderArenaGamesList(); }, 3000);
   }
   window.openArenaPage = openArenaPage;
 
@@ -1790,13 +1949,84 @@
   window.filterArenaParticipants = filterArenaParticipants;
 
   function renderArenaGamesList() {
-    const el = document.getElementById('arenaGamesList'); if (!el) return;
-    socket.emit('getArenaGames', { arenaId: currentArenaId }, (list) => {
-      const hash = JSON.stringify(list); if (hash === lastArenaGamesHash) return;
+    const topEl = document.getElementById('arenaTopGame');
+    const listEl = document.getElementById('arenaGamesList');
+    if (!topEl || !listEl) return;
+    socket.emit('getArenaGames', { arenaId: currentArenaId }, (res) => {
+      if (!res || typeof res !== 'object') return;
+      const live = res.live || [];
+      const done = res.done || [];
+      const hash = JSON.stringify({ live: live.map(g => [g.lobbyId, g.fen, g.timeW, g.timeB]), done: done.slice(0, 30).map(g => [g.white, g.black, g.result, g.finishedAt]) });
+      if (hash === lastArenaGamesHash) return;
       lastArenaGamesHash = hash;
-      if (!list || !list.length) { el.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>'; return; }
-      el.innerHTML = list.map(g => `<div class="arenaGameCard"><div class="names"><div><span class="liveDot"></span>${nickHtml(g.white, g.whiteIsAdmin)}</div><div style="padding-left:14px;">${nickHtml(g.black, g.blackIsAdmin)}</div></div><div class="meta"><span>${g.moveCount} ходов</span><span>${formatTime(g.timeW)} · ${formatTime(g.timeB)}</span></div></div>`).join('');
+
+      if (live.length) {
+        const g = live[0];
+        topEl.innerHTML = renderArenaTopGame(g);
+        const link = topEl.querySelector('.arenaTopGameLink');
+        if (link) link.onclick = () => watchGame(g.lobbyId);
+      } else {
+        topEl.innerHTML = '<div class="arenaTopGameEmpty">Сейчас никто не играет</div>';
+      }
+
+      if (!done.length) {
+        listEl.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>';
+        return;
+      }
+      listEl.innerHTML = done.slice(0, 50).map(g => {
+        const resChar = g.result === 'w' ? '1-0' : (g.result === 'b' ? '0-1' : '½-½');
+        const resCls = g.result === 'draw' ? 'd' : 'w';
+        const dateStr = new Date(g.finishedAt).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
+        const wR = g.whiteRating ? `<span class="rating"> ${g.whiteRating}</span>` : '';
+        const bR = g.blackRating ? `<span class="rating"> ${g.blackRating}</span>` : '';
+        return `<div class="arenaGameCard">
+          <div class="row1">
+            <span class="name">⚪ ${nickHtml(g.white, g.whiteIsAdmin)}${wR}</span>
+            <span class="res ${resCls}">${resChar}</span>
+          </div>
+          <div class="row1">
+            <span class="name">⚫ ${nickHtml(g.black, g.blackIsAdmin)}${bR}</span>
+          </div>
+          <div class="row2"><span>завершена</span><span>${dateStr}</span></div>
+        </div>`;
+      }).join('');
     });
+  }
+
+  function renderArenaTopGame(g) {
+    const state = parseFen(g.fen);
+    const flip = false;
+    let squares = '';
+    for (let dr = 0; dr < 8; dr++) {
+      for (let dc = 0; dc < 8; dc++) {
+        const r = flip ? 7 - dr : dr;
+        const c = flip ? 7 - dc : dc;
+        const cls = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
+        const p = state.board[r][c];
+        let inner = '';
+        if (p) {
+          const isW = p === p.toUpperCase();
+          inner = `<span class="piece ${isW ? 'w' : 'b'}">${EMOJI[p]}</span>`;
+        }
+        squares += `<div class="${cls}">${inner}</div>`;
+      }
+    }
+    const whiteActive = g.turn === 'w';
+    const blackActive = g.turn === 'b';
+    const wR = g.whiteRating ? `<span class="prat">${g.whiteRating}</span>` : '';
+    const bR = g.blackRating ? `<span class="prat">${g.blackRating}</span>` : '';
+    return `
+      <div class="arenaTopGamePlayers">
+        <span class="playerRow">⚫ <span class="name">${nickHtml(g.black, g.blackIsAdmin)}</span>${bR}</span>
+        <span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${formatTime(g.timeB)}</span>
+      </div>
+      <div class="arenaTopGameBoard">${squares}</div>
+      <div class="arenaTopGamePlayers">
+        <span class="playerRow">⚪ <span class="name">${nickHtml(g.white, g.whiteIsAdmin)}</span>${wR}</span>
+        <span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${formatTime(g.timeW)}</span>
+      </div>
+      <div class="arenaTopGameLink">▶ Смотреть партию</div>
+    `;
   }
 
   function showArenaWinnerBanner(top3) {
@@ -1813,8 +2043,8 @@
     if (!currentArenaId) return;
     socket.emit('joinArena', { arenaId: currentArenaId }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      lastArenaStateHash = '';
-      loadArenaPage(); refreshArenas(true);
+      lastArenaStateHash = ''; lastArenaGamesHash = '';
+      loadArenaPage(); refreshArenas(true); renderArenaGamesList();
     });
   }
   window.joinCurrentArena = joinCurrentArena;
@@ -1979,19 +2209,37 @@
 
   socket.on('arenaChatMessage', (msg) => { if (currentArenaId && msg.arenaId === currentArenaId) renderArenaChatMsg(msg); });
   socket.on('arenaUpdate', ({ arenaId }) => {
-    if (currentArenaId === arenaId) { lastArenaStateHash = ''; if (document.getElementById('arenaPageScreen').classList.contains('active')) loadArenaPage(); }
+    if (currentArenaId === arenaId) {
+      lastArenaStateHash = '';
+      lastArenaGamesHash = '';
+      if (document.getElementById('arenaPageScreen').classList.contains('active')) {
+        loadArenaPage();
+        renderArenaGamesList();
+      }
+    }
     if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas();
     if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas();
   });
   socket.on('arenaStarted', ({ arenaId }) => {
-    if (currentArenaId === arenaId) { lastArenaStateHash = ''; if (document.getElementById('arenaPageScreen').classList.contains('active')) loadArenaPage(); }
+    if (currentArenaId === arenaId) {
+      lastArenaStateHash = '';
+      lastArenaGamesHash = '';
+      if (document.getElementById('arenaPageScreen').classList.contains('active')) {
+        loadArenaPage();
+        renderArenaGamesList();
+      }
+    }
     if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas();
     if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas();
   });
   socket.on('arenaFinished', ({ arenaId, top3 }) => {
     if (currentArenaId === arenaId) {
       lastArenaStateHash = '';
-      if (document.getElementById('arenaPageScreen').classList.contains('active')) loadArenaPage();
+      lastArenaGamesHash = '';
+      if (document.getElementById('arenaPageScreen').classList.contains('active')) {
+        loadArenaPage();
+        renderArenaGamesList();
+      }
       if (top3 && top3.length) showArenaWinnerBanner(top3);
     }
     if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas();
