@@ -732,7 +732,6 @@
 
   function escapeHtml(s) { return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
 
-  // ⬇⬇⬇ ИЗМЕНЕНО: третья опция isModFlag + красный !
   function nickHtml(username, isAdminFlag, isModFlag) {
     if (!username) return '';
     const admin = (typeof isAdminFlag === 'boolean') ? isAdminFlag : (username === 'PeshkaSasha' || username === 'admin');
@@ -1171,7 +1170,9 @@
     if (!username || !password) { document.getElementById('loginMsg').textContent = 'Введите логин и пароль'; return; }
     socket.emit('register', { username, password }, (res) => {
       if (!res || !res.ok) { document.getElementById('loginMsg').textContent = (res && res.msg) || 'Ошибка'; return; }
-      me = res.user; updateTopbarUser();
+      me = res.user;
+      try { localStorage.setItem('kingside_login', JSON.stringify({ username, password })); } catch (e) {}
+      updateTopbarUser();
       navTo('lobby'); refreshLobbies(); refreshTopArenas(); refreshStats();
     });
   }
@@ -1180,11 +1181,13 @@
     if (!me) return;
     document.getElementById('userBtn').style.display = 'flex';
     document.getElementById('logoutBtn').style.display = 'block';
-    // ⬇⬇⬇ передаём третьим аргументом флаг модератора
     document.getElementById('userName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod) + ' (' + me.rating + ')';
     document.getElementById('userAvatar').textContent = me.username.charAt(0).toUpperCase();
   }
-  function logout() { location.reload(); }
+  function logout() {
+    try { localStorage.removeItem('kingside_login'); } catch (e) {}
+    location.reload();
+  }
   window.logout = logout;
   function switchLobbyTab(tab) { currentLobbyTab = tab; document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab)); renderLobbyTab(); }
   window.switchLobbyTab = switchLobbyTab;
@@ -1356,7 +1359,6 @@
     const time = new Date(msg.ts).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
     let modHtml = '';
     if (me && me.isMod) modHtml = `<span class="modBtn" data-mod-btn="1" title="Модерация">⚙</span>`;
-    // ⬇⬇⬇ передаём userIsMod с сервера
     div.innerHTML = `<span class="u">${nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
     if (me && me.isMod) {
       const btn = div.querySelector('.modBtn');
@@ -1732,7 +1734,6 @@
       let streakTag = '';
       if (p.winStreak >= 3) streakTag = `<span class="streak">🔥${p.winStreak}</span>`;
       else if (p.drawStreak >= 2) streakTag = `<span class="streak">½${p.drawStreak}</span>`;
-      // ⬇⬇⬇ передаём p.isMod
       return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''}"><span class="place ${placeCls}">${place}</span><span class="pname">${nickHtml(p.username, p.isAdmin, p.isMod)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
     }).join('');
   }
@@ -1869,7 +1870,6 @@
       const time = new Date(msg.ts).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
       let modHtml = '';
       if (me && me.isMod) modHtml = `<span class="modBtn always" title="Модерация" style="cursor:pointer;color:var(--muted);margin-left:6px;">⚙</span>`;
-      // ⬇⬇⬇ передаём userIsMod/userIsAdmin
       div.innerHTML = `<span class="u">${nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
       if (me && me.isMod) {
         const btn = div.querySelector('.modBtn');
@@ -2005,6 +2005,24 @@
     }
   }, 5000);
   document.getElementById('password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+
+  // Автологин при загрузке страницы
+  (function tryAutoLogin() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem('kingside_login') || 'null'); } catch (e) {}
+    if (!saved || !saved.username || !saved.password) return;
+    try { document.getElementById('username').value = saved.username; } catch (e) {}
+    socket.emit('register', { username: saved.username, password: saved.password }, (res) => {
+      if (!res || !res.ok) {
+        try { localStorage.removeItem('kingside_login'); } catch (e) {}
+        return;
+      }
+      me = res.user;
+      updateTopbarUser();
+      navTo('lobby');
+      refreshLobbies(); refreshTopArenas(); refreshStats();
+    });
+  })();
 })();
 </script>
 </body>
