@@ -18,93 +18,112 @@ const io = new Server(server, {
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ======================= БАЗА ДАННЫХ =======================
+// Railway требует SSL для подключения к Postgres.
+// rejectUnauthorized: false — потому что у Railway самоподписанный сертификат.
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('render.com')
-    ? { rejectUnauthorized: false }
-    : false
+  ssl: { rejectUnauthorized: false }
 });
 
+// Обёртка для логов с текстом ошибки
 async function initDB() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      username TEXT PRIMARY KEY,
-      password_hash TEXT NOT NULL,
-      salt TEXT NOT NULL,
-      rating INTEGER NOT NULL DEFAULT 1200,
-      wins INTEGER NOT NULL DEFAULT 0,
-      losses INTEGER NOT NULL DEFAULT 0,
-      draws INTEGER NOT NULL DEFAULT 0,
-      games INTEGER NOT NULL DEFAULT 0,
-      created_at BIGINT NOT NULL
-    );
-  `);
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS games (
-      id SERIAL PRIMARY KEY,
-      white TEXT NOT NULL,
-      black TEXT NOT NULL,
-      result TEXT NOT NULL,
-      reason TEXT,
-      time_control REAL,
-      increment INTEGER,
-      white_before INTEGER,
-      black_before INTEGER,
-      white_after INTEGER,
-      black_after INTEGER,
-      finished_at BIGINT NOT NULL
-    );
-  `);
-  console.log('[DB] Схема готова');
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        username TEXT PRIMARY KEY,
+        password_hash TEXT NOT NULL,
+        salt TEXT NOT NULL,
+        rating INTEGER NOT NULL DEFAULT 1200,
+        wins INTEGER NOT NULL DEFAULT 0,
+        losses INTEGER NOT NULL DEFAULT 0,
+        draws INTEGER NOT NULL DEFAULT 0,
+        games INTEGER NOT NULL DEFAULT 0,
+        created_at BIGINT NOT NULL
+      );
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS games (
+        id SERIAL PRIMARY KEY,
+        white TEXT NOT NULL,
+        black TEXT NOT NULL,
+        result TEXT NOT NULL,
+        reason TEXT,
+        time_control REAL,
+        increment INTEGER,
+        white_before INTEGER,
+        black_before INTEGER,
+        white_after INTEGER,
+        black_after INTEGER,
+        finished_at BIGINT NOT NULL
+      );
+    `);
+    console.log('[DB] Схема готова');
+  } catch (err) {
+    console.error('[DB] Ошибка создания схемы:', err.message || err.code || err);
+    throw err;
+  }
 }
 
-// Пользователи в памяти (для быстрого доступа)
 let db = { users: {}, games: [] };
 
 async function loadDB() {
-  const res = await pool.query('SELECT * FROM users');
-  db.users = {};
-  for (const row of res.rows) {
-    db.users[row.username] = {
-      passwordHash: row.password_hash,
-      salt: row.salt,
-      rating: row.rating,
-      wins: row.wins,
-      losses: row.losses,
-      draws: row.draws,
-      games: row.games,
-      createdAt: Number(row.created_at)
-    };
+  try {
+    const res = await pool.query('SELECT * FROM users');
+    db.users = {};
+    for (const row of res.rows) {
+      db.users[row.username] = {
+        passwordHash: row.password_hash,
+        salt: row.salt,
+        rating: row.rating,
+        wins: row.wins,
+        losses: row.losses,
+        draws: row.draws,
+        games: row.games,
+        createdAt: Number(row.created_at)
+      };
+    }
+    console.log(`[DB] Загружено: ${Object.keys(db.users).length} игроков`);
+  } catch (err) {
+    console.error('[DB] Ошибка загрузки игроков:', err.message || err.code || err);
   }
-  console.log(`[DB] Загружено: ${Object.keys(db.users).length} игроков`);
 }
 
 async function saveUser(username) {
   const u = db.users[username];
   if (!u) return;
-  await pool.query(
-    `INSERT INTO users (username, password_hash, salt, rating, wins, losses, draws, games, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-     ON CONFLICT (username) DO UPDATE SET
-       rating = EXCLUDED.rating,
-       wins = EXCLUDED.wins,
-       losses = EXCLUDED.losses,
-       draws = EXCLUDED.draws,
-       games = EXCLUDED.games`,
-    [username, u.passwordHash, u.salt, u.rating, u.wins, u.losses, u.draws, u.games, u.createdAt]
-  );
+  try {
+    await pool.query(
+      `INSERT INTO users (username, password_hash, salt, rating, wins, losses, draws, games, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (username) DO UPDATE SET
+         rating = EXCLUDED.rating,
+         wins = EXCLUDED.wins,
+         losses = EXCLUDED.losses,
+         draws = EXCLUDED.draws,
+         games = EXCLUDED.games`,
+      [username, u.passwordHash, u.salt, u.rating, u.wins, u.losses, u.draws, u.games, u.createdAt]
+    );
+  } catch (err) {
+    console.error(`[DB] saveUser(${username}) ошибка:`, err.message || err.code || err);
+    throw err;
+  }
 }
 
 async function saveGame(game) {
-  await pool.query(
-    `INSERT INTO games (white, black, result, reason, time_control, increment,
-                        white_before, black_before, white_after, black_after, finished_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-    [game.white, game.black, game.result, game.reason,
-     game.timeControl, game.increment,
-     game.whiteBefore, game.blackBefore, game.whiteAfter, game.blackAfter,
-     game.finishedAt]
-  );
+  try {
+    await pool.query(
+      `INSERT INTO games (white, black, result, reason, time_control, increment,
+                          white_before, black_before, white_after, black_after, finished_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      [game.white, game.black, game.result, game.reason,
+       game.timeControl, game.increment,
+       game.whiteBefore, game.blackBefore, game.whiteAfter, game.blackAfter,
+       game.finishedAt]
+    );
+  } catch (err) {
+    console.error('[DB] saveGame ошибка:', err.message || err.code || err);
+    throw err;
+  }
 }
 
 // ======================= ПАРОЛИ =======================
@@ -271,7 +290,7 @@ async function finishGame(lobbyId, result, reason) {
     await saveGame(gameRecord);
     console.log(`[DB] Сохранено: ${whiteName} vs ${blackName} = ${result}`);
   } catch (err) {
-    console.error('[DB] Ошибка сохранения партии:', err.message);
+    console.error('[DB] Ошибка сохранения партии:', err.message || err.code || err);
   }
 
   const isArena = !!l.arenaId;
@@ -743,7 +762,7 @@ io.on('connection', (socket) => {
       try {
         await saveUser(username);
       } catch (err) {
-        console.error('[DB] Ошибка сохранения пользователя:', err.message);
+        console.error('[DB] Ошибка сохранения пользователя:', err.message || err.code || err);
       }
     }
     online.set(socket.id, username);
@@ -786,7 +805,7 @@ io.on('connection', (socket) => {
 
       cb({ ok: true, user: publicUser(username), games, history });
     } catch (err) {
-      console.error('[DB] Ошибка загрузки профиля:', err.message);
+      console.error('[DB] Ошибка загрузки профиля:', err.message || err.code || err);
       cb({ ok: false, msg: 'Ошибка базы данных' });
     }
   });
@@ -1205,8 +1224,8 @@ io.on('connection', (socket) => {
     await initDB();
     await loadDB();
   } catch (err) {
-    console.error('[DB] Не удалось инициализировать базу данных:', err.message);
-    console.error('Проверь переменную DATABASE_URL в Variables сервиса.');
+    console.error('[DB] Не удалось инициализировать базу данных:', err.message || err.code || err);
+    console.error('Проверь, что в сервисе kingside-chess добавлена переменная DATABASE_URL со значением Internal Database URL из Postgres-кубика.');
   }
   getArenaSchedule(48);
 
