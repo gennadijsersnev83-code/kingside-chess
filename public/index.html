@@ -151,19 +151,27 @@
   .nowLine { position:absolute; top:32px; bottom:0; width:2px; background:#e5484d; z-index:3; pointer-events:none; }
   .nowLine::before { content:'▼'; position:absolute; top:-12px; left:50%; transform:translateX(-50%); color:#e5484d; font-size:10px; }
 
-  .arenaStatusRow { display:flex; align-items:center; gap:16px; padding:10px 14px; margin-top:8px; background:var(--panel-2); border-radius:6px; border-left:4px solid var(--accent); min-height:56px; }
+  .arenaStatusRow { display:flex; align-items:center; gap:16px; padding:10px 14px; margin-top:8px; background:var(--panel-2); border-radius:6px; border-left:4px solid var(--accent); }
   .arenaStatusRow.live { border-left-color:var(--green-2); background:rgba(98,153,36,.08); }
   .arenaStatusRow.finished { border-left-color:var(--muted); opacity:.7; }
   .arenaStatusLabel { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.5px; font-weight:700; white-space:nowrap; }
-  .arenaStatusTime { font-family:'Roboto Mono','Menlo',monospace; font-size:28px; font-weight:700; color:var(--accent-2); letter-spacing:1px; font-variant-numeric:tabular-nums; min-width:110px; }
-  .arenaStatusRow.live .arenaStatusTime { color:var(--green-2); }
-  .arenaStatusRow.finished .arenaStatusTime { color:var(--muted); }
+  .arenaStatusTime { font-family:'Roboto Mono','Menlo',monospace; font-size:28px; font-weight:700; color:var(--accent-2); letter-spacing:1px; font-variant-numeric:tabular-nums; }
 
-  .arenaPage { display:grid; grid-template-columns:260px 1fr 320px; gap:16px; align-items:start; max-width:1200px; margin:0 auto; }
-  @media (max-width:1100px) { .arenaPage { grid-template-columns:1fr; } }
-  .arenaLeft { display:flex; flex-direction:column; gap:12px; min-width:0; }
-  .arenaCenter,.arenaRight { min-width:0; }
-  .arenaInfoCard { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:16px; border-left:4px solid var(--accent); }
+  .arenaPage { display:grid; grid-template-columns:260px 620px 320px; gap:16px; align-items:start; justify-content:center; max-width:1240px; margin:0 auto; }
+  @media (max-width:1220px) { .arenaPage { grid-template-columns:240px 1fr 300px; } }
+  @media (max-width:1100px) { .arenaPage { grid-template-columns:1fr; max-width:640px; } }
+  .arenaLeft { display:flex; flex-direction:column; gap:12px; width:260px; min-width:260px; max-width:260px; }
+  @media (max-width:1220px) { .arenaLeft { width:240px; min-width:240px; max-width:240px; } }
+  @media (max-width:1100px) { .arenaLeft { width:100%; min-width:0; max-width:none; } }
+  .arenaCenter { width:620px; min-width:620px; max-width:620px; display:flex; flex-direction:column; gap:10px; }
+  @media (max-width:1220px) { .arenaCenter { width:auto; min-width:0; max-width:none; } }
+  .arenaRight { width:320px; min-width:320px; max-width:320px; }
+  @media (max-width:1220px) { .arenaRight { width:300px; min-width:300px; max-width:300px; } }
+  @media (max-width:1100px) { .arenaRight { width:100%; min-width:0; max-width:none; } }
+
+  .arenaInfoCard { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:16px; border-left:4px solid var(--accent); min-height:240px; display:flex; flex-direction:column; overflow:hidden; }
+  .arenaInfoCard .aInfoTitle, .arenaInfoCard .aInfoTime, .arenaInfoCard .aInfoDesc { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .arenaInfoCard .aInfoDesc { white-space:normal; max-height:40px; }
   .aInfoIcon { font-size:32px; margin-bottom:6px; }
   .aInfoTitle { font-size:16px; font-weight:700; color:var(--text-bright); margin-bottom:4px; }
   .aInfoTime { color:var(--accent); font-size:13px; font-weight:600; margin-bottom:10px; }
@@ -171,38 +179,47 @@
   .aInfoRules { background:var(--panel-2); border-radius:4px; padding:10px; font-size:12px; }
   .aInfoRulesLabel { color:var(--muted); margin-bottom:4px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; font-size:10px; }
   .aInfoRulesText { color:var(--green-2); font-weight:600; line-height:1.5; }
-  .arenaChatBox { background:var(--panel); border:1px solid var(--border); border-radius:6px; display:flex; flex-direction:column; height:320px; overflow:hidden; }
-  .arenaChatHeader { padding:10px 12px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600; color:var(--text-bright); }
-  .arenaChatMessages { flex:1; overflow-y:auto; padding:8px 12px; font-size:13px; display:flex; flex-direction:column; gap:4px; overflow-wrap:anywhere; word-break:break-word; }
+
+  .arenaChatBox { background:var(--panel); border:1px solid var(--border); border-radius:6px; display:flex; flex-direction:column; height:320px; min-height:320px; max-height:320px; overflow:hidden; width:100%; }
+  .arenaChatHeader { padding:10px 12px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600; color:var(--text-bright); flex:0 0 auto; }
+  .arenaChatMessages { flex:1 1 auto; min-height:0; overflow-y:auto; padding:8px 12px; font-size:13px; display:flex; flex-direction:column; gap:4px; overflow-wrap:anywhere; word-break:break-word; }
   .arenaChatMessages .msg { line-height:1.35; color:var(--text-bright); position:relative; white-space:pre-wrap; overflow-wrap:anywhere; }
   .arenaChatMessages .msg .u { color:var(--accent); font-weight:600; }
   .arenaChatMessages .msg .t { color:var(--muted); font-size:11px; margin-left:4px; }
   .arenaChatMessages .sys { color:var(--muted); font-size:12px; font-style:italic; }
-  .arenaChatForm { display:flex; border-top:1px solid var(--border); }
+  .arenaChatForm { display:flex; border-top:1px solid var(--border); flex:0 0 auto; }
   .arenaChatForm input { flex:1; border:none; border-radius:0; background:transparent; padding:10px 12px; font-size:13px; }
   .arenaChatForm button { border-radius:0; padding:0 16px; font-size:14px; border:none; background:transparent; color:var(--muted); cursor:pointer; min-width:48px; min-height:40px; }
-  .arenaTopBar { display:flex; justify-content:space-between; align-items:flex-start; padding:4px 0; }
-  .arenaTopLeft { display:flex; align-items:center; gap:12px; }
+
+  .arenaTopBar { display:flex; justify-content:space-between; align-items:flex-start; padding:4px 0; min-height:60px; }
+  .arenaTopLeft { display:flex; align-items:center; gap:12px; min-width:0; }
   .arenaTrophy { font-size:40px; }
-  .arenaPageName { margin:0; font-size:26px; font-weight:600; color:var(--accent-2); letter-spacing:-.3px; }
+  .arenaPageName { margin:0; font-size:26px; font-weight:600; color:var(--accent-2); letter-spacing:-.3px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .arenaPageSub { color:var(--muted); font-size:12px; margin-top:2px; }
-  .arenaPairingBox { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:10px 14px; font-size:13px; display:flex; align-items:center; gap:10px; border-left:4px solid var(--accent); min-height:44px; }
+
+  .arenaStatusRow { width:100%; height:56px; min-height:56px; max-height:56px; box-sizing:border-box; }
+  .arenaStatusTime { min-width:120px; }
+
+  .arenaPairingBox { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:10px 14px; font-size:13px; display:flex; align-items:center; gap:10px; border-left:4px solid var(--accent); width:100%; height:44px; min-height:44px; max-height:44px; box-sizing:border-box; overflow:hidden; }
   .arenaPairingBox.searching { border-left-color:var(--green-2); background:rgba(98,153,36,.08); }
   .arenaPairingBox .spinner { width:14px; height:14px; border-radius:50%; border:2px solid rgba(255,255,255,.25); border-top-color:var(--green-2); animation:spin .9s linear infinite; flex-shrink:0; }
   @keyframes spin { to { transform:rotate(360deg); } }
-  .arenaParticipantsHeader { display:flex; justify-content:space-between; align-items:center; gap:10px; }
-  .arenaSearch { flex:1; max-width:260px; }
-  .arenaSearch input { width:100%; padding:6px 12px; font-size:13px; }
-  .arenaJoinBtn { padding:10px 28px; font-weight:700; letter-spacing:.5px; min-width:170px; }
-  .arenaParticipantsTable { background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden; }
-  .arenaTableHeader { display:grid; grid-template-columns:40px 1fr 70px 90px 60px; gap:10px; padding:10px 14px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:600; }
-  .arenaTableBody { max-height:500px; overflow-y:auto; }
-  .arenaTableRow { display:grid; grid-template-columns:40px 1fr 70px 90px 60px; gap:10px; padding:8px 14px; align-items:center; font-size:13px; border-bottom:1px solid rgba(58,56,51,.4); }
+  .arenaPairingBox span, .arenaPairingBox b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; max-width:100%; vertical-align:bottom; }
+
+  .arenaParticipantsHeader { display:flex; justify-content:space-between; align-items:center; gap:10px; height:40px; min-height:40px; max-height:40px; box-sizing:border-box; }
+  .arenaSearch { width:260px; min-width:260px; max-width:260px; }
+  .arenaSearch input { width:100%; padding:6px 12px; font-size:13px; height:32px; box-sizing:border-box; }
+  .arenaJoinBtn { width:200px; min-width:200px; max-width:200px; height:40px; min-height:40px; max-height:40px; padding:0 12px; font-weight:700; letter-spacing:.5px; box-sizing:border-box; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  .arenaParticipantsTable { background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden; height:460px; min-height:460px; max-height:460px; display:flex; flex-direction:column; }
+  .arenaTableHeader { flex:0 0 auto; display:grid; grid-template-columns:40px minmax(0,1fr) 70px 90px 60px; gap:10px; padding:10px 14px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:600; min-height:36px; height:36px; }
+  .arenaTableBody { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; }
+  .arenaTableRow { display:grid; grid-template-columns:40px minmax(0,1fr) 70px 90px 60px; gap:10px; padding:0 14px; align-items:center; font-size:13px; border-bottom:1px solid rgba(58,56,51,.4); height:40px; min-height:40px; max-height:40px; box-sizing:border-box; }
   .arenaTableRow:last-child { border-bottom:none; }
   .arenaTableRow:hover { background:var(--panel-hover); }
   .arenaTableRow.me { background:rgba(191,129,29,.12); border-left:3px solid var(--accent); }
   .arenaTableRow.paused { opacity:.55; }
-  .arenaTableRow .place { color:var(--muted); font-weight:700; font-size:14px; }
+  .arenaTableRow .place { color:var(--muted); font-weight:700; font-size:14px; overflow:hidden; }
   .arenaTableRow .place.top1 { color:#ffd54f; }
   .arenaTableRow .place.top2 { color:#d0d0d0; }
   .arenaTableRow .place.top3 { color:#d4904a; }
@@ -210,11 +227,12 @@
   .arenaTableRow .pname .prat { color:var(--muted); font-weight:400; margin-left:6px; font-size:12px; }
   .arenaTableRow .pname .pgreen { color:var(--green); font-size:10px; margin-left:6px; }
   .arenaTableRow .pname .ppause { color:var(--accent); font-size:11px; margin-left:6px; }
-  .arenaTableRow .score { color:var(--accent); font-weight:700; text-align:center; font-size:15px; }
+  .arenaTableRow .score { color:var(--accent); font-weight:700; text-align:center; font-size:15px; overflow:hidden; }
   .arenaTableRow .score .streak { color:#ff9c3a; font-size:11px; margin-left:3px; font-weight:600; }
-  .arenaTableRow .wdl { color:var(--muted); text-align:center; font-size:12px; }
-  .arenaTableRow .games { color:var(--muted); text-align:center; font-size:12px; }
-  .arenaWinnerBanner { background:linear-gradient(160deg,#2a2520,#1a1815); border:1px solid var(--accent); border-radius:8px; padding:18px; text-align:center; }
+  .arenaTableRow .wdl { color:var(--muted); text-align:center; font-size:12px; overflow:hidden; }
+  .arenaTableRow .games { color:var(--muted); text-align:center; font-size:12px; overflow:hidden; }
+
+  .arenaWinnerBanner { background:linear-gradient(160deg,#2a2520,#1a1815); border:1px solid var(--accent); border-radius:8px; padding:18px; text-align:center; min-height:140px; box-sizing:border-box; }
   .awbTitle { font-size:20px; color:var(--accent-2); font-weight:700; margin-bottom:12px; }
   .awbPodium { display:flex; justify-content:center; align-items:flex-end; gap:10px; }
   .awbItem { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:12px 14px; min-width:100px; }
@@ -227,13 +245,17 @@
   .awbItem.bronze .place { color:#d4904a; }
   .awbItem .n { color:var(--text-bright); font-weight:600; margin:4px 0; }
   .awbItem .s { color:var(--accent); font-weight:700; font-size:18px; }
-  .arenaRightCol { background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden; min-height:400px; }
-  .arenaGamesHeader { padding:10px 14px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
-  .arenaGamesList { padding:8px; display:flex; flex-direction:column; gap:6px; max-height:600px; overflow-y:auto; }
-  .arenaGameCard { background:var(--panel-2); border-radius:6px; padding:8px 10px; font-size:12px; border-left:3px solid var(--green); }
-  .arenaGameCard .names { display:flex; flex-direction:column; gap:2px; color:var(--text-bright); font-weight:500; }
+
+  .arenaRightCol { background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden; min-height:420px; max-height:620px; box-sizing:border-box; display:flex; flex-direction:column; }
+  .arenaGamesHeader { padding:10px 14px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; flex:0 0 auto; }
+  .arenaGamesList { flex:1 1 auto; min-height:0; padding:8px; display:flex; flex-direction:column; gap:6px; overflow-y:auto; }
+  .arenaGameCard { background:var(--panel-2); border-radius:6px; padding:8px 10px; font-size:12px; border-left:3px solid var(--green); height:56px; min-height:56px; max-height:56px; box-sizing:border-box; overflow:hidden; }
+  .arenaGameCard .names { display:flex; flex-direction:column; gap:2px; color:var(--text-bright); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .arenaGameCard .meta { color:var(--muted); font-size:11px; display:flex; justify-content:space-between; margin-top:4px; }
   .arenaGameCard .liveDot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#ff5555; margin-right:5px; animation:pulse 1.2s infinite; }
+
+  .arenaPage * { min-width:0; }
+  .arenaPage button { flex-shrink:0; }
 
   .gameWrap { display:grid; grid-template-columns:280px 480px 280px; gap:16px; align-items:start; justify-content:center; margin:0 auto; }
   @media (max-width:1120px) { .gameWrap { grid-template-columns:240px minmax(0,1fr) 260px; } }
@@ -262,7 +284,6 @@
   .dragGhost.b { color:#1e1e1e; text-shadow:-1px -1px 0 #ddd,1px -1px 0 #ddd,-1px 1px 0 #ddd,1px 1px 0 #ddd; }
   .sq.premove-target { box-shadow:inset 0 0 0 4px rgba(74,156,232,.85); }
   .sq.premove-from { box-shadow:inset 0 0 0 4px rgba(74,156,232,.5); }
-  .sq.premove-applied { background:rgba(74,156,232,.35) !important; }
 
   .col-info { display:flex; flex-direction:column; gap:6px; min-width:0; }
   .clockBox { background:var(--panel); border:1px solid var(--border); border-radius:4px; padding:6px 12px; display:flex; justify-content:space-between; align-items:center; transition:background .2s,color .2s; min-height:44px; }
@@ -363,6 +384,32 @@
   .catCard.blitz     { border-top:3px solid #7db63a; }
   .catCard.bullet    { border-top:3px solid #c94a3a; }
   @media (max-width:600px) { .catRatingsGrid { grid-template-columns:repeat(2,1fr); } }
+
+  /* ============================================================
+     ФИКСИРОВАННЫЙ ИНТЕРФЕЙС АРЕНЫ — финальный слой каскада
+     ============================================================ */
+  .arenaPage * { min-width:0; }
+  .arenaPage button { flex-shrink:0; }
+  .arenaStatusRow { width:100%; height:56px; min-height:56px; max-height:56px; box-sizing:border-box; }
+  .arenaStatusTime { min-width:120px; }
+  .arenaPairingBox { width:100%; height:44px; min-height:44px; max-height:44px; box-sizing:border-box; overflow:hidden; }
+  .arenaJoinBtn { width:200px; min-width:200px; max-width:200px; height:40px; min-height:40px; max-height:40px; box-sizing:border-box; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:inline-block; }
+  .arenaParticipantsHeader { height:40px; min-height:40px; max-height:40px; box-sizing:border-box; }
+  .arenaParticipantsTable { height:460px; min-height:460px; max-height:460px; display:flex; flex-direction:column; overflow:hidden; }
+  .arenaTableHeader { flex:0 0 auto; min-height:36px; height:36px; }
+  .arenaTableBody { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; }
+  .arenaTableRow { height:40px; min-height:40px; max-height:40px; box-sizing:border-box; }
+  .arenaTableRow .pname { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .arenaWinnerBanner { min-height:140px; box-sizing:border-box; }
+  .arenaInfoCard { min-height:240px; display:flex; flex-direction:column; overflow:hidden; }
+  .arenaChatBox { width:100%; height:320px; min-height:320px; max-height:320px; box-sizing:border-box; }
+  .arenaChatMessages { min-height:0; }
+  .arenaChatForm { flex:0 0 auto; }
+  .arenaRightCol { min-height:420px; max-height:620px; box-sizing:border-box; display:flex; flex-direction:column; overflow:hidden; }
+  .arenaGamesList { flex:1 1 auto; min-height:0; }
+  .arenaGameCard { height:56px; min-height:56px; max-height:56px; box-sizing:border-box; overflow:hidden; }
+  .arenaTopBar { min-height:60px; }
+  .arenaPageName { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 </style>
 </head>
 <body>
@@ -480,7 +527,7 @@
         <div class="arenaTopBar">
           <div class="arenaTopLeft">
             <div class="arenaTrophy">🏆</div>
-            <div>
+            <div style="min-width:0;">
               <h2 class="arenaPageName" id="arenaPageName">—</h2>
               <div class="arenaPageSub" id="arenaPageSub">—</div>
             </div>
@@ -626,11 +673,7 @@
   // ============ ЗВУКИ ============
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   let audioCtx = null;
-  function ensureAudio() {
-    if (!audioCtx) audioCtx = new AudioCtx();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    return audioCtx;
-  }
+  function ensureAudio() { if (!audioCtx) audioCtx = new AudioCtx(); if (audioCtx.state === 'suspended') audioCtx.resume(); return audioCtx; }
   function playTone(freq, dur, type, vol, delay) {
     try {
       const ctx = ensureAudio();
@@ -642,10 +685,8 @@
       gain.gain.setValueAtTime(0.0001, t0);
       gain.gain.exponentialRampToValueAtTime(vol || 0.15, t0 + 0.008);
       gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start(t0);
-      osc.stop(t0 + dur + 0.02);
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.start(t0); osc.stop(t0 + dur + 0.02);
     } catch (e) {}
   }
   function sndMove()    { playTone(320, 0.055, 'triangle', 0.18); playTone(180, 0.04, 'sine', 0.10, 0.005); }
@@ -658,7 +699,6 @@
   function sndStart()   { playTone(523, 0.10, 'sine', 0.18); playTone(659, 0.12, 'sine', 0.16, 0.09); playTone(784, 0.16, 'sine', 0.14, 0.18); }
   window.addEventListener('pointerdown', () => ensureAudio(), { once: true });
 
-  // ============ СОСТОЯНИЕ ============
   let me = null;
   let myColor = 'w';
   let myTime = 0, oppTime = 0, inc = 0;
@@ -698,35 +738,23 @@
   let gameEnded = false;
   let pendingDrawOffer = false;
   let profileViewing = null;
-
-  // Локальная синхронизация времени сервера — для посекундного таймера
-  let arenaServerOffsetMs = 0;   // serverNow - Date.now() на момент получения
+  let arenaServerOffsetMs = 0;
   let arenaStartsAt = 0;
   let arenaEndsAt = 0;
   let arenaPhase = 'waiting';
-
-  // Просмотр
   let watchingGameId = null;
   let watchingGame = null;
-
-  // Drag-and-drop
-  let dragging = null;            // { from:[r,c], ghostEl, active }
+  let dragging = null;
   let dragStartPos = null;
-
-  // Премьюв
-  // premove = { from:[r,c], to:[r,c], san, promotion } — ставится когда НЕ мой ход
   let premove = null;
 
   const EMOJI = { 'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙','k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟' };
 
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-  }
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
   function nickHtml(username, isAdminFlag) {
     if (!username) return '';
     const admin = (typeof isAdminFlag === 'boolean') ? isAdminFlag : (username === 'PeshkaSasha' || username === 'admin');
-    const crown = admin ? '<span class="crown">👑</span>' : '';
-    return crown + escapeHtml(username);
+    return (admin ? '<span class="crown">👑</span>' : '') + escapeHtml(username);
   }
 
   // ============ ШАХМАТЫ ============
@@ -735,22 +763,15 @@
     const board = Array.from({length:8}, () => Array(8).fill(null));
     parts[0].split('/').forEach((row, r) => {
       let f = 0;
-      for (const ch of row) {
-        if (/\d/.test(ch)) f += +ch;
-        else board[r][f++] = ch;
-      }
+      for (const ch of row) { if (/\d/.test(ch)) f += +ch; else board[r][f++] = ch; }
     });
     return { board, turn: parts[1], castling: parts[2], ep: parts[3], half: +parts[4] || 0, full: +parts[5] || 1 };
   }
   function toFen(state) {
     const rows = state.board.map(r => {
       let s = '', e = 0;
-      for (const c of r) {
-        if (c) { if (e) { s += e; e = 0; } s += c; }
-        else e++;
-      }
-      if (e) s += e;
-      return s;
+      for (const c of r) { if (c) { if (e) { s += e; e = 0; } s += c; } else e++; }
+      if (e) s += e; return s;
     }).join('/');
     return [rows, state.turn, state.castling, state.ep, state.half, state.full].join(' ');
   }
@@ -803,10 +824,7 @@
       const dirs = [];
       if (type === 'r' || type === 'q') dirs.push([-1,0],[1,0],[0,-1],[0,1]);
       if (type === 'b' || type === 'q') dirs.push([-1,-1],[-1,1],[1,-1],[1,1]);
-      for (const [dr, dc] of dirs) {
-        let rr = r + dr, cc = c + dc;
-        while (add(rr, cc)) { rr += dr; cc += dc; }
-      }
+      for (const [dr, dc] of dirs) { let rr = r + dr, cc = c + dc; while (add(rr, cc)) { rr += dr; cc += dc; } }
     }
     return moves;
   }
@@ -816,33 +834,22 @@
     return null;
   }
   function isAttacked(state, r, c, byWhite) {
-    for (let rr = 0; rr < 8; rr++) {
-      for (let cc = 0; cc < 8; cc++) {
-        const p = state.board[rr][cc];
-        if (!p || isWhitePiece(p) !== byWhite) continue;
-        const t = p.toLowerCase();
-        if (t === 'p') {
-          const dir = byWhite ? -1 : 1;
-          if (rr + dir === r && (cc - 1 === c || cc + 1 === c)) return true;
-          continue;
-        }
-        const moves = pseudoMoves(state, rr, cc);
-        if (moves.some(([mr, mc]) => mr === r && mc === c)) return true;
+    for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
+      const p = state.board[rr][cc];
+      if (!p || isWhitePiece(p) !== byWhite) continue;
+      const t = p.toLowerCase();
+      if (t === 'p') {
+        const dir = byWhite ? -1 : 1;
+        if (rr + dir === r && (cc - 1 === c || cc + 1 === c)) return true;
+        continue;
       }
+      if (pseudoMoves(state, rr, cc).some(([mr, mc]) => mr === r && mc === c)) return true;
     }
     return false;
   }
-  function inCheck(state, white) {
-    const k = findKing(state, white);
-    if (!k) return false;
-    return isAttacked(state, k[0], k[1], !white);
-  }
+  function inCheck(state, white) { const k = findKing(state, white); if (!k) return false; return isAttacked(state, k[0], k[1], !white); }
   function applyMoveToCopy(state, from, to) {
-    const copy = {
-      board: state.board.map(row => row.slice()),
-      turn: state.turn, castling: state.castling, ep: state.ep,
-      half: state.half, full: state.full
-    };
+    const copy = { board: state.board.map(row => row.slice()), turn: state.turn, castling: state.castling, ep: state.ep, half: state.half, full: state.full };
     const [fr, fc] = from, [tr, tc] = to;
     const p = copy.board[fr][fc];
     const white = isWhitePiece(p);
@@ -851,8 +858,7 @@
       const target = String.fromCharCode(97 + tc) + (8 - tr);
       if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null;
     }
-    copy.board[tr][tc] = p;
-    copy.board[fr][fc] = null;
+    copy.board[tr][tc] = p; copy.board[fr][fc] = null;
     if (type === 'p' && (tr === 0 || tr === 7)) copy.board[tr][tc] = white ? 'Q' : 'q';
     if (type === 'k' && Math.abs(tc - fc) === 2) {
       const row = fr;
@@ -869,11 +875,8 @@
     }
     if (!cast) cast = '-';
     let ep = '-';
-    if (type === 'p' && Math.abs(tr - fr) === 2) {
-      ep = String.fromCharCode(97 + fc) + (8 - (fr + (tr - fr) / 2));
-    }
-    copy.castling = cast;
-    copy.ep = ep;
+    if (type === 'p' && Math.abs(tr - fr) === 2) ep = String.fromCharCode(97 + fc) + (8 - (fr + (tr - fr) / 2));
+    copy.castling = cast; copy.ep = ep;
     copy.turn = white ? 'b' : 'w';
     copy.full += 1;
     return copy;
@@ -882,11 +885,7 @@
     const p = state.board[r][c];
     if (!p) return [];
     const white = isWhitePiece(p);
-    const moves = pseudoMoves(state, r, c);
-    return moves.filter(([rr, cc]) => {
-      const next = applyMoveToCopy(state, [r, c], [rr, cc]);
-      return !inCheck(next, white);
-    });
+    return pseudoMoves(state, r, c).filter(([rr, cc]) => !inCheck(applyMoveToCopy(state, [r, c], [rr, cc]), white));
   }
   function hasAnyLegalMove(state, white) {
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
@@ -910,10 +909,8 @@
     const dest = String.fromCharCode(97 + tc) + (8 - tr);
     if (t === 'k' && Math.abs(tc - fc) === 2) return (tc > fc) ? 'O-O' : 'O-O-O';
     let san = '';
-    if (t === 'p') {
-      if (isCapture) san += String.fromCharCode(97 + fc) + 'x';
-      san += dest;
-    } else {
+    if (t === 'p') { if (isCapture) san += String.fromCharCode(97 + fc) + 'x'; san += dest; }
+    else {
       san += pieceSAN(p);
       let ambiguous = false, sameFile = false, sameRank = false;
       for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
@@ -938,19 +935,17 @@
     const nextWhite = next.turn === 'w';
     const isCheck = inCheck(next, nextWhite);
     const hasMoves = hasAnyLegalMove(next, nextWhite);
-    if (isCheck && !hasMoves) san += '#';
-    else if (isCheck) san += '+';
+    if (isCheck && !hasMoves) san += '#'; else if (isCheck) san += '+';
     return san;
   }
 
-  // ============ ДОСКА ============
+  // ============ ОТРИСОВКА ДОСКИ ============
   function renderBoard() {
     const fenToShow = (viewIndex >= 0 && viewIndex < moveFens.length) ? moveFens[viewIndex] : currentFen;
     const hash = fenToShow + '|' + (selected ? selected.join(',') : '') + '|' + viewIndex + '|' +
       (lastMove ? lastMove.from.join(',') + lastMove.to.join(',') : '') + '|' + myColor + '|' + boardFlipped +
       '|' + legalMoves.map(m => m.join(',')).join(';') + '|' +
-      (premove ? premove.from.join(',') + '>' + premove.to.join(',') : '') + '|' +
-      (dragging ? 'drag' : '');
+      (premove ? premove.from.join(',') + '>' + premove.to.join(',') : '') + '|' + (dragging ? 'drag' : '');
     if (hash === lastBoardHash) return;
     lastBoardHash = hash;
 
@@ -967,8 +962,7 @@
         sq.className = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
         sq.dataset.r = r; sq.dataset.c = c;
         if (lastMove && viewIndex === -1) {
-          if ((lastMove.from[0] === r && lastMove.from[1] === c) ||
-              (lastMove.to[0] === r && lastMove.to[1] === c)) sq.classList.add('lastmove');
+          if ((lastMove.from[0] === r && lastMove.from[1] === c) || (lastMove.to[0] === r && lastMove.to[1] === c)) sq.classList.add('lastmove');
         }
         const isWhiteTurn = state.turn === 'w';
         if (inCheck(state, isWhiteTurn)) {
@@ -978,12 +972,8 @@
         if (selected && selected[0] === r && selected[1] === c) sq.classList.add('sel');
         if (interactive) {
           const isLegal = legalMoves.some(([mr, mc]) => mr === r && mc === c);
-          if (isLegal) {
-            sq.classList.add('hint');
-            if (state.board[r][c]) sq.classList.add('capture');
-          }
+          if (isLegal) { sq.classList.add('hint'); if (state.board[r][c]) sq.classList.add('capture'); }
         }
-        // Подсветка премьюва
         if (premove) {
           if (premove.to[0] === r && premove.to[1] === c) sq.classList.add('premove-target');
           if (premove.from[0] === r && premove.from[1] === c) sq.classList.add('premove-from');
@@ -1026,21 +1016,8 @@
     const el = document.elementFromPoint(ev.clientX, ev.clientY);
     if (!el) return null;
     const sq = el.closest ? el.closest('.sq') : null;
-    if (!sq || !sq.dataset.r) return null;
+    if (!sq || sq.dataset.r == null) return null;
     return [ +sq.dataset.r, +sq.dataset.c ];
-  }
-
-  function canMovePiece(color) {
-    // Мой ход — только если это мой цвет
-    const state = parseFen(currentFen);
-    return state.turn === color;
-  }
-
-  function isPremoveAllowed() {
-    // Премьюв можно ставить, если партия активна, не закончена, и сейчас НЕ мой ход
-    if (!gameActive || gameEnded) return false;
-    const state = parseFen(currentFen);
-    return state.turn !== myColor;
   }
 
   function applyUserMove(from, to, isPremove) {
@@ -1051,8 +1028,7 @@
     const san = toSAN(state, from, to);
     if (isPremove) {
       premove = { from, to, san };
-      lastBoardHash = '';
-      renderBoard();
+      lastBoardHash = ''; renderBoard();
       return true;
     }
     const isCapture = !!state.board[to[0]][to[1]];
@@ -1064,6 +1040,7 @@
     moveFens.push(newFen);
     premove = null;
     renderMoves();
+    lastBoardHash = '';
     renderBoard();
     socket.emit('move', { lobbyId, fen: newFen, turn: nextState.turn, san });
     if (isCapture) sndCapture(); else sndMove();
@@ -1071,122 +1048,78 @@
     return true;
   }
 
-  // Клик по клетке
   function onSquareClick(r, c) {
     if (!gameActive || gameEnded || viewIndex !== -1) return;
     const state = parseFen(currentFen);
     const myTurn = state.turn === myColor;
-    // Если сейчас не мой ход — пытаемся поставить премьюв
+
     if (!myTurn) {
-      if (premove) {
-        // Если клик по полю premove.to — отменяем
-        if (premove.to[0] === r && premove.to[1] === c) {
-          premove = null;
-          lastBoardHash = '';
-          renderBoard();
-          return;
-        }
-      }
-      // Начать премьюв можно с фигуры своего цвета
-      const p = state.board[r][c];
-      if (p && isWhitePiece(p) === (myColor === 'w')) {
-        // вычислим легальные движения фигуры в текущей позиции
-        const leg = legalMovesFor(state, r, c);
-        if (leg.length) {
-          // Сохраняем кандидата как "premove selection"
-          if (selected && selected[0] === r && selected[1] === c) {
-            selected = null; legalMoves = [];
-          } else {
-            selected = [r, c];
-            legalMoves = leg;
-          }
-          lastBoardHash = '';
-          renderBoard();
-        }
-      } else if (selected) {
-        // Попытка завершить премьюв: клик по целевому полю
-        const leg = legalMoves.some(([mr, mc]) => mr === r && mc === c);
-        if (leg) {
-          const from = selected;
-          selected = null; legalMoves = [];
-          applyUserMove(from, [r, c], true);
-        } else {
-          selected = null; legalMoves = [];
-          lastBoardHash = '';
-          renderBoard();
-        }
-      }
-      return;
-    }
-    // Мой ход
-    if (selected) {
-      const isLegal = legalMoves.some(([mr, mc]) => mr === r && mc === c);
-      if (isLegal) {
-        const from = selected;
-        selected = null; legalMoves = [];
-        applyUserMove(from, [r, c], false);
+      if (premove && premove.to[0] === r && premove.to[1] === c) {
+        premove = null; lastBoardHash = ''; renderBoard();
         return;
       }
-    }
-    const p = state.board[r][c];
-    if (p && isWhitePiece(p) === (myColor === 'w')) {
-      selected = [r, c];
-      legalMoves = legalMovesFor(state, r, c);
-    } else {
-      selected = null; legalMoves = [];
-    }
-    lastBoardHash = '';
-    renderBoard();
-  }
-
-  // Клик (включая отмену drag-drop без движения)
-  document.getElementById('board').addEventListener('click', (ev) => {
-    if (dragStartPos && (Math.abs(ev.clientX - dragStartPos.x) > 6 || Math.abs(ev.clientY - dragStartPos.y) > 6)) {
-      dragStartPos = null;
+      const p = state.board[r][c];
+      if (p && isWhitePiece(p) === (myColor === 'w')) {
+        const leg = legalMovesFor(state, r, c);
+        if (leg.length) {
+          if (selected && selected[0] === r && selected[1] === c) { selected = null; legalMoves = []; }
+          else { selected = [r, c]; legalMoves = leg; }
+          lastBoardHash = ''; renderBoard();
+        }
+      } else if (selected) {
+        const leg = legalMoves.some(([mr, mc]) => mr === r && mc === c);
+        if (leg) { const from = selected; selected = null; legalMoves = []; applyUserMove(from, [r, c], true); }
+        else { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); }
+      }
       return;
     }
+
+    if (selected) {
+      const isLegal = legalMoves.some(([mr, mc]) => mr === r && mc === c);
+      if (isLegal) { const from = selected; selected = null; legalMoves = []; applyUserMove(from, [r, c], false); return; }
+    }
+    const p = state.board[r][c];
+    if (p && isWhitePiece(p) === (myColor === 'w')) { selected = [r, c]; legalMoves = legalMovesFor(state, r, c); }
+    else { selected = null; legalMoves = []; }
+    lastBoardHash = ''; renderBoard();
+  }
+
+  document.getElementById('board').addEventListener('click', (ev) => {
+    if (dragStartPos && (Math.abs(ev.clientX - dragStartPos.x) > 6 || Math.abs(ev.clientY - dragStartPos.y) > 6)) { dragStartPos = null; return; }
     dragStartPos = null;
     const sq = ev.target.closest('.sq');
-    if (!sq || !sq.dataset.r) return;
+    if (!sq || sq.dataset.r == null) return;
     onSquareClick(+sq.dataset.r, +sq.dataset.c);
   });
 
-  // Drag-and-drop
   document.getElementById('board').addEventListener('mousedown', (ev) => {
     if (ev.button !== 0) return;
     const sq = ev.target.closest('.sq');
-    if (!sq || !sq.dataset.r) return;
+    if (!sq || sq.dataset.r == null) return;
     const r = +sq.dataset.r, c = +sq.dataset.c;
     const state = parseFen(currentFen);
     const p = state.board[r][c];
     if (!p) return;
     const myTurn = state.turn === myColor;
     const sameColor = isWhitePiece(p) === (myColor === 'w');
-
-    // Мой ход — тащим обычную фигуру своего цвета
     if (myTurn && sameColor) {
       const leg = legalMovesFor(state, r, c);
       if (!leg.length) return;
-      selected = [r, c];
-      legalMoves = leg;
+      selected = [r, c]; legalMoves = leg;
       dragging = { from: [r, c], active: false };
       dragStartPos = { x: ev.clientX, y: ev.clientY };
-      lastBoardHash = '';
-      renderBoard();
+      lastBoardHash = ''; renderBoard();
       startDragGhost(p, ev.clientX, ev.clientY);
       ev.preventDefault();
       return;
     }
-    // Не мой ход — премьюв-драг
     if (!myTurn && sameColor) {
       const leg = legalMovesFor(state, r, c);
       if (!leg.length) return;
-      selected = [r, c];
-      legalMoves = leg;
+      selected = [r, c]; legalMoves = leg;
       dragging = { from: [r, c], active: false, premoveDrag: true };
       dragStartPos = { x: ev.clientX, y: ev.clientY };
-      lastBoardHash = '';
-      renderBoard();
+      lastBoardHash = ''; renderBoard();
       startDragGhost(p, ev.clientX, ev.clientY);
       ev.preventDefault();
     }
@@ -1203,64 +1136,34 @@
     ghostEl.style.display = 'none';
     document.body.appendChild(ghostEl);
   }
-  function moveGhost(x, y) {
-    if (!ghostEl) return;
-    ghostEl.style.display = '';
-    ghostEl.style.left = x + 'px';
-    ghostEl.style.top = y + 'px';
-  }
-  function clearGhost() {
-    if (ghostEl) { ghostEl.remove(); ghostEl = null; }
-  }
+  function moveGhost(x, y) { if (!ghostEl) return; ghostEl.style.display = ''; ghostEl.style.left = x + 'px'; ghostEl.style.top = y + 'px'; }
+  function clearGhost() { if (ghostEl) { ghostEl.remove(); ghostEl = null; } }
 
   document.addEventListener('mousemove', (ev) => {
     if (!dragging) return;
     if (!dragging.active) {
       if (Math.abs(ev.clientX - dragStartPos.x) < 5 && Math.abs(ev.clientY - dragStartPos.y) < 5) return;
       dragging.active = true;
-      // Скрываем фигуру под курсором
-      lastBoardHash = '';
-      renderBoard();
+      lastBoardHash = ''; renderBoard();
     }
     moveGhost(ev.clientX, ev.clientY);
   });
 
   document.addEventListener('mouseup', (ev) => {
     if (!dragging) { dragStartPos = null; return; }
-    if (!dragging.active) {
-      // Это был клик — не отпускаем drag, обработает click
-      dragging = null;
-      clearGhost();
-      return;
-    }
+    if (!dragging.active) { dragging = null; clearGhost(); return; }
     const target = boardSquareFromEvent(ev);
     const wasPremove = !!dragging.premoveDrag;
     const from = dragging.from;
-    dragging = null;
-    clearGhost();
-    dragStartPos = null;
-    if (!target) {
-      // Сброс
-      selected = null; legalMoves = [];
-      lastBoardHash = '';
-      renderBoard();
-      return;
-    }
+    dragging = null; clearGhost(); dragStartPos = null;
+    if (!target) { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); return; }
     if (target[0] === from[0] && target[1] === from[1]) {
-      // Отпустил там же — трактуем как клик
-      selected = from;
-      legalMoves = legalMovesFor(parseFen(currentFen), from[0], from[1]);
-      lastBoardHash = '';
-      renderBoard();
+      selected = from; legalMoves = legalMovesFor(parseFen(currentFen), from[0], from[1]);
+      lastBoardHash = ''; renderBoard();
       return;
     }
-    // Пробуем сходить
     const ok = applyUserMove(from, target, wasPremove);
-    if (!ok) {
-      selected = null; legalMoves = [];
-      lastBoardHash = '';
-      renderBoard();
-    }
+    if (!ok) { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); }
   });
 
   function renderMoves() {
@@ -1279,44 +1182,26 @@
     }
     el.scrollTop = el.scrollHeight;
   }
-  function jumpToMove(idx) {
-    if (idx < 0 || idx >= moveHistory.length) return;
-    viewIndex = idx;
-    lastBoardHash = '';
-    renderBoard();
-    renderMoves();
-  }
+  function jumpToMove(idx) { if (idx < 0 || idx >= moveHistory.length) return; viewIndex = idx; lastBoardHash = ''; renderBoard(); renderMoves(); }
   window.jumpToMove = jumpToMove;
   function gotoMove(where) {
     if (!moveHistory.length) return;
     if (where === 'first') viewIndex = 0;
     else if (where === 'last') viewIndex = -1;
     else if (where === 'prev') viewIndex = viewIndex === -1 ? moveHistory.length - 2 : Math.max(0, viewIndex - 1);
-    else if (where === 'next') {
-      if (viewIndex === -1) return;
-      viewIndex++;
-      if (viewIndex >= moveHistory.length - 1) viewIndex = -1;
-    }
-    lastBoardHash = '';
-    renderBoard();
-    renderMoves();
+    else if (where === 'next') { if (viewIndex === -1) return; viewIndex++; if (viewIndex >= moveHistory.length - 1) viewIndex = -1; }
+    lastBoardHash = ''; renderBoard(); renderMoves();
   }
   window.gotoMove = gotoMove;
 
   function checkGameEnd(state) {
     const sideToMoveWhite = state.turn === 'w';
     if (!hasAnyLegalMove(state, sideToMoveWhite)) {
-      if (inCheck(state, sideToMoveWhite)) {
-        sndMate();
-        endGame(sideToMoveWhite ? 'b' : 'w', 'Мат', true, currentGameIsArena);
-      } else {
-        sndDraw();
-        endGame(null, 'Пат', true, currentGameIsArena);
-      }
+      if (inCheck(state, sideToMoveWhite)) { sndMate(); endGame(sideToMoveWhite ? 'b' : 'w', 'Мат', true, currentGameIsArena); }
+      else { sndDraw(); endGame(null, 'Пат', true, currentGameIsArena); }
     }
   }
 
-  // После boardUpdate от соперника — применить премьюв
   function tryApplyPremove() {
     if (!premove) return;
     const state = parseFen(currentFen);
@@ -1324,23 +1209,11 @@
     const { from, to } = premove;
     const p = state.board[from[0]][from[1]];
     premove = null;
-    if (!p || isWhitePiece(p) !== (myColor === 'w')) {
-      // Премьюв невозможен — фигуры нет или она не моя
-      lastBoardHash = '';
-      renderBoard();
-      return;
-    }
+    if (!p || isWhitePiece(p) !== (myColor === 'w')) { lastBoardHash = ''; renderBoard(); return; }
     const leg = legalMovesFor(state, from[0], from[1]);
     const ok = leg.some(([r, c]) => r === to[0] && c === to[1]);
-    if (!ok) {
-      lastBoardHash = '';
-      renderBoard();
-      return;
-    }
-    // Применяем
-    setTimeout(() => {
-      applyUserMove(from, to, false);
-    }, 30);
+    if (!ok) { lastBoardHash = ''; renderBoard(); return; }
+    setTimeout(() => applyUserMove(from, to, false), 30);
   }
 
   // ============ НАВИГАЦИЯ ============
@@ -1354,7 +1227,6 @@
     const map = { 'lobby':'lobbyScreen','watch':'watchScreen','arenas':'arenasScreen','arenaPage':'arenaPageScreen','profile':'profileScreen','learn':'learnScreen','community':'communityScreen','game':'gameScreen','login':'loginScreen' };
     const screenId = map[name];
     if (!screenId) return;
-    // Если уходим со страницы арены — отписываемся от комнаты
     if (name !== 'arenaPage' && currentArenaId) {
       socket.emit('leaveArenaRoom', { arenaId: currentArenaId });
       if (arenaPageRefreshHandle) { clearInterval(arenaPageRefreshHandle); arenaPageRefreshHandle = null; }
@@ -1366,10 +1238,7 @@
     if (name === 'lobby') { refreshLobbies(); refreshTopArenas(); refreshStats(); }
     if (name === 'watch') refreshWatchList(true);
     if (name === 'arenas') refreshArenas(true);
-    if (name === 'profile') {
-      if (profileViewing) openProfileView(profileViewing);
-      else if (me) openProfileView(me.username);
-    }
+    if (name === 'profile') { if (profileViewing) openProfileView(profileViewing); else if (me) openProfileView(me.username); }
   }
   window.navTo = navTo;
 
@@ -1381,8 +1250,7 @@
       if (!res || !res.ok) { document.getElementById('loginMsg').textContent = (res && res.msg) || 'Ошибка'; return; }
       me = res.user;
       updateTopbarUser();
-      navTo('lobby');
-      refreshLobbies(); refreshTopArenas(); refreshStats();
+      navTo('lobby'); refreshLobbies(); refreshTopArenas(); refreshStats();
     });
   }
   window.doLogin = doLogin;
@@ -1395,12 +1263,7 @@
   }
   function logout() { location.reload(); }
   window.logout = logout;
-
-  function switchLobbyTab(tab) {
-    currentLobbyTab = tab;
-    document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-    renderLobbyTab();
-  }
+  function switchLobbyTab(tab) { currentLobbyTab = tab; document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab)); renderLobbyTab(); }
   window.switchLobbyTab = switchLobbyTab;
 
   function refreshTopArenas() {
@@ -1414,10 +1277,7 @@
       box.innerHTML = list.map(a => {
         const cls = 'topArenaCard' + (a.phase === 'live' ? ' live' : '');
         const phaseText = a.phase === 'live' ? 'идёт сейчас' : 'ждёт старта';
-        return `<div class="${cls}" onclick="openArenaPage('${a.id}')">
-          <div class="taName">${escapeHtml(a.name)}</div>
-          <div class="taInfo"><span>${a.timeControl}+${a.increment}</span><span><b>${a.participantsCount}</b> 👥 · ${phaseText}</span></div>
-        </div>`;
+        return `<div class="${cls}" onclick="openArenaPage('${a.id}')"><div class="taName">${escapeHtml(a.name)}</div><div class="taInfo"><span>${a.timeControl}+${a.increment}</span><span><b>${a.participantsCount}</b> 👥 · ${phaseText}</span></div></div>`;
       }).join('');
     });
   }
@@ -1426,9 +1286,7 @@
   function refreshStats() {
     socket.emit('getStats', (s) => {
       if (!s) return;
-      const e1 = document.getElementById('statOnline');
-      const e2 = document.getElementById('statGames');
-      const e3 = document.getElementById('statActive');
+      const e1 = document.getElementById('statOnline'), e2 = document.getElementById('statGames'), e3 = document.getElementById('statActive');
       if (e1) e1.textContent = s.online;
       if (e2) e2.textContent = s.games;
       if (e3) e3.textContent = s.activeGames || 0;
@@ -1441,12 +1299,7 @@
     if (currentLobbyTab === 'create') {
       el.innerHTML = `
         <div class="quickGrid">
-          ${[
-            {t:1,i:0,name:'Пуля'},{t:2,i:1,name:'Пуля'},{t:3,i:0,name:'Блиц'},
-            {t:3,i:2,name:'Блиц'},{t:5,i:0,name:'Блиц'},{t:5,i:3,name:'Блиц'},
-            {t:10,i:0,name:'Рапид'},{t:10,i:5,name:'Рапид'},{t:15,i:10,name:'Рапид'},
-            {t:30,i:0,name:'Классика'},{t:30,i:20,name:'Классика'}
-          ].map(({t,i,name}) => `<button class="quickBtn" onclick="quickStart(${t},${i})"><div class="qb-time">${t}+${i}</div><div class="qb-name">${name}</div></button>`).join('')}
+          ${[{t:1,i:0,name:'Пуля'},{t:2,i:1,name:'Пуля'},{t:3,i:0,name:'Блиц'},{t:3,i:2,name:'Блиц'},{t:5,i:0,name:'Блиц'},{t:5,i:3,name:'Блиц'},{t:10,i:0,name:'Рапид'},{t:10,i:5,name:'Рапид'},{t:15,i:10,name:'Рапид'},{t:30,i:0,name:'Классика'},{t:30,i:20,name:'Классика'}].map(({t,i,name}) => `<button class="quickBtn" onclick="quickStart(${t},${i})"><div class="qb-time">${t}+${i}</div><div class="qb-name">${name}</div></button>`).join('')}
           <button class="quickBtn custom" onclick="showCustomGame()"><div class="qb-time">Своя</div><div class="qb-name">игра</div></button>
         </div>
         <div id="customGamePanel" style="display:none; margin-top:14px; padding:14px; background:var(--panel-2); border-radius:6px;">
@@ -1462,8 +1315,7 @@
       socket.emit('getLobbies', (list) => {
         el.innerHTML = '';
         if (!list || !list.length) { el.innerHTML = '<div class="arenaEmpty">Нет активных вызовов.</div>'; return; }
-        const wrap = document.createElement('div');
-        wrap.className = 'lobbyList';
+        const wrap = document.createElement('div'); wrap.className = 'lobbyList';
         list.forEach(l => {
           const isMine = me && l.host === me.username;
           const row = document.createElement('div');
@@ -1471,22 +1323,12 @@
           row.style.cursor = isMine ? 'pointer' : 'default';
           row.innerHTML = `<div class="icon">♟</div><div class="name">${nickHtml(l.host)}${isMine ? '<span class="mineTag">(ваш вызов)</span>' : ''}</div><div class="time">${l.time}+${l.inc}</div><div class="mode">${l.status === 'waiting' ? 'ожидание' : 'идёт'}</div><div class="action"></div>`;
           if (l.status === 'waiting' && !isMine) {
-            const btn = document.createElement('button');
-            btn.className = 'primary'; btn.textContent = 'Играть';
-            btn.onclick = (e) => {
-              e.stopPropagation();
-              socket.emit('joinLobby', { id: l.id }, (r) => {
-                if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; }
-                lobbyId = r.id || l.id;
-              });
-            };
+            const btn = document.createElement('button'); btn.className = 'primary'; btn.textContent = 'Играть';
+            btn.onclick = (e) => { e.stopPropagation(); socket.emit('joinLobby', { id: l.id }, (r) => { if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; } lobbyId = r.id || l.id; }); };
             row.querySelector('.action').appendChild(btn);
           }
           if (isMine && l.status === 'waiting') {
-            row.onclick = () => {
-              if (!confirm('Отменить вызов?')) return;
-              socket.emit('cancelLobby', { id: l.id }, () => refreshLobbies());
-            };
+            row.onclick = () => { if (!confirm('Отменить вызов?')) return; socket.emit('cancelLobby', { id: l.id }, () => refreshLobbies()); };
           }
           wrap.appendChild(row);
         });
@@ -1506,8 +1348,7 @@
       premove = null; opponentName = '—'; opponentRating = null; opponentIsAdmin = false;
       currentGameIsArena = false; currentArenaName = null; lastBoardHash = '';
       resetGameUI(); hideGameResultBar();
-      navTo('game');
-      renderBoard(); renderMoves();
+      navTo('game'); renderBoard(); renderMoves();
       document.getElementById('statusBar').className = 'statusGreen';
       document.getElementById('statusBar').textContent = 'Ожидание соперника...';
     });
@@ -1550,17 +1391,14 @@
     sub.textContent = reason || '';
     actions.innerHTML = '';
     if (currentGameIsArena) {
-      const b1 = document.createElement('button');
-      b1.className = 'primary'; b1.textContent = 'Вернуться к турниру';
+      const b1 = document.createElement('button'); b1.className = 'primary'; b1.textContent = 'Вернуться к турниру';
       b1.onclick = () => { hideGameResultBar(); cleanupGame(); if (currentArenaId) openArenaPage(currentArenaId); else navTo('arenas'); };
       actions.appendChild(b1);
     } else {
-      const b1 = document.createElement('button');
-      b1.className = 'primary'; b1.textContent = 'Найти другого соперника';
+      const b1 = document.createElement('button'); b1.className = 'primary'; b1.textContent = 'Найти другого соперника';
       b1.onclick = () => { hideGameResultBar(); cleanupGame(); navTo('lobby'); switchLobbyTab('waiting'); refreshLobbies(); };
       actions.appendChild(b1);
-      const b2 = document.createElement('button');
-      b2.className = 'secondary'; b2.textContent = 'В лобби';
+      const b2 = document.createElement('button'); b2.className = 'secondary'; b2.textContent = 'В лобби';
       b2.onclick = () => { hideGameResultBar(); cleanupGame(); navTo('lobby'); };
       actions.appendChild(b2);
     }
@@ -1568,14 +1406,11 @@
   }
   function endGame(winner, reason, fromServer, isArena) {
     if (gameEnded) return;
-    gameEnded = true; gameActive = false;
-    premove = null;
+    gameEnded = true; gameActive = false; premove = null;
     if (typeof isArena === 'boolean') currentGameIsArena = isArena;
     showGameResultBar(winner, reason);
     if (!fromServer) socket.emit('gameOver', { lobbyId, result: winner || 'draw' });
-    socket.emit('getProfile', { username: me.username }, (res) => {
-      if (res && res.ok) { me = res.user; updateTopbarUser(); }
-    });
+    socket.emit('getProfile', { username: me.username }, (res) => { if (res && res.ok) { me = res.user; updateTopbarUser(); } });
     refreshStats();
   }
   function resign() {
@@ -1603,13 +1438,11 @@
     const box = document.createElement('div');
     box.style.cssText = 'background:#262522;border-radius:10px;padding:24px;max-width:360px;width:100%;border:1px solid #3a3833;color:#e8e6e3;text-align:center;';
     box.innerHTML = `<div style="font-size:18px;margin-bottom:8px;">½ Предложение ничьей</div><div style="color:#7d7a72;font-size:13px;margin-bottom:20px;">${escapeHtml(from)} предлагает ничью.</div><div style="display:flex;gap:10px;justify-content:center;"><button id="drawAcceptBtn" style="padding:10px 22px;background:#629924;border:none;color:#fff;font-weight:600;border-radius:4px;cursor:pointer;">Принять</button><button id="drawDeclineBtn" style="padding:10px 22px;background:#2d2c29;border:1px solid #3a3833;color:#bfbdb6;border-radius:4px;cursor:pointer;">Отклонить</button></div>`;
-    overlay.appendChild(box);
-    document.body.appendChild(overlay);
+    overlay.appendChild(box); document.body.appendChild(overlay);
     document.getElementById('drawAcceptBtn').onclick = () => { socket.emit('drawAccept', { lobbyId }); overlay.remove(); };
     document.getElementById('drawDeclineBtn').onclick = () => { socket.emit('drawDecline', { lobbyId }); overlay.remove(); };
   }
 
-  // ============ ЧАТ ПАРТИИ ============
   function renderChatMsg(msg) {
     const box = document.getElementById('chatMessages');
     const div = document.createElement('div');
@@ -1621,10 +1454,7 @@
     div.innerHTML = `<span class="u">${nickHtml(msg.user, msg.user === 'PeshkaSasha')}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
     if (me && me.isMod) {
       const btn = div.querySelector('.modBtn');
-      if (btn) btn.addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        openModMenu(ev, msg.id, msg.user, 'game', lobbyId);
-      });
+      if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); openModMenu(ev, msg.id, msg.user, 'game', lobbyId); });
     }
     box.appendChild(div);
     while (box.children.length > 50) box.removeChild(box.firstChild);
@@ -1640,7 +1470,6 @@
   }
   window.sendChat = sendChat;
 
-  // ============ МЕНЮ МОДЕРАЦИИ ============
   let modMenuEl = null;
   function closeModMenu() { if (modMenuEl) { modMenuEl.remove(); modMenuEl = null; } }
   function openModMenu(ev, msgId, username, scope, scopeId) {
@@ -1651,43 +1480,23 @@
     menu.className = 'modMenu';
     menu.style.left = Math.min(window.innerWidth - 210, Math.max(8, rect.left - 60)) + 'px';
     menu.style.top = Math.min(window.innerHeight - 320, rect.bottom + 4) + 'px';
-    menu.innerHTML = `
-      <div class="lbl">Сообщение</div>
-      <button data-act="del">🗑 Удалить сообщение</button>
-      <div class="sep"></div>
-      <div class="lbl">Игрок: ${escapeHtml(username)}</div>
-      <button data-act="mute" data-min="5">🔇 Мут 5 минут</button>
-      <button data-act="mute" data-min="30">🔇 Мут 30 минут</button>
-      <button data-act="mute" data-min="60">🔇 Мут 1 час</button>
-      <button data-act="mute" data-min="1440">🔇 Мут 1 сутки</button>
-      <button data-act="unmute">🔊 Снять мут</button>`;
-    document.body.appendChild(menu);
-    modMenuEl = menu;
+    menu.innerHTML = `<div class="lbl">Сообщение</div><button data-act="del">🗑 Удалить сообщение</button><div class="sep"></div><div class="lbl">Игрок: ${escapeHtml(username)}</div><button data-act="mute" data-min="5">🔇 Мут 5 минут</button><button data-act="mute" data-min="30">🔇 Мут 30 минут</button><button data-act="mute" data-min="60">🔇 Мут 1 час</button><button data-act="mute" data-min="1440">🔇 Мут 1 сутки</button><button data-act="unmute">🔊 Снять мут</button>`;
+    document.body.appendChild(menu); modMenuEl = menu;
     menu.addEventListener('click', (e) => {
       const act = e.target.dataset.act;
       if (act === 'del') {
         const evName = scope === 'arena' ? 'modDeleteArenaMessage' : 'modDeleteMessage';
         const payload = scope === 'arena' ? { arenaId: scopeId, msgId } : { lobbyId: scopeId, msgId };
-        socket.emit(evName, payload, (r) => {
-          if (!r || !r.ok) alert((r && r.msg) || 'Ошибка');
-          closeModMenu();
-        });
+        socket.emit(evName, payload, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); closeModMenu(); });
       } else if (act === 'mute') {
-        socket.emit('modMuteUser', { username, minutes: +e.target.dataset.min }, (r) => {
-          if (!r || !r.ok) alert((r && r.msg) || 'Ошибка');
-          closeModMenu();
-        });
+        socket.emit('modMuteUser', { username, minutes: +e.target.dataset.min }, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); closeModMenu(); });
       } else if (act === 'unmute') {
-        socket.emit('modUnmuteUser', { username }, (r) => {
-          if (!r || !r.ok) alert((r && r.msg) || 'Ошибка');
-          closeModMenu();
-        });
+        socket.emit('modUnmuteUser', { username }, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); closeModMenu(); });
       }
     });
   }
   document.addEventListener('click', (e) => { if (modMenuEl && !modMenuEl.contains(e.target)) closeModMenu(); });
 
-  // ============ ПРОСМОТР ============
   function refreshWatchList(force) {
     socket.emit('getLiveGames', (list) => {
       const box = document.getElementById('watchListBody');
@@ -1715,8 +1524,7 @@
     watchingGameId = id; watchingGame = null; lastWatchBoardHash = '';
     socket.emit('watchGame', { id }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось начать просмотр'); watchingGameId = null; return; }
-      watchingGame = res.game;
-      renderWatchBoard();
+      watchingGame = res.game; renderWatchBoard();
     });
   }
   window.watchGame = watchGame;
@@ -1745,10 +1553,7 @@
       squares += `<div class="${cls}">${inner}${coords}</div>`;
     }
     box.innerHTML = `
-      <div class="wbHeader">
-        <div><div class="wbTitle">Партия ${g.isArena ? 'турнира' : ''}</div><div class="wbSub">${g.timeControl}+${g.increment}${g.arenaName ? ' · '+escapeHtml(g.arenaName) : ''}</div></div>
-        <button class="secondary" onclick="stopWatching()">✕ Выйти</button>
-      </div>
+      <div class="wbHeader"><div><div class="wbTitle">Партия ${g.isArena ? 'турнира' : ''}</div><div class="wbSub">${g.timeControl}+${g.increment}${g.arenaName ? ' · '+escapeHtml(g.arenaName) : ''}</div></div><button class="secondary" onclick="stopWatching()">✕ Выйти</button></div>
       <div class="wbPlayers">
         <div class="wbPlayer ${blackActive?'active':''}"><span><span class="name">⚫ ${nickHtml(g.black, g.blackIsAdmin)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}</span><span class="time">${formatTime(g.timeB)}</span></div>
         <div class="wbPlayer ${whiteActive?'active':''}"><span><span class="name">⚪ ${nickHtml(g.white, g.whiteIsAdmin)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}</span><span class="time">${formatTime(g.timeW)}</span></div>
@@ -1762,7 +1567,6 @@
   }
   window.stopWatching = stopWatching;
 
-  // ============ ПРОФИЛЬ ============
   function openOpponentProfile() { if (opponentName && opponentName !== '—') openProfileView(opponentName); }
   window.openOpponentProfile = openOpponentProfile;
   function openProfileView(username) {
@@ -1827,10 +1631,7 @@
       gridLines.push(`<line x1="${PAD}" y1="${y}" x2="${W-PAD}" y2="${y}" stroke="#3a3833" stroke-width="1" stroke-dasharray="3,3"/>`);
       gridLines.push(`<text x="4" y="${y+4}" fill="#7d7a72" font-size="10">${val}</text>`);
     }
-    const dots = points.map((p, i) => {
-      const isLast = i === points.length - 1;
-      return `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${isLast?4:2.5}" fill="${isLast?'#bf811d':'#629924'}"/>`;
-    }).join('');
+    const dots = points.map((p, i) => { const isLast = i === points.length - 1; return `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${isLast?4:2.5}" fill="${isLast?'#bf811d':'#629924'}"/>`; }).join('');
     wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:160px;display:block">${gridLines.join('')}<path d="${pathD}" fill="none" stroke="#bf811d" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>${dots}</svg>`;
   }
 
@@ -1860,7 +1661,6 @@
     });
   }
 
-  // ============ АРЕНЫ ============
   function refreshArenas(force) {
     if (!force && !document.getElementById('arenasScreen').classList.contains('active')) return;
     socket.emit('getArenas', (list) => {
@@ -1942,10 +1742,7 @@
         const clickAttr = clickable ? `onclick="openArenaPage('${arena.id}')"` : '';
         const cursorStyle = clickable ? 'cursor:pointer' : 'cursor:default';
         const showInfo = width >= 100;
-        html += `<div class="${cls}" style="left:${left}px; width:${width}px; ${cursorStyle}" ${clickAttr} title="${escapeHtml(arena.name)} · ${tinfo}">
-          <div class="tname">${escapeHtml(arena.name)}</div>
-          ${showInfo ? `<div class="tinfo"><span>${tinfo}</span><span>👥 ${participantsCount}</span></div>` : ''}
-        </div>`;
+        html += `<div class="${cls}" style="left:${left}px; width:${width}px; ${cursorStyle}" ${clickAttr} title="${escapeHtml(arena.name)} · ${tinfo}"><div class="tname">${escapeHtml(arena.name)}</div>${showInfo ? `<div class="tinfo"><span>${tinfo}</span><span>👥 ${participantsCount}</span></div>` : ''}</div>`;
       }
       html += '</div>';
     }
@@ -1957,18 +1754,13 @@
   }
 
   function openArenaPage(arenaId) {
-    // Отписка от прошлой комнаты, если была
-    if (currentArenaId && currentArenaId !== arenaId) {
-      socket.emit('leaveArenaRoom', { arenaId: currentArenaId });
-    }
+    if (currentArenaId && currentArenaId !== arenaId) socket.emit('leaveArenaRoom', { arenaId: currentArenaId });
     currentArenaId = arenaId;
     show('arenaPageScreen');
     document.querySelectorAll('#mainNav a').forEach(a => a.classList.remove('active'));
     document.getElementById('arenaChatMessages').innerHTML = '';
     lastArenaStateHash = '';
     lastArenaGamesHash = '';
-
-    // Подписываемся на комнату арены — получаем историю чата и будем получать новые
     socket.emit('joinArenaRoom', { arenaId }, (res) => {
       if (res && res.ok && Array.isArray(res.chat)) {
         const box = document.getElementById('arenaChatMessages');
@@ -1976,13 +1768,11 @@
         res.chat.forEach(renderArenaChatMsg);
       }
     });
-
     loadArenaPage();
     if (arenaPageRefreshHandle) clearInterval(arenaPageRefreshHandle);
     arenaPageRefreshHandle = setInterval(() => {
       if (document.getElementById('arenaPageScreen').classList.contains('active')) loadArenaPage();
     }, 5000);
-    // Посекундный таймер статуса
     if (arenaStatusTickHandle) clearInterval(arenaStatusTickHandle);
     arenaStatusTickHandle = setInterval(tickArenaStatus, 1000);
     if (arenaGamesRefreshHandle) clearInterval(arenaGamesRefreshHandle);
@@ -2008,10 +1798,7 @@
     socket.emit('getArenaState', { arenaId: currentArenaId }, (state) => {
       loadArenaPageBusy = false;
       currentArenaState = state;
-      // Синхронизируем локальное время сервера
-      if (state.serverNow) {
-        arenaServerOffsetMs = state.serverNow - Date.now();
-      }
+      if (state.serverNow) arenaServerOffsetMs = state.serverNow - Date.now();
       arenaStartsAt = state.startsAt || arena.startsAt;
       arenaEndsAt = state.endsAt || arena.endsAt;
       arenaPhase = state.phase;
@@ -2035,25 +1822,9 @@
     if (!row || !lbl || !time) return;
     const serverNow = Date.now() + arenaServerOffsetMs;
     row.classList.remove('live', 'finished');
-    if (arenaPhase === 'finished') {
-      row.classList.add('finished');
-      lbl.textContent = 'Завершена:';
-      time.textContent = '00:00';
-      return;
-    }
-    if (arenaPhase === 'waiting') {
-      const left = Math.max(0, arenaStartsAt - serverNow);
-      lbl.textContent = 'До начала:';
-      time.textContent = formatMMSS(left);
-      return;
-    }
-    if (arenaPhase === 'live') {
-      const left = Math.max(0, arenaEndsAt - serverNow);
-      row.classList.add('live');
-      lbl.textContent = 'До конца:';
-      time.textContent = formatMMSS(left);
-      return;
-    }
+    if (arenaPhase === 'finished') { row.classList.add('finished'); lbl.textContent = 'Завершена:'; time.textContent = '00:00'; return; }
+    if (arenaPhase === 'waiting') { lbl.textContent = 'До начала:'; time.textContent = formatMMSS(Math.max(0, arenaStartsAt - serverNow)); return; }
+    if (arenaPhase === 'live') { row.classList.add('live'); lbl.textContent = 'До конца:'; time.textContent = formatMMSS(Math.max(0, arenaEndsAt - serverNow)); return; }
   }
 
   function renderArenaPage(arena, state) {
@@ -2069,9 +1840,9 @@
 
   function updateArenaJoinButton(state) {
     const wrap = document.getElementById('arenaJoinBtnWrap');
-    if (state.phase === 'finished') { wrap.innerHTML = `<button class="secondary" disabled>АРЕНА ЗАВЕРШЕНА</button>`; return; }
+    if (state.phase === 'finished') { wrap.innerHTML = `<button class="secondary" disabled style="width:200px;">ЗАВЕРШЕНА</button>`; return; }
     if (state.phase === 'waiting') {
-      if (state.joined) wrap.innerHTML = `<button class="secondary" onclick="leaveCurrentArena()">ОТМЕНИТЬ УЧАСТИЕ</button>`;
+      if (state.joined) wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="leaveCurrentArena()">ОТМЕНИТЬ УЧАСТИЕ</button>`;
       else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="joinCurrentArena()">УЧАСТВОВАТЬ</button>`;
       return;
     }
@@ -2086,7 +1857,7 @@
     if (!box) return;
     if (state.phase !== 'live') { box.style.display = 'none'; return; }
     if (!state.joined) { box.style.display = 'flex'; box.classList.remove('searching'); box.innerHTML = `<span>Чтобы участвовать в жеребьёвке, нажмите «УЧАСТВОВАТЬ».</span>`; return; }
-    if (state.paused) { box.style.display = 'flex'; box.classList.remove('searching'); box.innerHTML = `<span>⏸ Вы на паузе — жеребьёвка приостановлена.</span>`; return; }
+    if (state.paused) { box.style.display = 'flex'; box.classList.remove('searching'); box.innerHTML = `<span>⏸ Вы на паузе.</span>`; return; }
     if (state.pairingNow) { box.style.display = 'flex'; box.classList.add('searching'); box.innerHTML = `<div class="spinner"></div><span>Идёт жеребьёвка: <b>${escapeHtml(state.pairingNow)}</b></span>`; return; }
     box.style.display = 'flex'; box.classList.add('searching');
     box.innerHTML = `<div class="spinner"></div><span>Ожидайте, идёт жеребьёвка…</span>`;
@@ -2105,7 +1876,7 @@
       const isMe = myName && p.username === myName;
       const totalGames = (p.wins || 0) + (p.draws || 0) + (p.losses || 0);
       const greenDot = p.online ? '<span class="pgreen">●</span>' : '';
-      const pauseTag = p.paused ? '<span class="ppause">⏸ пауза</span>' : '';
+      const pauseTag = p.paused ? '<span class="ppause">⏸</span>' : '';
       let streakTag = '';
       if (p.winStreak >= 3) streakTag = `<span class="streak">🔥${p.winStreak}</span>`;
       else if (p.drawStreak >= 2) streakTag = `<span class="streak">½${p.drawStreak}</span>`;
@@ -2139,8 +1910,7 @@
     const places = ['🥇','🥈','🥉'];
     const order = top3.length >= 3 ? [1,0,2] : top3.map((_,i)=>i);
     podium.innerHTML = order.map(i => {
-      const p = top3[i];
-      if (!p) return '';
+      const p = top3[i]; if (!p) return '';
       return `<div class="awbItem ${medals[i]}"><div class="place">${places[i]}</div><div class="n">${nickHtml(p.username, p.username === 'PeshkaSasha')}</div><div class="s">${p.score}</div></div>`;
     }).join('');
     banner.style.display = 'block';
@@ -2213,12 +1983,10 @@
     document.getElementById('bottomClock').classList.toggle('low', myTime <= 20);
   }
 
-  // ============ СОБЫТИЯ СЕРВЕРА ============
+  // ============ СОБЫТИЯ ============
   socket.on('stats', (s) => {
     if (!s) return;
-    const e1 = document.getElementById('statOnline');
-    const e2 = document.getElementById('statGames');
-    const e3 = document.getElementById('statActive');
+    const e1 = document.getElementById('statOnline'), e2 = document.getElementById('statGames'), e3 = document.getElementById('statActive');
     if (e1) e1.textContent = s.online;
     if (e2) e2.textContent = s.games;
     if (e3) e3.textContent = s.activeGames || 0;
@@ -2268,8 +2036,7 @@
     selected = null; legalMoves = []; viewIndex = -1;
     if (san) { moveHistory.push(san); moveFens.push(fen); }
     renderMoves();
-    lastBoardHash = '';
-    renderBoard();
+    lastBoardHash = ''; renderBoard();
     const state = parseFen(currentFen);
     if (san) {
       if (san.includes('#')) sndMate();
@@ -2293,9 +2060,7 @@
     let winner = null;
     if (result === 'w') winner = 'w'; else if (result === 'b') winner = 'b';
     if (reason !== 'Мат' && reason !== 'Пат') {
-      if (!winner) sndDraw();
-      else if (winner === myColor) sndWin();
-      else sndLose();
+      if (!winner) sndDraw(); else if (winner === myColor) sndWin(); else sndLose();
     }
     if (typeof isArena === 'boolean') currentGameIsArena = isArena;
     if (arenaId) currentArenaId = arenaId;
@@ -2311,10 +2076,8 @@
 
   socket.on('chatMessage', (msg) => renderChatMsg(msg));
   socket.on('chatMessageDeleted', ({ msgId }) => {
-    const el = document.querySelector(`#chatMessages .msg[data-msg-id="${msgId}"]`);
-    if (el) el.remove();
-    const el2 = document.querySelector(`#arenaChatMessages .msg[data-msg-id="${msgId}"]`);
-    if (el2) el2.remove();
+    const el = document.querySelector(`#chatMessages .msg[data-msg-id="${msgId}"]`); if (el) el.remove();
+    const el2 = document.querySelector(`#arenaChatMessages .msg[data-msg-id="${msgId}"]`); if (el2) el2.remove();
   });
   socket.on('chatError', ({ msg }) => { alert(msg); });
   socket.on('modAction', (info) => {
@@ -2323,16 +2086,10 @@
     if (info.action === 'unmute' && me && info.target === me.username) alert('С вас снят мут.');
   });
 
-  socket.on('opponentLeft', () => {
-    if (!gameActive) return;
-    alert('Соперник отключился');
-    cleanupGame(); navTo('lobby');
-  });
+  socket.on('opponentLeft', () => { if (!gameActive) return; alert('Соперник отключился'); cleanupGame(); navTo('lobby'); });
   socket.on('connect_error', () => console.warn('Не удалось подключиться'));
 
-  socket.on('arenaChatMessage', (msg) => {
-    if (currentArenaId && msg.arenaId === currentArenaId) renderArenaChatMsg(msg);
-  });
+  socket.on('arenaChatMessage', (msg) => { if (currentArenaId && msg.arenaId === currentArenaId) renderArenaChatMsg(msg); });
   socket.on('arenaUpdate', ({ arenaId }) => {
     if (currentArenaId === arenaId) { lastArenaStateHash = ''; if (document.getElementById('arenaPageScreen').classList.contains('active')) loadArenaPage(); }
     if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas();
@@ -2353,7 +2110,6 @@
     if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas();
   });
 
-  // Периодическое обновление сцены
   topArenasRefreshHandle = setInterval(() => {
     if (document.getElementById('lobbyScreen').classList.contains('active')) { refreshTopArenas(); refreshStats(); }
     if (document.getElementById('watchScreen').classList.contains('active')) {
