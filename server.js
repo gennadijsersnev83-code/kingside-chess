@@ -19,7 +19,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ======================= РОЛИ =======================
 const ADMINS = new Set(['PeshkaSasha']);
-const MODERATORS = new Set([]);
+const MODERATORS = new Set([Debian]);
 const DEVS = new Set(['PeshkaSasha']);
 
 function roleOf(username) {
