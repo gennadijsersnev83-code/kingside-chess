@@ -18,14 +18,24 @@ const io = new Server(server, {
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ======================= БАЗА ДАННЫХ =======================
-// Railway требует SSL для подключения к Postgres.
-// rejectUnauthorized: false — потому что у Railway самоподписанный сертификат.
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-// Обёртка для логов с текстом ошибки
+// Специальные аккаунты
+const ADMINS = new Set(['admin']);
+const MODERATORS = new Set([]);   // добавь ники сюда
+const DEVS = new Set(['admin']);  // выдаётся автоматически владельцу
+
+function roleOf(username) {
+  if (ADMINS.has(username) || DEVS.has(username)) return 'admin';
+  if (MODERATORS.has(username)) return 'moderator';
+  return 'user';
+}
+function isAdmin(username) { return ADMINS.has(username) || DEVS.has(username); }
+function isMod(username) { return isAdmin(username) || MODERATORS.has(username); }
+
 async function initDB() {
   try {
     await pool.query(`
@@ -41,6 +51,32 @@ async function initDB() {
         created_at BIGINT NOT NULL
       );
     `);
+    // === Миграции для раздельных рейтингов (обратная совместимость) ===
+    // Добавляем колонки, если их нет. Старые данные остаются целыми.
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_classical INTEGER;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_rapid INTEGER;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_blitz INTEGER;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_bullet INTEGER;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wins_classical INTEGER DEFAULT 0;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wins_rapid INTEGER DEFAULT 0;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wins_blitz INTEGER DEFAULT 0;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wins_bullet INTEGER DEFAULT 0;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS losses_classical INTEGER DEFAULT 0;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS losses_rapid INTEGER DEFAULT 0;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS losses_blitz INTEGER DEFAULT 0;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS losses_bullet INTEGER DEFAULT 0;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS games_classical INTEGER DEFAULT 0;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS games_rapid INTEGER DEFAULT 0;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS games_blitz INTEGER DEFAULT 0;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS games_bullet INTEGER DEFAULT 0;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS muted_until BIGINT DEFAULT 0;`);
+
+    // Инициализируем новые рейтинги значением общего рейтинга для старых юзеров
+    await pool.query(`UPDATE users SET rating_classical = rating WHERE rating_classical IS NULL;`);
+    await pool.query(`UPDATE users SET rating_rapid     = rating WHERE rating_rapid     IS NULL;`);
+    await pool.query(`UPDATE users SET rating_blitz     = rating WHERE rating_blitz     IS NULL;`);
+    await pool.query(`UPDATE users SET rating_bullet    = rating WHERE rating_bullet    IS NULL;`);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS games (
         id SERIAL PRIMARY KEY,
@@ -57,6 +93,10 @@ async function initDB() {
         finished_at BIGINT NOT NULL
       );
     `);
+    await pool.query(`ALTER TABLE games ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'blitz';`);
+    await pool.query(`ALTER TABLE games ADD COLUMN IF NOT EXISTS is_arena BOOLEAN DEFAULT FALSE;`);
+    await pool.query(`ALTER TABLE games ADD COLUMN IF NOT EXISTS arena_name TEXT;`);
+
     console.log('[DB] Схема готова');
   } catch (err) {
     console.error('[DB] Ошибка создания схемы:', err.message || err.code || err);
@@ -65,6 +105,12 @@ async function initDB() {
 }
 
 let db = { users: {}, games: [] };
+
+function emptyRatingBlock(base) {
+  return {
+    rating: base, wins: 0, losses: 0, draws: 0, games: 0
+  };
+}
 
 async function loadDB() {
   try {
@@ -79,7 +125,35 @@ async function loadDB() {
         losses: row.losses,
         draws: row.draws,
         games: row.games,
-        createdAt: Number(row.created_at)
+        createdAt: Number(row.created_at),
+        mutedUntil: Number(row.muted_until || 0),
+        // Раздельные рейтинги
+        categories: {
+          classical: {
+            rating: row.rating_classical != null ? row.rating_classical : row.rating,
+            wins: row.wins_classical || 0,
+            losses: row.losses_classical || 0,
+            games: row.games_classical || 0
+          },
+          rapid: {
+            rating: row.rating_rapid != null ? row.rating_rapid : row.rating,
+            wins: row.wins_rapid || 0,
+            losses: row.losses_rapid || 0,
+            games: row.games_rapid || 0
+          },
+          blitz: {
+            rating: row.rating_blitz != null ? row.rating_blitz : row.rating,
+            wins: row.wins_blitz || 0,
+            losses: row.losses_blitz || 0,
+            games: row.games_blitz || 0
+          },
+          bullet: {
+            rating: row.rating_bullet != null ? row.rating_bullet : row.rating,
+            wins: row.wins_bullet || 0,
+            losses: row.losses_bullet || 0,
+            games: row.games_bullet || 0
+          }
+        }
       };
     }
     console.log(`[DB] Загружено: ${Object.keys(db.users).length} игроков`);
@@ -91,17 +165,51 @@ async function loadDB() {
 async function saveUser(username) {
   const u = db.users[username];
   if (!u) return;
+  const c = u.categories || {};
+  const get = (k, f) => c[k] ? c[k][f] : 0;
   try {
     await pool.query(
-      `INSERT INTO users (username, password_hash, salt, rating, wins, losses, draws, games, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      `INSERT INTO users (username, password_hash, salt, rating, wins, losses, draws, games, created_at,
+                          rating_classical, rating_rapid, rating_blitz, rating_bullet,
+                          wins_classical, wins_rapid, wins_blitz, wins_bullet,
+                          losses_classical, losses_rapid, losses_blitz, losses_bullet,
+                          games_classical, games_rapid, games_blitz, games_bullet,
+                          muted_until)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
        ON CONFLICT (username) DO UPDATE SET
          rating = EXCLUDED.rating,
          wins = EXCLUDED.wins,
          losses = EXCLUDED.losses,
          draws = EXCLUDED.draws,
-         games = EXCLUDED.games`,
-      [username, u.passwordHash, u.salt, u.rating, u.wins, u.losses, u.draws, u.games, u.createdAt]
+         games = EXCLUDED.games,
+         rating_classical = EXCLUDED.rating_classical,
+         rating_rapid = EXCLUDED.rating_rapid,
+         rating_blitz = EXCLUDED.rating_blitz,
+         rating_bullet = EXCLUDED.rating_bullet,
+         wins_classical = EXCLUDED.wins_classical,
+         wins_rapid = EXCLUDED.wins_rapid,
+         wins_blitz = EXCLUDED.wins_blitz,
+         wins_bullet = EXCLUDED.wins_bullet,
+         losses_classical = EXCLUDED.losses_classical,
+         losses_rapid = EXCLUDED.losses_rapid,
+         losses_blitz = EXCLUDED.losses_blitz,
+         losses_bullet = EXCLUDED.losses_bullet,
+         games_classical = EXCLUDED.games_classical,
+         games_rapid = EXCLUDED.games_rapid,
+         games_blitz = EXCLUDED.games_blitz,
+         games_bullet = EXCLUDED.games_bullet,
+         muted_until = EXCLUDED.muted_until`,
+      [
+        username, u.passwordHash, u.salt, u.rating, u.wins, u.losses, u.draws, u.games, u.createdAt,
+        c.classical ? c.classical.rating : u.rating,
+        c.rapid ? c.rapid.rating : u.rating,
+        c.blitz ? c.blitz.rating : u.rating,
+        c.bullet ? c.bullet.rating : u.rating,
+        get('classical','wins'), get('rapid','wins'), get('blitz','wins'), get('bullet','wins'),
+        get('classical','losses'), get('rapid','losses'), get('blitz','losses'), get('bullet','losses'),
+        get('classical','games'), get('rapid','games'), get('blitz','games'), get('bullet','games'),
+        u.mutedUntil || 0
+      ]
     );
   } catch (err) {
     console.error(`[DB] saveUser(${username}) ошибка:`, err.message || err.code || err);
@@ -113,12 +221,13 @@ async function saveGame(game) {
   try {
     await pool.query(
       `INSERT INTO games (white, black, result, reason, time_control, increment,
-                          white_before, black_before, white_after, black_after, finished_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                          white_before, black_before, white_after, black_after, finished_at,
+                          category, is_arena, arena_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
       [game.white, game.black, game.result, game.reason,
        game.timeControl, game.increment,
        game.whiteBefore, game.blackBefore, game.whiteAfter, game.blackAfter,
-       game.finishedAt]
+       game.finishedAt, game.category || 'blitz', !!game.isArena, game.arenaName || null]
     );
   } catch (err) {
     console.error('[DB] saveGame ошибка:', err.message || err.code || err);
@@ -148,6 +257,14 @@ function eloDelta(myRating, oppRating, score, k) {
   return Math.round(k * (score - expected));
 }
 
+// Определяем категорию по контролю времени
+function categoryOf(timeMin) {
+  if (timeMin < 3) return 'bullet';
+  if (timeMin < 10) return 'blitz';
+  if (timeMin < 30) return 'rapid';
+  return 'classical';
+}
+
 // ======================= УТИЛИТЫ =======================
 function genId() {
   return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6);
@@ -162,7 +279,11 @@ function publicUser(name) {
     losses: u.losses,
     draws: u.draws,
     games: u.games,
-    createdAt: u.createdAt
+    createdAt: u.createdAt,
+    role: roleOf(name),
+    isAdmin: isAdmin(name),
+    isMod: isMod(name),
+    categories: u.categories || null
   };
 }
 
@@ -207,7 +328,6 @@ function cleanupStuckPlaying() {
 }
 setInterval(cleanupStuckPlaying, 10000);
 
-// ======================= СПИСОК ТЕКУЩИХ ПАРТИЙ =======================
 function buildGamesList() {
   const list = [];
   for (const [id, l] of lobbies.entries()) {
@@ -249,20 +369,42 @@ async function finishGame(lobbyId, result, reason) {
   const whiteUser = db.users[whiteName];
   const blackUser = db.users[blackName];
 
-  const whiteBefore = whiteUser.rating;
-  const blackBefore = blackUser.rating;
+  // Категория партии по времени
+  const cat = categoryOf(l.time);
+  if (!whiteUser.categories) whiteUser.categories = {};
+  if (!blackUser.categories) blackUser.categories = {};
+  if (!whiteUser.categories[cat]) whiteUser.categories[cat] = emptyRatingBlock(whiteUser.rating);
+  if (!blackUser.categories[cat]) blackUser.categories[cat] = emptyRatingBlock(blackUser.rating);
+
+  const wc = whiteUser.categories[cat];
+  const bc = blackUser.categories[cat];
+
+  const whiteBefore = wc.rating;
+  const blackBefore = bc.rating;
 
   let whiteScore = 0.5, blackScore = 0.5;
   if (result === 'w') { whiteScore = 1; blackScore = 0; }
   else if (result === 'b') { whiteScore = 0; blackScore = 1; }
 
-  const kWhite = kFactor(whiteBefore, whiteUser.games);
-  const kBlack = kFactor(blackBefore, blackUser.games);
+  const kWhite = kFactor(whiteBefore, wc.games);
+  const kBlack = kFactor(blackBefore, bc.games);
   const whiteDelta = eloDelta(whiteBefore, blackBefore, whiteScore, kWhite);
   const blackDelta = eloDelta(blackBefore, whiteBefore, blackScore, kBlack);
   const whiteAfter = whiteBefore + whiteDelta;
   const blackAfter = blackBefore + blackDelta;
 
+  // Обновляем категорийный рейтинг
+  wc.rating = whiteAfter;
+  if (result === 'w') wc.wins++;
+  else if (result === 'b') wc.losses++;
+  wc.games++;
+
+  bc.rating = blackAfter;
+  if (result === 'b') bc.wins++;
+  else if (result === 'w') bc.losses++;
+  bc.games++;
+
+  // Общие агрегаты
   whiteUser.rating = whiteAfter;
   if (result === 'w') whiteUser.wins++;
   else if (result === 'b') whiteUser.losses++;
@@ -279,7 +421,10 @@ async function finishGame(lobbyId, result, reason) {
     white: whiteName, black: blackName, result, reason,
     timeControl: l.time, increment: l.inc,
     whiteBefore, blackBefore, whiteAfter, blackAfter,
-    finishedAt: Date.now()
+    finishedAt: Date.now(),
+    category: cat,
+    isArena: !!l.arenaId,
+    arenaName: l.arenaName || null
   };
   db.games.push(gameRecord);
   if (db.games.length > 10000) db.games.shift();
@@ -288,7 +433,7 @@ async function finishGame(lobbyId, result, reason) {
     await saveUser(whiteName);
     await saveUser(blackName);
     await saveGame(gameRecord);
-    console.log(`[DB] Сохранено: ${whiteName} vs ${blackName} = ${result}`);
+    console.log(`[DB] Сохранено (${cat}): ${whiteName} vs ${blackName} = ${result}`);
   } catch (err) {
     console.error('[DB] Ошибка сохранения партии:', err.message || err.code || err);
   }
@@ -297,6 +442,7 @@ async function finishGame(lobbyId, result, reason) {
   io.to(lobbyId).emit('gameEnded', {
     result, reason,
     whiteDelta, blackDelta, whiteAfter, blackAfter,
+    category: cat,
     isArena,
     arenaId: l.arenaId || null,
     arenaName: l.arenaName || null
@@ -321,19 +467,50 @@ async function finishGame(lobbyId, result, reason) {
 }
 
 // ======================= АРЕНЫ =======================
+// Расписания выровнены по «сетке», чтобы между турнирами был чистый перерыв 3 минуты.
+// Правило: durationMin = период - 3. Так турниры стартуют в :00 и :30, идут 27 мин, пауза 3 мин.
 const ARENA_TEMPLATES = [
-  { id: 'bullet-halfhour', name: 'Получасовая пуля', description: '1+0 · рейтинговая',
-    timeControl: 1, increment: 0, durationMin: 25, repeat: 'every30', color: 'bullet' },
-  { id: 'blitz-hourly', name: 'Ежечасная блиц-арена', description: '3+2 · рейтинговая',
-    timeControl: 3, increment: 2, durationMin: 50, repeat: 'hourly', color: 'blitz' },
-  { id: 'rapid-daily', name: 'Ежедневная рапид-арена', description: '10+0 · рейтинговая',
-    timeControl: 10, increment: 0, durationMin: 90, repeat: 'daily', startHour: 20, color: 'rapid' },
-  { id: 'weekly-classical', name: 'Воскресная классика', description: '30+0 · классика',
-    timeControl: 30, increment: 0, durationMin: 180, repeat: 'weekly', weekday: 0, startHour: 18, color: 'classical' }
+  {
+    id: 'bullet-halfhour',
+    name: 'Получасовая пуля',
+    description: '1+0 · рейтинговая',
+    timeControl: 1, increment: 0,
+    durationMin: 27,            // 30 мин слот − 3 мин пауза
+    repeat: 'every30',          // старт каждые 30 минут (:00 и :30)
+    color: 'bullet'
+  },
+  {
+    id: 'blitz-hourly',
+    name: 'Ежечасная блиц-арена',
+    description: '3+2 · рейтинговая',
+    timeControl: 3, increment: 2,
+    durationMin: 57,            // 60 мин слот − 3 мин пауза
+    repeat: 'hourly',
+    color: 'blitz'
+  },
+  {
+    id: 'rapid-2h',
+    name: 'Двухчасовая рапид-арена',
+    description: '10+0 · рейтинговая',
+    timeControl: 10, increment: 0,
+    durationMin: 117,           // 120 мин слот − 3 мин пауза
+    repeat: 'every2h',          // старт каждые 2 часа (00:00, 02:00, ...)
+    color: 'rapid'
+  },
+  {
+    id: 'classical-4h',
+    name: 'Классическая арена',
+    description: '30+0 · классика',
+    timeControl: 30, increment: 0,
+    durationMin: 237,           // 240 мин слот − 3 мин пауза
+    repeat: 'every4h',          // старт каждые 4 часа (00:00, 04:00, ...)
+    color: 'classical'
+  }
 ];
 
 function nextStartFor(tpl, now) {
   const c = new Date(now);
+  c.setSeconds(0, 0);
   if (tpl.repeat === 'hourly') {
     c.setMinutes(0, 0, 0);
     if (c.getTime() <= now) c.setHours(c.getHours() + 1);
@@ -346,18 +523,36 @@ function nextStartFor(tpl, now) {
     if (c.getTime() <= now) c.setMinutes(c.getMinutes() + 30);
     return c.getTime();
   }
-  if (tpl.repeat === 'daily') {
-    c.setHours(tpl.startHour || 20, 0, 0, 0);
-    if (c.getTime() <= now) c.setDate(c.getDate() + 1);
+  if (tpl.repeat === 'every2h') {
+    // Старт каждые 2 часа (00:00, 02:00, ...)
+    c.setMinutes(0, 0, 0);
+    const h = c.getHours();
+    const nextH = Math.ceil((h + 1) / 2) * 2; // 0,2,4,...
+    if (nextH === h) {
+      // Уже на чётном часу, но уже прошло — берём следующий чётный
+      c.setHours(h + 2, 0, 0, 0);
+    } else if (nextH > 24) {
+      c.setDate(c.getDate() + 1);
+      c.setHours(nextH - 24, 0, 0, 0);
+    } else {
+      c.setHours(nextH, 0, 0, 0);
+    }
+    if (c.getTime() <= now) c.setHours(c.getHours() + 2);
     return c.getTime();
   }
-  if (tpl.repeat === 'weekly') {
-    const target = tpl.weekday != null ? tpl.weekday : 0;
-    let diff = target - c.getDay();
-    if (diff < 0) diff += 7;
-    c.setDate(c.getDate() + diff);
-    c.setHours(tpl.startHour || 18, 0, 0, 0);
-    if (c.getTime() <= now) c.setDate(c.getDate() + 7);
+  if (tpl.repeat === 'every4h') {
+    c.setMinutes(0, 0, 0);
+    const h = c.getHours();
+    const nextH = Math.ceil((h + 1) / 4) * 4; // 0,4,8,12,16,20
+    if (nextH === h) {
+      c.setHours(h + 4, 0, 0, 0);
+    } else if (nextH >= 24) {
+      c.setDate(c.getDate() + 1);
+      c.setHours(nextH - 24, 0, 0, 0);
+    } else {
+      c.setHours(nextH, 0, 0, 0);
+    }
+    if (c.getTime() <= now) c.setHours(c.getHours() + 4);
     return c.getTime();
   }
   return now + 3600000;
@@ -366,8 +561,8 @@ function nextStartFor(tpl, now) {
 function stepFor(tpl) {
   if (tpl.repeat === 'hourly') return 3600 * 1000;
   if (tpl.repeat === 'every30') return 30 * 60 * 1000;
-  if (tpl.repeat === 'daily') return 24 * 3600 * 1000;
-  if (tpl.repeat === 'weekly') return 7 * 24 * 3600 * 1000;
+  if (tpl.repeat === 'every2h') return 2 * 3600 * 1000;
+  if (tpl.repeat === 'every4h') return 4 * 3600 * 1000;
   return 3600 * 1000;
 }
 
@@ -647,7 +842,7 @@ function getArenaSchedule(hoursAhead) {
     const step = stepFor(tpl);
     let safety = 0;
 
-    while (t <= end && safety < 200) {
+    while (t <= end && safety < 300) {
       safety++;
       const endsAt = t + tpl.durationMin * 60 * 1000;
       let status;
@@ -723,6 +918,29 @@ setInterval(() => {
   }
 }, 1000);
 
+// ======================= МОДЕРАЦИЯ =======================
+function checkMute(username) {
+  const u = db.users[username];
+  if (!u) return 0;
+  const until = u.mutedUntil || 0;
+  if (until <= Date.now()) return 0;
+  return until;
+}
+function setMute(username, minutes) {
+  const u = db.users[username];
+  if (!u) return false;
+  u.mutedUntil = Date.now() + minutes * 60 * 1000;
+  saveUser(username).catch(() => {});
+  return true;
+}
+function clearMute(username) {
+  const u = db.users[username];
+  if (!u) return false;
+  u.mutedUntil = 0;
+  saveUser(username).catch(() => {});
+  return true;
+}
+
 // ======================= SOCKET.IO =======================
 io.on('connection', (socket) => {
   console.log(`[socket] подключён ${socket.id}`);
@@ -754,16 +972,21 @@ io.on('connection', (socket) => {
     } else {
       const salt = newSalt();
       const passwordHash = hashPassword(password, salt);
+      const base = 1200;
       db.users[username] = {
-        passwordHash, salt, rating: 1200,
+        passwordHash, salt, rating: base,
         wins: 0, losses: 0, draws: 0, games: 0,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        mutedUntil: 0,
+        categories: {
+          classical: emptyRatingBlock(base),
+          rapid: emptyRatingBlock(base),
+          blitz: emptyRatingBlock(base),
+          bullet: emptyRatingBlock(base)
+        }
       };
-      try {
-        await saveUser(username);
-      } catch (err) {
-        console.error('[DB] Ошибка сохранения пользователя:', err.message || err.code || err);
-      }
+      try { await saveUser(username); }
+      catch (err) { console.error('[DB] Ошибка сохранения пользователя:', err.message || err.code || err); }
     }
     online.set(socket.id, username);
     socket.username = username;
@@ -786,7 +1009,8 @@ io.on('connection', (socket) => {
         timeControl: r.time_control, increment: r.increment,
         whiteBefore: r.white_before, blackBefore: r.black_before,
         whiteAfter: r.white_after, blackAfter: r.black_after,
-        finishedAt: Number(r.finished_at)
+        finishedAt: Number(r.finished_at),
+        category: r.category || 'blitz'
       }));
 
       const historyRes = await pool.query(
@@ -991,13 +1215,75 @@ io.on('connection', (socket) => {
   socket.on('chatMessage', ({ lobbyId, text }) => {
     const l = lobbies.get(lobbyId);
     if (!l || !socket.username) return;
+    // Проверка мута
+    const muteUntil = checkMute(socket.username);
+    if (muteUntil > 0) {
+      const mins = Math.ceil((muteUntil - Date.now()) / 60000);
+      socket.emit('chatError', { msg: `Вы заглушены ещё ${mins} мин.` });
+      return;
+    }
     if (typeof text !== 'string') return;
     text = text.trim().slice(0, 300);
     if (!text) return;
-    const msg = { user: socket.username, text, ts: Date.now() };
+    const msg = {
+      id: 'm' + Date.now() + Math.random().toString(36).slice(2, 6),
+      user: socket.username,
+      text,
+      ts: Date.now()
+    };
     l.chat.push(msg);
-    if (l.chat.length > 20) l.chat.shift();
+    if (l.chat.length > 50) l.chat.shift();
     io.to(lobbyId).emit('chatMessage', msg);
+  });
+
+  // === Модерация: удаление сообщения из чата партии ===
+  socket.on('modDeleteMessage', ({ lobbyId, msgId }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!isMod(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    const l = lobbies.get(lobbyId);
+    if (!l) return cb({ ok: false, msg: 'Лобби нет' });
+    const idx = l.chat.findIndex(m => m.id === msgId);
+    if (idx < 0) return cb({ ok: false, msg: 'Сообщение не найдено' });
+    l.chat.splice(idx, 1);
+    io.to(lobbyId).emit('chatMessageDeleted', { msgId });
+    cb({ ok: true });
+  });
+
+  // === Модерация: мут игрока ===
+  socket.on('modMuteUser', ({ username, minutes }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!isMod(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    if (!db.users[username]) return cb({ ok: false, msg: 'Игрок не найден' });
+    if (isAdmin(username) && !isAdmin(socket.username)) {
+      return cb({ ok: false, msg: 'Нельзя замутить админа' });
+    }
+    minutes = Math.max(1, Math.min(7 * 24 * 60, +minutes || 10));
+    setMute(username, minutes);
+    io.emit('modAction', {
+      action: 'mute',
+      by: socket.username,
+      target: username,
+      minutes,
+      ts: Date.now()
+    });
+    cb({ ok: true });
+  });
+
+  socket.on('modUnmuteUser', ({ username }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!isMod(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    if (!db.users[username]) return cb({ ok: false, msg: 'Игрок не найден' });
+    clearMute(username);
+    io.emit('modAction', {
+      action: 'unmute', by: socket.username, target: username, ts: Date.now()
+    });
+    cb({ ok: true });
+  });
+
+  socket.on('getMuteStatus', (cb) => {
+    if (typeof cb !== 'function') return;
+    if (!socket.username) return cb({ mutedUntil: 0 });
+    cb({ mutedUntil: checkMute(socket.username) });
   });
 
   socket.on('drawOffer', ({ lobbyId }) => {
@@ -1183,10 +1469,21 @@ io.on('connection', (socket) => {
   socket.on('arenaChat', ({ arenaId, text }) => {
     const state = arenas.get(arenaId);
     if (!state || !socket.username) return;
+    const muteUntil = checkMute(socket.username);
+    if (muteUntil > 0) {
+      const mins = Math.ceil((muteUntil - Date.now()) / 60000);
+      socket.emit('chatError', { msg: `Вы заглушены ещё ${mins} мин.` });
+      return;
+    }
     if (typeof text !== 'string') return;
     text = text.trim().slice(0, 300);
     if (!text) return;
-    io.emit('arenaChatMessage', { user: socket.username, text, ts: Date.now() });
+    io.emit('arenaChatMessage', {
+      id: 'a' + Date.now() + Math.random().toString(36).slice(2, 6),
+      user: socket.username,
+      text,
+      ts: Date.now()
+    });
   });
 
   socket.on('disconnect', () => {
@@ -1225,7 +1522,6 @@ io.on('connection', (socket) => {
     await loadDB();
   } catch (err) {
     console.error('[DB] Не удалось инициализировать базу данных:', err.message || err.code || err);
-    console.error('Проверь, что в сервисе kingside-chess добавлена переменная DATABASE_URL со значением Internal Database URL из Postgres-кубика.');
   }
   getArenaSchedule(48);
 
