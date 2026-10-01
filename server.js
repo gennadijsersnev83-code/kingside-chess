@@ -569,7 +569,8 @@ function getOrCreateArenaState(instance) {
     pairingNow: null,
     activeLobbies: new Set(),
     chat: [],                  // история чата арены (в памяти пока есть зрители/участники)
-    chatViewers: new Set()     // socket.id тех, кто сейчас на странице арены
+    chatViewers: new Set(),    // socket.id тех, кто сейчас на странице арены
+    finishedGames: []          // история завершённых партий арены
   };
   arenas.set(instance.id, state);
   scheduleArena(state);
@@ -749,12 +750,30 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   if (!state) return;
   state.activeLobbies.delete(lobbyId);
 
+  // === Сохраняем результат партии в историю арены ===
+  if (!state.finishedGames) state.finishedGames = [];
+  const wU = db.users[whiteName];
+  const bU = db.users[blackName];
+  state.finishedGames.push({
+    white: whiteName,
+    black: blackName,
+    whiteRating: wU ? wU.rating : null,
+    blackRating: bU ? bU.rating : null,
+    whiteIsAdmin: isAdmin(whiteName),
+    blackIsAdmin: isAdmin(blackName),
+    result,
+    finishedAt: Date.now()
+  });
+  if (state.finishedGames.length > 200) state.finishedGames.shift();
+  // =================================================
+
   const whiteP = state.participants.get(whiteName);
   const blackP = state.participants.get(blackName);
 
   if (state.finished || !whiteP || !blackP) {
     if (whiteP) { whiteP.isPlaying = false; whiteP.lobbyId = null; }
     if (blackP) { blackP.isPlaying = false; blackP.lobbyId = null; }
+    io.emit('arenaUpdate', { arenaId });
     return;
   }
 
@@ -821,7 +840,6 @@ function finishArena(state) {
     if (state.chatViewers.size === 0) {
       arenas.delete(state.id);
     } else {
-      // если кто-то ещё смотрит — продлеваем
       setTimeout(() => arenas.delete(state.id), 30 * 60 * 1000);
     }
   }, 2 * 60 * 60 * 1000);
@@ -1358,21 +1376,48 @@ io.on('connection', (socket) => {
     if (state) state.chatViewers.delete(socket.id);
   });
 
+  // === ИСТОРИЯ ПАРТИЙ АРЕНЫ: активные + завершённые ===
   socket.on('getArenaGames', ({ arenaId }, cb) => {
     if (typeof cb !== 'function') return;
     const list = [];
+    const state = arenas.get(arenaId);
+
+    // Сначала активные партии
     for (const [id, l] of lobbies.entries()) {
       if (l.arenaId !== arenaId || l.finished) continue;
+      const wName = l.hostColor === 'w' ? l.host : l.guest;
+      const bName = l.hostColor === 'b' ? l.host : l.guest;
       list.push({
         lobbyId: id,
-        white: l.hostColor === 'w' ? l.host : l.guest,
-        black: l.hostColor === 'b' ? l.host : l.guest,
-        whiteIsAdmin: isAdmin(l.hostColor === 'w' ? l.host : l.guest),
-        blackIsAdmin: isAdmin(l.hostColor === 'b' ? l.host : l.guest),
+        white: wName, black: bName,
+        whiteIsAdmin: isAdmin(wName),
+        blackIsAdmin: isAdmin(bName),
+        whiteRating: db.users[wName] ? db.users[wName].rating : null,
+        blackRating: db.users[bName] ? db.users[bName].rating : null,
         timeW: l.timeW, timeB: l.timeB,
-        moveCount: l.fen ? (+l.fen.split(' ')[5] || 1) : 1
+        moveCount: l.fen ? (+l.fen.split(' ')[5] || 1) : 1,
+        live: true
       });
     }
+
+    // Затем завершённые (свежие сверху)
+    if (state && Array.isArray(state.finishedGames)) {
+      const done = state.finishedGames.slice().reverse();
+      for (const g of done) {
+        list.push({
+          lobbyId: null,
+          white: g.white, black: g.black,
+          whiteIsAdmin: g.whiteIsAdmin, blackIsAdmin: g.blackIsAdmin,
+          whiteRating: g.whiteRating, blackRating: g.blackRating,
+          timeW: 0, timeB: 0,
+          moveCount: 0,
+          result: g.result,
+          finishedAt: g.finishedAt,
+          live: false
+        });
+      }
+    }
+
     cb(list);
   });
 
