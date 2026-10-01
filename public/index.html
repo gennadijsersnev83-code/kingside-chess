@@ -31,6 +31,7 @@
   header.topbar .userBtn:hover { background:var(--panel-hover); }
   header.topbar .userBtn .avatar { width:20px; height:20px; border-radius:50%; background:var(--accent); color:#161512; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; }
   .crown { color:var(--gold); margin-right:2px; text-shadow:0 0 4px rgba(255,213,79,.6); }
+  .modMark { display:inline-block; color:#e5484d; font-weight:900; margin:0 3px 0 1px; font-size:13px; line-height:1; text-shadow:0 0 4px rgba(229,72,77,.7); vertical-align:middle; }
   main { max-width:1240px; margin:0 auto; padding:20px 16px; }
   .screen { display:none; }
   .screen.active { display:block; }
@@ -51,7 +52,6 @@
   #loginScreen input { flex:1; min-width:0; }
   #loginMsg { color:#e58a8a; min-height:20px; text-align:center; font-size:13px; }
   .hint-text { color:var(--muted); font-size:12px; text-align:center; }
-
   .homeWrap { display:grid; grid-template-columns:280px 1fr 240px; gap:20px; max-width:1140px; margin:24px auto 0; align-items:start; }
   @media (max-width:980px) { .homeWrap { grid-template-columns:1fr; } }
   .homeLeft,.homeRight { display:flex; flex-direction:column; gap:12px; }
@@ -68,7 +68,6 @@
   .statsBox .statRow .lbl { color:var(--muted); font-size:12px; }
   .statsBox .statRow .val { color:var(--accent); font-weight:700; font-size:16px; }
   .statsBox .statRow.live .val { color:var(--green-2); }
-
   .lobbyCenter { background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
   .lobbyCenter .tabs { display:flex; background:var(--panel-2); border-bottom:1px solid var(--border); }
   .lobbyCenter .tabs button { flex:1; background:transparent; border:none; border-radius:0; color:var(--muted); padding:14px 12px; font-weight:600; text-transform:uppercase; font-size:12px; letter-spacing:.5px; border-bottom:2px solid transparent; cursor:pointer; }
@@ -82,7 +81,6 @@
   .quickBtn .qb-time { font-size:26px; font-weight:300; color:var(--text-bright); letter-spacing:.5px; }
   .quickBtn .qb-name { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
   .quickBtn.custom .qb-time { font-size:20px; color:var(--accent); }
-
   .lobbyList { display:flex; flex-direction:column; gap:6px; }
   .lobbyRow { display:grid; grid-template-columns:28px 1fr 80px 90px 90px; gap:10px; padding:10px 14px; align-items:center; background:var(--panel-2); border-radius:6px; border:1px solid var(--border); font-size:13px; transition:.15s; min-height:48px; }
   .lobbyRow:hover { background:var(--panel-hover); }
@@ -94,9 +92,7 @@
   .lobbyRow .mode { font-size:12px; color:var(--muted); text-align:center; }
   .lobbyRow .action { text-align:right; }
   .lobbyRow .action button { padding:6px 14px; font-size:13px; min-width:80px; }
-
   .arenaEmpty { padding:40px 20px; text-align:center; color:var(--muted); font-size:13px; }
-
   .watchWrap { display:grid; grid-template-columns:320px 1fr; gap:16px; max-width:1100px; margin:0 auto; align-items:start; }
   @media (max-width:900px) { .watchWrap { grid-template-columns:1fr; } }
   .watchList { background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden; }
@@ -123,7 +119,6 @@
   .watchBoard .wbBoardWrap { width:100%; aspect-ratio:1/1; max-width:480px; margin:0 auto 12px; position:relative; min-height:400px; }
   .watchBoard .wbBoard { display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); width:100%; height:100%; border:3px solid #0a0a0a; border-radius:4px; box-shadow:0 8px 30px rgba(0,0,0,.5); user-select:none; overflow:hidden; }
   .watchBoard .wbEmpty { padding:80px 20px; text-align:center; color:var(--muted); font-size:14px; }
-
   .arenasHeader { display:flex; justify-content:space-between; align-items:center; margin:0 0 16px 0; }
   .arenasHeader h1 { font-weight:300; font-size:32px; color:var(--text-bright); margin:0; }
   .arenasGridWrap { background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden; }
@@ -150,14 +145,12 @@
   .arenaBlock.classical { background:linear-gradient(180deg,#6f5fbf,#4a3d8f); }
   .nowLine { position:absolute; top:32px; bottom:0; width:2px; background:#e5484d; z-index:3; pointer-events:none; }
   .nowLine::before { content:'▼'; position:absolute; top:-12px; left:50%; transform:translateX(-50%); color:#e5484d; font-size:10px; }
-
   .arenaStatusRow { display:flex; align-items:center; gap:16px; padding:10px 14px; background:var(--panel-2); border-radius:6px; border-left:4px solid var(--accent); }
   .arenaStatusRow.live { border-left-color:var(--green-2); background:rgba(98,153,36,.08); }
   .arenaStatusRow.finished { border-left-color:var(--muted); opacity:.7; }
   .arenaStatusLabel { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.5px; font-weight:700; white-space:nowrap; }
   .arenaStatusTime { font-family:'Roboto Mono','Menlo',monospace; font-size:26px; font-weight:700; color:var(--accent-2); letter-spacing:1px; font-variant-numeric:tabular-nums; }
   .arenaStatusRow.live .arenaStatusTime { color:var(--green-2); }
-
   .arenaInfoCard { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:16px; border-left:4px solid var(--accent); display:flex; flex-direction:column; overflow:hidden; min-height:220px; }
   .aInfoIcon { font-size:32px; margin-bottom:6px; }
   .aInfoTitle { font-size:16px; font-weight:700; color:var(--text-bright); margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -166,7 +159,6 @@
   .aInfoRules { background:var(--panel-2); border-radius:4px; padding:10px; font-size:12px; }
   .aInfoRulesLabel { color:var(--muted); margin-bottom:4px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; font-size:10px; }
   .aInfoRulesText { color:var(--green-2); font-weight:600; line-height:1.5; }
-
   .arenaChatBox { background:var(--panel); border:1px solid var(--border); border-radius:6px; display:flex; flex-direction:column; height:320px; min-height:320px; max-height:320px; overflow:hidden; width:100%; }
   .arenaChatHeader { padding:10px 12px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600; color:var(--text-bright); flex:0 0 auto; }
   .arenaChatMessages { flex:1 1 auto; min-height:0; overflow-y:auto; padding:8px 12px; font-size:13px; display:flex; flex-direction:column; gap:4px; overflow-wrap:anywhere; word-break:break-word; }
@@ -177,24 +169,20 @@
   .arenaChatForm { display:flex; border-top:1px solid var(--border); flex:0 0 auto; }
   .arenaChatForm input { flex:1; border:none; border-radius:0; background:transparent; padding:10px 12px; font-size:13px; }
   .arenaChatForm button { border-radius:0; padding:0 16px; font-size:14px; border:none; background:transparent; color:var(--muted); cursor:pointer; min-width:48px; min-height:40px; }
-
   .arenaTopBar { display:flex; justify-content:space-between; align-items:center; padding:2px 0; min-height:56px; }
   .arenaTopLeft { display:flex; align-items:center; gap:12px; min-width:0; flex:1; }
   .arenaTrophy { font-size:36px; flex-shrink:0; }
   .arenaPageName { margin:0; font-size:22px; font-weight:600; color:var(--accent-2); letter-spacing:-.3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .arenaPageSub { color:var(--muted); font-size:12px; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-
   .arenaPairingBox { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:0 14px; font-size:13px; display:flex; align-items:center; gap:10px; border-left:4px solid var(--accent); width:100%; height:44px; min-height:44px; max-height:44px; box-sizing:border-box; overflow:hidden; }
   .arenaPairingBox.searching { border-left-color:var(--green-2); background:rgba(98,153,36,.08); }
   .arenaPairingBox .spinner { width:14px; height:14px; border-radius:50%; border:2px solid rgba(255,255,255,.25); border-top-color:var(--green-2); animation:spin .9s linear infinite; flex-shrink:0; }
   @keyframes spin { to { transform:rotate(360deg); } }
   .arenaPairingBox span, .arenaPairingBox b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; max-width:100%; vertical-align:middle; }
-
   .arenaParticipantsHeader { display:flex; justify-content:space-between; align-items:center; gap:10px; height:40px; min-height:40px; max-height:40px; }
   .arenaSearch { flex:1; min-width:0; }
   .arenaSearch input { width:100%; padding:6px 12px; font-size:13px; height:32px; box-sizing:border-box; }
   .arenaJoinBtn { width:180px; min-width:180px; max-width:180px; height:40px; min-height:40px; max-height:40px; padding:0 12px; font-weight:700; letter-spacing:.5px; box-sizing:border-box; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-
   .arenaParticipantsTable { background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden; height:340px; min-height:340px; max-height:340px; display:flex; flex-direction:column; }
   .arenaTableHeader { flex:0 0 auto; display:grid; grid-template-columns:36px minmax(0,1fr) 60px 90px 60px; gap:8px; padding:0 12px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; min-height:32px; height:32px; align-items:center; }
   .arenaTableBody { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; }
@@ -215,7 +203,6 @@
   .arenaTableRow .score .streak { color:#ff9c3a; font-size:11px; margin-left:2px; font-weight:600; }
   .arenaTableRow .wdl { color:var(--muted); text-align:center; font-size:12px; overflow:hidden; }
   .arenaTableRow .games { color:var(--muted); text-align:center; font-size:12px; overflow:hidden; }
-
   .arenaWinnerBanner { background:linear-gradient(160deg,#2a2520,#1a1815); border:1px solid var(--accent); border-radius:8px; padding:14px; text-align:center; box-sizing:border-box; }
   .awbTitle { font-size:18px; color:var(--accent-2); font-weight:700; margin-bottom:10px; }
   .awbPodium { display:flex; justify-content:center; align-items:flex-end; gap:8px; }
@@ -229,193 +216,53 @@
   .awbItem.bronze .place { color:#d4904a; }
   .awbItem .n { color:var(--text-bright); font-weight:600; margin:2px 0; font-size:13px; }
   .awbItem .s { color:var(--accent); font-weight:700; font-size:16px; }
-
-  /* ФИКСИРОВАННАЯ СЕТКА АРЕНЫ */
-  .arenaPage {
-    display: grid;
-    grid-template-columns: 280px 480px 300px;
-    gap: 16px;
-    align-items: start;
-    justify-content: center;
-    max-width: 1100px;
-    margin: 0 auto;
+  .arenaPage { display:grid; grid-template-columns:280px 480px 300px; gap:16px; align-items:start; justify-content:center; max-width:1100px; margin:0 auto; }
+  @media (max-width:1110px) { .arenaPage { grid-template-columns:260px 1fr 280px; } }
+  @media (max-width:940px)  { .arenaPage { grid-template-columns:1fr; max-width:500px; } }
+  .arenaLeft   { width:280px; min-width:280px; max-width:280px; display:flex; flex-direction:column; gap:12px; }
+  .arenaCenter { width:480px; min-width:480px; max-width:480px; display:flex; flex-direction:column; gap:10px; }
+  .arenaRight  { width:300px; min-width:300px; max-width:300px; display:flex; flex-direction:column; }
+  @media (max-width:1110px) {
+    .arenaLeft { width:260px; min-width:260px; max-width:260px; }
+    .arenaCenter { width:auto; min-width:0; max-width:none; }
+    .arenaRight { width:280px; min-width:280px; max-width:280px; }
   }
-  @media (max-width: 1110px) { .arenaPage { grid-template-columns: 260px 1fr 280px; } }
-  @media (max-width: 940px)  { .arenaPage { grid-template-columns: 1fr; max-width: 500px; } }
-
-  .arenaLeft   { width: 280px; min-width: 280px; max-width: 280px; display: flex; flex-direction: column; gap: 12px; }
-  .arenaCenter { width: 480px; min-width: 480px; max-width: 480px; display: flex; flex-direction: column; gap: 10px; }
-  .arenaRight  { width: 300px; min-width: 300px; max-width: 300px; display: flex; flex-direction: column; }
-  @media (max-width: 1110px) {
-    .arenaLeft { width: 260px; min-width: 260px; max-width: 260px; }
-    .arenaCenter { width: auto; min-width: 0; max-width: none; }
-    .arenaRight { width: 280px; min-width: 280px; max-width: 280px; }
+  @media (max-width:940px) {
+    .arenaLeft, .arenaCenter, .arenaRight { width:100%; min-width:0; max-width:none; }
   }
-  @media (max-width: 940px) {
-    .arenaLeft, .arenaCenter, .arenaRight { width: 100%; min-width: 0; max-width: none; }
-  }
-
-  /* Панель справа: партия лидеров сверху + список прошлых */
-  .arenaRightCol {
-    height: 576px; min-height: 576px; max-height: 576px;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  .arenaGamesHeader {
-    flex: 0 0 auto;
-    padding: 8px 12px;
-    background: var(--panel-2);
-    border-bottom: 1px solid var(--border);
-    font-size: 10px;
-    color: var(--muted);
-    text-transform: uppercase;
-    letter-spacing: .5px;
-    font-weight: 700;
-  }
-
-  /* Мини-превью партии лидеров */
-  .arenaTopGame {
-    flex: 0 0 auto;
-    padding: 8px;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    box-sizing: border-box;
-  }
-  .arenaTopGameEmpty {
-    padding: 30px 10px;
-    text-align: center;
-    color: var(--muted);
-    font-size: 12px;
-  }
-  .arenaTopGamePlayers {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 12px;
-    color: var(--text-bright);
-    padding: 1px 2px;
-  }
-  .arenaTopGamePlayers .playerRow {
-    display: flex; align-items: center; gap: 4px;
-    min-width: 0; overflow: hidden;
-  }
-  .arenaTopGamePlayers .playerRow .name {
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .arenaTopGamePlayers .playerRow .prat {
-    color: var(--muted); font-size: 11px; flex-shrink: 0;
-  }
-  .arenaTopGamePlayers .time {
-    font-family: 'Roboto Mono','Menlo',monospace;
-    font-weight: 700;
-    font-size: 12px;
-    color: var(--text-bright);
-    background: var(--panel-2);
-    padding: 1px 6px;
-    border-radius: 3px;
-    min-width: 44px;
-    text-align: center;
-    flex-shrink: 0;
-  }
-  .arenaTopGameBoard {
-    display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    grid-template-rows: repeat(8, 1fr);
-    aspect-ratio: 1 / 1;
-    width: 100%;
-    border: 2px solid #0a0a0a;
-    border-radius: 3px;
-    overflow: hidden;
-    box-shadow: 0 4px 12px rgba(0,0,0,.4);
-    user-select: none;
-  }
-  .arenaTopGameBoard .sq {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    overflow: hidden;
-  }
-  .arenaTopGameBoard .sq.light { background: var(--light-sq); }
-  .arenaTopGameBoard .sq.dark { background: var(--dark-sq); }
-  .arenaTopGameBoard .sq .piece {
-    font-size: 18px;
-    line-height: 1;
-    pointer-events: none;
-    position: relative;
-    z-index: 1;
-  }
-  .arenaTopGameBoard .sq .piece.w {
-    color: #fff;
-    text-shadow: -1px -1px 0 #1a1a1a, 1px -1px 0 #1a1a1a, -1px 1px 0 #1a1a1a, 1px 1px 0 #1a1a1a;
-  }
-  .arenaTopGameBoard .sq .piece.b {
-    color: #1e1e1e;
-    text-shadow: -1px -1px 0 #ddd, 1px -1px 0 #ddd, -1px 1px 0 #ddd, 1px 1px 0 #ddd;
-  }
-  .arenaTopGameLink {
-    text-align: center;
-    font-size: 11px;
-    color: var(--accent);
-    cursor: pointer;
-    padding: 3px;
-    border-radius: 3px;
-    flex-shrink: 0;
-  }
-  .arenaTopGameLink:hover { background: var(--panel-hover); }
-
-  /* Список прошлых партий */
-  .arenaGamesList {
-    flex: 1 1 auto;
-    min-height: 0;
-    padding: 6px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
-  .arenaGamesList::-webkit-scrollbar { width: 6px; }
-  .arenaGamesList::-webkit-scrollbar-track { background: transparent; }
-  .arenaGamesList::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-  .arenaGamesList::-webkit-scrollbar-thumb:hover { background: #4a4740; }
-  .arenaGameCard {
-    background: var(--panel-2);
-    border-radius: 4px;
-    padding: 6px 8px;
-    font-size: 11px;
-    border-left: 3px solid var(--accent);
-    flex-shrink: 0;
-  }
-  .arenaGameCard .row1 {
-    display: flex; justify-content: space-between; align-items: center;
-    color: var(--text-bright); font-weight: 600;
-    overflow: hidden;
-  }
-  .arenaGameCard .row1 .res {
-    font-weight: 700; flex-shrink: 0; margin-left: 6px;
-  }
-  .arenaGameCard .row1 .res.w { color: #6ee787; }
-  .arenaGameCard .row1 .res.d { color: var(--accent); }
-  .arenaGameCard .name {
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    min-width: 0; flex: 1;
-  }
-  .arenaGameCard .name .rating { color: var(--muted); font-weight: 400; font-size: 10px; }
-  .arenaGameCard .row2 {
-    color: var(--muted); font-size: 10px; margin-top: 2px;
-    display: flex; justify-content: space-between;
-  }
-
-  .arenaPage * { min-width: 0; }
-  .arenaPage button { flex-shrink: 0; }
-
+  .arenaRightCol { height:576px; min-height:576px; max-height:576px; background:var(--panel); border:1px solid var(--border); border-radius:6px; display:flex; flex-direction:column; overflow:hidden; }
+  .arenaGamesHeader { flex:0 0 auto; padding:8px 12px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
+  .arenaTopGame { flex:0 0 auto; padding:8px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:6px; box-sizing:border-box; }
+  .arenaTopGameEmpty { padding:30px 10px; text-align:center; color:var(--muted); font-size:12px; }
+  .arenaTopGamePlayers { display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--text-bright); padding:1px 2px; }
+  .arenaTopGamePlayers .playerRow { display:flex; align-items:center; gap:4px; min-width:0; overflow:hidden; }
+  .arenaTopGamePlayers .playerRow .name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .arenaTopGamePlayers .playerRow .prat { color:var(--muted); font-size:11px; flex-shrink:0; }
+  .arenaTopGamePlayers .time { font-family:'Roboto Mono','Menlo',monospace; font-weight:700; font-size:12px; color:var(--text-bright); background:var(--panel-2); padding:1px 6px; border-radius:3px; min-width:44px; text-align:center; flex-shrink:0; }
+  .arenaTopGameBoard { display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); aspect-ratio:1/1; width:100%; border:2px solid #0a0a0a; border-radius:3px; overflow:hidden; box-shadow:0 4px 12px rgba(0,0,0,.4); user-select:none; }
+  .arenaTopGameBoard .sq { display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+  .arenaTopGameBoard .sq.light { background:var(--light-sq); }
+  .arenaTopGameBoard .sq.dark { background:var(--dark-sq); }
+  .arenaTopGameBoard .sq .piece { font-size:18px; line-height:1; pointer-events:none; position:relative; z-index:1; }
+  .arenaTopGameBoard .sq .piece.w { color:#fff; text-shadow:-1px -1px 0 #1a1a1a,1px -1px 0 #1a1a1a,-1px 1px 0 #1a1a1a,1px 1px 0 #1a1a1a; }
+  .arenaTopGameBoard .sq .piece.b { color:#1e1e1e; text-shadow:-1px -1px 0 #ddd,1px -1px 0 #ddd,-1px 1px 0 #ddd,1px 1px 0 #ddd; }
+  .arenaTopGameLink { text-align:center; font-size:11px; color:var(--accent); cursor:pointer; padding:3px; border-radius:3px; flex-shrink:0; }
+  .arenaTopGameLink:hover { background:var(--panel-hover); }
+  .arenaGamesList { flex:1 1 auto; min-height:0; padding:6px; display:flex; flex-direction:column; gap:4px; overflow-y:auto; overflow-x:hidden; }
+  .arenaGamesList::-webkit-scrollbar { width:6px; }
+  .arenaGamesList::-webkit-scrollbar-track { background:transparent; }
+  .arenaGamesList::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+  .arenaGamesList::-webkit-scrollbar-thumb:hover { background:#4a4740; }
+  .arenaGameCard { background:var(--panel-2); border-radius:4px; padding:6px 8px; font-size:11px; border-left:3px solid var(--accent); flex-shrink:0; }
+  .arenaGameCard .row1 { display:flex; justify-content:space-between; align-items:center; color:var(--text-bright); font-weight:600; overflow:hidden; }
+  .arenaGameCard .row1 .res { font-weight:700; flex-shrink:0; margin-left:6px; }
+  .arenaGameCard .row1 .res.w { color:#6ee787; }
+  .arenaGameCard .row1 .res.d { color:var(--accent); }
+  .arenaGameCard .name { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1; }
+  .arenaGameCard .name .rating { color:var(--muted); font-weight:400; font-size:10px; }
+  .arenaGameCard .row2 { color:var(--muted); font-size:10px; margin-top:2px; display:flex; justify-content:space-between; }
+  .arenaPage * { min-width:0; }
+  .arenaPage button { flex-shrink:0; }
   .gameWrap { display:grid; grid-template-columns:280px 480px 280px; gap:16px; align-items:start; justify-content:center; margin:0 auto; }
   @media (max-width:1120px) { .gameWrap { grid-template-columns:240px minmax(0,1fr) 260px; } }
   @media (max-width:940px) { .gameWrap { grid-template-columns:1fr; max-width:520px; } .col-chat { order:3; } .col-info { order:2; } .col-board { order:1; } }
@@ -443,7 +290,6 @@
   .dragGhost.b { color:#1e1e1e; text-shadow:-1px -1px 0 #ddd,1px -1px 0 #ddd,-1px 1px 0 #ddd,1px 1px 0 #ddd; }
   .sq.premove-target { box-shadow:inset 0 0 0 4px rgba(74,156,232,.85); }
   .sq.premove-from { box-shadow:inset 0 0 0 4px rgba(74,156,232,.5); }
-
   .col-info { display:flex; flex-direction:column; gap:6px; min-width:0; }
   .clockBox { background:var(--panel); border:1px solid var(--border); border-radius:4px; padding:6px 12px; display:flex; justify-content:space-between; align-items:center; transition:background .2s,color .2s; min-height:44px; }
   .clockBox.active { background:var(--green); color:#0b0b0b; border-color:var(--green-2); }
@@ -505,7 +351,6 @@
   #chatForm { display:flex; border-top:1px solid var(--border); }
   #chatForm input { flex:1; border:none; border-radius:0; background:transparent; padding:10px 12px; font-size:13px; }
   #chatForm button { border-radius:0; padding:0 16px; font-size:14px; border:none; background:transparent; color:var(--muted); cursor:pointer; min-width:48px; min-height:40px; }
-
   .statsGrid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:16px 0; }
   .statBox { background:var(--panel-2); border-radius:6px; padding:12px; text-align:center; min-height:80px; }
   .statBox .v { font-size:22px; font-weight:700; color:var(--accent); }
@@ -521,7 +366,6 @@
   .gameRow .delta.down { color:#ff6b6b; }
   .gameRow .date { color:var(--muted); font-size:12px; text-align:right; }
   .gameRow .opp { color:var(--text-bright); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
-
   .profilePage { max-width:900px; margin:0 auto; }
   .profileHead { display:flex; align-items:center; gap:20px; padding:20px; background:var(--panel); border:1px solid var(--border); border-radius:8px; margin-bottom:16px; }
   .profileAvatar { width:72px; height:72px; border-radius:50%; background:var(--accent); color:#161512; display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:700; flex-shrink:0; position:relative; }
@@ -887,10 +731,15 @@
   const EMOJI = { 'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙','k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟' };
 
   function escapeHtml(s) { return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
-  function nickHtml(username, isAdminFlag) {
+
+  // ⬇⬇⬇ ИЗМЕНЕНО: третья опция isModFlag + красный !
+  function nickHtml(username, isAdminFlag, isModFlag) {
     if (!username) return '';
     const admin = (typeof isAdminFlag === 'boolean') ? isAdminFlag : (username === 'PeshkaSasha' || username === 'admin');
-    return (admin ? '<span class="crown">👑</span>' : '') + escapeHtml(username);
+    const mod = (typeof isModFlag === 'boolean') ? isModFlag : false;
+    const crown = admin ? '<span class="crown">👑</span>' : '';
+    const mark = (!admin && mod) ? '<span class="modMark" title="Модератор">!</span>' : '';
+    return crown + mark + escapeHtml(username);
   }
 
   // ============ ШАХМАТЫ ============
@@ -913,13 +762,9 @@
   }
   const isWhitePiece = p => !!p && p === p.toUpperCase();
   const inBoard = (r,c) => r >= 0 && r < 8 && c >= 0 && c < 8;
-
   function pseudoMoves(state, r, c) {
-    const p = state.board[r][c];
-    if (!p) return [];
-    const moves = [];
-    const white = isWhitePiece(p);
-    const type = p.toLowerCase();
+    const p = state.board[r][c]; if (!p) return [];
+    const moves = []; const white = isWhitePiece(p); const type = p.toLowerCase();
     const dir = white ? -1 : 1;
     const add = (rr, cc) => {
       if (!inBoard(rr, cc)) return false;
@@ -1018,8 +863,7 @@
     return copy;
   }
   function legalMovesFor(state, r, c) {
-    const p = state.board[r][c];
-    if (!p) return [];
+    const p = state.board[r][c]; if (!p) return [];
     const white = isWhitePiece(p);
     return pseudoMoves(state, r, c).filter(([rr, cc]) => !inCheck(applyMoveToCopy(state, [r, c], [rr, cc]), white));
   }
@@ -1069,7 +913,6 @@
       (premove ? premove.from.join(',') + '>' + premove.to.join(',') : '') + '|' + (dragging ? 'drag' : '');
     if (hash === lastBoardHash) return;
     lastBoardHash = hash;
-
     const state = parseFen(fenToShow);
     const boardEl = document.getElementById('board');
     boardEl.innerHTML = '';
@@ -1114,7 +957,6 @@
     }
     updateTurnIndicator(state);
   }
-
   function updateTurnIndicator(state) {
     if (!state) state = parseFen(currentFen);
     const isMy = state.turn === myColor;
@@ -1132,15 +974,12 @@
       bar.textContent = txt;
     }
   }
-
   function boardSquareFromEvent(ev) {
-    const el = document.elementFromPoint(ev.clientX, ev.clientY);
-    if (!el) return null;
+    const el = document.elementFromPoint(ev.clientX, ev.clientY); if (!el) return null;
     const sq = el.closest ? el.closest('.sq') : null;
     if (!sq || sq.dataset.r == null) return null;
     return [ +sq.dataset.r, +sq.dataset.c ];
   }
-
   function applyUserMove(from, to, isPremove) {
     const state = parseFen(currentFen);
     const legal = legalMovesFor(state, from[0], from[1]);
@@ -1161,7 +1000,6 @@
     checkGameEnd(nextState);
     return true;
   }
-
   function onSquareClick(r, c) {
     if (!gameActive || gameEnded || viewIndex !== -1) return;
     const state = parseFen(currentFen);
@@ -1192,7 +1030,6 @@
     else { selected = null; legalMoves = []; }
     lastBoardHash = ''; renderBoard();
   }
-
   document.getElementById('board').addEventListener('click', (ev) => {
     if (dragStartPos && (Math.abs(ev.clientX - dragStartPos.x) > 6 || Math.abs(ev.clientY - dragStartPos.y) > 6)) { dragStartPos = null; return; }
     dragStartPos = null;
@@ -1200,7 +1037,6 @@
     if (!sq || sq.dataset.r == null) return;
     onSquareClick(+sq.dataset.r, +sq.dataset.c);
   });
-
   document.getElementById('board').addEventListener('mousedown', (ev) => {
     if (ev.button !== 0) return;
     const sq = ev.target.closest('.sq');
@@ -1227,7 +1063,6 @@
       startDragGhost(p, ev.clientX, ev.clientY); ev.preventDefault();
     }
   });
-
   let ghostEl = null;
   function startDragGhost(piece, x, y) {
     if (ghostEl) { ghostEl.remove(); ghostEl = null; }
@@ -1239,7 +1074,6 @@
   }
   function moveGhost(x, y) { if (!ghostEl) return; ghostEl.style.display = ''; ghostEl.style.left = x + 'px'; ghostEl.style.top = y + 'px'; }
   function clearGhost() { if (ghostEl) { ghostEl.remove(); ghostEl = null; } }
-
   document.addEventListener('mousemove', (ev) => {
     if (!dragging) return;
     if (!dragging.active) {
@@ -1248,7 +1082,6 @@
     }
     moveGhost(ev.clientX, ev.clientY);
   });
-
   document.addEventListener('mouseup', (ev) => {
     if (!dragging) { dragStartPos = null; return; }
     if (!dragging.active) { dragging = null; clearGhost(); return; }
@@ -1264,7 +1097,6 @@
     const ok = applyUserMove(from, target, wasPremove);
     if (!ok) { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); }
   });
-
   function renderMoves() {
     const el = document.getElementById('movesList');
     el.innerHTML = '';
@@ -1292,7 +1124,6 @@
     lastBoardHash = ''; renderBoard(); renderMoves();
   }
   window.gotoMove = gotoMove;
-
   function checkGameEnd(state) {
     const sideToMoveWhite = state.turn === 'w';
     if (!hasAnyLegalMove(state, sideToMoveWhite)) {
@@ -1300,7 +1131,6 @@
       else { sndDraw(); endGame(null, 'Пат', true, currentGameIsArena); }
     }
   }
-
   function tryApplyPremove() {
     if (!premove) return;
     const state = parseFen(currentFen);
@@ -1316,10 +1146,7 @@
   }
 
   // ============ НАВИГАЦИЯ ============
-  function show(screen) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    const el = document.getElementById(screen); if (el) el.classList.add('active');
-  }
+  function show(screen) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); const el = document.getElementById(screen); if (el) el.classList.add('active'); }
   function navTo(name) {
     if (!me && name !== 'login') { show('loginScreen'); return; }
     const map = { 'lobby':'lobbyScreen','watch':'watchScreen','arenas':'arenasScreen','arenaPage':'arenaPageScreen','profile':'profileScreen','learn':'learnScreen','community':'communityScreen','game':'gameScreen','login':'loginScreen' };
@@ -1338,7 +1165,6 @@
     if (name === 'profile') { if (profileViewing) openProfileView(profileViewing); else if (me) openProfileView(me.username); }
   }
   window.navTo = navTo;
-
   function doLogin() {
     const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
@@ -1354,14 +1180,14 @@
     if (!me) return;
     document.getElementById('userBtn').style.display = 'flex';
     document.getElementById('logoutBtn').style.display = 'block';
-    document.getElementById('userName').innerHTML = nickHtml(me.username, me.isAdmin) + ' (' + me.rating + ')';
+    // ⬇⬇⬇ передаём третьим аргументом флаг модератора
+    document.getElementById('userName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod) + ' (' + me.rating + ')';
     document.getElementById('userAvatar').textContent = me.username.charAt(0).toUpperCase();
   }
   function logout() { location.reload(); }
   window.logout = logout;
   function switchLobbyTab(tab) { currentLobbyTab = tab; document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab)); renderLobbyTab(); }
   window.switchLobbyTab = switchLobbyTab;
-
   function refreshTopArenas() {
     socket.emit('getTopArenas', (list) => {
       const box = document.getElementById('topArenasBox'); if (!box) return;
@@ -1376,7 +1202,6 @@
     });
   }
   window.refreshTopArenas = refreshTopArenas;
-
   function refreshStats() {
     socket.emit('getStats', (s) => {
       if (!s) return;
@@ -1385,7 +1210,6 @@
     });
   }
   window.refreshStats = refreshStats;
-
   function renderLobbyTab() {
     const el = document.getElementById('lobbyTabContent');
     if (currentLobbyTab === 'create') {
@@ -1413,7 +1237,7 @@
           const row = document.createElement('div');
           row.className = 'lobbyRow' + (isMine ? ' mine' : '');
           row.style.cursor = isMine ? 'pointer' : 'default';
-          row.innerHTML = `<div class="icon">♟</div><div class="name">${nickHtml(l.host)}${isMine ? '<span class="mineTag">(ваш вызов)</span>' : ''}</div><div class="time">${l.time}+${l.inc}</div><div class="mode">${l.status === 'waiting' ? 'ожидание' : 'идёт'}</div><div class="action"></div>`;
+          row.innerHTML = `<div class="icon">♟</div><div class="name">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod)}${isMine ? '<span class="mineTag">(ваш вызов)</span>' : ''}</div><div class="time">${l.time}+${l.inc}</div><div class="mode">${l.status === 'waiting' ? 'ожидание' : 'идёт'}</div><div class="action"></div>`;
           if (l.status === 'waiting' && !isMine) {
             const btn = document.createElement('button'); btn.className = 'primary'; btn.textContent = 'Играть';
             btn.onclick = (e) => { e.stopPropagation(); socket.emit('joinLobby', { id: l.id }, (r) => { if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; } lobbyId = r.id || l.id; }); };
@@ -1427,7 +1251,6 @@
     }
   }
   function refreshLobbies() { if (document.getElementById('lobbyScreen').classList.contains('active')) renderLobbyTab(); }
-
   function quickStart(time, inc) {
     socket.emit('createLobby', { time, inc }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
@@ -1448,13 +1271,12 @@
   window.showCustomGame = showCustomGame;
   function createCustomLobby() { quickStart(+document.getElementById('customMin').value || 5, +document.getElementById('customInc').value || 0); }
   window.createCustomLobby = createCustomLobby;
-
   function resetGameUI() {
     document.getElementById('topName').textContent = '—';
     document.getElementById('topRating').textContent = '';
     document.getElementById('topDot').className = 'dot';
     document.getElementById('topTime').textContent = '--:--';
-    document.getElementById('bottomName').innerHTML = me ? nickHtml(me.username, me.isAdmin) : '—';
+    document.getElementById('bottomName').innerHTML = me ? nickHtml(me.username, me.isAdmin, me.isMod) : '—';
     document.getElementById('bottomRating').textContent = me ? me.rating : '';
     document.getElementById('bottomDot').className = 'dot';
     document.getElementById('bottomTime').textContent = '--:--';
@@ -1517,7 +1339,6 @@
   window.offerDraw = offerDraw;
   function flipBoard() { boardFlipped = !boardFlipped; lastBoardHash = ''; renderBoard(); }
   window.flipBoard = flipBoard;
-
   function showDrawOfferDialog(from) {
     const overlay = document.createElement('div');
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;';
@@ -1528,7 +1349,6 @@
     document.getElementById('drawAcceptBtn').onclick = () => { socket.emit('drawAccept', { lobbyId }); overlay.remove(); };
     document.getElementById('drawDeclineBtn').onclick = () => { socket.emit('drawDecline', { lobbyId }); overlay.remove(); };
   }
-
   function renderChatMsg(msg) {
     const box = document.getElementById('chatMessages');
     const div = document.createElement('div');
@@ -1536,7 +1356,8 @@
     const time = new Date(msg.ts).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
     let modHtml = '';
     if (me && me.isMod) modHtml = `<span class="modBtn" data-mod-btn="1" title="Модерация">⚙</span>`;
-    div.innerHTML = `<span class="u">${nickHtml(msg.user, msg.user === 'PeshkaSasha')}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
+    // ⬇⬇⬇ передаём userIsMod с сервера
+    div.innerHTML = `<span class="u">${nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
     if (me && me.isMod) {
       const btn = div.querySelector('.modBtn');
       if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); openModMenu(ev, msg.id, msg.user, 'game', lobbyId); });
@@ -1554,7 +1375,6 @@
     input.value = '';
   }
   window.sendChat = sendChat;
-
   let modMenuEl = null;
   function closeModMenu() { if (modMenuEl) { modMenuEl.remove(); modMenuEl = null; } }
   function openModMenu(ev, msgId, username, scope, scopeId) {
@@ -1581,7 +1401,6 @@
     });
   }
   document.addEventListener('click', (e) => { if (modMenuEl && !modMenuEl.contains(e.target)) closeModMenu(); });
-
   function refreshWatchList(force) {
     socket.emit('getLiveGames', (list) => {
       const box = document.getElementById('watchListBody'); if (!box) return;
@@ -1592,15 +1411,14 @@
         const cls = 'watchRow' + (g.isArena ? ' isArena' : '');
         const arenaTag = g.isArena ? ` · ${escapeHtml(g.arenaName || 'турнир')}` : '';
         return `<div class="${cls}" onclick="watchGame('${g.id}')">
-          <div class="wrPlayers"><span><span class="liveDot"></span>⚪ ${nickHtml(g.white, g.whiteIsAdmin)}${g.whiteRating ? ' <span class="prat">('+g.whiteRating+')</span>' : ''}</span><span>${formatTime(g.timeW)}</span></div>
-          <div class="wrPlayers"><span>⚫ ${nickHtml(g.black, g.blackIsAdmin)}${g.blackRating ? ' <span class="prat">('+g.blackRating+')</span>' : ''}</span><span>${formatTime(g.timeB)}</span></div>
+          <div class="wrPlayers"><span><span class="liveDot"></span>⚪ ${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${g.whiteRating ? ' <span class="prat">('+g.whiteRating+')</span>' : ''}</span><span>${formatTime(g.timeW)}</span></div>
+          <div class="wrPlayers"><span>⚫ ${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${g.blackRating ? ' <span class="prat">('+g.blackRating+')</span>' : ''}</span><span>${formatTime(g.timeB)}</span></div>
           <div class="wrMeta"><span>${g.timeControl}+${g.increment}${arenaTag}</span><span>ход: <b>${g.turn === 'w' ? 'белые' : 'чёрные'}</b></span></div>
         </div>`;
       }).join('');
     });
   }
   window.refreshWatchList = refreshWatchList;
-
   function watchGame(id) {
     if (watchingGameId === id) return;
     if (watchingGameId) socket.emit('unwatchGame', { id: watchingGameId });
@@ -1611,7 +1429,6 @@
     });
   }
   window.watchGame = watchGame;
-
   function renderWatchBoard() {
     const box = document.getElementById('watchBoardBox'); if (!box) return;
     if (!watchingGame) { box.innerHTML = '<div class="wbEmpty">Выбери партию слева</div>'; return; }
@@ -1637,18 +1454,13 @@
     box.innerHTML = `
       <div class="wbHeader"><div><div class="wbTitle">Партия ${g.isArena ? 'турнира' : ''}</div><div class="wbSub">${g.timeControl}+${g.increment}${g.arenaName ? ' · '+escapeHtml(g.arenaName) : ''}</div></div><button class="secondary" onclick="stopWatching()">✕ Выйти</button></div>
       <div class="wbPlayers">
-        <div class="wbPlayer ${blackActive?'active':''}"><span><span class="name">⚫ ${nickHtml(g.black, g.blackIsAdmin)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}</span><span class="time">${formatTime(g.timeB)}</span></div>
-        <div class="wbPlayer ${whiteActive?'active':''}"><span><span class="name">⚪ ${nickHtml(g.white, g.whiteIsAdmin)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}</span><span class="time">${formatTime(g.timeW)}</span></div>
+        <div class="wbPlayer ${blackActive?'active':''}"><span><span class="name">⚫ ${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}</span><span class="time">${formatTime(g.timeB)}</span></div>
+        <div class="wbPlayer ${whiteActive?'active':''}"><span><span class="name">⚪ ${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}</span><span class="time">${formatTime(g.timeW)}</span></div>
       </div>
       <div class="wbBoardWrap"><div class="wbBoard">${squares}</div></div>`;
   }
-  function stopWatching() {
-    if (watchingGameId) socket.emit('unwatchGame', { id: watchingGameId });
-    watchingGameId = null; watchingGame = null; lastWatchBoardHash = '';
-    renderWatchBoard();
-  }
+  function stopWatching() { if (watchingGameId) socket.emit('unwatchGame', { id: watchingGameId }); watchingGameId = null; watchingGame = null; lastWatchBoardHash = ''; renderWatchBoard(); }
   window.stopWatching = stopWatching;
-
   function openOpponentProfile() { if (opponentName && opponentName !== '—') openProfileView(opponentName); }
   window.openOpponentProfile = openOpponentProfile;
   function openProfileView(username) {
@@ -1661,10 +1473,9 @@
     });
   }
   window.openProfileView = openProfileView;
-
   function renderProfilePage(user, games, history) {
     document.getElementById('pAvatarBig').innerHTML = (user.isAdmin ? '<span class="pCrown">👑</span>' : '') + user.username.charAt(0).toUpperCase();
-    document.getElementById('pName').innerHTML = nickHtml(user.username, user.isAdmin);
+    document.getElementById('pName').innerHTML = nickHtml(user.username, user.isAdmin, user.isMod);
     const badges = [];
     if (user.role === 'admin') badges.push('<span class="roleBadge admin">👑 Админ</span>');
     if (user.role === 'moderator') badges.push('<span class="roleBadge mod">🛡 Модератор</span>');
@@ -1690,7 +1501,6 @@
     } else catEl.innerHTML = '';
     renderRatingChart(history); renderGamesList(games, user.username);
   }
-
   function renderRatingChart(history) {
     const wrap = document.getElementById('ratingChartWrap');
     if (!history || history.length < 2) { wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Недостаточно данных</div>'; return; }
@@ -1710,7 +1520,6 @@
     const dots = points.map((p, i) => { const isLast = i === points.length - 1; return `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${isLast?4:2.5}" fill="${isLast?'#bf811d':'#629924'}"/>`; }).join('');
     wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:160px;display:block">${gridLines.join('')}<path d="${pathD}" fill="none" stroke="#bf811d" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>${dots}</svg>`;
   }
-
   function renderGamesList(games, username) {
     const el = document.getElementById('gamesList');
     if (!games || !games.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px">Партий пока нет</div>'; return; }
@@ -1736,7 +1545,6 @@
       el.appendChild(row);
     });
   }
-
   function refreshArenas(force) {
     if (!force && !document.getElementById('arenasScreen').classList.contains('active')) return;
     socket.emit('getArenas', (list) => {
@@ -1764,11 +1572,9 @@
     }, 30000);
   }
   window.refreshArenas = refreshArenas;
-
   function fmtHHMM(ts) { const d = new Date(ts); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
   function formatMMSS(ms) { const t = Math.max(0, Math.floor(ms/1000)); return String(Math.floor(t/60)).padStart(2,'0') + ':' + String(t%60).padStart(2,'0'); }
   function formatTime(s) { s = Math.max(0, Math.floor(s)); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
-
   function renderArenasGrid() {
     const wrap = document.getElementById('arenasGridWrap'); if (!wrap) return;
     if (!arenasCache || !arenasCache.length) { wrap.innerHTML = '<div class="arenasEmpty">Нет доступных арен</div>'; return; }
@@ -1819,7 +1625,6 @@
     const scroller = wrap.querySelector('.arenasScroller');
     if (scroller) scroller.scrollLeft = Math.max(0, nowLeft - 300);
   }
-
   function openArenaPage(arenaId) {
     if (currentArenaId && currentArenaId !== arenaId) socket.emit('leaveArenaRoom', { arenaId: currentArenaId });
     currentArenaId = arenaId;
@@ -1842,18 +1647,13 @@
     arenaGamesRefreshHandle = setInterval(() => { if (document.getElementById('arenaPageScreen').classList.contains('active')) renderArenaGamesList(); }, 3000);
   }
   window.openArenaPage = openArenaPage;
-
   function loadArenaPage() {
     if (!currentArenaId) return;
     if (loadArenaPageBusy) return;
     loadArenaPageBusy = true;
     const arena = arenasCache.find(a => a.id === currentArenaId);
     if (!arena) {
-      socket.emit('getArenas', (list) => {
-        arenasCache = list || [];
-        loadArenaPageBusy = false;
-        if (arenasCache.find(x => x.id === currentArenaId)) loadArenaPage();
-      });
+      socket.emit('getArenas', (list) => { arenasCache = list || []; loadArenaPageBusy = false; if (arenasCache.find(x => x.id === currentArenaId)) loadArenaPage(); });
       return;
     }
     socket.emit('getArenaState', { arenaId: currentArenaId }, (state) => {
@@ -1871,7 +1671,6 @@
       tickArenaStatus();
     });
   }
-
   function tickArenaStatus() {
     if (!currentArenaId) return;
     const row = document.getElementById('arenaStatusRow');
@@ -1884,7 +1683,6 @@
     if (arenaPhase === 'waiting') { lbl.textContent = 'До начала:'; time.textContent = formatMMSS(Math.max(0, arenaStartsAt - serverNow)); return; }
     if (arenaPhase === 'live') { row.classList.add('live'); lbl.textContent = 'До конца:'; time.textContent = formatMMSS(Math.max(0, arenaEndsAt - serverNow)); return; }
   }
-
   function renderArenaPage(arena, state) {
     document.getElementById('arenaPageName').textContent = arena.name;
     const phaseText = { 'waiting':'Начало в '+fmtHHMM(arena.startsAt), 'live':'Идёт сейчас', 'finished':'Завершена' }[state.phase] || '';
@@ -1895,7 +1693,6 @@
     if (state.top3 && state.top3.length) showArenaWinnerBanner(state.top3);
     else document.getElementById('arenaWinnerBanner').style.display = 'none';
   }
-
   function updateArenaJoinButton(state) {
     const wrap = document.getElementById('arenaJoinBtnWrap');
     if (state.phase === 'finished') { wrap.innerHTML = `<button class="secondary" disabled style="width:180px;">ЗАВЕРШЕНА</button>`; return; }
@@ -1909,7 +1706,6 @@
       else wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="pauseCurrentArena()">⏸ ПАУЗА</button>`;
     } else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="joinCurrentArena()">УЧАСТВОВАТЬ</button>`;
   }
-
   function renderArenaPairingBox(state) {
     const box = document.getElementById('arenaPairingBox'); if (!box) return;
     if (state.phase !== 'live') { box.style.display = 'none'; return; }
@@ -1919,7 +1715,6 @@
     box.style.display = 'flex'; box.classList.add('searching');
     box.innerHTML = `<div class="spinner"></div><span>Ожидайте, идёт жеребьёвка…</span>`;
   }
-
   function renderArenaParticipants(arena, state) {
     const body = document.getElementById('arenaTableBody');
     const list = state.participants || [];
@@ -1937,7 +1732,8 @@
       let streakTag = '';
       if (p.winStreak >= 3) streakTag = `<span class="streak">🔥${p.winStreak}</span>`;
       else if (p.drawStreak >= 2) streakTag = `<span class="streak">½${p.drawStreak}</span>`;
-      return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''}"><span class="place ${placeCls}">${place}</span><span class="pname">${nickHtml(p.username, p.isAdmin)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
+      // ⬇⬇⬇ передаём p.isMod
+      return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''}"><span class="place ${placeCls}">${place}</span><span class="pname">${nickHtml(p.username, p.isAdmin, p.isMod)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
     }).join('');
   }
   function filterArenaParticipants() {
@@ -1947,7 +1743,6 @@
     }
   }
   window.filterArenaParticipants = filterArenaParticipants;
-
   function renderArenaGamesList() {
     const topEl = document.getElementById('arenaTopGame');
     const listEl = document.getElementById('arenaGamesList');
@@ -1959,7 +1754,6 @@
       const hash = JSON.stringify({ live: live.map(g => [g.lobbyId, g.fen, g.timeW, g.timeB]), done: done.slice(0, 30).map(g => [g.white, g.black, g.result, g.finishedAt]) });
       if (hash === lastArenaGamesHash) return;
       lastArenaGamesHash = hash;
-
       if (live.length) {
         const g = live[0];
         topEl.innerHTML = renderArenaTopGame(g);
@@ -1968,11 +1762,7 @@
       } else {
         topEl.innerHTML = '<div class="arenaTopGameEmpty">Сейчас никто не играет</div>';
       }
-
-      if (!done.length) {
-        listEl.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>';
-        return;
-      }
+      if (!done.length) { listEl.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>'; return; }
       listEl.innerHTML = done.slice(0, 50).map(g => {
         const resChar = g.result === 'w' ? '1-0' : (g.result === 'b' ? '0-1' : '½-½');
         const resCls = g.result === 'draw' ? 'd' : 'w';
@@ -1981,18 +1771,17 @@
         const bR = g.blackRating ? `<span class="rating"> ${g.blackRating}</span>` : '';
         return `<div class="arenaGameCard">
           <div class="row1">
-            <span class="name">⚪ ${nickHtml(g.white, g.whiteIsAdmin)}${wR}</span>
+            <span class="name">⚪ ${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${wR}</span>
             <span class="res ${resCls}">${resChar}</span>
           </div>
           <div class="row1">
-            <span class="name">⚫ ${nickHtml(g.black, g.blackIsAdmin)}${bR}</span>
+            <span class="name">⚫ ${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${bR}</span>
           </div>
           <div class="row2"><span>завершена</span><span>${dateStr}</span></div>
         </div>`;
       }).join('');
     });
   }
-
   function renderArenaTopGame(g) {
     const state = parseFen(g.fen);
     const flip = false;
@@ -2004,10 +1793,7 @@
         const cls = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
         const p = state.board[r][c];
         let inner = '';
-        if (p) {
-          const isW = p === p.toUpperCase();
-          inner = `<span class="piece ${isW ? 'w' : 'b'}">${EMOJI[p]}</span>`;
-        }
+        if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW ? 'w' : 'b'}">${EMOJI[p]}</span>`; }
         squares += `<div class="${cls}">${inner}</div>`;
       }
     }
@@ -2017,18 +1803,17 @@
     const bR = g.blackRating ? `<span class="prat">${g.blackRating}</span>` : '';
     return `
       <div class="arenaTopGamePlayers">
-        <span class="playerRow">⚫ <span class="name">${nickHtml(g.black, g.blackIsAdmin)}</span>${bR}</span>
+        <span class="playerRow">⚫ <span class="name">${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span>
         <span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${formatTime(g.timeB)}</span>
       </div>
       <div class="arenaTopGameBoard">${squares}</div>
       <div class="arenaTopGamePlayers">
-        <span class="playerRow">⚪ <span class="name">${nickHtml(g.white, g.whiteIsAdmin)}</span>${wR}</span>
+        <span class="playerRow">⚪ <span class="name">${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span>
         <span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${formatTime(g.timeW)}</span>
       </div>
       <div class="arenaTopGameLink">▶ Смотреть партию</div>
     `;
   }
-
   function showArenaWinnerBanner(top3) {
     const banner = document.getElementById('arenaWinnerBanner');
     const podium = document.getElementById('awbPodium');
@@ -2038,7 +1823,6 @@
     podium.innerHTML = order.map(i => { const p = top3[i]; if (!p) return ''; return `<div class="awbItem ${medals[i]}"><div class="place">${places[i]}</div><div class="n">${nickHtml(p.username, p.username === 'PeshkaSasha')}</div><div class="s">${p.score}</div></div>`; }).join('');
     banner.style.display = 'block';
   }
-
   function joinCurrentArena() {
     if (!currentArenaId) return;
     socket.emit('joinArena', { arenaId: currentArenaId }, (res) => {
@@ -2067,7 +1851,6 @@
     });
   }
   window.leaveCurrentArena = leaveCurrentArena;
-
   function sendArenaChat(e) {
     e.preventDefault();
     const input = document.getElementById('arenaChatInput');
@@ -2077,7 +1860,6 @@
     input.value = '';
   }
   window.sendArenaChat = sendArenaChat;
-
   function renderArenaChatMsg(msg) {
     const box = document.getElementById('arenaChatMessages');
     const div = document.createElement('div');
@@ -2087,7 +1869,8 @@
       const time = new Date(msg.ts).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
       let modHtml = '';
       if (me && me.isMod) modHtml = `<span class="modBtn always" title="Модерация" style="cursor:pointer;color:var(--muted);margin-left:6px;">⚙</span>`;
-      div.innerHTML = `<span class="u">${nickHtml(msg.user, msg.user === 'PeshkaSasha')}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
+      // ⬇⬇⬇ передаём userIsMod/userIsAdmin
+      div.innerHTML = `<span class="u">${nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
       if (me && me.isMod) {
         const btn = div.querySelector('.modBtn');
         if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); openModMenu(ev, msg.id, msg.user, 'arena', currentArenaId); });
@@ -2097,31 +1880,26 @@
     while (box.children.length > 200) box.removeChild(box.firstChild);
     box.scrollTop = box.scrollHeight;
   }
-
   function updateTimers() {
     document.getElementById('topTime').textContent = formatTime(oppTime);
     document.getElementById('bottomTime').textContent = formatTime(myTime);
     document.getElementById('topClock').classList.toggle('low', oppTime <= 20);
     document.getElementById('bottomClock').classList.toggle('low', myTime <= 20);
   }
-
-  // ============ СОБЫТИЯ ============
   socket.on('stats', (s) => {
     if (!s) return;
     const e1 = document.getElementById('statOnline'), e2 = document.getElementById('statGames'), e3 = document.getElementById('statActive');
     if (e1) e1.textContent = s.online; if (e2) e2.textContent = s.games; if (e3) e3.textContent = s.activeGames || 0;
     if (document.getElementById('watchScreen').classList.contains('active')) refreshWatchList(false);
   });
-
   socket.on('lobbiesUpdate', () => { if (document.getElementById('lobbyScreen').classList.contains('active')) refreshLobbies(); });
-
-  socket.on('gameStart', ({ color, opponent, opponentRating: oppRating, time, inc: gameInc, lobbyId: id, fen, chat, arenaId, arenaName }) => {
+  socket.on('gameStart', ({ color, opponent, opponentRating: oppRating, time, inc: gameInc, lobbyId: id, fen, chat, arenaId, arenaName, opponentIsAdmin: oppIsAdmin, opponentIsMod: oppIsMod }) => {
     if (id) lobbyId = id;
     myColor = color || 'w';
     inc = gameInc || 0;
     opponentName = opponent || 'Соперник';
     opponentRating = oppRating || null;
-    opponentIsAdmin = opponentName === 'PeshkaSasha';
+    opponentIsAdmin = (typeof oppIsAdmin === 'boolean') ? oppIsAdmin : (opponentName === 'PeshkaSasha');
     myTime = time * 60; oppTime = time * 60;
     currentFen = fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
     selected = null; legalMoves = []; moveHistory = []; moveFens = [];
@@ -2132,11 +1910,11 @@
     currentArenaId = arenaId || null;
     currentArenaName = arenaName || null;
     lastBoardHash = '';
-    document.getElementById('bottomName').innerHTML = nickHtml(me.username, me.isAdmin);
+    document.getElementById('bottomName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod);
     document.getElementById('bottomRating').textContent = me.rating;
     document.getElementById('bottomDot').className = 'dot ' + (myColor === 'w' ? 'w' : 'b');
     document.getElementById('bottomTime').textContent = formatTime(time * 60);
-    document.getElementById('topName').innerHTML = nickHtml(opponentName, opponentIsAdmin);
+    document.getElementById('topName').innerHTML = nickHtml(opponentName, opponentIsAdmin, oppIsMod);
     document.getElementById('topRating').textContent = opponentRating || '';
     document.getElementById('topDot').className = 'dot ' + (myColor === 'w' ? 'b' : 'w');
     document.getElementById('topTime').textContent = formatTime(time * 60);
@@ -2149,32 +1927,21 @@
     renderBoard(); renderMoves(); updateTimers();
     sndStart();
   });
-
   socket.on('boardUpdate', ({ fen, san }) => {
     if (!gameActive || gameEnded) return;
-    currentFen = fen;
-    selected = null; legalMoves = []; viewIndex = -1;
+    currentFen = fen; selected = null; legalMoves = []; viewIndex = -1;
     if (san) { moveHistory.push(san); moveFens.push(fen); }
-    renderMoves();
-    lastBoardHash = ''; renderBoard();
+    renderMoves(); lastBoardHash = ''; renderBoard();
     const state = parseFen(currentFen);
-    if (san) {
-      if (san.includes('#')) sndMate();
-      else if (san.includes('+')) sndCheck();
-      else if (san.includes('x')) sndCapture();
-      else sndMove();
-    }
-    checkGameEnd(state);
-    tryApplyPremove();
+    if (san) { if (san.includes('#')) sndMate(); else if (san.includes('+')) sndCheck(); else if (san.includes('x')) sndCapture(); else sndMove(); }
+    checkGameEnd(state); tryApplyPremove();
   });
-
   socket.on('timeUpdate', ({ timeW, timeB }) => {
     if (!gameActive) return;
     myTime = myColor === 'w' ? timeW : timeB;
     oppTime = myColor === 'w' ? timeB : timeW;
     updateTimers();
   });
-
   socket.on('gameEnded', ({ result, reason, isArena, arenaId }) => {
     if (gameEnded) return;
     let winner = null;
@@ -2184,14 +1951,8 @@
     if (arenaId) currentArenaId = arenaId;
     endGame(winner, reason, true, currentGameIsArena);
   });
-
   socket.on('drawOffered', ({ from }) => showDrawOfferDialog(from || 'Соперник'));
-  socket.on('drawDeclined', () => {
-    document.getElementById('statusBar').className = 'statusYellow';
-    document.getElementById('statusBar').textContent = 'Соперник отклонил ничью';
-    pendingDrawOffer = false;
-  });
-
+  socket.on('drawDeclined', () => { document.getElementById('statusBar').className = 'statusYellow'; document.getElementById('statusBar').textContent = 'Соперник отклонил ничью'; pendingDrawOffer = false; });
   socket.on('chatMessage', (msg) => renderChatMsg(msg));
   socket.on('chatMessageDeleted', ({ msgId }) => {
     const el = document.querySelector(`#chatMessages .msg[data-msg-id="${msgId}"]`); if (el) el.remove();
@@ -2203,49 +1964,34 @@
     if (info.action === 'mute' && me && info.target === me.username) alert(`Вы заглушены на ${info.minutes} мин. модератором ${info.by}.`);
     if (info.action === 'unmute' && me && info.target === me.username) alert('С вас снят мут.');
   });
-
   socket.on('opponentLeft', () => { if (!gameActive) return; alert('Соперник отключился'); cleanupGame(); navTo('lobby'); });
   socket.on('connect_error', () => console.warn('Не удалось подключиться'));
-
   socket.on('arenaChatMessage', (msg) => { if (currentArenaId && msg.arenaId === currentArenaId) renderArenaChatMsg(msg); });
   socket.on('arenaUpdate', ({ arenaId }) => {
     if (currentArenaId === arenaId) {
-      lastArenaStateHash = '';
-      lastArenaGamesHash = '';
-      if (document.getElementById('arenaPageScreen').classList.contains('active')) {
-        loadArenaPage();
-        renderArenaGamesList();
-      }
+      lastArenaStateHash = ''; lastArenaGamesHash = '';
+      if (document.getElementById('arenaPageScreen').classList.contains('active')) { loadArenaPage(); renderArenaGamesList(); }
     }
     if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas();
     if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas();
   });
   socket.on('arenaStarted', ({ arenaId }) => {
     if (currentArenaId === arenaId) {
-      lastArenaStateHash = '';
-      lastArenaGamesHash = '';
-      if (document.getElementById('arenaPageScreen').classList.contains('active')) {
-        loadArenaPage();
-        renderArenaGamesList();
-      }
+      lastArenaStateHash = ''; lastArenaGamesHash = '';
+      if (document.getElementById('arenaPageScreen').classList.contains('active')) { loadArenaPage(); renderArenaGamesList(); }
     }
     if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas();
     if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas();
   });
   socket.on('arenaFinished', ({ arenaId, top3 }) => {
     if (currentArenaId === arenaId) {
-      lastArenaStateHash = '';
-      lastArenaGamesHash = '';
-      if (document.getElementById('arenaPageScreen').classList.contains('active')) {
-        loadArenaPage();
-        renderArenaGamesList();
-      }
+      lastArenaStateHash = ''; lastArenaGamesHash = '';
+      if (document.getElementById('arenaPageScreen').classList.contains('active')) { loadArenaPage(); renderArenaGamesList(); }
       if (top3 && top3.length) showArenaWinnerBanner(top3);
     }
     if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas();
     if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas();
   });
-
   topArenasRefreshHandle = setInterval(() => {
     if (document.getElementById('lobbyScreen').classList.contains('active')) { refreshTopArenas(); refreshStats(); }
     if (document.getElementById('watchScreen').classList.contains('active')) {
@@ -2258,7 +2004,6 @@
       }
     }
   }, 5000);
-
   document.getElementById('password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
 })();
 </script>
