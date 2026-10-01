@@ -2,8 +2,8 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
-const fs = require('fs');
 const crypto = require('crypto');
+const { Pool } = require('pg');
 
 const app = express();
 const server = http.createServer(app);
@@ -17,51 +17,94 @@ const io = new Server(server, {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ======================= ХРАНИЛИЩЕ =======================
-const DB_PATH = process.env.RAILWAY_ENVIRONMENT
-  ? path.join('/app/data', 'data.json')
-  : (process.env.RENDER ? '/data/data.json' : path.join(__dirname, 'data.json'));
+// ======================= БАЗА ДАННЫХ =======================
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('render.com')
+    ? { rejectUnauthorized: false }
+    : false
+});
 
+async function initDB() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      username TEXT PRIMARY KEY,
+      password_hash TEXT NOT NULL,
+      salt TEXT NOT NULL,
+      rating INTEGER NOT NULL DEFAULT 1200,
+      wins INTEGER NOT NULL DEFAULT 0,
+      losses INTEGER NOT NULL DEFAULT 0,
+      draws INTEGER NOT NULL DEFAULT 0,
+      games INTEGER NOT NULL DEFAULT 0,
+      created_at BIGINT NOT NULL
+    );
+  `);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS games (
+      id SERIAL PRIMARY KEY,
+      white TEXT NOT NULL,
+      black TEXT NOT NULL,
+      result TEXT NOT NULL,
+      reason TEXT,
+      time_control REAL,
+      increment INTEGER,
+      white_before INTEGER,
+      black_before INTEGER,
+      white_after INTEGER,
+      black_after INTEGER,
+      finished_at BIGINT NOT NULL
+    );
+  `);
+  console.log('[DB] Схема готова');
+}
+
+// Пользователи в памяти (для быстрого доступа)
 let db = { users: {}, games: [] };
 
-function loadDB() {
-  try {
-    const dir = path.dirname(DB_PATH);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    if (fs.existsSync(DB_PATH)) {
-      const raw = fs.readFileSync(DB_PATH, 'utf8');
-      const parsed = JSON.parse(raw);
-      db.users = parsed.users || {};
-      db.games = parsed.games || [];
-      console.log(`[DB] Загружено: ${Object.keys(db.users).length} игроков, ${db.games.length} партий`);
-    } else {
-      console.log('[DB] Файл не найден — создаю новый');
-      saveDBNow();
-    }
-  } catch (err) {
-    console.error('[DB] Ошибка чтения:', err.message);
-    db = { users: {}, games: [] };
-    saveDBNow();
+async function loadDB() {
+  const res = await pool.query('SELECT * FROM users');
+  db.users = {};
+  for (const row of res.rows) {
+    db.users[row.username] = {
+      passwordHash: row.password_hash,
+      salt: row.salt,
+      rating: row.rating,
+      wins: row.wins,
+      losses: row.losses,
+      draws: row.draws,
+      games: row.games,
+      createdAt: Number(row.created_at)
+    };
   }
+  console.log(`[DB] Загружено: ${Object.keys(db.users).length} игроков`);
 }
 
-let saveTimer = null;
-function saveDB() {
-  if (saveTimer) return;
-  saveTimer = setTimeout(() => {
-    saveTimer = null;
-    try { fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), 'utf8'); }
-    catch (err) { console.error('[DB] Ошибка записи:', err.message); }
-  }, 200);
+async function saveUser(username) {
+  const u = db.users[username];
+  if (!u) return;
+  await pool.query(
+    `INSERT INTO users (username, password_hash, salt, rating, wins, losses, draws, games, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     ON CONFLICT (username) DO UPDATE SET
+       rating = EXCLUDED.rating,
+       wins = EXCLUDED.wins,
+       losses = EXCLUDED.losses,
+       draws = EXCLUDED.draws,
+       games = EXCLUDED.games`,
+    [username, u.passwordHash, u.salt, u.rating, u.wins, u.losses, u.draws, u.games, u.createdAt]
+  );
 }
-function saveDBNow() {
-  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
-  try {
-    const dir = path.dirname(DB_PATH);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2), 'utf8');
-  }
-  catch (err) { console.error('[DB] Ошибка записи:', err.message); }
+
+async function saveGame(game) {
+  await pool.query(
+    `INSERT INTO games (white, black, result, reason, time_control, increment,
+                        white_before, black_before, white_after, black_after, finished_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+    [game.white, game.black, game.result, game.reason,
+     game.timeControl, game.increment,
+     game.whiteBefore, game.blackBefore, game.whiteAfter, game.blackAfter,
+     game.finishedAt]
+  );
 }
 
 // ======================= ПАРОЛИ =======================
@@ -145,7 +188,7 @@ function cleanupStuckPlaying() {
 }
 setInterval(cleanupStuckPlaying, 10000);
 
-// ======================= СПИСОК ТЕКУЩИХ ПАРТИЙ (для просмотра) =======================
+// ======================= СПИСОК ТЕКУЩИХ ПАРТИЙ =======================
 function buildGamesList() {
   const list = [];
   for (const [id, l] of lobbies.entries()) {
@@ -160,24 +203,20 @@ function buildGamesList() {
       black: blackName,
       whiteRating: whiteU ? whiteU.rating : null,
       blackRating: blackU ? blackU.rating : null,
-      timeW: l.timeW,
-      timeB: l.timeB,
+      timeW: l.timeW, timeB: l.timeB,
       turn: l.turn,
-      timeControl: l.time,
-      increment: l.inc,
+      timeControl: l.time, increment: l.inc,
       isArena: !!l.arenaId,
       arenaName: l.arenaName || null,
-      fen: l.fen,
-      lastMoveSan: l.chat && l.chat.length ? null : null
+      fen: l.fen
     });
   }
-  // Сортируем: сначала турнирные, потом обычные
   list.sort((a, b) => (b.isArena ? 1 : 0) - (a.isArena ? 1 : 0));
   return list;
 }
 
 // ======================= ФИНАЛИЗАЦИЯ ПАРТИИ =======================
-function finishGame(lobbyId, result, reason) {
+async function finishGame(lobbyId, result, reason) {
   const l = lobbies.get(lobbyId);
   if (!l || l.finished) return;
   l.finished = true;
@@ -217,16 +256,23 @@ function finishGame(lobbyId, result, reason) {
   else blackUser.draws++;
   blackUser.games++;
 
-  db.games.push({
+  const gameRecord = {
     white: whiteName, black: blackName, result, reason,
     timeControl: l.time, increment: l.inc,
     whiteBefore, blackBefore, whiteAfter, blackAfter,
     finishedAt: Date.now()
-  });
-  if (db.games.length > 10000) db.games.splice(0, db.games.length - 10000);
+  };
+  db.games.push(gameRecord);
+  if (db.games.length > 10000) db.games.shift();
 
-  saveDBNow();
-  console.log(`[game] ${whiteName}(${whiteBefore}→${whiteAfter}) vs ${blackName}(${blackBefore}→${blackAfter}) = ${result} (${reason})`);
+  try {
+    await saveUser(whiteName);
+    await saveUser(blackName);
+    await saveGame(gameRecord);
+    console.log(`[DB] Сохранено: ${whiteName} vs ${blackName} = ${result}`);
+  } catch (err) {
+    console.error('[DB] Ошибка сохранения партии:', err.message);
+  }
 
   const isArena = !!l.arenaId;
   io.to(lobbyId).emit('gameEnded', {
@@ -669,7 +715,7 @@ io.on('connection', (socket) => {
     activeGames: countActiveLobbies()
   });
 
-  socket.on('register', ({ username, password }, cb) => {
+  socket.on('register', async ({ username, password }, cb) => {
     if (typeof cb !== 'function') return;
     if (!username || !password) return cb({ ok: false, msg: 'Заполните поля' });
     if (typeof username !== 'string' || username.length < 2 || username.length > 32) {
@@ -694,7 +740,11 @@ io.on('connection', (socket) => {
         wins: 0, losses: 0, draws: 0, games: 0,
         createdAt: Date.now()
       };
-      saveDB();
+      try {
+        await saveUser(username);
+      } catch (err) {
+        console.error('[DB] Ошибка сохранения пользователя:', err.message);
+      }
     }
     online.set(socket.id, username);
     socket.username = username;
@@ -702,21 +752,43 @@ io.on('connection', (socket) => {
     broadcastOnline();
   });
 
-  socket.on('getProfile', ({ username }, cb) => {
+  socket.on('getProfile', async ({ username }, cb) => {
     if (typeof cb !== 'function') return;
     const u = db.users[username];
     if (!u) return cb({ ok: false, msg: 'Игрок не найден' });
-    const games = db.games
-      .filter(g => g.white === username || g.black === username)
-      .slice(-50).reverse();
-    const history = [{ ts: u.createdAt, rating: 1200 }];
-    for (const g of db.games) {
-      if (g.white === username || g.black === username) {
-        const isWhite = g.white === username;
-        history.push({ ts: g.finishedAt, rating: isWhite ? g.whiteAfter : g.blackAfter });
+
+    try {
+      const gamesRes = await pool.query(
+        `SELECT * FROM games WHERE white = $1 OR black = $1 ORDER BY finished_at DESC LIMIT 50`,
+        [username]
+      );
+      const games = gamesRes.rows.map(r => ({
+        white: r.white, black: r.black, result: r.result, reason: r.reason,
+        timeControl: r.time_control, increment: r.increment,
+        whiteBefore: r.white_before, blackBefore: r.black_before,
+        whiteAfter: r.white_after, blackAfter: r.black_after,
+        finishedAt: Number(r.finished_at)
+      }));
+
+      const historyRes = await pool.query(
+        `SELECT white, black, white_after, black_after, finished_at FROM games
+         WHERE white = $1 OR black = $1 ORDER BY finished_at ASC`,
+        [username]
+      );
+      const history = [{ ts: u.createdAt, rating: 1200 }];
+      for (const r of historyRes.rows) {
+        const isWhite = r.white === username;
+        history.push({
+          ts: Number(r.finished_at),
+          rating: isWhite ? r.white_after : r.black_after
+        });
       }
+
+      cb({ ok: true, user: publicUser(username), games, history });
+    } catch (err) {
+      console.error('[DB] Ошибка загрузки профиля:', err.message);
+      cb({ ok: false, msg: 'Ошибка базы данных' });
     }
-    cb({ ok: true, user: publicUser(username), games, history });
   });
 
   socket.on('getStats', (cb) => {
@@ -729,13 +801,11 @@ io.on('connection', (socket) => {
     cb(getTopLiveArenas());
   });
 
-  // Список текущих партий для просмотра
   socket.on('getLiveGames', (cb) => {
     if (typeof cb !== 'function') return;
     cb(buildGamesList());
   });
 
-  // Подписка на просмотр конкретной партии
   socket.on('watchGame', ({ id }, cb) => {
     const l = lobbies.get(id);
     if (!l || l.finished || !l.started) {
@@ -754,8 +824,7 @@ io.on('connection', (socket) => {
         blackRating: db.users[blackName] ? db.users[blackName].rating : null,
         timeW: l.timeW, timeB: l.timeB,
         turn: l.turn,
-        timeControl: l.time,
-        increment: l.inc,
+        timeControl: l.time, increment: l.inc,
         fen: l.fen,
         isArena: !!l.arenaId,
         arenaName: l.arenaName || null
@@ -1131,19 +1200,27 @@ io.on('connection', (socket) => {
 });
 
 // ======================= ЗАПУСК =======================
-loadDB();
-getArenaSchedule(48);
+(async () => {
+  try {
+    await initDB();
+    await loadDB();
+  } catch (err) {
+    console.error('[DB] Не удалось инициализировать базу данных:', err.message);
+    console.error('Проверь переменную DATABASE_URL в Variables сервиса.');
+  }
+  getArenaSchedule(48);
 
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log('==================================================');
-  console.log('  Kingside — сервер запущен');
-  console.log(`  Локально:  http://localhost:${PORT}`);
-  console.log(`  Порт:      ${PORT}`);
-  console.log(`  База:      ${DB_PATH}`);
-  console.log('==================================================');
-});
+  const PORT = process.env.PORT || 3000;
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log('==================================================');
+    console.log('  Kingside — сервер запущен');
+    console.log(`  Локально:  http://localhost:${PORT}`);
+    console.log(`  Порт:      ${PORT}`);
+    console.log(`  База:      PostgreSQL`);
+    console.log('==================================================');
+  });
+})();
 
-process.on('SIGINT', () => { saveDBNow(); process.exit(0); });
-process.on('SIGTERM', () => { saveDBNow(); process.exit(0); });
+process.on('SIGINT', () => { process.exit(0); });
+process.on('SIGTERM', () => { process.exit(0); });
 process.on('uncaughtException', (err) => { console.error('[Server] Ошибка:', err); });
