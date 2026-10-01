@@ -356,6 +356,8 @@
   .statBox .v { font-size:22px; font-weight:700; color:var(--accent); }
   .statBox .l { font-size:11px; color:var(--muted); margin-top:4px; text-transform:uppercase; letter-spacing:.5px; }
   .ratingChart { background:var(--panel-2); border-radius:6px; padding:12px; margin:16px 0; }
+  .chartLegendItem { transition:.15s; user-select:none; }
+  .chartLegendItem:hover { background:var(--panel-hover); }
   .gamesList { margin-top:8px; }
   .gameRow { display:grid; grid-template-columns:50px 1fr 100px 110px; gap:8px; padding:8px 10px; border-radius:6px; background:var(--panel-2); margin-bottom:4px; font-size:13px; align-items:center; min-height:44px; }
   .gameRow .res { font-weight:700; text-align:center; }
@@ -566,7 +568,8 @@
         <div class="statBox"><div class="v" id="pWinrate">—</div><div class="l">Winrate</div></div>
       </div>
       <div class="ratingChart">
-        <div style="color:var(--muted);font-size:12px;margin-bottom:8px">📈 Динамика рейтинга</div>
+        <div style="color:var(--muted);font-size:12px;margin-bottom:8px">📈 Динамика рейтинга по категориям</div>
+        <div id="ratingChartLegend" style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; font-size:12px;"></div>
         <div id="ratingChartWrap"></div>
       </div>
       <h3 style="margin:16px 0 8px; color:var(--text-bright); font-weight:500">Последние партии</h3>
@@ -728,11 +731,16 @@
   let dragStartPos = null;
   let premove = null;
 
+  // Для графика рейтинга по категориям
+  const CAT_COLORS = { classical: '#6f5fbf', rapid: '#4a9ce8', blitz: '#7db63a', bullet: '#c94a3a' };
+  const CAT_NAMES  = { classical: 'Классика', rapid: 'Рапид', blitz: 'Блиц', bullet: 'Пуля' };
+  let hiddenCats = new Set();
+  let lastHistoryByCat = null;
+
   const EMOJI = { 'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙','k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟' };
 
   function escapeHtml(s) { return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
 
-  // ⬇⬇⬇ ИЗМЕНЕНО: третья опция isModFlag + красный !
   function nickHtml(username, isAdminFlag, isModFlag) {
     if (!username) return '';
     const admin = (typeof isAdminFlag === 'boolean') ? isAdminFlag : (username === 'PeshkaSasha' || username === 'admin');
@@ -1180,7 +1188,6 @@
     if (!me) return;
     document.getElementById('userBtn').style.display = 'flex';
     document.getElementById('logoutBtn').style.display = 'block';
-    // ⬇⬇⬇ передаём третьим аргументом флаг модератора
     document.getElementById('userName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod) + ' (' + me.rating + ')';
     document.getElementById('userAvatar').textContent = me.username.charAt(0).toUpperCase();
   }
@@ -1356,7 +1363,6 @@
     const time = new Date(msg.ts).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
     let modHtml = '';
     if (me && me.isMod) modHtml = `<span class="modBtn" data-mod-btn="1" title="Модерация">⚙</span>`;
-    // ⬇⬇⬇ передаём userIsMod с сервера
     div.innerHTML = `<span class="u">${nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
     if (me && me.isMod) {
       const btn = div.querySelector('.modBtn');
@@ -1469,11 +1475,11 @@
     document.querySelectorAll('#mainNav a').forEach(a => a.classList.remove('active'));
     socket.emit('getProfile', { username }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      renderProfilePage(res.user, res.games, res.history);
+      renderProfilePage(res.user, res.games, res.history, res.historyByCat);
     });
   }
   window.openProfileView = openProfileView;
-  function renderProfilePage(user, games, history) {
+  function renderProfilePage(user, games, history, historyByCat) {
     document.getElementById('pAvatarBig').innerHTML = (user.isAdmin ? '<span class="pCrown">👑</span>' : '') + user.username.charAt(0).toUpperCase();
     document.getElementById('pName').innerHTML = nickHtml(user.username, user.isAdmin, user.isMod);
     const badges = [];
@@ -1499,27 +1505,115 @@
         return `<div class="catCard ${c.key}"><div class="catIcon">${c.icon}</div><div class="catName">${c.name}</div><div class="catRating">${r.rating}</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">${r.games||0} партий</div></div>`;
       }).join('');
     } else catEl.innerHTML = '';
-    renderRatingChart(history); renderGamesList(games, user.username);
+    renderRatingChart(history, historyByCat);
+    renderGamesList(games, user.username);
   }
-  function renderRatingChart(history) {
+
+  // ============ ГРАФИК РЕЙТИНГА (4 категории) ============
+  function renderRatingChart(history, historyByCat) {
     const wrap = document.getElementById('ratingChartWrap');
-    if (!history || history.length < 2) { wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Недостаточно данных</div>'; return; }
-    const W = 600, H = 160, PAD = 30;
-    const ratings = history.map(h => h.rating);
-    const minR = Math.min(...ratings) - 20, maxR = Math.max(...ratings) + 20;
-    const rangeR = maxR - minR || 1;
-    const points = history.map((h, i) => [PAD + (i/(history.length-1))*(W-PAD*2), H-PAD-((h.rating-minR)/rangeR)*(H-PAD*2)]);
-    const pathD = points.map((p, i) => (i===0?'M':'L')+p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
-    const gridLines = [];
-    for (let g = 0; g <= 4; g++) {
-      const y = PAD + (g/4)*(H-PAD*2);
-      const val = Math.round(maxR - (g/4)*rangeR);
-      gridLines.push(`<line x1="${PAD}" y1="${y}" x2="${W-PAD}" y2="${y}" stroke="#3a3833" stroke-width="1" stroke-dasharray="3,3"/>`);
-      gridLines.push(`<text x="4" y="${y+4}" fill="#7d7a72" font-size="10">${val}</text>`);
+    const legend = document.getElementById('ratingChartLegend');
+    if (!wrap || !legend) return;
+
+    if (!historyByCat) {
+      historyByCat = {
+        classical: history || [{ ts: Date.now(), rating: 1200 }],
+        rapid:     history || [{ ts: Date.now(), rating: 1200 }],
+        blitz:     history || [{ ts: Date.now(), rating: 1200 }],
+        bullet:    history || [{ ts: Date.now(), rating: 1200 }]
+      };
     }
-    const dots = points.map((p, i) => { const isLast = i === points.length - 1; return `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${isLast?4:2.5}" fill="${isLast?'#bf811d':'#629924'}"/>`; }).join('');
-    wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:160px;display:block">${gridLines.join('')}<path d="${pathD}" fill="none" stroke="#bf811d" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>${dots}</svg>`;
+    lastHistoryByCat = historyByCat;
+
+    const cats = ['classical', 'rapid', 'blitz', 'bullet'];
+
+    // Легенда
+    legend.innerHTML = cats.map(k => {
+      const hidden = hiddenCats.has(k);
+      return `<span class="chartLegendItem" data-cat="${k}" style="cursor:pointer; display:flex; align-items:center; gap:6px; padding:3px 10px; border-radius:12px; border:1px solid ${CAT_COLORS[k]}; color:${hidden ? 'var(--muted)' : CAT_COLORS[k]}; opacity:${hidden ? 0.4 : 1};">
+        <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:${CAT_COLORS[k]};"></span>
+        ${CAT_NAMES[k]}
+      </span>`;
+    }).join('');
+    legend.querySelectorAll('.chartLegendItem').forEach(el => {
+      el.addEventListener('click', () => {
+        const k = el.dataset.cat;
+        if (hiddenCats.has(k)) hiddenCats.delete(k); else hiddenCats.add(k);
+        renderRatingChart(null, lastHistoryByCat);
+      });
+    });
+
+    // Видимые серии
+    const visibleSeries = cats
+      .filter(k => !hiddenCats.has(k))
+      .map(k => ({ key: k, points: historyByCat[k] || [] }))
+      .filter(s => s.points.length >= 1);
+
+    if (!visibleSeries.length) {
+      wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Все категории скрыты</div>';
+      return;
+    }
+
+    // Границы
+    let minR = Infinity, maxR = -Infinity, minT = Infinity, maxT = -Infinity;
+    for (const s of visibleSeries) {
+      for (const p of s.points) {
+        if (p.rating < minR) minR = p.rating;
+        if (p.rating > maxR) maxR = p.rating;
+        if (p.ts < minT) minT = p.ts;
+        if (p.ts > maxT) maxT = p.ts;
+      }
+    }
+    if (!isFinite(minR)) { minR = 1200; maxR = 1300; }
+    if (!isFinite(minT)) { minT = Date.now() - 86400000; maxT = Date.now(); }
+    minR = Math.floor(minR / 50) * 50 - 50;
+    maxR = Math.ceil(maxR / 50) * 50 + 50;
+    const rangeR = Math.max(1, maxR - minR);
+    const rangeT = Math.max(1, maxT - minT);
+
+    const W = 600, H = 200, PAD_L = 40, PAD_R = 12, PAD_T = 10, PAD_B = 24;
+    const toX = (ts) => PAD_L + ((ts - minT) / rangeT) * (W - PAD_L - PAD_R);
+    const toY = (r)  => PAD_T + (1 - (r - minR) / rangeR) * (H - PAD_T - PAD_B);
+
+    // Сетка
+    const gridLines = [];
+    for (let i = 0; i <= 4; i++) {
+      const y = PAD_T + (i / 4) * (H - PAD_T - PAD_B);
+      const val = Math.round(maxR - (i / 4) * rangeR);
+      gridLines.push(`<line x1="${PAD_L}" y1="${y}" x2="${W - PAD_R}" y2="${y}" stroke="#3a3833" stroke-width="1" stroke-dasharray="3,3"/>`);
+      gridLines.push(`<text x="4" y="${y + 4}" fill="#7d7a72" font-size="10">${val}</text>`);
+    }
+
+    // Подписи по датам
+    const fmtD = (ts) => {
+      const d = new Date(ts);
+      return String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0');
+    };
+    const xLabels = [];
+    const xTickTs = [minT, minT + (maxT - minT) / 2, maxT];
+    for (const ts of xTickTs) {
+      const x = toX(ts);
+      xLabels.push(`<text x="${x.toFixed(1)}" y="${H - 6}" fill="#7d7a72" font-size="10" text-anchor="middle">${fmtD(ts)}</text>`);
+    }
+
+    // Линии
+    const paths = [];
+    for (const s of visibleSeries) {
+      const col = CAT_COLORS[s.key];
+      const pts = s.points;
+      const d = pts.map((p, i) => (i === 0 ? 'M' : 'L') + toX(p.ts).toFixed(1) + ',' + toY(p.rating).toFixed(1)).join(' ');
+      paths.push(`<path d="${d}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`);
+      const lastP = pts[pts.length - 1];
+      paths.push(`<circle cx="${toX(lastP.ts).toFixed(1)}" cy="${toY(lastP.rating).toFixed(1)}" r="3.5" fill="${col}" stroke="#161512" stroke-width="1.5"/>`);
+    }
+
+    wrap.innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:200px;display:block">
+      ${gridLines.join('')}
+      ${paths.join('')}
+      ${xLabels.join('')}
+    </svg>`;
   }
+
   function renderGamesList(games, username) {
     const el = document.getElementById('gamesList');
     if (!games || !games.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px">Партий пока нет</div>'; return; }
@@ -1732,7 +1826,6 @@
       let streakTag = '';
       if (p.winStreak >= 3) streakTag = `<span class="streak">🔥${p.winStreak}</span>`;
       else if (p.drawStreak >= 2) streakTag = `<span class="streak">½${p.drawStreak}</span>`;
-      // ⬇⬇⬇ передаём p.isMod
       return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''}"><span class="place ${placeCls}">${place}</span><span class="pname">${nickHtml(p.username, p.isAdmin, p.isMod)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
     }).join('');
   }
@@ -1754,11 +1847,21 @@
       const hash = JSON.stringify({ live: live.map(g => [g.lobbyId, g.fen, g.timeW, g.timeB]), done: done.slice(0, 30).map(g => [g.white, g.black, g.result, g.finishedAt]) });
       if (hash === lastArenaGamesHash) return;
       lastArenaGamesHash = hash;
-      if (live.length) {
-        const g = live[0];
-        topEl.innerHTML = renderArenaTopGame(g);
+      const featured = res.featured || (live.length ? live[0] : (done.length ? done[0] : null));
+      if (featured) {
+        topEl.innerHTML = renderArenaTopGame(featured);
         const link = topEl.querySelector('.arenaTopGameLink');
-        if (link) link.onclick = () => watchGame(g.lobbyId);
+        if (link) {
+          if (featured.live) {
+            link.textContent = '▶ Смотреть партию';
+            link.onclick = () => watchGame(featured.lobbyId);
+          } else {
+            link.textContent = 'завершена';
+            link.style.cursor = 'default';
+            link.style.color = 'var(--muted)';
+            link.onclick = null;
+          }
+        }
       } else {
         topEl.innerHTML = '<div class="arenaTopGameEmpty">Сейчас никто не играет</div>';
       }
@@ -1783,7 +1886,8 @@
     });
   }
   function renderArenaTopGame(g) {
-    const state = parseFen(g.fen);
+    const fen = g.fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    const state = parseFen(fen);
     const flip = false;
     let squares = '';
     for (let dr = 0; dr < 8; dr++) {
@@ -1797,21 +1901,24 @@
         squares += `<div class="${cls}">${inner}</div>`;
       }
     }
-    const whiteActive = g.turn === 'w';
-    const blackActive = g.turn === 'b';
+    const isLive = !!g.live;
+    const whiteActive = isLive && g.turn === 'w';
+    const blackActive = isLive && g.turn === 'b';
     const wR = g.whiteRating ? `<span class="prat">${g.whiteRating}</span>` : '';
     const bR = g.blackRating ? `<span class="prat">${g.blackRating}</span>` : '';
+    const topTime = isLive ? `<span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${formatTime(g.timeB)}</span>` : `<span class="time" style="color:var(--muted);">—</span>`;
+    const bottomTime = isLive ? `<span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${formatTime(g.timeW)}</span>` : `<span class="time" style="color:var(--muted);">—</span>`;
     return `
       <div class="arenaTopGamePlayers">
         <span class="playerRow">⚫ <span class="name">${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span>
-        <span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${formatTime(g.timeB)}</span>
+        ${topTime}
       </div>
       <div class="arenaTopGameBoard">${squares}</div>
       <div class="arenaTopGamePlayers">
         <span class="playerRow">⚪ <span class="name">${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span>
-        <span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${formatTime(g.timeW)}</span>
+        ${bottomTime}
       </div>
-      <div class="arenaTopGameLink">▶ Смотреть партию</div>
+      <div class="arenaTopGameLink"></div>
     `;
   }
   function showArenaWinnerBanner(top3) {
@@ -1869,7 +1976,6 @@
       const time = new Date(msg.ts).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
       let modHtml = '';
       if (me && me.isMod) modHtml = `<span class="modBtn always" title="Модерация" style="cursor:pointer;color:var(--muted);margin-left:6px;">⚙</span>`;
-      // ⬇⬇⬇ передаём userIsMod/userIsAdmin
       div.innerHTML = `<span class="u">${nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
       if (me && me.isMod) {
         const btn = div.querySelector('.modBtn');
