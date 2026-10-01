@@ -31,7 +31,7 @@
   header.topbar .userBtn:hover { background:var(--panel-hover); }
   header.topbar .userBtn .avatar { width:20px; height:20px; border-radius:50%; background:var(--accent); color:#161512; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; }
   .crown { color:var(--gold); margin-right:2px; text-shadow:0 0 4px rgba(255,213,79,.6); }
-  main { max-width:1200px; margin:0 auto; padding:20px 16px; }
+  main { max-width:1240px; margin:0 auto; padding:20px 16px; }
   .screen { display:none; }
   .screen.active { display:block; }
   input,button,select { padding:9px 12px; border-radius:6px; border:1px solid var(--border); background:var(--panel-2); color:var(--text-bright); font-size:14px; font-family:inherit; outline:none; transition:.15s; }
@@ -151,29 +151,16 @@
   .nowLine { position:absolute; top:32px; bottom:0; width:2px; background:#e5484d; z-index:3; pointer-events:none; }
   .nowLine::before { content:'▼'; position:absolute; top:-12px; left:50%; transform:translateX(-50%); color:#e5484d; font-size:10px; }
 
-  .arenaStatusRow { display:flex; align-items:center; gap:16px; padding:10px 14px; margin-top:8px; background:var(--panel-2); border-radius:6px; border-left:4px solid var(--accent); }
+  .arenaStatusRow { display:flex; align-items:center; gap:16px; padding:10px 14px; background:var(--panel-2); border-radius:6px; border-left:4px solid var(--accent); }
   .arenaStatusRow.live { border-left-color:var(--green-2); background:rgba(98,153,36,.08); }
   .arenaStatusRow.finished { border-left-color:var(--muted); opacity:.7; }
   .arenaStatusLabel { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.5px; font-weight:700; white-space:nowrap; }
-  .arenaStatusTime { font-family:'Roboto Mono','Menlo',monospace; font-size:28px; font-weight:700; color:var(--accent-2); letter-spacing:1px; font-variant-numeric:tabular-nums; }
+  .arenaStatusTime { font-family:'Roboto Mono','Menlo',monospace; font-size:26px; font-weight:700; color:var(--accent-2); letter-spacing:1px; font-variant-numeric:tabular-nums; }
+  .arenaStatusRow.live .arenaStatusTime { color:var(--green-2); }
 
-  .arenaPage { display:grid; grid-template-columns:260px 620px 320px; gap:16px; align-items:start; justify-content:center; max-width:1240px; margin:0 auto; }
-  @media (max-width:1220px) { .arenaPage { grid-template-columns:240px 1fr 300px; } }
-  @media (max-width:1100px) { .arenaPage { grid-template-columns:1fr; max-width:640px; } }
-  .arenaLeft { display:flex; flex-direction:column; gap:12px; width:260px; min-width:260px; max-width:260px; }
-  @media (max-width:1220px) { .arenaLeft { width:240px; min-width:240px; max-width:240px; } }
-  @media (max-width:1100px) { .arenaLeft { width:100%; min-width:0; max-width:none; } }
-  .arenaCenter { width:620px; min-width:620px; max-width:620px; display:flex; flex-direction:column; gap:10px; }
-  @media (max-width:1220px) { .arenaCenter { width:auto; min-width:0; max-width:none; } }
-  .arenaRight { width:320px; min-width:320px; max-width:320px; }
-  @media (max-width:1220px) { .arenaRight { width:300px; min-width:300px; max-width:300px; } }
-  @media (max-width:1100px) { .arenaRight { width:100%; min-width:0; max-width:none; } }
-
-  .arenaInfoCard { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:16px; border-left:4px solid var(--accent); min-height:240px; display:flex; flex-direction:column; overflow:hidden; }
-  .arenaInfoCard .aInfoTitle, .arenaInfoCard .aInfoTime, .arenaInfoCard .aInfoDesc { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .arenaInfoCard .aInfoDesc { white-space:normal; max-height:40px; }
+  .arenaInfoCard { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:16px; border-left:4px solid var(--accent); display:flex; flex-direction:column; overflow:hidden; min-height:220px; }
   .aInfoIcon { font-size:32px; margin-bottom:6px; }
-  .aInfoTitle { font-size:16px; font-weight:700; color:var(--text-bright); margin-bottom:4px; }
+  .aInfoTitle { font-size:16px; font-weight:700; color:var(--text-bright); margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .aInfoTime { color:var(--accent); font-size:13px; font-weight:600; margin-bottom:10px; }
   .aInfoDesc { color:var(--muted); font-size:12px; line-height:1.4; margin-bottom:14px; }
   .aInfoRules { background:var(--panel-2); border-radius:4px; padding:10px; font-size:12px; }
@@ -191,71 +178,90 @@
   .arenaChatForm input { flex:1; border:none; border-radius:0; background:transparent; padding:10px 12px; font-size:13px; }
   .arenaChatForm button { border-radius:0; padding:0 16px; font-size:14px; border:none; background:transparent; color:var(--muted); cursor:pointer; min-width:48px; min-height:40px; }
 
-  .arenaTopBar { display:flex; justify-content:space-between; align-items:flex-start; padding:4px 0; min-height:60px; }
-  .arenaTopLeft { display:flex; align-items:center; gap:12px; min-width:0; }
-  .arenaTrophy { font-size:40px; }
-  .arenaPageName { margin:0; font-size:26px; font-weight:600; color:var(--accent-2); letter-spacing:-.3px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .arenaPageSub { color:var(--muted); font-size:12px; margin-top:2px; }
+  .arenaTopBar { display:flex; justify-content:space-between; align-items:center; padding:2px 0; min-height:56px; }
+  .arenaTopLeft { display:flex; align-items:center; gap:12px; min-width:0; flex:1; }
+  .arenaTrophy { font-size:36px; flex-shrink:0; }
+  .arenaPageName { margin:0; font-size:22px; font-weight:600; color:var(--accent-2); letter-spacing:-.3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .arenaPageSub { color:var(--muted); font-size:12px; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-  .arenaStatusRow { width:100%; height:56px; min-height:56px; max-height:56px; box-sizing:border-box; }
-  .arenaStatusTime { min-width:120px; }
-
-  .arenaPairingBox { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:10px 14px; font-size:13px; display:flex; align-items:center; gap:10px; border-left:4px solid var(--accent); width:100%; height:44px; min-height:44px; max-height:44px; box-sizing:border-box; overflow:hidden; }
+  .arenaPairingBox { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:0 14px; font-size:13px; display:flex; align-items:center; gap:10px; border-left:4px solid var(--accent); width:100%; height:44px; min-height:44px; max-height:44px; box-sizing:border-box; overflow:hidden; }
   .arenaPairingBox.searching { border-left-color:var(--green-2); background:rgba(98,153,36,.08); }
   .arenaPairingBox .spinner { width:14px; height:14px; border-radius:50%; border:2px solid rgba(255,255,255,.25); border-top-color:var(--green-2); animation:spin .9s linear infinite; flex-shrink:0; }
   @keyframes spin { to { transform:rotate(360deg); } }
-  .arenaPairingBox span, .arenaPairingBox b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; max-width:100%; vertical-align:bottom; }
+  .arenaPairingBox span, .arenaPairingBox b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; max-width:100%; vertical-align:middle; }
 
-  .arenaParticipantsHeader { display:flex; justify-content:space-between; align-items:center; gap:10px; height:40px; min-height:40px; max-height:40px; box-sizing:border-box; }
-  .arenaSearch { width:260px; min-width:260px; max-width:260px; }
+  .arenaParticipantsHeader { display:flex; justify-content:space-between; align-items:center; gap:10px; height:40px; min-height:40px; max-height:40px; }
+  .arenaSearch { flex:1; min-width:0; }
   .arenaSearch input { width:100%; padding:6px 12px; font-size:13px; height:32px; box-sizing:border-box; }
-  .arenaJoinBtn { width:200px; min-width:200px; max-width:200px; height:40px; min-height:40px; max-height:40px; padding:0 12px; font-weight:700; letter-spacing:.5px; box-sizing:border-box; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .arenaJoinBtn { width:180px; min-width:180px; max-width:180px; height:40px; min-height:40px; max-height:40px; padding:0 12px; font-weight:700; letter-spacing:.5px; box-sizing:border-box; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
-  .arenaParticipantsTable { background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden; height:460px; min-height:460px; max-height:460px; display:flex; flex-direction:column; }
-  .arenaTableHeader { flex:0 0 auto; display:grid; grid-template-columns:40px minmax(0,1fr) 70px 90px 60px; gap:10px; padding:10px 14px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:600; min-height:36px; height:36px; }
+  .arenaParticipantsTable { background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden; height:340px; min-height:340px; max-height:340px; display:flex; flex-direction:column; }
+  .arenaTableHeader { flex:0 0 auto; display:grid; grid-template-columns:36px minmax(0,1fr) 60px 90px 60px; gap:8px; padding:0 12px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; min-height:32px; height:32px; align-items:center; }
   .arenaTableBody { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; }
-  .arenaTableRow { display:grid; grid-template-columns:40px minmax(0,1fr) 70px 90px 60px; gap:10px; padding:0 14px; align-items:center; font-size:13px; border-bottom:1px solid rgba(58,56,51,.4); height:40px; min-height:40px; max-height:40px; box-sizing:border-box; }
+  .arenaTableRow { display:grid; grid-template-columns:36px minmax(0,1fr) 60px 90px 60px; gap:8px; padding:0 12px; align-items:center; font-size:13px; border-bottom:1px solid rgba(58,56,51,.35); height:40px; min-height:40px; max-height:40px; box-sizing:border-box; }
   .arenaTableRow:last-child { border-bottom:none; }
   .arenaTableRow:hover { background:var(--panel-hover); }
-  .arenaTableRow.me { background:rgba(191,129,29,.12); border-left:3px solid var(--accent); }
+  .arenaTableRow.me { background:rgba(191,129,29,.12); border-left:3px solid var(--accent); padding-left:9px; }
   .arenaTableRow.paused { opacity:.55; }
   .arenaTableRow .place { color:var(--muted); font-weight:700; font-size:14px; overflow:hidden; }
   .arenaTableRow .place.top1 { color:#ffd54f; }
   .arenaTableRow .place.top2 { color:#d0d0d0; }
   .arenaTableRow .place.top3 { color:#d4904a; }
-  .arenaTableRow .pname { color:var(--text-bright); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
-  .arenaTableRow .pname .prat { color:var(--muted); font-weight:400; margin-left:6px; font-size:12px; }
-  .arenaTableRow .pname .pgreen { color:var(--green); font-size:10px; margin-left:6px; }
-  .arenaTableRow .pname .ppause { color:var(--accent); font-size:11px; margin-left:6px; }
+  .arenaTableRow .pname { color:var(--text-bright); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; display:flex; align-items:center; gap:4px; }
+  .arenaTableRow .pname .prat { color:var(--muted); font-weight:400; font-size:11px; }
+  .arenaTableRow .pname .pgreen { color:var(--green); font-size:10px; }
+  .arenaTableRow .pname .ppause { color:var(--accent); font-size:11px; }
   .arenaTableRow .score { color:var(--accent); font-weight:700; text-align:center; font-size:15px; overflow:hidden; }
-  .arenaTableRow .score .streak { color:#ff9c3a; font-size:11px; margin-left:3px; font-weight:600; }
+  .arenaTableRow .score .streak { color:#ff9c3a; font-size:11px; margin-left:2px; font-weight:600; }
   .arenaTableRow .wdl { color:var(--muted); text-align:center; font-size:12px; overflow:hidden; }
   .arenaTableRow .games { color:var(--muted); text-align:center; font-size:12px; overflow:hidden; }
 
-  .arenaWinnerBanner { background:linear-gradient(160deg,#2a2520,#1a1815); border:1px solid var(--accent); border-radius:8px; padding:18px; text-align:center; min-height:140px; box-sizing:border-box; }
-  .awbTitle { font-size:20px; color:var(--accent-2); font-weight:700; margin-bottom:12px; }
-  .awbPodium { display:flex; justify-content:center; align-items:flex-end; gap:10px; }
-  .awbItem { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:12px 14px; min-width:100px; }
-  .awbItem.gold { border-color:var(--accent); background:linear-gradient(180deg,#3d331c,#2a2517); transform:translateY(-8px); }
+  .arenaWinnerBanner { background:linear-gradient(160deg,#2a2520,#1a1815); border:1px solid var(--accent); border-radius:8px; padding:14px; text-align:center; box-sizing:border-box; }
+  .awbTitle { font-size:18px; color:var(--accent-2); font-weight:700; margin-bottom:10px; }
+  .awbPodium { display:flex; justify-content:center; align-items:flex-end; gap:8px; }
+  .awbItem { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:10px 12px; min-width:90px; }
+  .awbItem.gold { border-color:var(--accent); background:linear-gradient(180deg,#3d331c,#2a2517); transform:translateY(-6px); }
   .awbItem.silver { border-color:#888; }
   .awbItem.bronze { border-color:#a06a3a; }
-  .awbItem .place { font-size:22px; font-weight:700; }
+  .awbItem .place { font-size:20px; font-weight:700; }
   .awbItem.gold .place { color:#ffd54f; }
   .awbItem.silver .place { color:#d0d0d0; }
   .awbItem.bronze .place { color:#d4904a; }
-  .awbItem .n { color:var(--text-bright); font-weight:600; margin:4px 0; }
-  .awbItem .s { color:var(--accent); font-weight:700; font-size:18px; }
+  .awbItem .n { color:var(--text-bright); font-weight:600; margin:2px 0; font-size:13px; }
+  .awbItem .s { color:var(--accent); font-weight:700; font-size:16px; }
 
-  .arenaRightCol { background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden; min-height:420px; max-height:620px; box-sizing:border-box; display:flex; flex-direction:column; }
-  .arenaGamesHeader { padding:10px 14px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; flex:0 0 auto; }
-  .arenaGamesList { flex:1 1 auto; min-height:0; padding:8px; display:flex; flex-direction:column; gap:6px; overflow-y:auto; }
-  .arenaGameCard { background:var(--panel-2); border-radius:6px; padding:8px 10px; font-size:12px; border-left:3px solid var(--green); height:56px; min-height:56px; max-height:56px; box-sizing:border-box; overflow:hidden; }
-  .arenaGameCard .names { display:flex; flex-direction:column; gap:2px; color:var(--text-bright); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .arenaGameCard .meta { color:var(--muted); font-size:11px; display:flex; justify-content:space-between; margin-top:4px; }
-  .arenaGameCard .liveDot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#ff5555; margin-right:5px; animation:pulse 1.2s infinite; }
+  /* ============================================================
+     ФИКСИРОВАННАЯ СЕТКА АРЕНЫ: 280 / 480 / 300 = 1060 + 32 gap
+     ============================================================ */
+  .arenaPage {
+    display: grid;
+    grid-template-columns: 280px 480px 300px;
+    gap: 16px;
+    align-items: start;
+    justify-content: center;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  @media (max-width: 1110px) { .arenaPage { grid-template-columns: 260px 1fr 280px; } }
+  @media (max-width: 940px)  { .arenaPage { grid-template-columns: 1fr; max-width: 500px; } }
 
-  .arenaPage * { min-width:0; }
-  .arenaPage button { flex-shrink:0; }
+  .arenaLeft   { width: 280px; min-width: 280px; max-width: 280px; display: flex; flex-direction: column; gap: 12px; }
+  .arenaCenter { width: 480px; min-width: 480px; max-width: 480px; display: flex; flex-direction: column; gap: 10px; }
+  .arenaRight  { width: 300px; min-width: 300px; max-width: 300px; display: flex; flex-direction: column; }
+  @media (max-width: 1110px) {
+    .arenaLeft { width: 260px; min-width: 260px; max-width: 260px; }
+    .arenaCenter { width: auto; min-width: 0; max-width: none; }
+    .arenaRight { width: 280px; min-width: 280px; max-width: 280px; }
+  }
+  @media (max-width: 940px) {
+    .arenaLeft, .arenaCenter, .arenaRight { width: 100%; min-width: 0; max-width: none; }
+  }
+
+  .arenaRightCol { flex: 1 1 auto; min-height: 420px; display: flex; flex-direction: column; }
+
+  /* Общая защита от скачков */
+  .arenaPage * { min-width: 0; }
+  .arenaPage button { flex-shrink: 0; }
 
   .gameWrap { display:grid; grid-template-columns:280px 480px 280px; gap:16px; align-items:start; justify-content:center; margin:0 auto; }
   @media (max-width:1120px) { .gameWrap { grid-template-columns:240px minmax(0,1fr) 260px; } }
@@ -384,32 +390,6 @@
   .catCard.blitz     { border-top:3px solid #7db63a; }
   .catCard.bullet    { border-top:3px solid #c94a3a; }
   @media (max-width:600px) { .catRatingsGrid { grid-template-columns:repeat(2,1fr); } }
-
-  /* ============================================================
-     ФИКСИРОВАННЫЙ ИНТЕРФЕЙС АРЕНЫ — финальный слой каскада
-     ============================================================ */
-  .arenaPage * { min-width:0; }
-  .arenaPage button { flex-shrink:0; }
-  .arenaStatusRow { width:100%; height:56px; min-height:56px; max-height:56px; box-sizing:border-box; }
-  .arenaStatusTime { min-width:120px; }
-  .arenaPairingBox { width:100%; height:44px; min-height:44px; max-height:44px; box-sizing:border-box; overflow:hidden; }
-  .arenaJoinBtn { width:200px; min-width:200px; max-width:200px; height:40px; min-height:40px; max-height:40px; box-sizing:border-box; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:inline-block; }
-  .arenaParticipantsHeader { height:40px; min-height:40px; max-height:40px; box-sizing:border-box; }
-  .arenaParticipantsTable { height:460px; min-height:460px; max-height:460px; display:flex; flex-direction:column; overflow:hidden; }
-  .arenaTableHeader { flex:0 0 auto; min-height:36px; height:36px; }
-  .arenaTableBody { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; }
-  .arenaTableRow { height:40px; min-height:40px; max-height:40px; box-sizing:border-box; }
-  .arenaTableRow .pname { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
-  .arenaWinnerBanner { min-height:140px; box-sizing:border-box; }
-  .arenaInfoCard { min-height:240px; display:flex; flex-direction:column; overflow:hidden; }
-  .arenaChatBox { width:100%; height:320px; min-height:320px; max-height:320px; box-sizing:border-box; }
-  .arenaChatMessages { min-height:0; }
-  .arenaChatForm { flex:0 0 auto; }
-  .arenaRightCol { min-height:420px; max-height:620px; box-sizing:border-box; display:flex; flex-direction:column; overflow:hidden; }
-  .arenaGamesList { flex:1 1 auto; min-height:0; }
-  .arenaGameCard { height:56px; min-height:56px; max-height:56px; box-sizing:border-box; overflow:hidden; }
-  .arenaTopBar { min-height:60px; }
-  .arenaPageName { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 </style>
 </head>
 <body>
@@ -527,7 +507,7 @@
         <div class="arenaTopBar">
           <div class="arenaTopLeft">
             <div class="arenaTrophy">🏆</div>
-            <div style="min-width:0;">
+            <div style="min-width:0; flex:1;">
               <h2 class="arenaPageName" id="arenaPageName">—</h2>
               <div class="arenaPageSub" id="arenaPageSub">—</div>
             </div>
@@ -670,7 +650,6 @@
     reconnectionDelay: 1000
   });
 
-  // ============ ЗВУКИ ============
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   let audioCtx = null;
   function ensureAudio() { if (!audioCtx) audioCtx = new AudioCtx(); if (audioCtx.state === 'suspended') audioCtx.resume(); return audioCtx; }
@@ -678,10 +657,8 @@
     try {
       const ctx = ensureAudio();
       const t0 = ctx.currentTime + (delay || 0);
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = type || 'sine';
-      osc.frequency.setValueAtTime(freq, t0);
+      const osc = ctx.createOscillator(); const gain = ctx.createGain();
+      osc.type = type || 'sine'; osc.frequency.setValueAtTime(freq, t0);
       gain.gain.setValueAtTime(0.0001, t0);
       gain.gain.exponentialRampToValueAtTime(vol || 0.15, t0 + 0.008);
       gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
@@ -894,16 +871,10 @@
     }
     return false;
   }
-  function pieceSAN(p) {
-    const t = p.toLowerCase();
-    if (t === 'n') return 'N'; if (t === 'b') return 'B';
-    if (t === 'r') return 'R'; if (t === 'q') return 'Q'; if (t === 'k') return 'K';
-    return '';
-  }
+  function pieceSAN(p) { const t = p.toLowerCase(); if (t === 'n') return 'N'; if (t === 'b') return 'B'; if (t === 'r') return 'R'; if (t === 'q') return 'Q'; if (t === 'k') return 'K'; return ''; }
   function toSAN(state, from, to) {
     const [fr, fc] = from, [tr, tc] = to;
-    const p = state.board[fr][fc];
-    if (!p) return '';
+    const p = state.board[fr][fc]; if (!p) return '';
     const t = p.toLowerCase();
     const isCapture = !!state.board[tr][tc] || (t === 'p' && fc !== tc);
     const dest = String.fromCharCode(97 + tc) + (8 - tr);
@@ -915,19 +886,10 @@
       let ambiguous = false, sameFile = false, sameRank = false;
       for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
         if (r === fr && c === fc) continue;
-        const q = state.board[r][c];
-        if (!q || q !== p) continue;
-        if (legalMovesFor(state, r, c).some(([mr,mc]) => mr === tr && mc === tc)) {
-          ambiguous = true;
-          if (c === fc) sameFile = true;
-          if (r === fr) sameRank = true;
-        }
+        const q = state.board[r][c]; if (!q || q !== p) continue;
+        if (legalMovesFor(state, r, c).some(([mr,mc]) => mr === tr && mc === tc)) { ambiguous = true; if (c === fc) sameFile = true; if (r === fr) sameRank = true; }
       }
-      if (ambiguous) {
-        if (!sameFile) san += String.fromCharCode(97 + fc);
-        else if (!sameRank) san += (8 - fr);
-        else san += String.fromCharCode(97 + fc) + (8 - fr);
-      }
+      if (ambiguous) { if (!sameFile) san += String.fromCharCode(97 + fc); else if (!sameRank) san += (8 - fr); else san += String.fromCharCode(97 + fc) + (8 - fr); }
       if (isCapture) san += 'x';
       san += dest;
     }
@@ -939,7 +901,7 @@
     return san;
   }
 
-  // ============ ОТРИСОВКА ДОСКИ ============
+  // ============ ДОСКА ============
   function renderBoard() {
     const fenToShow = (viewIndex >= 0 && viewIndex < moveFens.length) ? moveFens[viewIndex] : currentFen;
     const hash = fenToShow + '|' + (selected ? selected.join(',') : '') + '|' + viewIndex + '|' +
@@ -1026,22 +988,15 @@
     const isLegal = legal.some(([r, c]) => r === to[0] && c === to[1]);
     if (!isLegal) return false;
     const san = toSAN(state, from, to);
-    if (isPremove) {
-      premove = { from, to, san };
-      lastBoardHash = ''; renderBoard();
-      return true;
-    }
+    if (isPremove) { premove = { from, to, san }; lastBoardHash = ''; renderBoard(); return true; }
     const isCapture = !!state.board[to[0]][to[1]];
     const nextState = applyMoveToCopy(state, from, to);
     const newFen = toFen(nextState);
-    currentFen = newFen;
-    lastMove = { from, to };
-    moveHistory.push(san);
-    moveFens.push(newFen);
+    currentFen = newFen; lastMove = { from, to };
+    moveHistory.push(san); moveFens.push(newFen);
     premove = null;
     renderMoves();
-    lastBoardHash = '';
-    renderBoard();
+    lastBoardHash = ''; renderBoard();
     socket.emit('move', { lobbyId, fen: newFen, turn: nextState.turn, san });
     if (isCapture) sndCapture(); else sndMove();
     checkGameEnd(nextState);
@@ -1052,12 +1007,8 @@
     if (!gameActive || gameEnded || viewIndex !== -1) return;
     const state = parseFen(currentFen);
     const myTurn = state.turn === myColor;
-
     if (!myTurn) {
-      if (premove && premove.to[0] === r && premove.to[1] === c) {
-        premove = null; lastBoardHash = ''; renderBoard();
-        return;
-      }
+      if (premove && premove.to[0] === r && premove.to[1] === c) { premove = null; lastBoardHash = ''; renderBoard(); return; }
       const p = state.board[r][c];
       if (p && isWhitePiece(p) === (myColor === 'w')) {
         const leg = legalMovesFor(state, r, c);
@@ -1073,7 +1024,6 @@
       }
       return;
     }
-
     if (selected) {
       const isLegal = legalMoves.some(([mr, mc]) => mr === r && mc === c);
       if (isLegal) { const from = selected; selected = null; legalMoves = []; applyUserMove(from, [r, c], false); return; }
@@ -1098,30 +1048,24 @@
     if (!sq || sq.dataset.r == null) return;
     const r = +sq.dataset.r, c = +sq.dataset.c;
     const state = parseFen(currentFen);
-    const p = state.board[r][c];
-    if (!p) return;
+    const p = state.board[r][c]; if (!p) return;
     const myTurn = state.turn === myColor;
     const sameColor = isWhitePiece(p) === (myColor === 'w');
     if (myTurn && sameColor) {
-      const leg = legalMovesFor(state, r, c);
-      if (!leg.length) return;
+      const leg = legalMovesFor(state, r, c); if (!leg.length) return;
       selected = [r, c]; legalMoves = leg;
       dragging = { from: [r, c], active: false };
       dragStartPos = { x: ev.clientX, y: ev.clientY };
       lastBoardHash = ''; renderBoard();
-      startDragGhost(p, ev.clientX, ev.clientY);
-      ev.preventDefault();
-      return;
+      startDragGhost(p, ev.clientX, ev.clientY); ev.preventDefault(); return;
     }
     if (!myTurn && sameColor) {
-      const leg = legalMovesFor(state, r, c);
-      if (!leg.length) return;
+      const leg = legalMovesFor(state, r, c); if (!leg.length) return;
       selected = [r, c]; legalMoves = leg;
       dragging = { from: [r, c], active: false, premoveDrag: true };
       dragStartPos = { x: ev.clientX, y: ev.clientY };
       lastBoardHash = ''; renderBoard();
-      startDragGhost(p, ev.clientX, ev.clientY);
-      ev.preventDefault();
+      startDragGhost(p, ev.clientX, ev.clientY); ev.preventDefault();
     }
   });
 
@@ -1131,9 +1075,7 @@
     ghostEl = document.createElement('div');
     ghostEl.className = 'dragGhost ' + (isWhitePiece(piece) ? 'w' : 'b');
     ghostEl.textContent = EMOJI[piece];
-    ghostEl.style.left = x + 'px';
-    ghostEl.style.top = y + 'px';
-    ghostEl.style.display = 'none';
+    ghostEl.style.left = x + 'px'; ghostEl.style.top = y + 'px'; ghostEl.style.display = 'none';
     document.body.appendChild(ghostEl);
   }
   function moveGhost(x, y) { if (!ghostEl) return; ghostEl.style.display = ''; ghostEl.style.left = x + 'px'; ghostEl.style.top = y + 'px'; }
@@ -1143,8 +1085,7 @@
     if (!dragging) return;
     if (!dragging.active) {
       if (Math.abs(ev.clientX - dragStartPos.x) < 5 && Math.abs(ev.clientY - dragStartPos.y) < 5) return;
-      dragging.active = true;
-      lastBoardHash = ''; renderBoard();
+      dragging.active = true; lastBoardHash = ''; renderBoard();
     }
     moveGhost(ev.clientX, ev.clientY);
   });
@@ -1159,8 +1100,7 @@
     if (!target) { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); return; }
     if (target[0] === from[0] && target[1] === from[1]) {
       selected = from; legalMoves = legalMovesFor(parseFen(currentFen), from[0], from[1]);
-      lastBoardHash = ''; renderBoard();
-      return;
+      lastBoardHash = ''; renderBoard(); return;
     }
     const ok = applyUserMove(from, target, wasPremove);
     if (!ok) { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); }
@@ -1219,14 +1159,12 @@
   // ============ НАВИГАЦИЯ ============
   function show(screen) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    const el = document.getElementById(screen);
-    if (el) el.classList.add('active');
+    const el = document.getElementById(screen); if (el) el.classList.add('active');
   }
   function navTo(name) {
     if (!me && name !== 'login') { show('loginScreen'); return; }
     const map = { 'lobby':'lobbyScreen','watch':'watchScreen','arenas':'arenasScreen','arenaPage':'arenaPageScreen','profile':'profileScreen','learn':'learnScreen','community':'communityScreen','game':'gameScreen','login':'loginScreen' };
-    const screenId = map[name];
-    if (!screenId) return;
+    const screenId = map[name]; if (!screenId) return;
     if (name !== 'arenaPage' && currentArenaId) {
       socket.emit('leaveArenaRoom', { arenaId: currentArenaId });
       if (arenaPageRefreshHandle) { clearInterval(arenaPageRefreshHandle); arenaPageRefreshHandle = null; }
@@ -1248,8 +1186,7 @@
     if (!username || !password) { document.getElementById('loginMsg').textContent = 'Введите логин и пароль'; return; }
     socket.emit('register', { username, password }, (res) => {
       if (!res || !res.ok) { document.getElementById('loginMsg').textContent = (res && res.msg) || 'Ошибка'; return; }
-      me = res.user;
-      updateTopbarUser();
+      me = res.user; updateTopbarUser();
       navTo('lobby'); refreshLobbies(); refreshTopArenas(); refreshStats();
     });
   }
@@ -1268,10 +1205,8 @@
 
   function refreshTopArenas() {
     socket.emit('getTopArenas', (list) => {
-      const box = document.getElementById('topArenasBox');
-      if (!box) return;
-      const hash = JSON.stringify(list);
-      if (hash === lastTopArenasHash) return;
+      const box = document.getElementById('topArenasBox'); if (!box) return;
+      const hash = JSON.stringify(list); if (hash === lastTopArenasHash) return;
       lastTopArenasHash = hash;
       if (!list || !list.length) { box.innerHTML = '<div class="arenaEmpty" style="padding:20px 0">Сейчас активных арен нет</div>'; return; }
       box.innerHTML = list.map(a => {
@@ -1287,9 +1222,7 @@
     socket.emit('getStats', (s) => {
       if (!s) return;
       const e1 = document.getElementById('statOnline'), e2 = document.getElementById('statGames'), e3 = document.getElementById('statActive');
-      if (e1) e1.textContent = s.online;
-      if (e2) e2.textContent = s.games;
-      if (e3) e3.textContent = s.activeGames || 0;
+      if (e1) e1.textContent = s.online; if (e2) e2.textContent = s.games; if (e3) e3.textContent = s.activeGames || 0;
     });
   }
   window.refreshStats = refreshStats;
@@ -1327,9 +1260,7 @@
             btn.onclick = (e) => { e.stopPropagation(); socket.emit('joinLobby', { id: l.id }, (r) => { if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; } lobbyId = r.id || l.id; }); };
             row.querySelector('.action').appendChild(btn);
           }
-          if (isMine && l.status === 'waiting') {
-            row.onclick = () => { if (!confirm('Отменить вызов?')) return; socket.emit('cancelLobby', { id: l.id }, () => refreshLobbies()); };
-          }
+          if (isMine && l.status === 'waiting') { row.onclick = () => { if (!confirm('Отменить вызов?')) return; socket.emit('cancelLobby', { id: l.id }, () => refreshLobbies()); }; }
           wrap.appendChild(row);
         });
         el.appendChild(wrap);
@@ -1383,13 +1314,9 @@
     const sub = document.getElementById('grSub');
     const actions = document.getElementById('grActions');
     let text, cls;
-    if (!winner) { text = 'Ничья'; cls = ''; }
-    else if (winner === myColor) { text = 'Победа!'; cls = 'win'; }
-    else { text = 'Поражение'; cls = 'lose'; }
-    title.textContent = text;
-    title.className = 'grTitle ' + cls;
-    sub.textContent = reason || '';
-    actions.innerHTML = '';
+    if (!winner) { text = 'Ничья'; cls = ''; } else if (winner === myColor) { text = 'Победа!'; cls = 'win'; } else { text = 'Поражение'; cls = 'lose'; }
+    title.textContent = text; title.className = 'grTitle ' + cls;
+    sub.textContent = reason || ''; actions.innerHTML = '';
     if (currentGameIsArena) {
       const b1 = document.createElement('button'); b1.className = 'primary'; b1.textContent = 'Вернуться к турниру';
       b1.onclick = () => { hideGameResultBar(); cleanupGame(); if (currentArenaId) openArenaPage(currentArenaId); else navTo('arenas'); };
@@ -1446,8 +1373,7 @@
   function renderChatMsg(msg) {
     const box = document.getElementById('chatMessages');
     const div = document.createElement('div');
-    div.className = 'msg';
-    div.dataset.msgId = msg.id || '';
+    div.className = 'msg'; div.dataset.msgId = msg.id || '';
     const time = new Date(msg.ts).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
     let modHtml = '';
     if (me && me.isMod) modHtml = `<span class="modBtn" data-mod-btn="1" title="Модерация">⚙</span>`;
@@ -1499,10 +1425,8 @@
 
   function refreshWatchList(force) {
     socket.emit('getLiveGames', (list) => {
-      const box = document.getElementById('watchListBody');
-      if (!box) return;
-      const hash = JSON.stringify(list);
-      if (hash === lastWatchHash && !force) return;
+      const box = document.getElementById('watchListBody'); if (!box) return;
+      const hash = JSON.stringify(list); if (hash === lastWatchHash && !force) return;
       lastWatchHash = hash;
       if (!list || !list.length) { box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>'; return; }
       box.innerHTML = list.map(g => {
@@ -1530,8 +1454,7 @@
   window.watchGame = watchGame;
 
   function renderWatchBoard() {
-    const box = document.getElementById('watchBoardBox');
-    if (!box) return;
+    const box = document.getElementById('watchBoardBox'); if (!box) return;
     if (!watchingGame) { box.innerHTML = '<div class="wbEmpty">Выбери партию слева</div>'; return; }
     const g = watchingGame;
     const state = parseFen(g.fen);
@@ -1600,19 +1523,13 @@
     document.getElementById('pWinrate').textContent = (user.games ? Math.round((user.wins/user.games)*100) : 0) + '%';
     const catEl = document.getElementById('catRatingsGrid');
     if (user.categories) {
-      const cats = [
-        { key:'classical', name:'Классика', icon:'🐢' },
-        { key:'rapid', name:'Рапид', icon:'⏱' },
-        { key:'blitz', name:'Блиц', icon:'⚡' },
-        { key:'bullet', name:'Пуля', icon:'🔫' }
-      ];
+      const cats = [{ key:'classical', name:'Классика', icon:'🐢' },{ key:'rapid', name:'Рапид', icon:'⏱' },{ key:'blitz', name:'Блиц', icon:'⚡' },{ key:'bullet', name:'Пуля', icon:'🔫' }];
       catEl.innerHTML = cats.map(c => {
         const r = user.categories[c.key] || { rating:user.rating, games:0 };
         return `<div class="catCard ${c.key}"><div class="catIcon">${c.icon}</div><div class="catName">${c.name}</div><div class="catRating">${r.rating}</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">${r.games||0} партий</div></div>`;
       }).join('');
     } else catEl.innerHTML = '';
-    renderRatingChart(history);
-    renderGamesList(games, user.username);
+    renderRatingChart(history); renderGamesList(games, user.username);
   }
 
   function renderRatingChart(history) {
@@ -1669,8 +1586,7 @@
         arenaStatesCache = states || {};
         const hash = JSON.stringify(arenasCache) + '|' + JSON.stringify(arenaStatesCache);
         if (hash === lastArenasHash && !force) return;
-        lastArenasHash = hash;
-        renderArenasGrid();
+        lastArenasHash = hash; renderArenasGrid();
       });
     });
     if (arenasRefreshHandle) clearInterval(arenasRefreshHandle);
@@ -1682,8 +1598,7 @@
             arenaStatesCache = states || {};
             const hash = JSON.stringify(arenasCache) + '|' + JSON.stringify(arenaStatesCache);
             if (hash === lastArenasHash) return;
-            lastArenasHash = hash;
-            renderArenasGrid();
+            lastArenasHash = hash; renderArenasGrid();
           });
         });
       }
@@ -1696,13 +1611,10 @@
   function formatTime(s) { s = Math.max(0, Math.floor(s)); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
 
   function renderArenasGrid() {
-    const wrap = document.getElementById('arenasGridWrap');
-    if (!wrap) return;
+    const wrap = document.getElementById('arenasGridWrap'); if (!wrap) return;
     if (!arenasCache || !arenasCache.length) { wrap.innerHTML = '<div class="arenasEmpty">Нет доступных арен</div>'; return; }
     const now = Date.now();
-    const SLOT_MS = 10 * 60 * 1000;
-    const SLOT_PX = 180;
-    const COLS = 36;
+    const SLOT_MS = 10 * 60 * 1000, SLOT_PX = 180, COLS = 36;
     const startMs = Math.floor((now - SLOT_MS) / SLOT_MS) * SLOT_MS;
     const endMs = startMs + COLS * SLOT_MS;
     const visible = arenasCache.filter(a => a.endsAt > startMs && a.startsAt < endMs);
@@ -1710,16 +1622,12 @@
     const rows = [];
     for (const arena of sorted) {
       let placed = false;
-      for (const row of rows) {
-        const last = row[row.length - 1];
-        if (last.endsAt <= arena.startsAt) { row.push(arena); placed = true; break; }
-      }
+      for (const row of rows) { const last = row[row.length - 1]; if (last.endsAt <= arena.startsAt) { row.push(arena); placed = true; break; } }
       if (!placed) rows.push([arena]);
     }
     const toPx = (ts) => ((ts - startMs) / SLOT_MS) * SLOT_PX;
     const rowWidth = COLS * SLOT_PX;
-    let html = '<div class="arenasScroller">';
-    html += '<div class="timeRow">';
+    let html = '<div class="arenasScroller"><div class="timeRow">';
     for (let i = 0; i < COLS; i++) {
       const t = startMs + i * SLOT_MS;
       const isNow = Math.abs(t - now) < SLOT_MS / 2;
@@ -1759,26 +1667,20 @@
     show('arenaPageScreen');
     document.querySelectorAll('#mainNav a').forEach(a => a.classList.remove('active'));
     document.getElementById('arenaChatMessages').innerHTML = '';
-    lastArenaStateHash = '';
-    lastArenaGamesHash = '';
+    lastArenaStateHash = ''; lastArenaGamesHash = '';
     socket.emit('joinArenaRoom', { arenaId }, (res) => {
       if (res && res.ok && Array.isArray(res.chat)) {
-        const box = document.getElementById('arenaChatMessages');
-        box.innerHTML = '';
+        const box = document.getElementById('arenaChatMessages'); box.innerHTML = '';
         res.chat.forEach(renderArenaChatMsg);
       }
     });
     loadArenaPage();
     if (arenaPageRefreshHandle) clearInterval(arenaPageRefreshHandle);
-    arenaPageRefreshHandle = setInterval(() => {
-      if (document.getElementById('arenaPageScreen').classList.contains('active')) loadArenaPage();
-    }, 5000);
+    arenaPageRefreshHandle = setInterval(() => { if (document.getElementById('arenaPageScreen').classList.contains('active')) loadArenaPage(); }, 5000);
     if (arenaStatusTickHandle) clearInterval(arenaStatusTickHandle);
     arenaStatusTickHandle = setInterval(tickArenaStatus, 1000);
     if (arenaGamesRefreshHandle) clearInterval(arenaGamesRefreshHandle);
-    arenaGamesRefreshHandle = setInterval(() => {
-      if (document.getElementById('arenaPageScreen').classList.contains('active')) renderArenaGamesList();
-    }, 10000);
+    arenaGamesRefreshHandle = setInterval(() => { if (document.getElementById('arenaPageScreen').classList.contains('active')) renderArenaGamesList(); }, 10000);
   }
   window.openArenaPage = openArenaPage;
 
@@ -1806,10 +1708,7 @@
       updateArenaJoinButton(state);
       renderArenaPairingBox(state);
       const stateHash = JSON.stringify(state.participants) + '|' + state.paused + '|' + state.phase;
-      if (stateHash !== lastArenaStateHash) {
-        lastArenaStateHash = stateHash;
-        renderArenaParticipants(arena, state);
-      }
+      if (stateHash !== lastArenaStateHash) { lastArenaStateHash = stateHash; renderArenaParticipants(arena, state); }
       tickArenaStatus();
     });
   }
@@ -1840,23 +1739,22 @@
 
   function updateArenaJoinButton(state) {
     const wrap = document.getElementById('arenaJoinBtnWrap');
-    if (state.phase === 'finished') { wrap.innerHTML = `<button class="secondary" disabled style="width:200px;">ЗАВЕРШЕНА</button>`; return; }
+    if (state.phase === 'finished') { wrap.innerHTML = `<button class="secondary" disabled style="width:180px;">ЗАВЕРШЕНА</button>`; return; }
     if (state.phase === 'waiting') {
-      if (state.joined) wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="leaveCurrentArena()">ОТМЕНИТЬ УЧАСТИЕ</button>`;
+      if (state.joined) wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="leaveCurrentArena()">ОТМЕНИТЬ</button>`;
       else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="joinCurrentArena()">УЧАСТВОВАТЬ</button>`;
       return;
     }
     if (state.joined) {
-      if (state.paused) wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="pauseCurrentArena()">▶ ПРОДОЛЖИТЬ</button>`;
+      if (state.paused) wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="pauseCurrentArena()">▶ ИГРАТЬ</button>`;
       else wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="pauseCurrentArena()">⏸ ПАУЗА</button>`;
     } else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="joinCurrentArena()">УЧАСТВОВАТЬ</button>`;
   }
 
   function renderArenaPairingBox(state) {
-    const box = document.getElementById('arenaPairingBox');
-    if (!box) return;
+    const box = document.getElementById('arenaPairingBox'); if (!box) return;
     if (state.phase !== 'live') { box.style.display = 'none'; return; }
-    if (!state.joined) { box.style.display = 'flex'; box.classList.remove('searching'); box.innerHTML = `<span>Чтобы участвовать в жеребьёвке, нажмите «УЧАСТВОВАТЬ».</span>`; return; }
+    if (!state.joined) { box.style.display = 'flex'; box.classList.remove('searching'); box.innerHTML = `<span>Нажмите «УЧАСТВОВАТЬ» для жеребьёвки.</span>`; return; }
     if (state.paused) { box.style.display = 'flex'; box.classList.remove('searching'); box.innerHTML = `<span>⏸ Вы на паузе.</span>`; return; }
     if (state.pairingNow) { box.style.display = 'flex'; box.classList.add('searching'); box.innerHTML = `<div class="spinner"></div><span>Идёт жеребьёвка: <b>${escapeHtml(state.pairingNow)}</b></span>`; return; }
     box.style.display = 'flex'; box.classList.add('searching');
@@ -1866,7 +1764,7 @@
   function renderArenaParticipants(arena, state) {
     const body = document.getElementById('arenaTableBody');
     const list = state.participants || [];
-    if (!list.length) { body.innerHTML = '<div class="arenasEmpty">Пока никто не зарегистрировался</div>'; return; }
+    if (!list.length) { body.innerHTML = '<div class="arenasEmpty" style="padding:20px;">Пока никто не зарегистрировался</div>'; return; }
     const myName = me ? me.username : null;
     const search = (document.getElementById('arenaSearchInput').value || '').trim().toLowerCase();
     const filtered = search ? list.filter(p => p.username.toLowerCase().includes(search)) : list;
@@ -1892,11 +1790,9 @@
   window.filterArenaParticipants = filterArenaParticipants;
 
   function renderArenaGamesList() {
-    const el = document.getElementById('arenaGamesList');
-    if (!el) return;
+    const el = document.getElementById('arenaGamesList'); if (!el) return;
     socket.emit('getArenaGames', { arenaId: currentArenaId }, (list) => {
-      const hash = JSON.stringify(list);
-      if (hash === lastArenaGamesHash) return;
+      const hash = JSON.stringify(list); if (hash === lastArenaGamesHash) return;
       lastArenaGamesHash = hash;
       if (!list || !list.length) { el.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>'; return; }
       el.innerHTML = list.map(g => `<div class="arenaGameCard"><div class="names"><div><span class="liveDot"></span>${nickHtml(g.white, g.whiteIsAdmin)}</div><div style="padding-left:14px;">${nickHtml(g.black, g.blackIsAdmin)}</div></div><div class="meta"><span>${g.moveCount} ходов</span><span>${formatTime(g.timeW)} · ${formatTime(g.timeB)}</span></div></div>`).join('');
@@ -1909,10 +1805,7 @@
     const medals = ['gold','silver','bronze'];
     const places = ['🥇','🥈','🥉'];
     const order = top3.length >= 3 ? [1,0,2] : top3.map((_,i)=>i);
-    podium.innerHTML = order.map(i => {
-      const p = top3[i]; if (!p) return '';
-      return `<div class="awbItem ${medals[i]}"><div class="place">${places[i]}</div><div class="n">${nickHtml(p.username, p.username === 'PeshkaSasha')}</div><div class="s">${p.score}</div></div>`;
-    }).join('');
+    podium.innerHTML = order.map(i => { const p = top3[i]; if (!p) return ''; return `<div class="awbItem ${medals[i]}"><div class="place">${places[i]}</div><div class="n">${nickHtml(p.username, p.username === 'PeshkaSasha')}</div><div class="s">${p.score}</div></div>`; }).join('');
     banner.style.display = 'block';
   }
 
@@ -1960,8 +1853,7 @@
     const div = document.createElement('div');
     if (msg.system) { div.className = 'msg sys'; div.textContent = msg.text; }
     else {
-      div.className = 'msg';
-      div.dataset.msgId = msg.id || '';
+      div.className = 'msg'; div.dataset.msgId = msg.id || '';
       const time = new Date(msg.ts).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
       let modHtml = '';
       if (me && me.isMod) modHtml = `<span class="modBtn always" title="Модерация" style="cursor:pointer;color:var(--muted);margin-left:6px;">⚙</span>`;
@@ -1987,9 +1879,7 @@
   socket.on('stats', (s) => {
     if (!s) return;
     const e1 = document.getElementById('statOnline'), e2 = document.getElementById('statGames'), e3 = document.getElementById('statActive');
-    if (e1) e1.textContent = s.online;
-    if (e2) e2.textContent = s.games;
-    if (e3) e3.textContent = s.activeGames || 0;
+    if (e1) e1.textContent = s.online; if (e2) e2.textContent = s.games; if (e3) e3.textContent = s.activeGames || 0;
     if (document.getElementById('watchScreen').classList.contains('active')) refreshWatchList(false);
   });
 
@@ -2059,9 +1949,7 @@
     if (gameEnded) return;
     let winner = null;
     if (result === 'w') winner = 'w'; else if (result === 'b') winner = 'b';
-    if (reason !== 'Мат' && reason !== 'Пат') {
-      if (!winner) sndDraw(); else if (winner === myColor) sndWin(); else sndLose();
-    }
+    if (reason !== 'Мат' && reason !== 'Пат') { if (!winner) sndDraw(); else if (winner === myColor) sndWin(); else sndLose(); }
     if (typeof isArena === 'boolean') currentGameIsArena = isArena;
     if (arenaId) currentArenaId = arenaId;
     endGame(winner, reason, true, currentGameIsArena);
