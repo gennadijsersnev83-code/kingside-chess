@@ -457,8 +457,6 @@ async function finishGame(lobbyId, result, reason) {
 }
 
 // ======================= АРЕНЫ =======================
-// durationMin — реальная длительность арены. Блок на таймлайне рисуется
-// от startsAt до startsAt + durationMin минут.
 const ARENA_TEMPLATES = [
   {
     id: 'bullet-halfhour',
@@ -889,7 +887,6 @@ function getArenaSchedule(hoursAhead) {
       };
       result.push(instance);
 
-      // Создаём состояние только для арен, которые уже идут или начнутся в течение 6 часов.
       const createAheadMs = 6 * 3600 * 1000;
       if (status === 'live' || (status === 'upcoming' && t - now < createAheadMs)) {
         getOrCreateArenaState(instance);
@@ -1315,7 +1312,10 @@ io.on('connection', (socket) => {
     socket.to(lobbyId).emit('drawDeclined');
   });
 
-  socket.on('getArenas', (cb) => { if (typeof cb === 'function') cb(getArenaSchedule(48)); });
+  socket.on('getArenas', (cb) => {
+    if (typeof cb !== 'function') return;
+    cb({ list: getArenaSchedule(48), serverNow: Date.now() });
+  });
 
   socket.on('getMyArenaStates', (cb) => {
     if (typeof cb !== 'function') return;
@@ -1636,7 +1636,7 @@ io.on('connection', (socket) => {
   server.listen(PORT, '0.0.0.0', () => {
     console.log('==================================================');
     console.log('  Kingside — сервер запущен');
-    console.log(`  Порт: ${PORT}`);
+    console.log('  Порт: ' + PORT);
     console.log('==================================================');
   });
 })();
