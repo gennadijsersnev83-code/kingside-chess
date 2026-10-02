@@ -695,7 +695,7 @@
 (function() {
   'use strict';
 
-  // ====== ВРЕМЯ В МСК (единая шкала для клиента) ======
+  // ====== ВРЕМЯ В МСК ======
   const MSK_TZ = 'Europe/Moscow';
   function fmtMskHM(ts) {
     return new Intl.DateTimeFormat('ru-RU', {
@@ -705,17 +705,7 @@
       hour12: false
     }).format(new Date(ts));
   }
-  // Для логов/дебага — с датой
-  function fmtMskFull(ts) {
-    return new Intl.DateTimeFormat('ru-RU', {
-      timeZone: MSK_TZ,
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-      hour12: false
-    }).format(new Date(ts));
-  }
   window.fmtMskHM = fmtMskHM;
-  window.fmtMskFull = fmtMskFull;
 
   const socket = io({
     transports: ['websocket', 'polling'],
@@ -1750,50 +1740,61 @@
   function formatMMSS(ms) { const t = Math.max(0, Math.floor(ms/1000)); return String(Math.floor(t/60)).padStart(2,'0') + ':' + String(t%60).padStart(2,'0'); }
   function formatTime(s) { s = Math.max(0, Math.floor(s)); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
 
-  // ====== ТАЙМЛАЙН АРЕН: всё в МСК ======
+  // ====== ТАЙМЛАЙН АРЕН: всё в клиентской шкале ======
+  // Локальное "сейчас" пользователя. Серверные startsAt/endsAt приводим к клиентской
+  // шкале через `ts - arenaServerOffsetMs`, чтобы блоки и now-line были согласованы.
   function renderArenasGrid() {
     const wrap = document.getElementById('arenasGridWrap'); if (!wrap) return;
     if (!arenasCache || !arenasCache.length) { wrap.innerHTML = '<div class="arenasEmpty">Нет доступных арен</div>'; return; }
 
-    // "сейчас" с поправкой на сервер (если сервер дрейфует)
-    const now = Date.now() + arenaServerOffsetMs;
+    // ЛОКАЛЬНОЕ «сейчас» — часы браузера пользователя.
+    const localNow = Date.now();
+
+    // Приводим серверные timestamp'ы к клиентской шкале.
+    // arenaServerOffsetMs = serverNow - Date.now(). Если сервер отстаёт на 5 мин,
+    // offset = -5м, и `ts - offset` прибавит 5 мин, вернув реальную шкалу.
+    const toClient = (ts) => ts - arenaServerOffsetMs;
 
     const isMobile = window.matchMedia('(max-width: 700px)').matches;
     const SLOT_PX = isMobile ? 120 : 180;
     const SLOT_MS = 10 * 60 * 1000;
     const COLS = isMobile ? 24 : 36;
 
-    // Сетка привязана к МСК-слотам :00 / :10 / :20 ...
-    // Чтобы округлить абсолютный timestamp к ближайшему нижнему 10-мин слоту МСК,
-    // используем: сдвиг на MSK (3ч), округление вниз до 10 мин, обратный сдвиг.
-    // Поскольку МСК смещение кратно 10 мин, это эквивалентно округлению вниз по UTC —
-    // но делаем явно, чтобы не зависеть от TZ.
-    const MSK_OFFSET_MS = 3 * 3600 * 1000;
-    const shifted = now + MSK_OFFSET_MS;
-    const startMs = Math.floor(shifted / SLOT_MS) * SLOT_MS - MSK_OFFSET_MS;
+    // Сетка — от ЛОКАЛЬНОГО now, округлённого вниз до 10 минут.
+    const startMs = Math.floor(localNow / SLOT_MS) * SLOT_MS;
     const endMs = startMs + COLS * SLOT_MS;
 
-    const toPx = (ts) => ((ts - startMs) / SLOT_MS) * SLOT_PX;
+    // Перевод client-time → пиксели.
+    const toPx = (clientTs) => ((clientTs - startMs) / SLOT_MS) * SLOT_PX;
 
-    const visible = arenasCache.filter(a => a.endsAt > startMs && a.startsAt < endMs);
-    const sorted = visible.slice().sort((a, b) => a.startsAt - b.startsAt);
+    // Всё в client-шкале.
+    const visible = arenasCache
+      .map(a => ({
+        ...a,
+        clientStartsAt: toClient(a.startsAt),
+        clientEndsAt: toClient(a.endsAt)
+      }))
+      .filter(a => a.clientEndsAt > startMs && a.clientStartsAt < endMs)
+      .sort((a, b) => a.clientStartsAt - b.clientStartsAt);
 
+    // Раскладка по дорожкам.
     const rows = [];
-    for (const arena of sorted) {
+    for (const arena of visible) {
       let placed = false;
       for (const row of rows) {
         const last = row[row.length - 1];
-        if (last.endsAt <= arena.startsAt) { row.push(arena); placed = true; break; }
+        if (last.clientEndsAt <= arena.clientStartsAt) { row.push(arena); placed = true; break; }
       }
       if (!placed) rows.push([arena]);
     }
 
     const rowWidth = COLS * SLOT_PX;
 
+    // timeRow — метки ровно по ЛОКАЛЬНОЙ 10-минутной сетке.
     let html = '<div class="arenasScroller"><div class="timeRow" style="width:' + rowWidth + 'px;">';
     for (let i = 0; i < COLS; i++) {
       const t = startMs + i * SLOT_MS;
-      const isNow = t <= now && now < t + SLOT_MS;
+      const isNow = t <= localNow && localNow < t + SLOT_MS;
       html += '<div class="timeCell' + (isNow ? ' now' : '') + '" style="width:' + SLOT_PX + 'px;min-width:' + SLOT_PX + 'px;">' + fmtMskHM(t) + '</div>';
     }
     html += '</div>';
@@ -1803,9 +1804,9 @@
     for (const row of rows) {
       html += '<div class="arenaRowGrid" style="width:' + rowWidth + 'px;">';
       for (const arena of row) {
-        const left = toPx(arena.startsAt);
-        const width = toPx(arena.endsAt) - left;
-        const isPast = arena.endsAt < now;
+        const left = toPx(arena.clientStartsAt);
+        const width = toPx(arena.clientEndsAt) - left;
+        const isPast = arena.clientEndsAt < localNow;
         const isLive = arena.status === 'live';
         const colorClass = arena.color || 'blitz';
         const myState = arenaStatesCache[arena.id];
@@ -1817,24 +1818,25 @@
         const clickAttr = clickable ? 'onclick="openArenaPage(\'' + arena.id + '\')"' : '';
         const cursorStyle = clickable ? 'cursor:pointer' : 'cursor:default';
         const showInfo = width >= 100;
-        const dur = Math.round((arena.endsAt - arena.startsAt) / 60000);
+        const dur = Math.round((arena.clientEndsAt - arena.clientStartsAt) / 60000);
         html += '<div class="' + cls + '" '
               + 'style="left:' + left.toFixed(2) + 'px; width:' + width.toFixed(2) + 'px; ' + cursorStyle + '" '
-              + 'data-start="' + arena.startsAt + '" data-end="' + arena.endsAt + '" '
-              + 'data-starts="' + fmtMskHM(arena.startsAt) + '" data-ends="' + fmtMskHM(arena.endsAt) + '" '
+              + 'data-start="' + arena.clientStartsAt + '" data-end="' + arena.clientEndsAt + '" '
+              + 'data-starts="' + fmtMskHM(arena.clientStartsAt) + '" data-ends="' + fmtMskHM(arena.clientEndsAt) + '" '
               + 'data-duration-min="' + dur + '" '
               + clickAttr
-              + ' title="' + escapeHtml(arena.name) + ' · ' + tinfo + ' · ' + fmtMskHM(arena.startsAt) + '–' + fmtMskHM(arena.endsAt) + ' МСК (' + dur + ' мин)">'
+              + ' title="' + escapeHtml(arena.name) + ' · ' + tinfo + ' · ' + fmtMskHM(arena.clientStartsAt) + '–' + fmtMskHM(arena.clientEndsAt) + ' МСК (' + dur + ' мин)">'
               + '<div class="tname">' + escapeHtml(arena.name) + '</div>'
               + (showInfo ? '<div class="tinfo"><span>' + tinfo + '</span><span>👥 ' + participantsCount + '</span></div>' : '')
-              + (debug ? '<div class="arenaDebug">' + fmtMskHM(arena.startsAt) + '–' + fmtMskHM(arena.endsAt) + ' (' + dur + 'м) L=' + left.toFixed(0) + ' W=' + width.toFixed(0) + '</div>' : '')
+              + (debug ? '<div class="arenaDebug">' + fmtMskHM(arena.clientStartsAt) + '–' + fmtMskHM(arena.clientEndsAt) + ' (' + dur + 'м) L=' + left.toFixed(0) + ' W=' + width.toFixed(0) + '</div>' : '')
               + '</div>';
       }
       html += '</div>';
     }
 
-    const nowLeft = toPx(now);
-    html += '<div class="nowLine" style="left:' + nowLeft.toFixed(2) + 'px;" data-label="' + fmtMskHM(now) + ' МСК"></div></div>';
+    // now-line — строго по локальному времени.
+    const nowLeft = toPx(localNow);
+    html += '<div class="nowLine" style="left:' + nowLeft.toFixed(2) + 'px;" data-label="' + fmtMskHM(localNow) + ' МСК"></div></div>';
 
     wrap.innerHTML = html;
 
