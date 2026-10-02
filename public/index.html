@@ -121,18 +121,19 @@
   .watchBoard .wbBoard { display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); width:100%; height:100%; border:3px solid #0a0a0a; border-radius:4px; box-shadow:0 8px 30px rgba(0,0,0,.5); user-select:none; overflow:hidden; }
   .watchBoard .wbEmpty { padding:80px 20px; text-align:center; color:var(--muted); font-size:14px; }
   .arenasHeader { display:flex; justify-content:space-between; align-items:center; margin:0 0 16px 0; }
-  .arenasHeader h1 { font-weight:300; font-size:32px; color:var(--text-bright); margin:0; }
+  .arenasHeader h1 { font-weight:300; font-size:32px; color:var(--text-bright); margin:0; display:flex; align-items:center; gap:9px; }
+  .mskBadge { display:inline-flex; align-items:center; height:22px; padding:0 7px; border-radius:4px; border:1px solid rgba(191,129,29,.45); background:rgba(191,129,29,.10); color:var(--accent); font-size:11px; font-weight:700; letter-spacing:.2px; vertical-align:middle; }
   .arenasGridWrap { background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden; }
   .arenasEmpty { padding:60px 20px; text-align:center; color:var(--muted); font-size:14px; }
   .arenasScroller { overflow-x:auto; overflow-y:hidden; position:relative; }
-  .timeRow { display:flex; padding:0; border-bottom:1px solid var(--border); background:var(--panel-2); position:sticky; top:0; z-index:2; height:32px; }
+  .timeRow { display:flex; padding:0; border-bottom:1px solid var(--border); background:var(--panel-2); position:sticky; top:0; z-index:2; height:28px; }
   .timeCell { color:var(--muted); font-size:11px; text-align:left; font-weight:500; flex-shrink:0; padding:0; border-right:1px solid rgba(58,56,51,.5); box-sizing:border-box; position:relative; overflow:visible; }
   .timeTick { position:absolute; top:8px; width:33.3333%; white-space:nowrap; text-align:center; transform:translateX(-50%); pointer-events:none; }
   .timeTick.first { transform:none; text-align:left; padding-left:4px; box-sizing:border-box; }
   .timeCell.now { color:var(--accent); font-weight:700; background:rgba(191,129,29,.08); }
-  .arenaRowGrid { position:relative; height:52px; border-bottom:1px solid rgba(58,56,51,.35); }
+  .arenaRowGrid { position:relative; height:44px; border-bottom:1px solid rgba(58,56,51,.35); }
   .arenaRowGrid:last-child { border-bottom:none; }
-  .arenaBlock { position:absolute; top:4px; bottom:4px; border-radius:6px; padding:4px 8px; color:#fff; cursor:pointer; display:flex; flex-direction:column; justify-content:center; gap:1px; transition:transform .15s, box-shadow .15s, filter .15s; overflow:hidden; box-sizing:border-box; }
+  .arenaBlock { position:absolute; top:3px; bottom:3px; border-radius:6px; padding:4px 8px; color:#fff; cursor:pointer; display:flex; flex-direction:column; justify-content:center; gap:1px; transition:transform .15s, box-shadow .15s, filter .15s; overflow:hidden; box-sizing:border-box; }
   .arenaBlock:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.4); filter:brightness(1.08); z-index:4; }
   .arenaBlock .tname { font-size:12px; font-weight:700; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .arenaBlock .tinfo { font-size:10px; opacity:.9; line-height:1.1; display:flex; justify-content:space-between; gap:6px; white-space:nowrap; overflow:hidden; }
@@ -149,7 +150,7 @@
   .arenaDebug { position:absolute; bottom:-14px; left:0; font-size:10px; color:#e5484d; white-space:nowrap; pointer-events:none; }
   .nowLine { position:absolute; top:0; bottom:0; width:2px; background:#e5484d; z-index:3; pointer-events:none; }
   .nowLine::before { content:'▼'; position:absolute; top:-2px; left:50%; transform:translateX(-50%); color:#e5484d; font-size:10px; }
-  .nowLine::after { content:attr(data-label); position:absolute; top:-14px; left:4px; font-size:10px; color:#e5484d; font-weight:700; background:rgba(22,21,18,.9); padding:0 3px; border-radius:2px; }
+  .nowLine::after { content:none; position:absolute; top:-14px; left:4px; font-size:10px; color:#e5484d; font-weight:700; background:rgba(22,21,18,.9); padding:0 3px; border-radius:2px; }
   .arenaStatusRow { display:flex; align-items:center; gap:16px; padding:10px 14px; background:var(--panel-2); border-radius:6px; border-left:4px solid var(--accent); }
   .arenaStatusRow.live { border-left-color:var(--green-2); background:rgba(98,153,36,.08); }
   .arenaStatusRow.finished { border-left-color:var(--muted); opacity:.7; }
@@ -521,7 +522,7 @@
   <section id="arenasScreen" class="screen">
     <div style="max-width:1100px; margin:0 auto;">
       <div class="arenasHeader">
-        <h1>Турниры</h1>
+        <h1>Турниры <span class="mskBadge">МСК</span></h1>
         <button class="primary" onclick="refreshArenas(true)">↻ Обновить</button>
       </div>
       <div class="arenasGridWrap" id="arenasGridWrap">
@@ -1836,7 +1837,7 @@
     }
 
     const nowLeft = toPx(localNow);
-    html += '<div class="nowLine" style="left:' + nowLeft.toFixed(2) + 'px;" data-label="' + fmtMskHM(localNow) + ' МСК"></div></div>';
+    html += '<div class="nowLine" style="left:' + nowLeft.toFixed(2) + 'px;"></div></div>';
 
     wrap.innerHTML = html;
 
@@ -2282,7 +2283,7 @@
       : Math.floor(localNow / SLOT_MS) * SLOT_MS;
     const nowLeft = ((localNow - startMs) / SLOT_MS) * SLOT_PX;
     nowLine.style.left = nowLeft.toFixed(2) + 'px';
-    nowLine.setAttribute('data-label', fmtMskHM(localNow) + ' МСК');
+    nowLine.removeAttribute('data-label');
     const cells = timeRow.querySelectorAll('.timeCell');
     const idx = Math.floor((localNow - startMs) / SLOT_MS);
     cells.forEach((c, i) => c.classList.toggle('now', i === idx && idx >= 0 && idx < cells.length));
