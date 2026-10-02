@@ -695,6 +695,28 @@
 (function() {
   'use strict';
 
+  // ====== ВРЕМЯ В МСК (единая шкала для клиента) ======
+  const MSK_TZ = 'Europe/Moscow';
+  function fmtMskHM(ts) {
+    return new Intl.DateTimeFormat('ru-RU', {
+      timeZone: MSK_TZ,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).format(new Date(ts));
+  }
+  // Для логов/дебага — с датой
+  function fmtMskFull(ts) {
+    return new Intl.DateTimeFormat('ru-RU', {
+      timeZone: MSK_TZ,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false
+    }).format(new Date(ts));
+  }
+  window.fmtMskHM = fmtMskHM;
+  window.fmtMskFull = fmtMskFull;
+
   const socket = io({
     transports: ['websocket', 'polling'],
     upgrade: true,
@@ -1406,7 +1428,7 @@
     const box = document.getElementById('chatMessages');
     const div = document.createElement('div');
     div.className = 'msg'; div.dataset.msgId = msg.id || '';
-    const time = new Date(msg.ts).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
+    const time = fmtMskHM(msg.ts);
     let modHtml = '';
     if (me && me.isMod) modHtml = `<span class="modBtn" data-mod-btn="1" title="Модерация">⚙</span>`;
     div.innerHTML = `<span class="u">${nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
@@ -1555,7 +1577,6 @@
     renderGamesList(games, user.username);
   }
 
-  // ====== ГРАФИК РЕЙТИНГА ПО ДНЯМ ======
   function renderRatingChart(history) {
     const wrap = document.getElementById('ratingChartWrap');
     if (!history || history.length < 2) {
@@ -1726,36 +1747,37 @@
   }
   window.refreshArenas = refreshArenas;
 
-  function fmtHHMM(ts) { const d = new Date(ts); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
   function formatMMSS(ms) { const t = Math.max(0, Math.floor(ms/1000)); return String(Math.floor(t/60)).padStart(2,'0') + ':' + String(t%60).padStart(2,'0'); }
   function formatTime(s) { s = Math.max(0, Math.floor(s)); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
 
-  // ====== ТАЙМЛАЙН АРЕН: ТОЧНАЯ привязка блока к [startsAt, endsAt] ======
+  // ====== ТАЙМЛАЙН АРЕН: всё в МСК ======
   function renderArenasGrid() {
     const wrap = document.getElementById('arenasGridWrap'); if (!wrap) return;
     if (!arenasCache || !arenasCache.length) { wrap.innerHTML = '<div class="arenasEmpty">Нет доступных арен</div>'; return; }
 
-    // "сейчас" с поправкой на сервер
+    // "сейчас" с поправкой на сервер (если сервер дрейфует)
     const now = Date.now() + arenaServerOffsetMs;
 
-    // Фиксированные размеры (desktop / mobile)
     const isMobile = window.matchMedia('(max-width: 700px)').matches;
-    const SLOT_PX = isMobile ? 120 : 180;      // 10 минут в пикселях
-    const SLOT_MS = 10 * 60 * 1000;            // 10 минут
+    const SLOT_PX = isMobile ? 120 : 180;
+    const SLOT_MS = 10 * 60 * 1000;
     const COLS = isMobile ? 24 : 36;
 
-    // startMs — округление now вниз до 10-минутного слота.
-    // ВАЖНО: используем UTC-getTime (без TZ-преобразований) — timestamp уже абсолютный.
-    const startMs = Math.floor(now / SLOT_MS) * SLOT_MS;
+    // Сетка привязана к МСК-слотам :00 / :10 / :20 ...
+    // Чтобы округлить абсолютный timestamp к ближайшему нижнему 10-мин слоту МСК,
+    // используем: сдвиг на MSK (3ч), округление вниз до 10 мин, обратный сдвиг.
+    // Поскольку МСК смещение кратно 10 мин, это эквивалентно округлению вниз по UTC —
+    // но делаем явно, чтобы не зависеть от TZ.
+    const MSK_OFFSET_MS = 3 * 3600 * 1000;
+    const shifted = now + MSK_OFFSET_MS;
+    const startMs = Math.floor(shifted / SLOT_MS) * SLOT_MS - MSK_OFFSET_MS;
     const endMs = startMs + COLS * SLOT_MS;
 
-    // Линейное преобразование времени в пиксели.
     const toPx = (ts) => ((ts - startMs) / SLOT_MS) * SLOT_PX;
 
     const visible = arenasCache.filter(a => a.endsAt > startMs && a.startsAt < endMs);
     const sorted = visible.slice().sort((a, b) => a.startsAt - b.startsAt);
 
-    // Раскладка по дорожкам
     const rows = [];
     for (const arena of sorted) {
       let placed = false;
@@ -1772,7 +1794,7 @@
     for (let i = 0; i < COLS; i++) {
       const t = startMs + i * SLOT_MS;
       const isNow = t <= now && now < t + SLOT_MS;
-      html += '<div class="timeCell' + (isNow ? ' now' : '') + '" style="width:' + SLOT_PX + 'px;min-width:' + SLOT_PX + 'px;">' + fmtHHMM(t) + '</div>';
+      html += '<div class="timeCell' + (isNow ? ' now' : '') + '" style="width:' + SLOT_PX + 'px;min-width:' + SLOT_PX + 'px;">' + fmtMskHM(t) + '</div>';
     }
     html += '</div>';
 
@@ -1799,20 +1821,20 @@
         html += '<div class="' + cls + '" '
               + 'style="left:' + left.toFixed(2) + 'px; width:' + width.toFixed(2) + 'px; ' + cursorStyle + '" '
               + 'data-start="' + arena.startsAt + '" data-end="' + arena.endsAt + '" '
-              + 'data-starts="' + fmtHHMM(arena.startsAt) + '" data-ends="' + fmtHHMM(arena.endsAt) + '" '
+              + 'data-starts="' + fmtMskHM(arena.startsAt) + '" data-ends="' + fmtMskHM(arena.endsAt) + '" '
               + 'data-duration-min="' + dur + '" '
               + clickAttr
-              + ' title="' + escapeHtml(arena.name) + ' · ' + tinfo + ' · ' + fmtHHMM(arena.startsAt) + '–' + fmtHHMM(arena.endsAt) + ' (' + dur + ' мин)">'
+              + ' title="' + escapeHtml(arena.name) + ' · ' + tinfo + ' · ' + fmtMskHM(arena.startsAt) + '–' + fmtMskHM(arena.endsAt) + ' МСК (' + dur + ' мин)">'
               + '<div class="tname">' + escapeHtml(arena.name) + '</div>'
               + (showInfo ? '<div class="tinfo"><span>' + tinfo + '</span><span>👥 ' + participantsCount + '</span></div>' : '')
-              + (debug ? '<div class="arenaDebug">' + fmtHHMM(arena.startsAt) + '–' + fmtHHMM(arena.endsAt) + ' (' + dur + 'м) L=' + left.toFixed(0) + ' W=' + width.toFixed(0) + '</div>' : '')
+              + (debug ? '<div class="arenaDebug">' + fmtMskHM(arena.startsAt) + '–' + fmtMskHM(arena.endsAt) + ' (' + dur + 'м) L=' + left.toFixed(0) + ' W=' + width.toFixed(0) + '</div>' : '')
               + '</div>';
       }
       html += '</div>';
     }
 
     const nowLeft = toPx(now);
-    html += '<div class="nowLine" style="left:' + nowLeft.toFixed(2) + 'px;" data-label="' + fmtHHMM(now) + '"></div></div>';
+    html += '<div class="nowLine" style="left:' + nowLeft.toFixed(2) + 'px;" data-label="' + fmtMskHM(now) + ' МСК"></div></div>';
 
     wrap.innerHTML = html;
 
@@ -1896,10 +1918,10 @@
   }
   function renderArenaPage(arena, state) {
     document.getElementById('arenaPageName').textContent = arena.name;
-    const phaseText = { 'waiting':'Начало в '+fmtHHMM(arena.startsAt), 'live':'Идёт сейчас', 'finished':'Завершена' }[state.phase] || '';
+    const phaseText = { 'waiting':'Начало в '+fmtMskHM(arena.startsAt)+' МСК', 'live':'Идёт сейчас', 'finished':'Завершена' }[state.phase] || '';
     document.getElementById('arenaPageSub').textContent = `${arena.timeControl}+${arena.increment} · ${phaseText}`;
     document.getElementById('aInfoTitle').textContent = arena.name;
-    document.getElementById('aInfoTime').textContent = fmtHHMM(arena.startsAt) + ' – ' + fmtHHMM(arena.endsAt);
+    document.getElementById('aInfoTime').textContent = fmtMskHM(arena.startsAt) + ' – ' + fmtMskHM(arena.endsAt) + ' МСК';
     document.getElementById('aInfoDesc').textContent = arena.description;
     if (state.top3 && state.top3.length) showArenaWinnerBanner(state.top3);
     else document.getElementById('arenaWinnerBanner').style.display = 'none';
@@ -1976,7 +1998,7 @@
       listEl.innerHTML = done.slice(0, 50).map(g => {
         const resChar = g.result === 'w' ? '1-0' : (g.result === 'b' ? '0-1' : '½-½');
         const resCls = g.result === 'draw' ? 'd' : 'w';
-        const dateStr = new Date(g.finishedAt).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
+        const dateStr = fmtMskHM(g.finishedAt);
         const wR = g.whiteRating ? `<span class="rating"> ${g.whiteRating}</span>` : '';
         const bR = g.blackRating ? `<span class="rating"> ${g.blackRating}</span>` : '';
         return `<div class="arenaGameCard">
@@ -2076,7 +2098,7 @@
     if (msg.system) { div.className = 'msg sys'; div.textContent = msg.text; }
     else {
       div.className = 'msg'; div.dataset.msgId = msg.id || '';
-      const time = new Date(msg.ts).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
+      const time = fmtMskHM(msg.ts);
       let modHtml = '';
       if (me && me.isMod) modHtml = `<span class="modBtn always" title="Модерация" style="cursor:pointer;color:var(--muted);margin-left:6px;">⚙</span>`;
       div.innerHTML = `<span class="u">${nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
