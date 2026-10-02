@@ -1087,6 +1087,10 @@
     });
   }
   window.refreshStats = refreshStats;
+
+  let knownWaitingLobbies = new Map();
+  let disappearedLobbies = new Map();
+
   function renderLobbyTab() {
     const el = document.getElementById('lobbyTabContent');
     if (currentLobbyTab === 'create') {
@@ -1104,29 +1108,71 @@
             <button class="primary" onclick="createCustomLobby()" style="padding:8px 18px;">Создать</button>
           </div>
         </div>`;
-    } else {
-      socket.emit('getLobbies', (list) => {
-        el.innerHTML = '';
-        if (!list || !list.length) { el.innerHTML = '<div class="arenaEmpty">Нет активных вызовов.</div>'; return; }
-        const wrap = document.createElement('div'); wrap.className = 'lobbyList';
-        list.forEach(l => {
-          const isMine = me && l.host === me.username;
-          const row = document.createElement('div');
-          row.className = 'lobbyRow' + (isMine ? ' mine' : '');
-          row.style.cursor = isMine ? 'pointer' : 'default';
-          row.innerHTML = `<div class="icon">♟</div><div class="name">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod)}${isMine ? '<span class="mineTag">(ваш вызов)</span>' : ''}</div><div class="time">${l.time}+${l.inc}</div><div class="mode">${l.status === 'waiting' ? 'ожидание' : 'идёт'}</div><div class="action"></div>`;
-          if (l.status === 'waiting' && !isMine) { const btn = document.createElement('button'); btn.className = 'primary'; btn.textContent = 'Играть'; btn.onclick = (e) => { e.stopPropagation(); socket.emit('joinLobby', { id: l.id }, (r) => { if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; } lobbyId = r.id || l.id; }); }; row.querySelector('.action').appendChild(btn); }
-          if (isMine && l.status === 'waiting') { row.onclick = () => { if (!confirm('Отменить вызов?')) return; socket.emit('cancelLobby', { id: l.id }, () => refreshLobbies()); }; }
-          wrap.appendChild(row);
-        });
-        el.appendChild(wrap);
-      });
+      return;
     }
+
+    socket.emit('getLobbies', (list) => {
+      el.innerHTML = '';
+      const current = new Map();
+      if (list && list.length) {
+        for (const l of list) if (l.status === 'waiting') current.set(l.id, l);
+      }
+      const now = Date.now();
+      for (const [id, data] of knownWaitingLobbies) {
+        if (!current.has(id)) disappearedLobbies.set(id, { data, removedAt: now + 5000 });
+      }
+      knownWaitingLobbies = current;
+      for (const [id, info] of disappearedLobbies) {
+        if (Date.now() > info.removedAt) disappearedLobbies.delete(id);
+      }
+
+      const allItems = [];
+      for (const [id, l] of current) allItems.push({ kind: 'waiting', id, data: l });
+      for (const [id, info] of disappearedLobbies) allItems.push({ kind: 'started', id, data: info.data });
+      if (!allItems.length) { el.innerHTML = '<div class="arenaEmpty">Нет активных вызовов.</div>'; return; }
+
+      allItems.sort((a, b) => { if (a.kind !== b.kind) return a.kind === 'started' ? -1 : 1; return (b.data.time || 0) - (a.data.time || 0); });
+
+      const wrap = document.createElement('div'); wrap.className = 'lobbyList';
+      for (const item of allItems) {
+        const l = item.data;
+        const isMine = me && l.host === me.username;
+        const row = document.createElement('div');
+        row.className = 'lobbyRow' + (isMine && item.kind === 'waiting' ? ' mine' : '');
+        if (item.kind === 'started') {
+          row.style.opacity = '0.45';
+          row.style.cursor = 'default';
+          row.style.transition = 'opacity .4s';
+          row.innerHTML = `<div class="icon">⚔</div><div class="name">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod)}</div><div class="time">${l.time}+${l.inc}</div><div class="mode" style="color:var(--green-2);font-weight:600;">партия началась</div><div class="action"></div>`;
+        } else {
+          row.style.cursor = isMine ? 'pointer' : 'default';
+          row.innerHTML = `<div class="icon">♟</div><div class="name">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod)}${isMine ? '<span class="mineTag">(ваш вызов)</span>' : ''}</div><div class="time">${l.time}+${l.inc}</div><div class="mode">ожидание</div><div class="action"></div>`;
+          if (!isMine) {
+            const btn = document.createElement('button'); btn.className = 'primary'; btn.textContent = 'Играть';
+            btn.onclick = (e) => { e.stopPropagation(); socket.emit('joinLobby', { id: l.id }, (r) => { if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; } lobbyId = r.id || l.id; }); };
+            row.querySelector('.action').appendChild(btn);
+          } else {
+            row.onclick = () => { socket.emit('cancelLobby', { id: l.id }, () => refreshLobbies()); };
+          }
+        }
+        wrap.appendChild(row);
+      }
+      el.appendChild(wrap);
+
+      if (disappearedLobbies.size) {
+        setTimeout(() => { if (currentLobbyTab === 'waiting') renderLobbyTab(); }, 5200);
+      }
+    });
   }
   function refreshLobbies() { if (document.getElementById('lobbyScreen').classList.contains('active')) renderLobbyTab(); }
   function quickStart(time, inc) {
     socket.emit('createLobby', { time, inc }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
+      if (res.matched) {
+        // Сервер соединил нас с уже ожидающим — игра начнётся через gameStart
+        lobbyId = res.id;
+        return;
+      }
       lobbyId = res.id; myColor = 'w';
       currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
       moveHistory = []; moveFens = []; viewIndex = -1; lastMove = null;
@@ -1171,8 +1217,15 @@
     if (!winner) { text = 'Ничья'; cls = ''; } else if (winner === myColor) { text = 'Победа!'; cls = 'win'; } else { text = 'Поражение'; cls = 'lose'; }
     title.textContent = text; title.className = 'grTitle ' + cls;
     sub.textContent = reason || ''; actions.innerHTML = '';
-    if (currentGameIsArena) { const b1 = document.createElement('button'); b1.className = 'primary'; b1.textContent = 'Вернуться к турниру'; b1.onclick = () => { hideGameResultBar(); cleanupGame(); if (currentArenaId) openArenaPage(currentArenaId); else navTo('arenas'); }; actions.appendChild(b1); }
-    else { const b1 = document.createElement('button'); b1.className = 'primary'; b1.textContent = 'Найти другого соперника'; b1.onclick = () => { hideGameResultBar(); cleanupGame(); navTo('lobby'); switchLobbyTab('waiting'); refreshLobbies(); }; actions.appendChild(b1); const b2 = document.createElement('button'); b2.className = 'secondary'; b2.textContent = 'В лобби'; b2.onclick = () => { hideGameResultBar(); cleanupGame(); navTo('lobby'); }; actions.appendChild(b2); }
+    if (currentGameIsArena) {
+      const b1 = document.createElement('button'); b1.className = 'primary'; b1.textContent = 'Вернуться к турниру';
+      b1.onclick = () => { hideGameResultBar(); cleanupGame(); if (currentArenaId) openArenaPage(currentArenaId); else navTo('arenas'); };
+      actions.appendChild(b1);
+    } else {
+      const b1 = document.createElement('button'); b1.className = 'primary'; b1.textContent = 'Найти другого соперника';
+      b1.onclick = () => { hideGameResultBar(); cleanupGame(); navTo('lobby'); switchLobbyTab('waiting'); refreshLobbies(); };
+      actions.appendChild(b1);
+    }
     bar.classList.add('show');
   }
   function endGame(winner, reason, fromServer, isArena) {
