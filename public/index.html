@@ -1740,17 +1740,18 @@
   function formatMMSS(ms) { const t = Math.max(0, Math.floor(ms/1000)); return String(Math.floor(t/60)).padStart(2,'0') + ':' + String(t%60).padStart(2,'0'); }
   function formatTime(s) { s = Math.max(0, Math.floor(s)); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
 
-  // ====== ТАЙМЛАЙН АРЕН: полностью по локальным часам пользователя ======
+  // ====== ТАЙМЛАЙН АРЕН: серверные timestamp'ы приводим к клиентской шкале ======
   function renderArenasGrid() {
     const wrap = document.getElementById('arenasGridWrap'); if (!wrap) return;
     if (!arenasCache || !arenasCache.length) { wrap.innerHTML = '<div class="arenasEmpty">Нет доступных арен</div>'; return; }
 
-    // ЧИСТОЕ локальное «сейчас». Никаких поправок. Если у тебя 8:29 — now-line на 8:29.
+    // Локальное "сейчас" — метки и now-line по нему.
     const localNow = Date.now();
 
-    // Блоки арен — по серверным timestamp'ам БЕЗ сдвига.
-    // Они всё равно приходят как абсолютные UTC-ms, TZ на них не влияет.
-    const toClient = (ts) => ts;
+    // ВАЖНО: серверные startsAt/endsAt приводятся в клиентскую шкалу.
+    // arenaServerOffsetMs = serverNow - Date.now(). Если сервер впереди на 3 мин,
+    // offset = +180000, и ts - offset = ts - 3 мин → попадает на целые :00/:30 по клиенту.
+    const toClient = (ts) => ts - arenaServerOffsetMs;
 
     const isMobile = window.matchMedia('(max-width: 700px)').matches;
     const SLOT_PX = isMobile ? 120 : 180;
@@ -2244,8 +2245,7 @@
     });
   })();
 
-  // ===== Автообновление now-line и подсветки «сейчас» каждую секунду =====
-  // Не перерисовывает всё, только двигает now-line и меняет подсветку .timeCell.
+  // ===== Автообновление now-line каждую секунду =====
   setInterval(() => {
     if (!document.getElementById('arenasScreen').classList.contains('active')) return;
     const scroller = document.querySelector('#arenasGridWrap .arenasScroller');
