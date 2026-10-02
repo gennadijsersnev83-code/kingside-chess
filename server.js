@@ -19,7 +19,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ======================= РОЛИ =======================
 const ADMINS = new Set(['PeshkaSasha']);
-const MODERATORS = new Set(['Debian', '1234']);
+const MODERATORS = new Set(['Debian']);
 const DEVS = new Set(['PeshkaSasha']);
 
 function roleOf(username) {
@@ -37,7 +37,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-let db = { users: {}, games: [], totalGames: 0 };
+let db = { users: {}, totalGames: 0 };
 
 async function initDB() {
   try {
@@ -423,8 +423,6 @@ async function finishGame(lobbyId, result, reason) {
     isArena: !!l.arenaId,
     arenaName: l.arenaName || null
   };
-  db.games.push(gameRecord);
-  if (db.games.length > 10000) db.games.shift();
 
   try {
     await saveUser(whiteName);
@@ -459,6 +457,8 @@ async function finishGame(lobbyId, result, reason) {
 }
 
 // ======================= АРЕНЫ =======================
+// durationMin — реальная длительность арены. Блок на таймлайне рисуется
+// от startsAt до startsAt + durationMin минут.
 const ARENA_TEMPLATES = [
   {
     id: 'bullet-halfhour',
@@ -889,7 +889,9 @@ function getArenaSchedule(hoursAhead) {
       };
       result.push(instance);
 
-      if (status === 'live' || (status === 'upcoming' && t - now < 24 * 3600 * 1000)) {
+      // Создаём состояние только для арен, которые уже идут или начнутся в течение 6 часов.
+      const createAheadMs = 6 * 3600 * 1000;
+      if (status === 'live' || (status === 'upcoming' && t - now < createAheadMs)) {
         getOrCreateArenaState(instance);
       }
       t += step;
