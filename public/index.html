@@ -335,20 +335,24 @@
   .statusGreen { background:var(--green); color:#0b0b0b; text-align:center; font-weight:600; padding:6px 10px; border-radius:4px; font-size:13px; min-height:32px; line-height:20px; }
   .statusYellow { background:var(--panel); border-left:3px solid var(--accent); color:var(--text); padding:8px 12px; border-radius:4px; font-size:13px; min-height:32px; }
 
-  /* Компактная панель результата в стиле Lichess */
+  /* ============================================================
+     LICHESS-STYLE RESULT PANEL
+     Располагается между двумя участниками (соперник сверху, ты снизу).
+     ============================================================ */
   .gameResultCompact {
     display: none;
     flex-direction: column;
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 4px;
-    padding: 12px 10px;
+    padding: 10px 12px;
     text-align: center;
-    gap: 2px;
+    gap: 6px;
+    align-items: stretch;
   }
   .gameResultCompact.show { display: flex; }
   .gameResultCompact .grTitle {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
     color: var(--text-bright);
     line-height: 1.2;
@@ -358,31 +362,28 @@
   .gameResultCompact .grSub {
     font-size: 12px;
     color: var(--muted);
-    margin-bottom: 10px;
     font-style: italic;
+    margin-top: -2px;
   }
   .gameResultCompact .grBtn {
     display: block;
     width: 100%;
-    padding: 10px 8px;
-    margin-bottom: 6px;
+    padding: 9px 8px;
     border-radius: 4px;
     font-weight: 700;
-    font-size: 13px;
-    letter-spacing: .5px;
+    font-size: 12px;
+    letter-spacing: .6px;
     text-transform: uppercase;
     border: none;
     cursor: pointer;
     text-align: center;
-    transition: .15s;
+    transition: background .15s;
   }
   .gameResultCompact .grBtn.rematch { background: #629924; color: #fff; }
   .gameResultCompact .grBtn.rematch:hover { background: #7dbe30; }
   .gameResultCompact .grBtn.rematch:disabled { background: #3a5014; color: #888; cursor: not-allowed; }
   .gameResultCompact .grBtn.findOpp { background: var(--panel-2); color: var(--text-bright); border: 1px solid var(--border); }
   .gameResultCompact .grBtn.findOpp:hover { background: var(--panel-hover); }
-  .gameResultCompact .grBtn.analysis { background: var(--panel-2); color: var(--text-bright); border: 1px solid var(--border); }
-  .gameResultCompact .grBtn.analysis:hover { background: var(--panel-hover); }
 
   .col-chat { display:flex; flex-direction:column; gap:8px; min-width:0; }
   #chatBox { background:var(--panel); border:1px solid var(--border); border-radius:4px; display:flex; flex-direction:column; height:420px; overflow:hidden; }
@@ -705,11 +706,13 @@
         <div id="boardWrap"><div id="board"></div></div>
       </div>
       <div class="col-info">
+        <!-- Соперник сверху -->
         <div class="clockBox" id="topClock"><div class="clockTime" id="topTime">--:--</div></div>
         <div class="playerStrip" id="topStrip">
           <div class="side"><span class="dot" id="topDot"></span><span class="nm" id="topName" onclick="openOpponentProfile()">—</span></div>
           <span class="rt" id="topRating"></span>
         </div>
+
         <div class="movesPanel">
           <div class="movesToolbar">
             <button title="В начало" onclick="gotoMove('first')">⏮</button>
@@ -719,25 +722,29 @@
           </div>
           <div class="movesList" id="movesList"></div>
         </div>
-        <div class="bigActionsRow">
+
+        <!-- Кнопки управления: во время партии; скрываются когда партия завершена -->
+        <div class="bigActionsRow" id="bigActionsRow">
           <button title="Сдаться" class="danger" onclick="resign()">🏳</button>
           <button title="Предложить ничью" onclick="offerDraw()">½</button>
           <button title="Перевернуть доску" onclick="flipBoard()">⇅</button>
         </div>
+
+        <!-- Панель результата в стиле Lichess — МЕЖДУ игроками -->
+        <div class="gameResultCompact" id="gameResultCompact">
+          <div class="grTitle" id="grTitleCompact">—</div>
+          <div class="grSub" id="grSubCompact">—</div>
+          <button class="grBtn rematch" id="grRematchBtn" onclick="requestRematch()">РЕВАНШ</button>
+          <button class="grBtn findOpp" id="grFindBtn" onclick="findNewOpponent()">НАЙТИ ДРУГОГО СОПЕРНИКА</button>
+        </div>
+
+        <!-- Ты снизу -->
         <div class="playerStrip" id="bottomStrip">
           <div class="side"><span class="dot" id="bottomDot"></span><span class="nm" id="bottomName" onclick="navTo('profile')">—</span></div>
           <span class="rt" id="bottomRating"></span>
         </div>
         <div id="statusBar" class="statusGreen">Ожидание соперника...</div>
         <div class="clockBox" id="bottomClock"><div class="clockTime" id="bottomTime">--:--</div></div>
-        <!-- Компактная панель результата в стиле Lichess -->
-        <div class="gameResultCompact" id="gameResultCompact">
-          <div class="grTitle" id="grTitleCompact">—</div>
-          <div class="grSub" id="grSubCompact">—</div>
-          <button class="grBtn rematch" id="grRematchBtn" onclick="requestRematch()">РЕВАНШ</button>
-          <button class="grBtn findOpp" id="grFindBtn" onclick="findNewOpponent()">НАЙТИ ДРУГОГО СОПЕРНИКА</button>
-          <button class="grBtn analysis" id="grAnalysisBtn" onclick="analyzeGame()">АНАЛИЗИРОВАТЬ ПАРТИЮ</button>
-        </div>
       </div>
     </div>
   </section>
@@ -775,14 +782,32 @@
       osc.start(t0); osc.stop(t0 + dur + 0.02);
     } catch (e) {}
   }
-  function sndMove()    { playTone(320, 0.055, 'triangle', 0.18); playTone(180, 0.04, 'sine', 0.10, 0.005); }
-  function sndCapture() { playTone(220, 0.07, 'square', 0.16); playTone(140, 0.05, 'sine', 0.10, 0.01); }
-  function sndCheck()   { playTone(880, 0.09, 'sine', 0.18); playTone(1320, 0.12, 'sine', 0.12, 0.05); }
-  function sndMate()    { playTone(440, 0.18, 'sine', 0.22); playTone(330, 0.20, 'sine', 0.20, 0.12); playTone(220, 0.35, 'sine', 0.18, 0.26); }
-  function sndDraw()    { playTone(440, 0.14, 'sine', 0.16); playTone(440, 0.14, 'sine', 0.16, 0.18); }
-  function sndWin()     { playTone(660, 0.10, 'sine', 0.18); playTone(880, 0.12, 'sine', 0.18, 0.09); playTone(1320, 0.20, 'sine', 0.16, 0.20); }
-  function sndLose()    { playTone(330, 0.16, 'sine', 0.18); playTone(220, 0.22, 'sine', 0.16, 0.12); }
-  function sndStart()   { playTone(523, 0.10, 'sine', 0.18); playTone(659, 0.12, 'sine', 0.16, 0.09); playTone(784, 0.16, 'sine', 0.14, 0.18); }
+  // ==== ЗВУКИ С ЗАЩИТОЙ ОТ ДУБЛИРОВАНИЯ ====
+  // Каждый тип звука воспроизводится не чаще, чем раз в N мс (глобально)
+  const _lastSound = { move: 0, capture: 0, check: 0, mate: 0, draw: 0, win: 0, lose: 0, start: 0 };
+  const SOUND_COOLDOWN = 80; // мс — защита от двойного вызова при быстрых апдейтах
+  function _canPlay(key) {
+    const now = performance.now();
+    if (now - _lastSound[key] < SOUND_COOLDOWN) return false;
+    _lastSound[key] = now;
+    return true;
+  }
+  function sndMove()    { if (!_canPlay('move')) return;    playTone(320, 0.055, 'triangle', 0.18); playTone(180, 0.04, 'sine', 0.10, 0.005); }
+  function sndCapture() { if (!_canPlay('capture')) return; playTone(220, 0.07, 'square', 0.16); playTone(140, 0.05, 'sine', 0.10, 0.01); }
+  function sndCheck()   { if (!_canPlay('check')) return;   playTone(880, 0.09, 'sine', 0.18); playTone(1320, 0.12, 'sine', 0.12, 0.05); }
+  function sndMate()    { if (!_canPlay('mate')) return;    playTone(440, 0.18, 'sine', 0.22); playTone(330, 0.20, 'sine', 0.20, 0.12); playTone(220, 0.35, 'sine', 0.18, 0.26); }
+  function sndDraw()    { if (!_canPlay('draw')) return;    playTone(440, 0.14, 'sine', 0.16); playTone(440, 0.14, 'sine', 0.16, 0.18); }
+  function sndWin()     { if (!_canPlay('win')) return;     playTone(660, 0.10, 'sine', 0.18); playTone(880, 0.12, 'sine', 0.18, 0.09); playTone(1320, 0.20, 'sine', 0.16, 0.20); }
+  function sndLose()    { if (!_canPlay('lose')) return;    playTone(330, 0.16, 'sine', 0.18); playTone(220, 0.22, 'sine', 0.16, 0.12); }
+  function sndStart()   { if (!_canPlay('start')) return;   playTone(523, 0.10, 'sine', 0.18); playTone(659, 0.12, 'sine', 0.16, 0.09); playTone(784, 0.16, 'sine', 0.14, 0.18); }
+  // Приоритетный выбор звука по SAN: мат > шах > взятие > ход
+  function playMoveSound(san) {
+    if (!san) return;
+    if (san.includes('#'))      sndMate();
+    else if (san.includes('+')) sndCheck();
+    else if (san.includes('x')) sndCapture();
+    else                        sndMove();
+  }
   window.addEventListener('pointerdown', () => ensureAudio(), { once: true });
 
   let me = null;
@@ -1007,14 +1032,13 @@
     if (!isLegal) return false;
     const san = toSAN(state, from, to);
     if (isPremove) { premove = { from, to, san }; lastBoardHash = ''; renderBoard(); return true; }
-    const isCapture = !!state.board[to[0]][to[1]];
     const nextState = applyMoveToCopy(state, from, to);
     const newFen = toFen(nextState);
     currentFen = newFen; lastMove = { from, to };
     moveHistory.push(san); moveFens.push(newFen);
     premove = null; renderMoves(); lastBoardHash = ''; renderBoard();
     socket.emit('move', { lobbyId, fen: newFen, turn: nextState.turn, san });
-    if (isCapture) sndCapture(); else sndMove();
+    playMoveSound(san);
     checkGameEnd(nextState);
     return true;
   }
@@ -1279,34 +1303,38 @@
     try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
     updateBackToGameBtn();
   }
-  function hideGameResultBar() { document.getElementById('gameResultCompact').classList.remove('show'); }
+  function hideGameResultBar() {
+    document.getElementById('gameResultCompact').classList.remove('show');
+    document.getElementById('bigActionsRow').style.display = '';
+  }
   function showGameResultBar(winner, reason) {
     const bar = document.getElementById('gameResultCompact');
     const title = document.getElementById('grTitleCompact');
     const sub = document.getElementById('grSubCompact');
     let text, cls;
-    if (!winner) { text = '½ Ничья'; cls = ''; } else if (winner === myColor) { text = '1-0 Победа'; cls = 'win'; } else { text = '0-1 Поражение'; cls = 'lose'; }
+    if (!winner) { text = '½ Ничья'; cls = ''; }
+    else if (winner === myColor) { text = (myColor === 'w' ? '1-0' : '0-1') + ' Победа'; cls = 'win'; }
+    else { text = (myColor === 'w' ? '0-1' : '1-0') + ' Поражение'; cls = 'lose'; }
     title.textContent = text; title.className = 'grTitle ' + cls;
     sub.textContent = reason || '';
 
     const rematchBtn = document.getElementById('grRematchBtn');
     const findBtn = document.getElementById('grFindBtn');
-    const analysisBtn = document.getElementById('grAnalysisBtn');
 
     if (currentGameIsArena) {
       rematchBtn.style.display = 'none';
       findBtn.textContent = 'ВЕРНУТЬСЯ К ТУРНИРУ';
       findBtn.onclick = () => { hideGameResultBar(); cleanupGame(); if (currentArenaId) openArenaPage(currentArenaId); else navTo('arenas'); };
-      analysisBtn.style.display = 'none';
     } else {
       rematchBtn.style.display = 'block';
       rematchBtn.disabled = false;
       rematchBtn.textContent = 'РЕВАНШ';
       findBtn.textContent = 'НАЙТИ ДРУГОГО СОПЕРНИКА';
       findBtn.onclick = () => { hideGameResultBar(); cleanupGame(); navTo('lobby'); switchLobbyTab('create'); };
-      analysisBtn.style.display = 'block';
     }
     bar.classList.add('show');
+    // Во время отображения результата прячем кнопки сдачи/ничьей
+    document.getElementById('bigActionsRow').style.display = 'none';
   }
   function requestRematch() {
     if (!lobbyId) return;
@@ -1325,8 +1353,6 @@
   window.requestRematch = requestRematch;
   function findNewOpponent() { hideGameResultBar(); cleanupGame(); navTo('lobby'); switchLobbyTab('create'); }
   window.findNewOpponent = findNewOpponent;
-  function analyzeGame() { alert('Анализ партии — раздел в разработке'); }
-  window.analyzeGame = analyzeGame;
   function endGame(winner, reason, fromServer, isArena) {
     if (gameEnded) return;
     gameEnded = true; gameActive = false; premove = null; rematchRequested = false;
@@ -1881,7 +1907,6 @@
   function returnToGame() {
     if (!lobbyId) return;
     if (gameActive && !gameEnded) { navTo('game'); renderBoard(); renderMoves(); return; }
-    // Пробуем восстановить состояние с сервера
     socket.emit('getGameState', { lobbyId }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось вернуться к партии'); return; }
       const s = res.state;
@@ -1994,7 +2019,7 @@
     if (san) { moveHistory.push(san); moveFens.push(fen); }
     renderMoves(); lastBoardHash = ''; renderBoard();
     const state = parseFen(currentFen);
-    if (san) { if (san.includes('#')) sndMate(); else if (san.includes('+')) sndCheck(); else if (san.includes('x')) sndCapture(); else sndMove(); }
+    if (san) playMoveSound(san);
     checkGameEnd(state); tryApplyPremove();
   });
   socket.on('timeUpdate', ({ timeW, timeB }) => { if (!gameActive) return; myTime = myColor === 'w' ? timeW : timeB; oppTime = myColor === 'w' ? timeB : timeW; updateTimers(); });
