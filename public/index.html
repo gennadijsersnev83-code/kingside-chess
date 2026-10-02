@@ -125,12 +125,12 @@
   .arenasGridWrap { background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden; }
   .arenasEmpty { padding:60px 20px; text-align:center; color:var(--muted); font-size:14px; }
   .arenasScroller { overflow-x:auto; overflow-y:hidden; position:relative; }
-  .timeRow { display:flex; padding:0; border-bottom:1px solid var(--border); background:var(--panel-2); position:sticky; top:0; z-index:2; min-width:max-content; height:32px; }
+  .timeRow { display:flex; padding:0; border-bottom:1px solid var(--border); background:var(--panel-2); position:sticky; top:0; z-index:2; height:32px; }
   .timeCell { color:var(--muted); font-size:11px; text-align:center; font-weight:500; width:180px; min-width:180px; flex-shrink:0; padding:8px 0; border-right:1px solid rgba(58,56,51,.5); box-sizing:border-box; }
   .timeCell.now { color:var(--accent); font-weight:700; background:rgba(191,129,29,.08); }
-  .arenaRowGrid { position:relative; height:52px; min-width:max-content; border-bottom:1px solid rgba(58,56,51,.35); }
+  .arenaRowGrid { position:relative; height:52px; border-bottom:1px solid rgba(58,56,51,.35); }
   .arenaRowGrid:last-child { border-bottom:none; }
-  .arenaBlock { position:absolute; top:4px; bottom:4px; border-radius:6px; padding:4px 8px; color:#fff; cursor:pointer; display:flex; flex-direction:column; justify-content:center; gap:1px; transition:transform .15s, box-shadow .15s, filter .15s; overflow:hidden; box-sizing:border-box; min-width:20px; }
+  .arenaBlock { position:absolute; top:4px; bottom:4px; border-radius:6px; padding:4px 8px; color:#fff; cursor:pointer; display:flex; flex-direction:column; justify-content:center; gap:1px; transition:transform .15s, box-shadow .15s, filter .15s; overflow:hidden; box-sizing:border-box; }
   .arenaBlock:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.4); filter:brightness(1.08); z-index:4; }
   .arenaBlock .tname { font-size:12px; font-weight:700; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .arenaBlock .tinfo { font-size:10px; opacity:.9; line-height:1.1; display:flex; justify-content:space-between; gap:6px; white-space:nowrap; overflow:hidden; }
@@ -399,7 +399,6 @@
     header.topbar .userBtn { font-size:11px; padding:4px 6px; }
     header.topbar .userBtn .avatar { width:16px; height:16px; font-size:10px; }
 
-    /* Доска на всю ширину, чат и панели ниже */
     .gameWrap { display:flex; flex-direction:column; gap:10px; max-width:none; width:100%; align-items:stretch; }
     .col-board { order:1; width:100%; }
     .col-info  { order:2; width:100%; }
@@ -417,7 +416,6 @@
     .playerStrip { padding:5px 10px; }
     .playerStrip .rt { font-size:13px; }
 
-    /* Профиль */
     .profileHead { flex-direction:column; text-align:center; gap:12px; padding:16px 12px; }
     .profileAvatar { width:60px; height:60px; font-size:26px; }
     .profileHead .nameBlock h2 { justify-content:center; }
@@ -425,7 +423,6 @@
     .gameRow { grid-template-columns:36px 1fr 70px; gap:6px; font-size:12px; }
     .gameRow .date { display:none; }
 
-    /* Арена */
     .arenaPage { display:flex; flex-direction:column; max-width:none; }
     .arenaLeft, .arenaCenter, .arenaRight { width:100%; min-width:0; max-width:none; }
     .arenaRightCol { height:auto; max-height:none; }
@@ -433,10 +430,8 @@
     .arenaTableHeader, .arenaTableRow { grid-template-columns:26px minmax(0,1fr) 42px 66px 42px; gap:6px; font-size:12px; }
     .arenaTableRow .score { font-size:13px; }
 
-    /* Турнирная сетка */
     .arenasHeader h1 { font-size:24px; }
     .timeCell { width:120px; min-width:120px; font-size:10px; }
-    /* SLOT_PX в JS должен соответствовать этому! */
   }
   @media (max-width: 380px) {
     .piece { font-size:min(10vw, 40px); }
@@ -1567,8 +1562,7 @@
       return;
     }
 
-    // Группируем историю по дням (локальная дата). Для каждого дня:
-    // first, last, min, max и timestamp последней партии дня.
+    // Группируем по дням
     const byDay = new Map();
     for (const h of history) {
       const d = new Date(h.ts);
@@ -1584,10 +1578,6 @@
       }
     }
     const days = [...byDay.values()].sort((a,b) => a.ts - b.ts);
-    if (days.length < 2) {
-      // Один день — всё равно нарисуем «по партиям», но с осью
-      days.length = 0;
-    }
 
     const W = 900, H = 200, PADL = 44, PADR = 14, PADT = 16, PADB = 28;
     const innerW = W - PADL - PADR;
@@ -1604,8 +1594,7 @@
       yFor = (r) => PADT + innerH - ((r - minR) / rangeR) * innerH;
       points = days.map((d, i) => ({ x: xFor(i), y: yFor(d.last), day: d }));
     } else {
-      // fallback: по партиям
-      daysUsed = history.map((h, i) => ({ ts: h.ts, last: h.rating, min: h.rating, max: h.rating, first: h.rating, count: 1 }));
+      daysUsed = history.map(h => ({ ts: h.ts, last: h.rating, min: h.rating, max: h.rating, first: h.rating, count: 1 }));
       const ratings = history.map(h => h.rating);
       minR = Math.min(...ratings) - 20;
       maxR = Math.max(...ratings) + 20;
@@ -1615,10 +1604,8 @@
       points = history.map((h, i) => ({ x: xFor(i), y: yFor(h.rating), day: { ts: h.ts, last: h.rating, min: h.rating, max: h.rating, count: 1 } }));
     }
 
-    // Линия по last
     const pathD = points.map((p, i) => (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
 
-    // Сетка по Y + подписи значений
     const gridLines = [];
     for (let g = 0; g <= 4; g++) {
       const y = PADT + (g / 4) * innerH;
@@ -1627,35 +1614,31 @@
       gridLines.push(`<text x="${PADL - 6}" y="${(y + 4).toFixed(1)}" fill="#7d7a72" font-size="11" text-anchor="end">${val}</text>`);
     }
 
-    // Отметки дней по X (подписи)
     const xLabels = [];
     const maxLabels = Math.min(daysUsed.length, 8);
     const step = Math.max(1, Math.floor(daysUsed.length / maxLabels));
     for (let i = 0; i < daysUsed.length; i += step) {
       const d = daysUsed[i];
-      const x = (days.length >= 2) ? xFor(i) : xFor(i);
+      const x = xFor(i);
       const date = new Date(d.ts);
       const label = String(date.getDate()).padStart(2,'0') + '.' + String(date.getMonth()+1).padStart(2,'0');
       xLabels.push(`<text x="${x.toFixed(1)}" y="${H - 8}" fill="#7d7a72" font-size="10" text-anchor="middle">${label}</text>`);
     }
-    // Всегда добавим последнюю дату
     if (daysUsed.length > 1 && (daysUsed.length - 1) % step !== 0) {
       const i = daysUsed.length - 1;
       const d = daysUsed[i];
-      const x = (days.length >= 2) ? xFor(i) : xFor(i);
+      const x = xFor(i);
       const date = new Date(d.ts);
       const label = String(date.getDate()).padStart(2,'0') + '.' + String(date.getMonth()+1).padStart(2,'0');
       xLabels.push(`<text x="${x.toFixed(1)}" y="${H - 8}" fill="#7d7a72" font-size="10" text-anchor="middle">${label}</text>`);
     }
 
-    // Дневные «свечи» min-max (тонкие вертикальные линии)
     const dayBars = points.map((p) => {
       const yMin = yFor(p.day.min), yMax = yFor(p.day.max);
       if (Math.abs(yMax - yMin) < 1) return '';
       return `<line x1="${p.x.toFixed(1)}" y1="${yMin.toFixed(1)}" x2="${p.x.toFixed(1)}" y2="${yMax.toFixed(1)}" stroke="rgba(191,129,29,.35)" stroke-width="3" stroke-linecap="round"/>`;
     }).join('');
 
-    // Точки + всплывающие подсказки
     const dots = points.map((p, i) => {
       const isLast = i === points.length - 1;
       const d = p.day;
@@ -1664,7 +1647,6 @@
       return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${isLast ? 4.5 : 3}" fill="${isLast ? '#bf811d' : '#629924'}" stroke="#161512" stroke-width="1"><title>${escapeHtml(title)}</title></circle>`;
     }).join('');
 
-    // Область под линией (полупрозрачная)
     const areaD = pathD + ` L ${points[points.length-1].x.toFixed(1)},${(PADT + innerH).toFixed(1)} L ${points[0].x.toFixed(1)},${(PADT + innerH).toFixed(1)} Z`;
 
     wrap.innerHTML = `
@@ -1711,8 +1693,11 @@
 
   function refreshArenas(force) {
     if (!force && !document.getElementById('arenasScreen').classList.contains('active')) return;
-    socket.emit('getArenas', (list) => {
-      arenasCache = list || [];
+    socket.emit('getArenas', (res) => {
+      const list = (res && res.list) || [];
+      const serverNow = (res && res.serverNow) || Date.now();
+      arenaServerOffsetMs = serverNow - Date.now();
+      arenasCache = list;
       socket.emit('getMyArenaStates', (states) => {
         arenaStatesCache = states || {};
         const hash = JSON.stringify(arenasCache) + '|' + JSON.stringify(arenaStatesCache);
@@ -1723,8 +1708,11 @@
     if (arenasRefreshHandle) clearInterval(arenasRefreshHandle);
     arenasRefreshHandle = setInterval(() => {
       if (document.getElementById('arenasScreen').classList.contains('active')) {
-        socket.emit('getArenas', (list) => {
-          arenasCache = list || [];
+        socket.emit('getArenas', (res) => {
+          const list = (res && res.list) || [];
+          const serverNow = (res && res.serverNow) || Date.now();
+          arenaServerOffsetMs = serverNow - Date.now();
+          arenasCache = list;
           socket.emit('getMyArenaStates', (states) => {
             arenaStatesCache = states || {};
             const hash = JSON.stringify(arenasCache) + '|' + JSON.stringify(arenaStatesCache);
@@ -1746,26 +1734,33 @@
     const wrap = document.getElementById('arenasGridWrap'); if (!wrap) return;
     if (!arenasCache || !arenasCache.length) { wrap.innerHTML = '<div class="arenasEmpty">Нет доступных арен</div>'; return; }
 
-    const now = Date.now();
+    // now с поправкой на сервер
+    const now = Date.now() + arenaServerOffsetMs;
 
-    // Определяем размер слота в зависимости от ширины экрана:
-    // на мобильном — 120px на 10 минут, на десктопе — 180px.
-    const isMobile = window.matchMedia('(max-width: 700px)').matches;
-    const SLOT_PX = isMobile ? 120 : 180;      // ширина одного 10-мин слота
-    const SLOT_MS = 10 * 60 * 1000;            // 10 минут
-    const COLS = isMobile ? 24 : 36;           // сколько слотов показываем
+    // Ширина одного 10-мин слота — берём реальную ширину .timeCell из CSS.
+    let SLOT_PX = 180;
+    const probe = document.createElement('div');
+    probe.className = 'timeCell';
+    probe.style.position = 'absolute';
+    probe.style.visibility = 'hidden';
+    probe.style.width = '';
+    probe.style.minWidth = '';
+    document.body.appendChild(probe);
+    const measured = probe.getBoundingClientRect().width;
+    document.body.removeChild(probe);
+    if (measured > 0) SLOT_PX = Math.round(measured);
 
-    // Начало сетки — ближайший 10-минутный слот В ПРОШЛОМ (включая текущий).
+    const SLOT_MS = 10 * 60 * 1000;
+    const COLS = 36;
+
     const startMs = Math.floor(now / SLOT_MS) * SLOT_MS;
     const endMs = startMs + COLS * SLOT_MS;
 
-    // Точное преобразование времени в пиксели (линейное, без floor).
     const toPx = (ts) => ((ts - startMs) / SLOT_MS) * SLOT_PX;
 
     const visible = arenasCache.filter(a => a.endsAt > startMs && a.startsAt < endMs);
     const sorted = visible.slice().sort((a, b) => a.startsAt - b.startsAt);
 
-    // Раскладка по «дорожкам»: каждая дорожка содержит непересекающиеся по времени арены.
     const rows = [];
     for (const arena of sorted) {
       let placed = false;
@@ -1778,58 +1773,59 @@
 
     const rowWidth = COLS * SLOT_PX;
 
-    // Заголовок с временными отметками — каждая ровно на своём слоте.
-    let html = '<div class="arenasScroller"><div class="timeRow">';
+    let html = '<div class="arenasScroller"><div class="timeRow" style="width:' + rowWidth + 'px;">';
     for (let i = 0; i < COLS; i++) {
       const t = startMs + i * SLOT_MS;
       const isNow = t <= now && now < t + SLOT_MS;
-      const cellW = isMobile ? 120 : 180;
-      html += `<div class="timeCell${isNow?' now':''}" style="width:${cellW}px;min-width:${cellW}px;">${fmtHHMM(t)}</div>`;
+      html += '<div class="timeCell' + (isNow ? ' now' : '') + '" style="width:' + SLOT_PX + 'px;min-width:' + SLOT_PX + 'px;">' + fmtHHMM(t) + '</div>';
     }
     html += '</div>';
 
-    // Дорожки с блоками арен.
     for (const row of rows) {
-      html += `<div class="arenaRowGrid" style="width:${rowWidth}px;">`;
+      html += '<div class="arenaRowGrid" style="width:' + rowWidth + 'px;">';
       for (const arena of row) {
         const left = toPx(arena.startsAt);
-        const width = toPx(arena.endsAt) - left;   // ровно пропорционально длительности
+        const width = toPx(arena.endsAt) - left;
         const isPast = arena.endsAt < now;
         const isLive = arena.status === 'live';
         const colorClass = arena.color || 'blitz';
         const myState = arenaStatesCache[arena.id];
         const joined = myState && myState.joined;
         const clickable = !isPast || isLive;
-        const cls = `arenaBlock ${colorClass}${isPast && !isLive ? ' past' : ''}${isLive ? ' live' : ''}${joined ? ' joined' : ''}`;
-        const tinfo = `${arena.timeControl}+${arena.increment}`;
+        const cls = 'arenaBlock ' + colorClass + (isPast && !isLive ? ' past' : '') + (isLive ? ' live' : '') + (joined ? ' joined' : '');
+        const tinfo = arena.timeControl + '+' + arena.increment;
         const participantsCount = (myState && myState.participantsCount) || 0;
-        const clickAttr = clickable ? `onclick="openArenaPage('${arena.id}')"` : '';
+        const clickAttr = clickable ? 'onclick="openArenaPage(\'' + arena.id + '\')"' : '';
         const cursorStyle = clickable ? 'cursor:pointer' : 'cursor:default';
         const showInfo = width >= 100;
-        // Ключевой момент: left и width вычислены из startsAt/endsAt без Math.max и без floor.
-        html += `<div class="${cls}" style="left:${left.toFixed(2)}px; width:${width.toFixed(2)}px; ${cursorStyle}" ${clickAttr} title="${escapeHtml(arena.name)} · ${tinfo} · ${fmtHHMM(arena.startsAt)}–${fmtHHMM(arena.endsAt)}"><div class="tname">${escapeHtml(arena.name)}</div>${showInfo ? `<div class="tinfo"><span>${tinfo}</span><span>👥 ${participantsCount}</span></div>` : ''}</div>`;
+        html += '<div class="' + cls + '" '
+              + 'style="left:' + left.toFixed(2) + 'px; width:' + width.toFixed(2) + 'px; ' + cursorStyle + '" '
+              + 'data-start="' + arena.startsAt + '" data-end="' + arena.endsAt + '" '
+              + 'data-starts="' + fmtHHMM(arena.startsAt) + '" data-ends="' + fmtHHMM(arena.endsAt) + '" '
+              + clickAttr
+              + ' title="' + escapeHtml(arena.name) + ' · ' + tinfo + ' · ' + fmtHHMM(arena.startsAt) + '–' + fmtHHMM(arena.endsAt) + '">'
+              + '<div class="tname">' + escapeHtml(arena.name) + '</div>'
+              + (showInfo ? '<div class="tinfo"><span>' + tinfo + '</span><span>👥 ' + participantsCount + '</span></div>' : '')
+              + '</div>';
       }
       html += '</div>';
     }
 
-    // Линия «сейчас» — ровно на текущем времени.
     const nowLeft = toPx(now);
-    html += `<div class="nowLine" style="left:${nowLeft.toFixed(2)}px;"></div></div>`;
+    html += '<div class="nowLine" style="left:' + nowLeft.toFixed(2) + 'px;"></div></div>';
 
     wrap.innerHTML = html;
 
-    // Скроллим так, чтобы «сейчас» было примерно в 1/4 экрана слева.
     const scroller = wrap.querySelector('.arenasScroller');
     if (scroller) scroller.scrollLeft = Math.max(0, nowLeft - scroller.clientWidth / 4);
   }
 
-  // Перерисовываем таймлайн при ресайзе (мобильный/десктоп переключается)
   let _resizeT = null;
   window.addEventListener('resize', () => {
     if (_resizeT) clearTimeout(_resizeT);
     _resizeT = setTimeout(() => {
       if (document.getElementById('arenasScreen').classList.contains('active')) {
-        lastArenasHash = ''; // форсим перерисовку с новой шириной слота
+        lastArenasHash = '';
         renderArenasGrid();
       }
     }, 200);
@@ -1863,7 +1859,12 @@
     loadArenaPageBusy = true;
     const arena = arenasCache.find(a => a.id === currentArenaId);
     if (!arena) {
-      socket.emit('getArenas', (list) => { arenasCache = list || []; loadArenaPageBusy = false; if (arenasCache.find(x => x.id === currentArenaId)) loadArenaPage(); });
+      socket.emit('getArenas', (res) => {
+        arenasCache = (res && res.list) || [];
+        if (res && res.serverNow) arenaServerOffsetMs = res.serverNow - Date.now();
+        loadArenaPageBusy = false;
+        if (arenasCache.find(x => x.id === currentArenaId)) loadArenaPage();
+      });
       return;
     }
     socket.emit('getArenaState', { arenaId: currentArenaId }, (state) => {
