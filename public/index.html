@@ -33,6 +33,11 @@
   header.topbar .userBtn .avatar { width:20px; height:20px; border-radius:50%; background:var(--accent); color:#161512; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; }
   .crown { color:var(--gold); margin-right:2px; text-shadow:0 0 4px rgba(255,213,79,.6); }
   .modMark { display:inline-block; color:#e5484d; font-weight:900; margin:0 3px 0 1px; font-size:13px; line-height:1; text-shadow:0 0 4px rgba(229,72,77,.7); vertical-align:middle; }
+  .onlineDot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#629924; margin-right:5px; flex-shrink:0; vertical-align:middle; box-shadow:0 0 4px rgba(98,153,36,.7); }
+  .offlineDot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#555; margin-right:5px; flex-shrink:0; vertical-align:middle; }
+  .backToGameBtn { background:var(--green); border:none; color:#fff; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:700; display:none; align-items:center; gap:6px; white-space:nowrap; animation:pulse 1.6s infinite; }
+  .backToGameBtn:hover { background:var(--green-2); }
+  .backToGameBtn.show { display:flex; }
   main { max-width:1240px; margin:0 auto; padding:20px 16px; }
   .screen { display:none; }
   .screen.active { display:block; }
@@ -309,7 +314,7 @@
   .playerStrip .dot { width:12px; height:12px; border-radius:50%; border:1px solid #111; flex-shrink:0; }
   .playerStrip .dot.w { background:#f0f0f0; }
   .playerStrip .dot.b { background:#333; }
-  .playerStrip .nm { color:var(--text-bright); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
+  .playerStrip .nm { color:var(--text-bright); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; display:flex; align-items:center; min-width:0; }
   .playerStrip .nm:hover { color:var(--accent); }
   .playerStrip .rt { color:var(--text-bright); font-size:15px; font-weight:500; }
   .movesPanel { background:var(--panel); border:1px solid var(--border); border-radius:4px; display:flex; flex-direction:column; height:200px; overflow:hidden; }
@@ -329,14 +334,56 @@
   .bigActionsRow button.danger:hover { color:#ff8080; }
   .statusGreen { background:var(--green); color:#0b0b0b; text-align:center; font-weight:600; padding:6px 10px; border-radius:4px; font-size:13px; min-height:32px; line-height:20px; }
   .statusYellow { background:var(--panel); border-left:3px solid var(--accent); color:var(--text); padding:8px 12px; border-radius:4px; font-size:13px; min-height:32px; }
-  .gameResultBar { display:none; flex-direction:column; gap:10px; background:var(--panel); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:6px; padding:12px 14px; margin-top:10px; }
-  .gameResultBar.show { display:flex; }
-  .gameResultBar .grTitle { font-size:16px; font-weight:700; color:var(--text-bright); }
-  .gameResultBar .grTitle.win { color:var(--green-2); }
-  .gameResultBar .grTitle.lose { color:#ff7b7b; }
-  .gameResultBar .grSub { font-size:13px; color:var(--muted); }
-  .gameResultBar .grActions { display:flex; gap:10px; flex-wrap:wrap; }
-  .gameResultBar .grActions button { padding:10px 18px; font-weight:600; }
+
+  /* Компактная панель результата в стиле Lichess */
+  .gameResultCompact {
+    display: none;
+    flex-direction: column;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px 10px;
+    text-align: center;
+    gap: 2px;
+  }
+  .gameResultCompact.show { display: flex; }
+  .gameResultCompact .grTitle {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text-bright);
+    line-height: 1.2;
+  }
+  .gameResultCompact .grTitle.win { color: var(--green-2); }
+  .gameResultCompact .grTitle.lose { color: #ff7b7b; }
+  .gameResultCompact .grSub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 10px;
+    font-style: italic;
+  }
+  .gameResultCompact .grBtn {
+    display: block;
+    width: 100%;
+    padding: 10px 8px;
+    margin-bottom: 6px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+    border: none;
+    cursor: pointer;
+    text-align: center;
+    transition: .15s;
+  }
+  .gameResultCompact .grBtn.rematch { background: #629924; color: #fff; }
+  .gameResultCompact .grBtn.rematch:hover { background: #7dbe30; }
+  .gameResultCompact .grBtn.rematch:disabled { background: #3a5014; color: #888; cursor: not-allowed; }
+  .gameResultCompact .grBtn.findOpp { background: var(--panel-2); color: var(--text-bright); border: 1px solid var(--border); }
+  .gameResultCompact .grBtn.findOpp:hover { background: var(--panel-hover); }
+  .gameResultCompact .grBtn.analysis { background: var(--panel-2); color: var(--text-bright); border: 1px solid var(--border); }
+  .gameResultCompact .grBtn.analysis:hover { background: var(--panel-hover); }
+
   .col-chat { display:flex; flex-direction:column; gap:8px; min-width:0; }
   #chatBox { background:var(--panel); border:1px solid var(--border); border-radius:4px; display:flex; flex-direction:column; height:420px; overflow:hidden; }
   #chatTabs { display:flex; border-bottom:1px solid var(--border); }
@@ -450,6 +497,7 @@
     <a data-nav="community" onclick="navTo('community')">Сообщество</a>
   </nav>
   <div class="right">
+    <button class="backToGameBtn" id="backToGameBtn" onclick="returnToGame()">⚔ Вернуться к партии</button>
     <button class="userBtn" id="userBtn" onclick="navTo('profile')" style="display:none">
       <span class="avatar" id="userAvatar">?</span>
       <span id="userName">—</span>
@@ -682,10 +730,13 @@
         </div>
         <div id="statusBar" class="statusGreen">Ожидание соперника...</div>
         <div class="clockBox" id="bottomClock"><div class="clockTime" id="bottomTime">--:--</div></div>
-        <div class="gameResultBar" id="gameResultBar">
-          <div class="grTitle" id="grTitle">—</div>
-          <div class="grSub" id="grSub">—</div>
-          <div class="grActions" id="grActions"></div>
+        <!-- Компактная панель результата в стиле Lichess -->
+        <div class="gameResultCompact" id="gameResultCompact">
+          <div class="grTitle" id="grTitleCompact">—</div>
+          <div class="grSub" id="grSubCompact">—</div>
+          <button class="grBtn rematch" id="grRematchBtn" onclick="requestRematch()">РЕВАНШ</button>
+          <button class="grBtn findOpp" id="grFindBtn" onclick="findNewOpponent()">НАЙТИ ДРУГОГО СОПЕРНИКА</button>
+          <button class="grBtn analysis" id="grAnalysisBtn" onclick="analyzeGame()">АНАЛИЗИРОВАТЬ ПАРТИЮ</button>
         </div>
       </div>
     </div>
@@ -742,6 +793,7 @@
   let opponentName = '—';
   let opponentRating = null;
   let opponentIsAdmin = false;
+  let opponentOnline = true;
   let currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
   let selected = null;
   let legalMoves = [];
@@ -795,6 +847,11 @@
     const mark = (!admin && mod) ? '<span class="modMark" title="Модератор">!</span>' : '';
     return crown + mark + escapeHtml(username);
   }
+  function onlineDotHtml(online) {
+    return online
+      ? '<span class="onlineDot" title="В сети"></span>'
+      : '<span class="offlineDot" title="Не в сети"></span>';
+  }
 
   function parseFen(fen) {
     const parts = fen.split(' ');
@@ -820,7 +877,6 @@
     } else if (type === 'n') { [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc]) => add(r+dr, c+dc)); }
     else if (type === 'k') {
       [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc]) => add(r+dr, c+dc));
-      // Рокировки — только если король не под шахом
       if (white && r === 7 && c === 4 && !isAttacked(state, 7, 4, false)) {
         if (state.castling.includes('K') && !state.board[7][5] && !state.board[7][6] && state.board[7][7] === 'R'
             && !isAttacked(state, 7, 5, false) && !isAttacked(state, 7, 6, false)) moves.push([7, 6]);
@@ -847,7 +903,6 @@
       const p = state.board[rr][cc]; if (!p || isWhitePiece(p) !== byWhite) continue;
       const t = p.toLowerCase();
       if (t === 'p') { const dir = byWhite ? -1 : 1; if (rr + dir === r && (cc - 1 === c || cc + 1 === c)) return true; continue; }
-      // Король не атакует по «псевдо-ходам» рокировкой — проверяем только обычные ходы
       if (t === 'k') { if (Math.abs(rr - r) <= 1 && Math.abs(cc - c) <= 1 && (rr !== r || cc !== c)) return true; continue; }
       if (pseudoMoves(state, rr, cc).some(([mr, mc]) => mr === r && mc === c)) return true;
     }
@@ -1065,6 +1120,7 @@
       me = res.user;
       try { localStorage.setItem('kingside_login', JSON.stringify({ username, password })); } catch (e) {}
       updateTopbarUser(); navTo('lobby'); refreshLobbies(); refreshTopArenas(); refreshStats();
+      tryResumeGame();
     });
   }
   window.doLogin = doLogin;
@@ -1075,7 +1131,7 @@
     document.getElementById('userName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod) + ' (' + me.rating + ')';
     document.getElementById('userAvatar').textContent = me.username.charAt(0).toUpperCase();
   }
-  function logout() { try { localStorage.removeItem('kingside_login'); } catch (e) {} location.reload(); }
+  function logout() { try { localStorage.removeItem('kingside_login'); localStorage.removeItem('kingside_active_lobby'); } catch (e) {} location.reload(); }
   window.logout = logout;
   function switchLobbyTab(tab) { currentLobbyTab = tab; document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab)); renderLobbyTab(); }
   window.switchLobbyTab = switchLobbyTab;
@@ -1220,28 +1276,35 @@
     gameEnded = false; currentGameIsArena = false; currentArenaName = null;
     premove = null; lastBoardHash = ''; rematchRequested = false;
     document.getElementById('chatMessages').innerHTML = '';
+    try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
+    updateBackToGameBtn();
   }
-  function hideGameResultBar() { document.getElementById('gameResultBar').classList.remove('show'); }
+  function hideGameResultBar() { document.getElementById('gameResultCompact').classList.remove('show'); }
   function showGameResultBar(winner, reason) {
-    const bar = document.getElementById('gameResultBar');
-    const title = document.getElementById('grTitle');
-    const sub = document.getElementById('grSub');
-    const actions = document.getElementById('grActions');
+    const bar = document.getElementById('gameResultCompact');
+    const title = document.getElementById('grTitleCompact');
+    const sub = document.getElementById('grSubCompact');
     let text, cls;
-    if (!winner) { text = 'Ничья'; cls = ''; } else if (winner === myColor) { text = 'Победа!'; cls = 'win'; } else { text = 'Поражение'; cls = 'lose'; }
+    if (!winner) { text = '½ Ничья'; cls = ''; } else if (winner === myColor) { text = '1-0 Победа'; cls = 'win'; } else { text = '0-1 Поражение'; cls = 'lose'; }
     title.textContent = text; title.className = 'grTitle ' + cls;
-    sub.textContent = reason || ''; actions.innerHTML = '';
+    sub.textContent = reason || '';
+
+    const rematchBtn = document.getElementById('grRematchBtn');
+    const findBtn = document.getElementById('grFindBtn');
+    const analysisBtn = document.getElementById('grAnalysisBtn');
+
     if (currentGameIsArena) {
-      const b1 = document.createElement('button'); b1.className = 'primary'; b1.textContent = 'Вернуться к турниру';
-      b1.onclick = () => { hideGameResultBar(); cleanupGame(); if (currentArenaId) openArenaPage(currentArenaId); else navTo('arenas'); };
-      actions.appendChild(b1);
+      rematchBtn.style.display = 'none';
+      findBtn.textContent = 'ВЕРНУТЬСЯ К ТУРНИРУ';
+      findBtn.onclick = () => { hideGameResultBar(); cleanupGame(); if (currentArenaId) openArenaPage(currentArenaId); else navTo('arenas'); };
+      analysisBtn.style.display = 'none';
     } else {
-      const b1 = document.createElement('button'); b1.className = 'primary'; b1.textContent = 'Реванш';
-      b1.onclick = () => requestRematch();
-      actions.appendChild(b1);
-      const b2 = document.createElement('button'); b2.className = 'secondary'; b2.textContent = 'Новая партия';
-      b2.onclick = () => { hideGameResultBar(); cleanupGame(); navTo('lobby'); switchLobbyTab('create'); };
-      actions.appendChild(b2);
+      rematchBtn.style.display = 'block';
+      rematchBtn.disabled = false;
+      rematchBtn.textContent = 'РЕВАНШ';
+      findBtn.textContent = 'НАЙТИ ДРУГОГО СОПЕРНИКА';
+      findBtn.onclick = () => { hideGameResultBar(); cleanupGame(); navTo('lobby'); switchLobbyTab('create'); };
+      analysisBtn.style.display = 'block';
     }
     bar.classList.add('show');
   }
@@ -1251,9 +1314,19 @@
     socket.emit('rematchRequest', { lobbyId }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
       if (res.started) { /* уже началось через gameStart */ }
-      else { rematchRequested = true; document.getElementById('statusBar').className = 'statusYellow'; document.getElementById('statusBar').textContent = 'Реванш предложен. Ожидание соперника...'; }
+      else {
+        rematchRequested = true;
+        const btn = document.getElementById('grRematchBtn');
+        btn.disabled = true;
+        btn.textContent = 'ОЖИДАНИЕ...';
+      }
     });
   }
+  window.requestRematch = requestRematch;
+  function findNewOpponent() { hideGameResultBar(); cleanupGame(); navTo('lobby'); switchLobbyTab('create'); }
+  window.findNewOpponent = findNewOpponent;
+  function analyzeGame() { alert('Анализ партии — раздел в разработке'); }
+  window.analyzeGame = analyzeGame;
   function endGame(winner, reason, fromServer, isArena) {
     if (gameEnded) return;
     gameEnded = true; gameActive = false; premove = null; rematchRequested = false;
@@ -1391,12 +1464,14 @@
   window.openProfileView = openProfileView;
   function renderProfilePage(user, games, history) {
     document.getElementById('pAvatarBig').innerHTML = (user.isAdmin ? '<span class="pCrown">👑</span>' : '') + user.username.charAt(0).toUpperCase();
-    document.getElementById('pName').innerHTML = nickHtml(user.username, user.isAdmin, user.isMod);
+    const onlinePrefix = onlineDotHtml(user.online);
+    document.getElementById('pName').innerHTML = onlinePrefix + nickHtml(user.username, user.isAdmin, user.isMod);
     const badges = [];
     if (user.role === 'admin') badges.push('<span class="roleBadge admin">👑 Админ</span>');
     if (user.role === 'moderator') badges.push('<span class="roleBadge mod">🛡 Модератор</span>');
     if (user.isDev) badges.push('<span class="roleBadge dev">⚙ Разраб</span>');
     if (user.mutedUntil && user.mutedUntil > Date.now()) { const mins = Math.ceil((user.mutedUntil - Date.now())/60000); badges.push(`<span class="muteBadge">🔇 Мут ${mins} мин</span>`); }
+    if (user.online) badges.push('<span class="roleBadge" style="color:var(--green-2)">● В сети</span>');
     document.getElementById('pRoleBadges').innerHTML = badges.join(' ');
     const date = new Date(user.createdAt);
     document.getElementById('pSub').textContent = `На сайте с ${date.toLocaleDateString('ru-RU')} · ${user.games} партий`;
@@ -1797,13 +1872,97 @@
     document.getElementById('topClock').classList.toggle('low', oppTime <= 20);
     document.getElementById('bottomClock').classList.toggle('low', myTime <= 20);
   }
+  function updateBackToGameBtn() {
+    const btn = document.getElementById('backToGameBtn');
+    if (!btn) return;
+    if (gameActive && !gameEnded && lobbyId) btn.classList.add('show');
+    else btn.classList.remove('show');
+  }
+  function returnToGame() {
+    if (!lobbyId) return;
+    if (gameActive && !gameEnded) { navTo('game'); renderBoard(); renderMoves(); return; }
+    // Пробуем восстановить состояние с сервера
+    socket.emit('getGameState', { lobbyId }, (res) => {
+      if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось вернуться к партии'); return; }
+      const s = res.state;
+      myColor = s.myColor;
+      opponentName = s.opponent; opponentRating = s.opponentRating;
+      opponentIsAdmin = s.opponentIsAdmin;
+      opponentOnline = !!s.opponentOnline;
+      inc = s.inc;
+      myTime = myColor === 'w' ? s.timeW : s.timeB;
+      oppTime = myColor === 'w' ? s.timeB : s.timeW;
+      currentFen = s.fen;
+      moveHistory = []; moveFens = []; viewIndex = -1; lastMove = null;
+      gameEnded = !!s.finished; gameActive = !s.finished;
+      currentGameIsArena = !!s.arenaId; currentArenaId = s.arenaId || null;
+      currentArenaName = s.arenaName || null;
+      lastBoardHash = ''; rematchRequested = false;
+
+      document.getElementById('bottomName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod);
+      document.getElementById('bottomRating').textContent = me.rating;
+      document.getElementById('bottomDot').className = 'dot ' + (myColor === 'w' ? 'w' : 'b');
+      document.getElementById('topName').innerHTML = onlineDotHtml(opponentOnline) + nickHtml(opponentName, opponentIsAdmin, false);
+      document.getElementById('topRating').textContent = opponentRating || '';
+      document.getElementById('topDot').className = 'dot ' + (myColor === 'w' ? 'b' : 'w');
+      updateTimers();
+      document.getElementById('chatMessages').innerHTML = '';
+      if (Array.isArray(s.chat)) s.chat.forEach(renderChatMsg);
+      navTo('game'); renderBoard(); renderMoves();
+      updateTurnIndicator();
+      if (s.finished) hideGameResultBar();
+      updateBackToGameBtn();
+      try { localStorage.setItem('kingside_active_lobby', lobbyId); } catch (e) {}
+    });
+  }
+  window.returnToGame = returnToGame;
+  function tryResumeGame() {
+    let saved = null;
+    try { saved = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
+    if (!saved) return;
+    socket.emit('getGameState', { lobbyId: saved }, (res) => {
+      if (!res || !res.ok) { try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {} updateBackToGameBtn(); return; }
+      lobbyId = saved;
+      const s = res.state;
+      myColor = s.myColor;
+      opponentName = s.opponent; opponentRating = s.opponentRating;
+      opponentIsAdmin = s.opponentIsAdmin;
+      opponentOnline = !!s.opponentOnline;
+      inc = s.inc;
+      myTime = myColor === 'w' ? s.timeW : s.timeB;
+      oppTime = myColor === 'w' ? s.timeB : s.timeW;
+      currentFen = s.fen;
+      moveHistory = []; moveFens = []; viewIndex = -1; lastMove = null;
+      gameEnded = !!s.finished; gameActive = !s.finished;
+      currentGameIsArena = !!s.arenaId; currentArenaId = s.arenaId || null;
+      currentArenaName = s.arenaName || null;
+      lastBoardHash = ''; rematchRequested = false;
+
+      document.getElementById('bottomName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod);
+      document.getElementById('bottomRating').textContent = me.rating;
+      document.getElementById('bottomDot').className = 'dot ' + (myColor === 'w' ? 'w' : 'b');
+      document.getElementById('topName').innerHTML = onlineDotHtml(opponentOnline) + nickHtml(opponentName, opponentIsAdmin, false);
+      document.getElementById('topRating').textContent = opponentRating || '';
+      document.getElementById('topDot').className = 'dot ' + (myColor === 'w' ? 'b' : 'w');
+      updateTimers();
+      document.getElementById('chatMessages').innerHTML = '';
+      if (Array.isArray(s.chat)) s.chat.forEach(renderChatMsg);
+      updateBackToGameBtn();
+    });
+  }
+  window.addEventListener('beforeunload', () => {
+    if (lobbyId && gameActive && !gameEnded) {
+      try { localStorage.setItem('kingside_active_lobby', lobbyId); } catch (e) {}
+    }
+  });
   socket.on('stats', (s) => { if (!s) return; const e1 = document.getElementById('statOnline'), e2 = document.getElementById('statGames'), e3 = document.getElementById('statActive'); if (e1) e1.textContent = s.online; if (e2) e2.textContent = s.games; if (e3) e3.textContent = s.activeGames || 0; if (document.getElementById('watchScreen').classList.contains('active')) refreshWatchList(false); });
   socket.on('lobbiesUpdate', () => { if (document.getElementById('lobbyScreen').classList.contains('active')) refreshLobbies(); });
-  socket.on('gameStart', ({ color, opponent, opponentRating: oppRating, time, inc: gameInc, lobbyId: id, fen, chat, arenaId, arenaName, opponentIsAdmin: oppIsAdmin, opponentIsMod: oppIsMod }) => {
+  socket.on('gameStart', ({ color, opponent, opponentRating: oppRating, time, inc: gameInc, lobbyId: id, fen, chat, arenaId, arenaName, opponentIsAdmin: oppIsAdmin, opponentIsMod: oppIsMod, opponentOnline: oppOnline }) => {
     if (id) lobbyId = id;
     myColor = color || 'w'; inc = gameInc || 0;
     opponentName = opponent || 'Соперник'; opponentRating = oppRating || null;
     opponentIsAdmin = (typeof oppIsAdmin === 'boolean') ? oppIsAdmin : (opponentName === 'PeshkaSasha');
+    opponentOnline = (typeof oppOnline === 'boolean') ? oppOnline : true;
     myTime = time * 60; oppTime = time * 60;
     currentFen = fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
     selected = null; legalMoves = []; moveHistory = []; moveFens = [];
@@ -1815,7 +1974,7 @@
     document.getElementById('bottomRating').textContent = me.rating;
     document.getElementById('bottomDot').className = 'dot ' + (myColor === 'w' ? 'w' : 'b');
     document.getElementById('bottomTime').textContent = formatTime(time * 60);
-    document.getElementById('topName').innerHTML = nickHtml(opponentName, opponentIsAdmin, oppIsMod);
+    document.getElementById('topName').innerHTML = onlineDotHtml(opponentOnline) + nickHtml(opponentName, opponentIsAdmin, oppIsMod);
     document.getElementById('topRating').textContent = opponentRating || '';
     document.getElementById('topDot').className = 'dot ' + (myColor === 'w' ? 'b' : 'w');
     document.getElementById('topTime').textContent = formatTime(time * 60);
@@ -1825,6 +1984,8 @@
     if (Array.isArray(chat)) chat.forEach(renderChatMsg);
     hideGameResultBar();
     navTo('game'); renderBoard(); renderMoves(); updateTimers();
+    updateBackToGameBtn();
+    try { localStorage.setItem('kingside_active_lobby', lobbyId); } catch (e) {}
     sndStart();
   });
   socket.on('boardUpdate', ({ fen, san }) => {
@@ -1848,7 +2009,26 @@
   socket.on('drawOffered', ({ from }) => showDrawOfferDialog(from || 'Соперник'));
   socket.on('drawDeclined', () => { document.getElementById('statusBar').className = 'statusYellow'; document.getElementById('statusBar').textContent = 'Соперник отклонил ничью'; pendingDrawOffer = false; });
   socket.on('rematchOffered', ({ from }) => showRematchOfferDialog(from || 'Соперник'));
-  socket.on('rematchDeclined', () => { rematchRequested = false; document.getElementById('statusBar').className = 'statusYellow'; document.getElementById('statusBar').textContent = 'Соперник отклонил реванш'; });
+  socket.on('rematchDeclined', () => {
+    rematchRequested = false;
+    const btn = document.getElementById('grRematchBtn');
+    if (btn) { btn.disabled = false; btn.textContent = 'РЕВАНШ'; }
+    document.getElementById('statusBar').className = 'statusYellow'; document.getElementById('statusBar').textContent = 'Соперник отклонил реванш';
+  });
+  socket.on('opponentOnline', ({ username }) => {
+    if (username === opponentName) {
+      opponentOnline = true;
+      const strip = document.getElementById('topName');
+      if (strip) strip.innerHTML = onlineDotHtml(true) + nickHtml(opponentName, opponentIsAdmin, false);
+    }
+  });
+  socket.on('opponentOffline', ({ username }) => {
+    if (username === opponentName) {
+      opponentOnline = false;
+      const strip = document.getElementById('topName');
+      if (strip) strip.innerHTML = onlineDotHtml(false) + nickHtml(opponentName, opponentIsAdmin, false);
+    }
+  });
   socket.on('chatMessage', (msg) => renderChatMsg(msg));
   socket.on('chatMessageDeleted', ({ msgId }) => {
     const el = document.querySelector(`#chatMessages .msg[data-msg-id="${msgId}"]`); if (el) el.remove();
@@ -1856,7 +2036,7 @@
   });
   socket.on('chatError', ({ msg }) => { alert(msg); });
   socket.on('modAction', (info) => { if (!info) return; if (info.action === 'mute' && me && info.target === me.username) alert(`Вы заглушены на ${info.minutes} мин. модератором ${info.by}.`); if (info.action === 'unmute' && me && info.target === me.username) alert('С вас снят мут.'); });
-  socket.on('opponentLeft', () => { if (!gameActive) return; alert('Соперник отключился'); cleanupGame(); navTo('lobby'); });
+  socket.on('opponentLeft', () => { if (!gameActive) return; alert('Соперник отключился'); updateBackToGameBtn(); });
   socket.on('connect_error', () => console.warn('Не удалось подключиться'));
   socket.on('arenaChatMessage', (msg) => { if (currentArenaId && msg.arenaId === currentArenaId) renderArenaChatMsg(msg); });
   socket.on('arenaUpdate', ({ arenaId }) => { if (currentArenaId === arenaId) { lastArenaStateHash = ''; lastArenaGamesHash = ''; if (document.getElementById('arenaPageScreen').classList.contains('active')) { loadArenaPage(); renderArenaGamesList(); } } if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas(); if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas(); });
@@ -1866,6 +2046,7 @@
     if (document.hidden) return;
     if (document.getElementById('lobbyScreen').classList.contains('active')) { refreshTopArenas(); refreshStats(); }
     if (document.getElementById('watchScreen').classList.contains('active')) { refreshWatchList(false); if (watchingGameId) { socket.emit('watchGame', { id: watchingGameId }, (res) => { if (res && res.ok) { watchingGame = res.game; renderWatchBoard(); } else { stopWatching(); refreshWatchList(true); } }); } }
+    updateBackToGameBtn();
   }, 5000);
   document.getElementById('password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
 
@@ -1877,6 +2058,7 @@
     socket.emit('register', { username: saved.username, password: saved.password }, (res) => {
       if (!res || !res.ok) { try { localStorage.removeItem('kingside_login'); } catch (e) {} return; }
       me = res.user; updateTopbarUser(); navTo('lobby'); refreshLobbies(); refreshTopArenas(); refreshStats();
+      tryResumeGame();
     });
   })();
 
