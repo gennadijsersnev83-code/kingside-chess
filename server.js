@@ -19,7 +19,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // ======================= РОЛИ =======================
 const ADMINS = new Set(['PeshkaSasha']);
-const MODERATORS = new Set(['Debian', '1234']);
+const MODERATORS = new Set(['Debian']);
 const DEVS = new Set(['PeshkaSasha']);
 
 function roleOf(username) {
@@ -288,6 +288,11 @@ function publicUser(name) {
   };
 }
 
+// Округление до целой минуты — чтобы не было 07:30:00.342
+function roundToMinute(ts) {
+  return Math.round(ts / 60000) * 60000;
+}
+
 // ======================= ХРАНИЛИЩА =======================
 const online = new Map();
 const lobbies = new Map();
@@ -457,6 +462,8 @@ async function finishGame(lobbyId, result, reason) {
 }
 
 // ======================= АРЕНЫ =======================
+// durationMin — точная длительность. endsAt = startsAt + durationMin.
+// Старты: :00 и :30 (для every30), :00 (hourly), :00 кратный 2ч (every2h), :00 кратный 4ч (every4h).
 const ARENA_TEMPLATES = [
   {
     id: 'bullet-halfhour',
@@ -496,48 +503,62 @@ const ARENA_TEMPLATES = [
   }
 ];
 
+// Возвращает следующий момент старта СТРОГО > now (или = now), привязанный к сетке.
 function nextStartFor(tpl, now) {
   const c = new Date(now);
   c.setSeconds(0, 0);
+  const mins = c.getMinutes();
+  const hrs = c.getHours();
+
+  if (tpl.repeat === 'every30') {
+    // :00 или :30
+    if (mins < 30) {
+      c.setMinutes(30, 0, 0);
+    } else {
+      c.setHours(hrs + 1, 0, 0, 0);
+    }
+    return roundToMinute(c.getTime());
+  }
+
   if (tpl.repeat === 'hourly') {
     c.setMinutes(0, 0, 0);
-    if (c.getTime() <= now) c.setHours(c.getHours() + 1);
-    return c.getTime();
+    if (c.getTime() < now) c.setHours(c.getHours() + 1);
+    return roundToMinute(c.getTime());
   }
-  if (tpl.repeat === 'every30') {
-    const m = c.getMinutes();
-    if (m < 30) c.setMinutes(30, 0, 0);
-    else { c.setHours(c.getHours() + 1); c.setMinutes(0, 0, 0); }
-    if (c.getTime() <= now) c.setMinutes(c.getMinutes() + 30);
-    return c.getTime();
-  }
+
   if (tpl.repeat === 'every2h') {
     c.setMinutes(0, 0, 0);
-    const h = c.getHours();
-    let nextH = (Math.floor(h / 2) + 1) * 2;
-    if (h % 2 === 0 && c.getTime() > now) nextH = h;
-    if (nextH >= 24) {
-      const d = new Date(c); d.setDate(d.getDate() + 1); d.setHours(nextH - 24, 0, 0, 0);
-      return d.getTime();
+    let nextH = Math.floor(hrs / 2) * 2;
+    if (nextH * 3600000 + new Date(now).setMinutes(0,0,0) < now) {
+      // уже прошло — берём следующий чётный час
     }
-    c.setHours(nextH, 0, 0, 0);
-    if (c.getTime() <= now) c.setHours(c.getHours() + 2);
-    return c.getTime();
+    let t = new Date(now);
+    t.setMinutes(0, 0, 0);
+    t.setSeconds(0, 0);
+    // ближайший чётный час, начиная с t
+    let h = t.getHours();
+    let cand = new Date(t);
+    cand.setHours(h - (h % 2), 0, 0, 0);
+    if (cand.getTime() < now) {
+      cand.setHours(cand.getHours() + 2);
+    }
+    return roundToMinute(cand.getTime());
   }
+
   if (tpl.repeat === 'every4h') {
-    c.setMinutes(0, 0, 0);
-    const h = c.getHours();
-    let nextH = (Math.floor(h / 4) + 1) * 4;
-    if (h % 4 === 0 && c.getTime() > now) nextH = h;
-    if (nextH >= 24) {
-      const d = new Date(c); d.setDate(d.getDate() + 1); d.setHours(nextH - 24, 0, 0, 0);
-      return d.getTime();
+    let t = new Date(now);
+    t.setMinutes(0, 0, 0);
+    t.setSeconds(0, 0);
+    let h = t.getHours();
+    let cand = new Date(t);
+    cand.setHours(h - (h % 4), 0, 0, 0);
+    if (cand.getTime() < now) {
+      cand.setHours(cand.getHours() + 4);
     }
-    c.setHours(nextH, 0, 0, 0);
-    if (c.getTime() <= now) c.setHours(c.getHours() + 4);
-    return c.getTime();
+    return roundToMinute(cand.getTime());
   }
-  return now + 3600000;
+
+  return roundToMinute(now + 3600000);
 }
 
 function stepFor(tpl) {
@@ -866,7 +887,8 @@ function getArenaSchedule(hoursAhead) {
 
     while (t <= end && safety < 300) {
       safety++;
-      const endsAt = t + tpl.durationMin * 60 * 1000;
+      const endsAt = roundToMinute(t + tpl.durationMin * 60 * 1000);
+
       let status;
       if (t > now) status = 'upcoming';
       else if (now < endsAt) status = 'live';
@@ -887,8 +909,8 @@ function getArenaSchedule(hoursAhead) {
       };
       result.push(instance);
 
-      const createAheadMs = 6 * 3600 * 1000;
-      if (status === 'live' || (status === 'upcoming' && t - now < createAheadMs)) {
+      // Состояние создаём ТОЛЬКО для live, иначе слишком много таймеров
+      if (status === 'live') {
         getOrCreateArenaState(instance);
       }
       t += step;
@@ -1330,7 +1352,7 @@ io.on('connection', (socket) => {
         score: p ? p.score : 0
       };
     }
-    cb(states);
+    cb({ states, serverNow: Date.now() });
   });
 
   socket.on('getArenaState', ({ arenaId }, cb) => {
@@ -1630,13 +1652,24 @@ io.on('connection', (socket) => {
   } catch (err) {
     console.error('[DB] Не удалось инициализировать базу данных:', err.message || err.code || err);
   }
-  getArenaSchedule(48);
+
+  // Диагностический лог расписания на ближайшие 3 часа
+  const diag = getArenaSchedule(3);
+  console.log('[arena] расписание на ближайшие 3 часа:');
+  for (const a of diag.slice(0, 12)) {
+    const s = new Date(a.startsAt);
+    const e = new Date(a.endsAt);
+    const dur = ((a.endsAt - a.startsAt) / 60000).toFixed(0);
+    console.log(
+      `  ${a.name} | ${s.toLocaleTimeString('ru-RU')} → ${e.toLocaleTimeString('ru-RU')} | ${dur} мин | ${a.status}`
+    );
+  }
 
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, '0.0.0.0', () => {
     console.log('==================================================');
     console.log('  Kingside — сервер запущен');
-    console.log('  Порт: ' + PORT);
+    console.log(`  Порт: ${PORT}`);
     console.log('==================================================');
   });
 })();
