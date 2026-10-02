@@ -18,11 +18,8 @@ const io = new Server(server, {
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ======================= ВРЕМЯ В МСК =======================
-// Всё расписание арен строится в московском времени (UTC+3), независимо от TZ сервера.
-// Timestamp'ы остаются абсолютными (UTC-ms), но привязка к «круглым» часам идёт по МСК.
 const MSK_OFFSET_MS = 3 * 3600 * 1000;
 
-// Возвращает { y, mo, d, h, mi } в МСК для данного timestamp.
 function mskParts(ts) {
   const d = new Date(ts + MSK_OFFSET_MS);
   return {
@@ -35,25 +32,22 @@ function mskParts(ts) {
   };
 }
 
-// Собирает timestamp из МСК-компонентов.
 function fromMsk(y, mo, d, h, mi, s) {
   return Date.UTC(y, mo, d, h, mi, s || 0) - MSK_OFFSET_MS;
 }
 
-// Форматирует timestamp как "HH:MM" в МСК — для логов.
 function fmtMskHM(ts) {
   const p = mskParts(ts);
   return String(p.h).padStart(2, '0') + ':' + String(p.mi).padStart(2, '0');
 }
 
-// Округление до целой минуты.
 function roundToMinute(ts) {
   return Math.round(ts / 60000) * 60000;
 }
 
 // ======================= РОЛИ =======================
 const ADMINS = new Set(['PeshkaSasha']);
-const MODERATORS = new Set(['Debian', '1234']);
+const MODERATORS = new Set(['Debian']);
 const DEVS = new Set(['PeshkaSasha']);
 
 function roleOf(username) {
@@ -491,8 +485,6 @@ async function finishGame(lobbyId, result, reason) {
 }
 
 // ======================= АРЕНЫ =======================
-// durationMin — реальная длительность. endsAt = startsAt + durationMin.
-// Старты строятся в МСК: :00 / :30 (every30), :00 (hourly), :00 чётный (every2h), :00 кратный 4 (every4h).
 const ARENA_TEMPLATES = [
   {
     id: 'bullet-halfhour',
@@ -532,29 +524,21 @@ const ARENA_TEMPLATES = [
   }
 ];
 
-// Возвращает следующий старт СТРОГО >= now, привязанный к МСК-сетке.
 function nextStartFor(tpl, now) {
   const p = mskParts(now);
 
   if (tpl.repeat === 'every30') {
-    // :00 или :30 в МСК
-    if (p.mi < 30) {
-      return fromMsk(p.y, p.mo, p.d, p.h, 30, 0);
-    } else {
-      // следующий час
-      return fromMsk(p.y, p.mo, p.d, p.h + 1, 0, 0);
-    }
+    if (p.mi < 30) return fromMsk(p.y, p.mo, p.d, p.h, 30, 0);
+    return fromMsk(p.y, p.mo, p.d, p.h + 1, 0, 0);
   }
 
   if (tpl.repeat === 'hourly') {
-    // :00 в МСК; если уже :00 ровно и now <= этой минуты — оставляем, иначе следующий час
     const candidate = fromMsk(p.y, p.mo, p.d, p.h, 0, 0);
     if (candidate >= now) return candidate;
     return fromMsk(p.y, p.mo, p.d, p.h + 1, 0, 0);
   }
 
   if (tpl.repeat === 'every2h') {
-    // :00 в чётный МСК-час (0, 2, 4, ...)
     const evenH = p.h - (p.h % 2);
     const candidate = fromMsk(p.y, p.mo, p.d, evenH, 0, 0);
     if (candidate >= now) return candidate;
@@ -580,7 +564,13 @@ function stepFor(tpl) {
 }
 
 function getOrCreateArenaState(instance) {
-  if (arenas.has(instance.id)) return arenas.get(instance.id);
+  if (arenas.has(instance.id)) {
+    const existing = arenas.get(instance.id);
+    // Обновляем «живые» поля на случай, если instance пересчитался
+    existing.startsAt = instance.startsAt;
+    existing.endsAt = instance.endsAt;
+    return existing;
+  }
   const state = {
     id: instance.id,
     templateId: instance.templateId,
@@ -919,8 +909,10 @@ function getArenaSchedule(hoursAhead) {
       };
       result.push(instance);
 
-      // Состояние создаём ТОЛЬКО для live
-      if (status === 'live') {
+      // Создаём состояние арены заранее — за 24 часа до старта.
+      // Это позволяет регистрироваться и писать в чат ДО начала арены.
+      const createAheadMs = 24 * 3600 * 1000;
+      if (status === 'live' || (status === 'upcoming' && t - now < createAheadMs)) {
         getOrCreateArenaState(instance);
       }
       t += step;
@@ -1369,9 +1361,13 @@ io.on('connection', (socket) => {
     if (typeof cb !== 'function') return;
     const state = arenas.get(arenaId);
     if (!state) {
-      return cb({ joined: false, paused: false, participants: [], participantsCount: 0,
-                  phase: 'waiting', timeLeftMin: 0, timeLeftMs: 0, top3: null, pairingNow: null,
-                  startsAt: 0, endsAt: 0, serverNow: Date.now() });
+      // Арена ещё не создана на сервере — вернём "пустое" состояние с фазой waiting.
+      // Это позволит клиенту отобразить страницу, но без участников.
+      return cb({
+        joined: false, paused: false, participants: [], participantsCount: 0,
+        phase: 'waiting', timeLeftMin: 0, timeLeftMs: 0, top3: null, pairingNow: null,
+        startsAt: 0, endsAt: 0, serverNow: Date.now()
+      });
     }
 
     for (const p of state.participants.values()) {
@@ -1663,7 +1659,9 @@ io.on('connection', (socket) => {
     console.error('[DB] Не удалось инициализировать базу данных:', err.message || err.code || err);
   }
 
-  // Диагностика расписания в МСК
+  // Прогреваем расписание и создаём состояния арен на 24 часа вперёд
+  getArenaSchedule(48);
+
   const diag = getArenaSchedule(3);
   console.log('[arena] расписание на ближайшие 3 часа (МСК):');
   for (const a of diag.slice(0, 12)) {
