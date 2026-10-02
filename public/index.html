@@ -126,7 +126,9 @@
   .arenasEmpty { padding:60px 20px; text-align:center; color:var(--muted); font-size:14px; }
   .arenasScroller { overflow-x:auto; overflow-y:hidden; position:relative; }
   .timeRow { display:flex; padding:0; border-bottom:1px solid var(--border); background:var(--panel-2); position:sticky; top:0; z-index:2; height:32px; }
-  .timeCell { color:var(--muted); font-size:11px; text-align:center; font-weight:500; flex-shrink:0; padding:8px 0; border-right:1px solid rgba(58,56,51,.5); box-sizing:border-box; }
+  .timeCell { color:var(--muted); font-size:11px; text-align:left; font-weight:500; flex-shrink:0; padding:0; border-right:1px solid rgba(58,56,51,.5); box-sizing:border-box; position:relative; overflow:visible; }
+  .timeTick { position:absolute; top:8px; width:33.3333%; white-space:nowrap; text-align:center; transform:translateX(-50%); pointer-events:none; }
+  .timeTick.first { transform:none; text-align:left; padding-left:4px; box-sizing:border-box; }
   .timeCell.now { color:var(--accent); font-weight:700; background:rgba(191,129,29,.08); }
   .arenaRowGrid { position:relative; height:52px; border-bottom:1px solid rgba(58,56,51,.35); }
   .arenaRowGrid:last-child { border-bottom:none; }
@@ -1793,7 +1795,15 @@
     for (let i = 0; i < COLS; i++) {
       const t = startMs + i * SLOT_MS;
       const isNow = t <= localNow && localNow < t + SLOT_MS;
-      html += '<div class="timeCell' + (isNow ? ' now' : '') + '" style="width:' + SLOT_PX + 'px;min-width:' + SLOT_PX + 'px;">' + fmtMskHM(t) + '</div>';
+      const tickPx = SLOT_PX / 3;
+      const tick0 = fmtMskHM(t);
+      const tick1 = fmtMskHM(t + 10 * 60 * 1000);
+      const tick2 = fmtMskHM(t + 20 * 60 * 1000);
+      html += '<div class="timeCell' + (isNow ? ' now' : '') + '" style="width:' + SLOT_PX + 'px;min-width:' + SLOT_PX + 'px;">'
+           + '<span class="timeTick first" style="left:0px;">' + tick0 + '</span>'
+           + '<span class="timeTick" style="left:' + tickPx + 'px;">' + tick1 + '</span>'
+           + '<span class="timeTick" style="left:' + (tickPx * 2) + 'px;">' + tick2 + '</span>'
+           + '</div>';
     }
     html += '</div>';
 
