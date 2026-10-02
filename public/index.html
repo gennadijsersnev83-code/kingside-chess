@@ -317,7 +317,8 @@
   .playerStrip .nm { color:var(--text-bright); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; display:flex; align-items:center; min-width:0; }
   .playerStrip .nm:hover { color:var(--accent); }
   .playerStrip .rt { color:var(--text-bright); font-size:15px; font-weight:500; }
-  .movesPanel { background:var(--panel); border:1px solid var(--border); border-radius:4px; display:flex; flex-direction:column; height:200px; overflow:hidden; }
+  .movesPanel { background:var(--panel); border:1px solid var(--border); border-radius:4px; display:flex; flex-direction:column; height:200px; overflow:hidden; transition: height .15s; }
+  .movesPanel.compact { height:110px; }
   .movesToolbar { background:var(--panel-2); display:flex; align-items:stretch; border-bottom:1px solid var(--border); }
   .movesToolbar button { flex:1; background:transparent; border:none; border-radius:0; padding:6px 0; font-size:16px; color:var(--text); border-right:1px solid var(--border); cursor:pointer; min-height:32px; }
   .movesToolbar button:last-child { border-right:none; }
@@ -336,8 +337,8 @@
   .statusYellow { background:var(--panel); border-left:3px solid var(--accent); color:var(--text); padding:8px 12px; border-radius:4px; font-size:13px; min-height:32px; }
 
   /* ============================================================
-     LICHESS-STYLE RESULT PANEL
-     Располагается между двумя участниками (соперник сверху, ты снизу).
+     КОМПАКТНАЯ ПАНЕЛЬ РЕЗУЛЬТАТА (LICHESS-STYLE)
+     Строго в пределах правой колонки, между двумя участниками.
      ============================================================ */
   .gameResultCompact {
     display: none;
@@ -345,10 +346,12 @@
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: 4px;
-    padding: 10px 12px;
+    padding: 10px 10px;
     text-align: center;
-    gap: 6px;
-    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
   }
   .gameResultCompact.show { display: flex; }
   .gameResultCompact .grTitle {
@@ -356,6 +359,9 @@
     font-weight: 700;
     color: var(--text-bright);
     line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .gameResultCompact .grTitle.win { color: var(--green-2); }
   .gameResultCompact .grTitle.lose { color: #ff7b7b; }
@@ -363,7 +369,10 @@
     font-size: 12px;
     color: var(--muted);
     font-style: italic;
-    margin-top: -2px;
+    margin-top: -4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .gameResultCompact .grBtn {
     display: block;
@@ -372,12 +381,16 @@
     border-radius: 4px;
     font-weight: 700;
     font-size: 12px;
-    letter-spacing: .6px;
+    letter-spacing: .5px;
     text-transform: uppercase;
     border: none;
     cursor: pointer;
     text-align: center;
     transition: background .15s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-sizing: border-box;
   }
   .gameResultCompact .grBtn.rematch { background: #629924; color: #fff; }
   .gameResultCompact .grBtn.rematch:hover { background: #7dbe30; }
@@ -461,6 +474,7 @@
     .dragGhost { width:44px; height:44px; font-size:min(9.5vw, 34px); }
     .sq .coord-f,.sq .coord-r { font-size:8px; }
     .movesPanel { height:160px; }
+    .movesPanel.compact { height:100px; }
     .clockBox .clockTime { font-size:22px; }
     #chatBox { height:280px; }
     .bigActionsRow button { font-size:20px; padding:6px 10px; min-height:40px; min-width:40px; }
@@ -713,7 +727,7 @@
           <span class="rt" id="topRating"></span>
         </div>
 
-        <div class="movesPanel">
+        <div class="movesPanel" id="movesPanel">
           <div class="movesToolbar">
             <button title="В начало" onclick="gotoMove('first')">⏮</button>
             <button title="Назад" onclick="gotoMove('prev')">◀</button>
@@ -783,9 +797,8 @@
     } catch (e) {}
   }
   // ==== ЗВУКИ С ЗАЩИТОЙ ОТ ДУБЛИРОВАНИЯ ====
-  // Каждый тип звука воспроизводится не чаще, чем раз в N мс (глобально)
   const _lastSound = { move: 0, capture: 0, check: 0, mate: 0, draw: 0, win: 0, lose: 0, start: 0 };
-  const SOUND_COOLDOWN = 80; // мс — защита от двойного вызова при быстрых апдейтах
+  const SOUND_COOLDOWN = 80;
   function _canPlay(key) {
     const now = performance.now();
     if (now - _lastSound[key] < SOUND_COOLDOWN) return false;
@@ -800,7 +813,6 @@
   function sndWin()     { if (!_canPlay('win')) return;     playTone(660, 0.10, 'sine', 0.18); playTone(880, 0.12, 'sine', 0.18, 0.09); playTone(1320, 0.20, 'sine', 0.16, 0.20); }
   function sndLose()    { if (!_canPlay('lose')) return;    playTone(330, 0.16, 'sine', 0.18); playTone(220, 0.22, 'sine', 0.16, 0.12); }
   function sndStart()   { if (!_canPlay('start')) return;   playTone(523, 0.10, 'sine', 0.18); playTone(659, 0.12, 'sine', 0.16, 0.09); playTone(784, 0.16, 'sine', 0.14, 0.18); }
-  // Приоритетный выбор звука по SAN: мат > шах > взятие > ход
   function playMoveSound(san) {
     if (!san) return;
     if (san.includes('#'))      sndMate();
@@ -1300,12 +1312,14 @@
     gameEnded = false; currentGameIsArena = false; currentArenaName = null;
     premove = null; lastBoardHash = ''; rematchRequested = false;
     document.getElementById('chatMessages').innerHTML = '';
+    document.getElementById('movesPanel').classList.remove('compact');
     try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
     updateBackToGameBtn();
   }
   function hideGameResultBar() {
     document.getElementById('gameResultCompact').classList.remove('show');
     document.getElementById('bigActionsRow').style.display = '';
+    document.getElementById('movesPanel').classList.remove('compact');
   }
   function showGameResultBar(winner, reason) {
     const bar = document.getElementById('gameResultCompact');
@@ -1333,7 +1347,9 @@
       findBtn.onclick = () => { hideGameResultBar(); cleanupGame(); navTo('lobby'); switchLobbyTab('create'); };
     }
     bar.classList.add('show');
-    // Во время отображения результата прячем кнопки сдачи/ничьей
+    // Сжимаем панель ходов, чтобы всё поместилось без скролла
+    document.getElementById('movesPanel').classList.add('compact');
+    // Скрываем кнопки сдачи/ничьей/переворота во время показа результата
     document.getElementById('bigActionsRow').style.display = 'none';
   }
   function requestRematch() {
