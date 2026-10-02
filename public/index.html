@@ -139,8 +139,8 @@
   .arenaBlock:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.4); filter:brightness(1.08); z-index:4; }
   .arenaBlock .tname { font-size:12px; font-weight:700; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .arenaBlock .tinfo { font-size:10px; opacity:.9; line-height:1.1; display:flex; justify-content:space-between; gap:6px; white-space:nowrap; overflow:hidden; }
-  .arenaBlock.past { opacity:.35; cursor:default; filter:saturate(.5); }
-  .arenaBlock.past:hover { transform:none; box-shadow:none; filter:saturate(.5); }
+  .arenaBlock.past { opacity:.35; cursor:pointer; filter:saturate(.5); }
+  .arenaBlock.past:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.4); filter:saturate(.5) brightness(1.08); }
   .arenaBlock.live .tname::before { content:'● '; animation:pulse 1.5s infinite; }
   .arenaBlock.live { box-shadow:0 0 0 2px rgba(255,255,255,.3), 0 0 12px rgba(255,200,80,.35); }
   .arenaBlock.joined { outline:2px solid #fff; outline-offset:-2px; }
@@ -1456,7 +1456,6 @@
   function formatMMSS(ms) { const t = Math.max(0, Math.floor(ms/1000)); return String(Math.floor(t/60)).padStart(2,'0') + ':' + String(t%60).padStart(2,'0'); }
   function formatTime(s) { s = Math.max(0, Math.floor(s)); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
 
-  // ====== ТАЙМЛАЙН АРЕН ======
   function renderArenasGrid() {
     const wrap = document.getElementById('arenasGridWrap'); if (!wrap) return;
     if (!arenasCache || !arenasCache.length) { wrap.innerHTML = '<div class="arenasEmpty">Нет доступных арен</div>'; return; }
@@ -1509,7 +1508,7 @@
         const colorClass = arena.color || 'blitz';
         const myState = arenaStatesCache[arena.id];
         const joined = myState && myState.joined;
-        const clickable = !isPast || isLive;
+        const clickable = true;
         const cls = 'arenaBlock ' + colorClass + (isPast && !isLive ? ' past' : '') + (isLive ? ' live' : '') + (joined ? ' joined' : '');
         const tinfo = arena.timeControl + '+' + arena.increment;
         const participantsCount = (myState && myState.participantsCount) || 0;
