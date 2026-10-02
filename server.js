@@ -30,7 +30,7 @@ function roundToMinute(ts) { return Math.round(ts / 60000) * 60000; }
 
 // ======================= РОЛИ =======================
 const ADMINS = new Set(['PeshkaSasha']);
-const MODERATORS = new Set(['Debian', '1234']);
+const MODERATORS = new Set(['Debian']);
 const DEVS = new Set(['PeshkaSasha']);
 
 function roleOf(username) {
@@ -254,6 +254,10 @@ function publicUser(name) {
     mutedUntil: u.mutedUntil || 0, categories: u.categories || null
   };
 }
+function isUserOnline(username) {
+  for (const [, name] of online.entries()) if (name === username) return true;
+  return false;
+}
 
 // ======================= ХРАНИЛИЩА =======================
 const online = new Map();
@@ -271,6 +275,15 @@ function broadcastOnline() {
   io.emit('stats', { online: online.size, games: db.totalGames, activeGames: countActiveLobbies() });
 }
 function broadcastLobbies() { io.emit('lobbiesUpdate'); }
+
+// Оповещаем всех участников лобби о смене статуса
+function notifyOpponentStatus(lobbyId, username, isOnline) {
+  const l = lobbies.get(lobbyId);
+  if (!l) return;
+  const target = username === l.host ? l.guestSocket : l.hostSocket;
+  if (!target) return;
+  io.to(target).emit(isOnline ? 'opponentOnline' : 'opponentOffline', { username });
+}
 
 function cleanupStuckPlaying() {
   for (const state of arenas.values()) {
@@ -384,7 +397,7 @@ async function finishGame(lobbyId, result, reason) {
     catch (e) { console.error('[arena] handleArenaGameEnd ошибка:', e.message); }
   }
 
-  // НЕ удаляем лобби сразу — оно ещё нужно для реванша (5 минут).
+  // Оставляем лобби живым 10 минут для реванша / возврата
   setTimeout(() => {
     const cur = lobbies.get(lobbyId);
     if (cur && cur.finished) {
@@ -392,7 +405,7 @@ async function finishGame(lobbyId, result, reason) {
       lobbies.delete(lobbyId);
       broadcastLobbies();
     }
-  }, 5 * 60 * 1000);
+  }, 10 * 60 * 1000);
 
   io.emit('stats', { online: online.size, games: db.totalGames, activeGames: countActiveLobbies() });
 }
@@ -613,6 +626,7 @@ function createArenaPairing(state, a, b) {
     aSocket.emit('gameStart', {
       color: hostColor, opponent: b.username, opponentRating: b.rating,
       opponentIsAdmin: isAdmin(b.username), opponentIsMod: isMod(b.username),
+      opponentOnline: true,
       time, inc, lobbyId,
       fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
       chat: [], arenaId: state.id, arenaName: state.name
@@ -623,6 +637,7 @@ function createArenaPairing(state, a, b) {
     bSocket.emit('gameStart', {
       color: guestColor, opponent: a.username, opponentRating: a.rating,
       opponentIsAdmin: isAdmin(a.username), opponentIsMod: isMod(a.username),
+      opponentOnline: true,
       time, inc, lobbyId,
       fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
       chat: [], arenaId: state.id, arenaName: state.name
@@ -874,6 +889,14 @@ io.on('connection', (socket) => {
     online.set(socket.id, username);
     socket.username = username;
     cb({ ok: true, user: publicUser(username) });
+
+    // Сообщаем всем соперникам по лобби, что игрок теперь онлайн
+    for (const [lid, l] of lobbies.entries()) {
+      if (l.finished) continue;
+      if (l.host === username && l.guestSocket) io.to(l.guestSocket).emit('opponentOnline', { username });
+      if (l.guest === username && l.hostSocket) io.to(l.hostSocket).emit('opponentOnline', { username });
+    }
+
     broadcastOnline();
   });
 
@@ -896,7 +919,9 @@ io.on('connection', (socket) => {
         const isWhite = r.white === username;
         history.push({ ts: Number(r.finished_at), rating: isWhite ? r.white_after : r.black_after });
       }
-      cb({ ok: true, user: publicUser(username), games, history });
+      const user = publicUser(username);
+      user.online = isUserOnline(username);
+      cb({ ok: true, user, games, history });
     } catch (err) {
       console.error('[DB] Ошибка загрузки профиля:', err.message || err.code || err);
       cb({ ok: false, msg: 'Ошибка базы данных' });
@@ -906,6 +931,49 @@ io.on('connection', (socket) => {
   socket.on('getStats', (cb) => { if (typeof cb === 'function') cb({ online: online.size, games: db.totalGames, activeGames: countActiveLobbies() }); });
   socket.on('getTopArenas', (cb) => { if (typeof cb === 'function') cb(getTopLiveArenas()); });
   socket.on('getLiveGames', (cb) => { if (typeof cb === 'function') cb(buildGamesList()); });
+
+  // Восстановление партии (возврат к идущей партии)
+  socket.on('getGameState', ({ lobbyId: lid }, cb) => {
+    if (typeof cb !== 'function') return;
+    const l = lobbies.get(lid);
+    if (!l) return cb({ ok: false, msg: 'Партия не найдена' });
+    if (socket.username !== l.host && socket.username !== l.guest) return cb({ ok: false, msg: 'Вы не участник' });
+
+    // Перепривязываем сокет к лобби
+    if (l.host === socket.username) l.hostSocket = socket.id;
+    else l.guestSocket = socket.id;
+
+    if (socket.username === l.host && !l.guestSocket) {
+      return cb({ ok: false, msg: 'Соперник ещё не подключился' });
+    }
+
+    socket.join(lid);
+    socketToLobby.set(socket.id, lid);
+    socket.lobbyId = lid;
+
+    const myColor = socket.username === l.host ? l.hostColor : l.guestColor;
+    const opponentName = socket.username === l.host ? l.guest : l.host;
+    const opponentU = db.users[opponentName];
+
+    cb({
+      ok: true,
+      state: {
+        myColor,
+        opponent: opponentName,
+        opponentRating: opponentU ? opponentU.rating : null,
+        opponentIsAdmin: isAdmin(opponentName),
+        opponentIsMod: isMod(opponentName),
+        opponentOnline: isUserOnline(opponentName),
+        time: l.time, inc: l.inc,
+        timeW: l.timeW, timeB: l.timeB,
+        turn: l.turn,
+        fen: l.fen,
+        chat: l.chat,
+        arenaId: l.arenaId, arenaName: l.arenaName,
+        finished: l.finished
+      }
+    });
+  });
 
   socket.on('watchGame', ({ id }, cb) => {
     const l = lobbies.get(id);
@@ -976,11 +1044,13 @@ io.on('connection', (socket) => {
       io.to(matched.hostSocket).emit('gameStart', {
         color: matched.hostColor, opponent: matched.guest, opponentRating: guestRating,
         opponentIsAdmin: isAdmin(matched.guest), opponentIsMod: isMod(matched.guest),
+        opponentOnline: true,
         time: matched.time, inc: matched.inc, lobbyId: matched.id, fen: matched.fen, chat: matched.chat, isArena: false
       });
       io.to(matched.guestSocket).emit('gameStart', {
         color: matched.guestColor, opponent: matched.host, opponentRating: hostRating,
         opponentIsAdmin: isAdmin(matched.host), opponentIsMod: isMod(matched.host),
+        opponentOnline: true,
         time: matched.time, inc: matched.inc, lobbyId: matched.id, fen: matched.fen, chat: matched.chat, isArena: false
       });
 
@@ -1053,11 +1123,13 @@ io.on('connection', (socket) => {
     io.to(l.hostSocket).emit('gameStart', {
       color: l.hostColor, opponent: l.guest, opponentRating: guestRating,
       opponentIsAdmin: isAdmin(l.guest), opponentIsMod: isMod(l.guest),
+      opponentOnline: true,
       time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat, isArena: false
     });
     io.to(l.guestSocket).emit('gameStart', {
       color: l.guestColor, opponent: l.host, opponentRating: hostRating,
       opponentIsAdmin: isAdmin(l.host), opponentIsMod: isMod(l.host),
+      opponentOnline: true,
       time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat, isArena: false
     });
 
@@ -1204,9 +1276,8 @@ io.on('connection', (socket) => {
     const otherSocket = socket.username === l.host ? l.guestSocket : l.hostSocket;
 
     if (l.rematch[otherName]) {
-      // Оба согласились — создаём новую партию
       const newId = genId();
-      const hostColor = l.guestColor; // цвета меняются
+      const hostColor = l.guestColor;
       const guestColor = l.hostColor;
       const newLobby = {
         id: newId,
@@ -1239,6 +1310,7 @@ io.on('connection', (socket) => {
         hostSocket.emit('gameStart', {
           color: hostColor, opponent: l.guest, opponentRating: guestRating,
           opponentIsAdmin: isAdmin(l.guest), opponentIsMod: isMod(l.guest),
+          opponentOnline: isUserOnline(l.guest),
           time: l.time, inc: l.inc, lobbyId: newId, fen: newLobby.fen, chat: [], isArena: false
         });
       }
@@ -1250,17 +1322,16 @@ io.on('connection', (socket) => {
         guestSocket.emit('gameStart', {
           color: guestColor, opponent: l.host, opponentRating: hostRating,
           opponentIsAdmin: isAdmin(l.host), opponentIsMod: isMod(l.host),
+          opponentOnline: isUserOnline(l.host),
           time: l.time, inc: l.inc, lobbyId: newId, fen: newLobby.fen, chat: [], isArena: false
         });
       }
-      // Удаляем старое лобби
       lobbies.delete(lobbyId);
       broadcastLobbies();
       cb({ ok: true, started: true, newLobbyId: newId });
       return;
     }
 
-    // Уведомляем соперника
     if (otherSocket) {
       io.to(otherSocket).emit('rematchOffered', { from: socket.username, lobbyId });
     }
@@ -1513,29 +1584,32 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    const wasUser = online.get(socket.id);
     online.delete(socket.id);
     if (socket.username) {
+      // Оповещаем соперников, что игрок ушёл
+      for (const [lid, l] of lobbies.entries()) {
+        if (l.finished) continue;
+        if (l.host === socket.username && l.guestSocket) io.to(l.guestSocket).emit('opponentOffline', { username: socket.username });
+        if (l.guest === socket.username && l.hostSocket) io.to(l.hostSocket).emit('opponentOffline', { username: socket.username });
+      }
       for (const state of arenas.values()) {
         const p = state.participants.get(socket.username);
         if (p && p.socketId === socket.id) p.socketId = null;
         state.chatViewers.delete(socket.id);
       }
     }
+    // ВАЖНО: не завершаем партию при disconnect — даём возможность вернуться
     const lobbyId = socketToLobby.get(socket.id);
     socketToLobby.delete(socket.id);
     if (lobbyId) {
       const l = lobbies.get(lobbyId);
-      if (l && !l.finished) {
-        if (l.started) {
-          const myColor = socket.id === l.hostSocket ? l.hostColor : l.guestColor;
-          const winner = myColor === 'w' ? 'b' : 'w';
-          finishGame(lobbyId, winner, 'Соперник отключился');
-        } else {
-          io.to(lobbyId).emit('opponentLeft');
-          lobbies.delete(lobbyId);
-          io.emit('lobbiesUpdate');
-        }
+      if (l && !l.finished && !l.started) {
+        io.to(lobbyId).emit('opponentLeft');
+        lobbies.delete(lobbyId);
+        io.emit('lobbiesUpdate');
       }
+      // started && !finished → оставляем партию живой, игрок может вернуться
     }
     broadcastOnline();
   });
