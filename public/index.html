@@ -1755,10 +1755,11 @@
     const toClient = (ts) => ts - arenaServerOffsetMs;
 
     const isMobile = window.matchMedia('(max-width: 700px)').matches;
-    // Арены стартуют только в :00 или :30, поэтому и сетка должна быть такой же.
-    const SLOT_PX = isMobile ? 180 : 240;
-    const SLOT_MS = 30 * 60 * 1000;
-    const COLS = isMobile ? 16 : 24;
+    // Шкала размечена равными 10-минутными интервалами.
+    // Поэтому каждая отметка времени находится на одинаковом расстоянии от соседней.
+    const SLOT_PX = isMobile ? 120 : 180;
+    const SLOT_MS = 10 * 60 * 1000;
+    const COLS = isMobile ? 24 : 36;
 
     const startMs = Math.floor(localNow / SLOT_MS) * SLOT_MS;
     const endMs = startMs + COLS * SLOT_MS;
@@ -1795,15 +1796,7 @@
     for (let i = 0; i < COLS; i++) {
       const t = startMs + i * SLOT_MS;
       const isNow = t <= localNow && localNow < t + SLOT_MS;
-      const tickPx = SLOT_PX / 3;
-      const tick0 = fmtMskHM(t);
-      const tick1 = fmtMskHM(t + 10 * 60 * 1000);
-      const tick2 = fmtMskHM(t + 20 * 60 * 1000);
-      html += '<div class="timeCell' + (isNow ? ' now' : '') + '" style="width:' + SLOT_PX + 'px;min-width:' + SLOT_PX + 'px;">'
-           + '<span class="timeTick first" style="left:0px;">' + tick0 + '</span>'
-           + '<span class="timeTick" style="left:' + tickPx + 'px;">' + tick1 + '</span>'
-           + '<span class="timeTick" style="left:' + (tickPx * 2) + 'px;">' + tick2 + '</span>'
-           + '</div>';
+      html += '<div class="timeCell' + (isNow ? ' now' : '') + '" style="width:' + SLOT_PX + 'px;min-width:' + SLOT_PX + 'px;">' + fmtMskHM(t) + '</div>';
     }
     html += '</div>';
 
@@ -2280,7 +2273,7 @@
     const SLOT_PX = (typeof window.__arenaSlotPx === 'number' && window.__arenaSlotPx > 0)
       ? window.__arenaSlotPx
       : (firstCell.getBoundingClientRect().width || 180);
-    const SLOT_MS = 30 * 60 * 1000;
+    const SLOT_MS = 10 * 60 * 1000;
     // Считаем «сейчас» по реальному текущему моменту клиента.
     const localNow = Date.now();
     // Берём ту же базу, что использовал renderArenasGrid.
