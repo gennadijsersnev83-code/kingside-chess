@@ -17,6 +17,40 @@ const io = new Server(server, {
 
 app.use(express.static(path.join(__dirname, 'public')));
 
+// ======================= ВРЕМЯ В МСК =======================
+// Всё расписание арен строится в московском времени (UTC+3), независимо от TZ сервера.
+// Timestamp'ы остаются абсолютными (UTC-ms), но привязка к «круглым» часам идёт по МСК.
+const MSK_OFFSET_MS = 3 * 3600 * 1000;
+
+// Возвращает { y, mo, d, h, mi } в МСК для данного timestamp.
+function mskParts(ts) {
+  const d = new Date(ts + MSK_OFFSET_MS);
+  return {
+    y: d.getUTCFullYear(),
+    mo: d.getUTCMonth(),
+    d: d.getUTCDate(),
+    h: d.getUTCHours(),
+    mi: d.getUTCMinutes(),
+    s: d.getUTCSeconds()
+  };
+}
+
+// Собирает timestamp из МСК-компонентов.
+function fromMsk(y, mo, d, h, mi, s) {
+  return Date.UTC(y, mo, d, h, mi, s || 0) - MSK_OFFSET_MS;
+}
+
+// Форматирует timestamp как "HH:MM" в МСК — для логов.
+function fmtMskHM(ts) {
+  const p = mskParts(ts);
+  return String(p.h).padStart(2, '0') + ':' + String(p.mi).padStart(2, '0');
+}
+
+// Округление до целой минуты.
+function roundToMinute(ts) {
+  return Math.round(ts / 60000) * 60000;
+}
+
 // ======================= РОЛИ =======================
 const ADMINS = new Set(['PeshkaSasha']);
 const MODERATORS = new Set(['Debian']);
@@ -288,11 +322,6 @@ function publicUser(name) {
   };
 }
 
-// Округление до целой минуты — чтобы не было 07:30:00.342
-function roundToMinute(ts) {
-  return Math.round(ts / 60000) * 60000;
-}
-
 // ======================= ХРАНИЛИЩА =======================
 const online = new Map();
 const lobbies = new Map();
@@ -462,8 +491,8 @@ async function finishGame(lobbyId, result, reason) {
 }
 
 // ======================= АРЕНЫ =======================
-// durationMin — точная длительность. endsAt = startsAt + durationMin.
-// Старты: :00 и :30 (для every30), :00 (hourly), :00 кратный 2ч (every2h), :00 кратный 4ч (every4h).
+// durationMin — реальная длительность. endsAt = startsAt + durationMin.
+// Старты строятся в МСК: :00 / :30 (every30), :00 (hourly), :00 чётный (every2h), :00 кратный 4 (every4h).
 const ARENA_TEMPLATES = [
   {
     id: 'bullet-halfhour',
@@ -503,59 +532,40 @@ const ARENA_TEMPLATES = [
   }
 ];
 
-// Возвращает следующий момент старта СТРОГО > now (или = now), привязанный к сетке.
+// Возвращает следующий старт СТРОГО >= now, привязанный к МСК-сетке.
 function nextStartFor(tpl, now) {
-  const c = new Date(now);
-  c.setSeconds(0, 0);
-  const mins = c.getMinutes();
-  const hrs = c.getHours();
+  const p = mskParts(now);
 
   if (tpl.repeat === 'every30') {
-    // :00 или :30
-    if (mins < 30) {
-      c.setMinutes(30, 0, 0);
+    // :00 или :30 в МСК
+    if (p.mi < 30) {
+      return fromMsk(p.y, p.mo, p.d, p.h, 30, 0);
     } else {
-      c.setHours(hrs + 1, 0, 0, 0);
+      // следующий час
+      return fromMsk(p.y, p.mo, p.d, p.h + 1, 0, 0);
     }
-    return roundToMinute(c.getTime());
   }
 
   if (tpl.repeat === 'hourly') {
-    c.setMinutes(0, 0, 0);
-    if (c.getTime() < now) c.setHours(c.getHours() + 1);
-    return roundToMinute(c.getTime());
+    // :00 в МСК; если уже :00 ровно и now <= этой минуты — оставляем, иначе следующий час
+    const candidate = fromMsk(p.y, p.mo, p.d, p.h, 0, 0);
+    if (candidate >= now) return candidate;
+    return fromMsk(p.y, p.mo, p.d, p.h + 1, 0, 0);
   }
 
   if (tpl.repeat === 'every2h') {
-    c.setMinutes(0, 0, 0);
-    let nextH = Math.floor(hrs / 2) * 2;
-    if (nextH * 3600000 + new Date(now).setMinutes(0,0,0) < now) {
-      // уже прошло — берём следующий чётный час
-    }
-    let t = new Date(now);
-    t.setMinutes(0, 0, 0);
-    t.setSeconds(0, 0);
-    // ближайший чётный час, начиная с t
-    let h = t.getHours();
-    let cand = new Date(t);
-    cand.setHours(h - (h % 2), 0, 0, 0);
-    if (cand.getTime() < now) {
-      cand.setHours(cand.getHours() + 2);
-    }
-    return roundToMinute(cand.getTime());
+    // :00 в чётный МСК-час (0, 2, 4, ...)
+    const evenH = p.h - (p.h % 2);
+    const candidate = fromMsk(p.y, p.mo, p.d, evenH, 0, 0);
+    if (candidate >= now) return candidate;
+    return fromMsk(p.y, p.mo, p.d, evenH + 2, 0, 0);
   }
 
   if (tpl.repeat === 'every4h') {
-    let t = new Date(now);
-    t.setMinutes(0, 0, 0);
-    t.setSeconds(0, 0);
-    let h = t.getHours();
-    let cand = new Date(t);
-    cand.setHours(h - (h % 4), 0, 0, 0);
-    if (cand.getTime() < now) {
-      cand.setHours(cand.getHours() + 4);
-    }
-    return roundToMinute(cand.getTime());
+    const fourH = p.h - (p.h % 4);
+    const candidate = fromMsk(p.y, p.mo, p.d, fourH, 0, 0);
+    if (candidate >= now) return candidate;
+    return fromMsk(p.y, p.mo, p.d, fourH + 4, 0, 0);
   }
 
   return roundToMinute(now + 3600000);
@@ -607,7 +617,7 @@ function scheduleArena(state) {
     setTimeout(() => {
       if (state.finished) return;
       state.phase = 'live';
-      console.log(`[arena] СТАРТ ${state.name}`);
+      console.log(`[arena] СТАРТ ${state.name} (${fmtMskHM(state.startsAt)} МСК)`);
       io.emit('arenaUpdate', { arenaId: state.id });
       io.emit('arenaStarted', { arenaId: state.id, arenaName: state.name });
       const sysMsg = {
@@ -625,7 +635,7 @@ function scheduleArena(state) {
     }, startDelay);
   } else if (now < state.endsAt && !state.finished) {
     state.phase = 'live';
-    console.log(`[arena] ПОДХВАТ идущей арены ${state.name}`);
+    console.log(`[arena] ПОДХВАТ идущей арены ${state.name} (${fmtMskHM(state.startsAt)}–${fmtMskHM(state.endsAt)} МСК)`);
     state.pairingInterval = setInterval(() => tryPair(state), 5000);
     tryPair(state);
   }
@@ -909,7 +919,7 @@ function getArenaSchedule(hoursAhead) {
       };
       result.push(instance);
 
-      // Состояние создаём ТОЛЬКО для live, иначе слишком много таймеров
+      // Состояние создаём ТОЛЬКО для live
       if (status === 'live') {
         getOrCreateArenaState(instance);
       }
@@ -1653,15 +1663,13 @@ io.on('connection', (socket) => {
     console.error('[DB] Не удалось инициализировать базу данных:', err.message || err.code || err);
   }
 
-  // Диагностический лог расписания на ближайшие 3 часа
+  // Диагностика расписания в МСК
   const diag = getArenaSchedule(3);
-  console.log('[arena] расписание на ближайшие 3 часа:');
+  console.log('[arena] расписание на ближайшие 3 часа (МСК):');
   for (const a of diag.slice(0, 12)) {
-    const s = new Date(a.startsAt);
-    const e = new Date(a.endsAt);
     const dur = ((a.endsAt - a.startsAt) / 60000).toFixed(0);
     console.log(
-      `  ${a.name} | ${s.toLocaleTimeString('ru-RU')} → ${e.toLocaleTimeString('ru-RU')} | ${dur} мин | ${a.status}`
+      `  ${a.name} | ${fmtMskHM(a.startsAt)} → ${fmtMskHM(a.endsAt)} (МСК) | ${dur} мин | ${a.status}`
     );
   }
 
