@@ -1740,17 +1740,12 @@
   function formatMMSS(ms) { const t = Math.max(0, Math.floor(ms/1000)); return String(Math.floor(t/60)).padStart(2,'0') + ':' + String(t%60).padStart(2,'0'); }
   function formatTime(s) { s = Math.max(0, Math.floor(s)); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
 
-  // ====== ТАЙМЛАЙН АРЕН: серверные timestamp'ы приводим к клиентской шкале ======
+  // ====== ТАЙМЛАЙН АРЕН ======
   function renderArenasGrid() {
     const wrap = document.getElementById('arenasGridWrap'); if (!wrap) return;
     if (!arenasCache || !arenasCache.length) { wrap.innerHTML = '<div class="arenasEmpty">Нет доступных арен</div>'; return; }
 
-    // Локальное "сейчас" — метки и now-line по нему.
     const localNow = Date.now();
-
-    // ВАЖНО: серверные startsAt/endsAt приводятся в клиентскую шкалу.
-    // arenaServerOffsetMs = serverNow - Date.now(). Если сервер впереди на 3 мин,
-    // offset = +180000, и ts - offset = ts - 3 мин → попадает на целые :00/:30 по клиенту.
     const toClient = (ts) => ts - arenaServerOffsetMs;
 
     const isMobile = window.matchMedia('(max-width: 700px)').matches;
@@ -1760,6 +1755,10 @@
 
     const startMs = Math.floor(localNow / SLOT_MS) * SLOT_MS;
     const endMs = startMs + COLS * SLOT_MS;
+
+    // Сохраняем базу сетки для setInterval-обновления now-line.
+    window.__arenaStartMs = startMs;
+    window.__arenaSlotPx = SLOT_PX;
 
     const toPx = (clientTs) => ((clientTs - startMs) / SLOT_MS) * SLOT_PX;
 
@@ -2245,7 +2244,9 @@
     });
   })();
 
-  // ===== Автообновление now-line каждую секунду =====
+  // ===== Автообновление now-line КАЖДУЮ СЕКУНДУ =====
+  // Использует базу сетки из последнего рендера (window.__arenaStartMs),
+  // чтобы now-line не «уезжал» относительно блоков и меток.
   setInterval(() => {
     if (!document.getElementById('arenasScreen').classList.contains('active')) return;
     const scroller = document.querySelector('#arenasGridWrap .arenasScroller');
@@ -2256,16 +2257,21 @@
     if (!timeRow) return;
     const firstCell = timeRow.querySelector('.timeCell');
     if (!firstCell) return;
-    const SLOT_PX = firstCell.getBoundingClientRect().width || 180;
+    const SLOT_PX = (typeof window.__arenaSlotPx === 'number' && window.__arenaSlotPx > 0)
+      ? window.__arenaSlotPx
+      : (firstCell.getBoundingClientRect().width || 180);
     const SLOT_MS = 10 * 60 * 1000;
     const localNow = Date.now();
-    const startMs = Math.floor(localNow / SLOT_MS) * SLOT_MS;
+    // Берём ту же базу, что использовал renderArenasGrid.
+    const startMs = (typeof window.__arenaStartMs === 'number')
+      ? window.__arenaStartMs
+      : Math.floor(localNow / SLOT_MS) * SLOT_MS;
     const nowLeft = ((localNow - startMs) / SLOT_MS) * SLOT_PX;
     nowLine.style.left = nowLeft.toFixed(2) + 'px';
     nowLine.setAttribute('data-label', fmtMskHM(localNow) + ' МСК');
     const cells = timeRow.querySelectorAll('.timeCell');
     const idx = Math.floor((localNow - startMs) / SLOT_MS);
-    cells.forEach((c, i) => c.classList.toggle('now', i === idx));
+    cells.forEach((c, i) => c.classList.toggle('now', i === idx && idx >= 0 && idx < cells.length));
   }, 1000);
 })();
 </script>
