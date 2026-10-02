@@ -120,20 +120,22 @@
   .watchBoard .wbBoardWrap { width:100%; aspect-ratio:1/1; max-width:480px; margin:0 auto 12px; position:relative; min-height:400px; }
   .watchBoard .wbBoard { display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); width:100%; height:100%; border:3px solid #0a0a0a; border-radius:4px; box-shadow:0 8px 30px rgba(0,0,0,.5); user-select:none; overflow:hidden; }
   .watchBoard .wbEmpty { padding:80px 20px; text-align:center; color:var(--muted); font-size:14px; }
-  .arenasHeader { display:flex; justify-content:space-between; align-items:center; margin:0 0 16px 0; }
-  .arenasHeader h1 { font-weight:300; font-size:32px; color:var(--text-bright); margin:0; display:flex; align-items:center; gap:9px; }
-  .mskBadge { display:inline-flex; align-items:center; height:22px; padding:0 7px; border-radius:4px; border:1px solid rgba(191,129,29,.45); background:rgba(191,129,29,.10); color:var(--accent); font-size:11px; font-weight:700; letter-spacing:.2px; vertical-align:middle; }
+  .arenasHeader { display:flex; justify-content:space-between; align-items:center; margin:0 0 16px 0; gap:12px; flex-wrap:wrap; }
+  .arenasHeader .ahLeft { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; min-width:0; }
+  .arenasHeader h1 { font-weight:300; font-size:32px; color:var(--text-bright); margin:0; }
+  .arenasHeader .ahNow { color:var(--accent-2); font-family:'Roboto Mono','Menlo',monospace; font-size:15px; font-weight:700; letter-spacing:.5px; white-space:nowrap; }
+  .arenasHeader .ahNow .ahLabel { color:var(--muted); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:.5px; margin-right:6px; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
   .arenasGridWrap { background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden; }
   .arenasEmpty { padding:60px 20px; text-align:center; color:var(--muted); font-size:14px; }
   .arenasScroller { overflow-x:auto; overflow-y:hidden; position:relative; }
-  .timeRow { display:flex; padding:0; border-bottom:1px solid var(--border); background:var(--panel-2); position:sticky; top:0; z-index:2; height:28px; }
+  .timeRow { display:flex; padding:0; border-bottom:1px solid var(--border); background:var(--panel-2); position:sticky; top:0; z-index:2; height:32px; }
   .timeCell { color:var(--muted); font-size:11px; text-align:left; font-weight:500; flex-shrink:0; padding:0; border-right:1px solid rgba(58,56,51,.5); box-sizing:border-box; position:relative; overflow:visible; }
   .timeTick { position:absolute; top:8px; width:33.3333%; white-space:nowrap; text-align:center; transform:translateX(-50%); pointer-events:none; }
   .timeTick.first { transform:none; text-align:left; padding-left:4px; box-sizing:border-box; }
   .timeCell.now { color:var(--accent); font-weight:700; background:rgba(191,129,29,.08); }
-  .arenaRowGrid { position:relative; height:44px; border-bottom:1px solid rgba(58,56,51,.35); }
+  .arenaRowGrid { position:relative; height:52px; border-bottom:1px solid rgba(58,56,51,.35); }
   .arenaRowGrid:last-child { border-bottom:none; }
-  .arenaBlock { position:absolute; top:3px; bottom:3px; border-radius:6px; padding:4px 8px; color:#fff; cursor:pointer; display:flex; flex-direction:column; justify-content:center; gap:1px; transition:transform .15s, box-shadow .15s, filter .15s; overflow:hidden; box-sizing:border-box; }
+  .arenaBlock { position:absolute; top:4px; bottom:4px; border-radius:6px; padding:4px 8px; color:#fff; cursor:pointer; display:flex; flex-direction:column; justify-content:center; gap:1px; transition:transform .15s, box-shadow .15s, filter .15s; overflow:hidden; box-sizing:border-box; }
   .arenaBlock:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.4); filter:brightness(1.08); z-index:4; }
   .arenaBlock .tname { font-size:12px; font-weight:700; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .arenaBlock .tinfo { font-size:10px; opacity:.9; line-height:1.1; display:flex; justify-content:space-between; gap:6px; white-space:nowrap; overflow:hidden; }
@@ -150,7 +152,6 @@
   .arenaDebug { position:absolute; bottom:-14px; left:0; font-size:10px; color:#e5484d; white-space:nowrap; pointer-events:none; }
   .nowLine { position:absolute; top:0; bottom:0; width:2px; background:#e5484d; z-index:3; pointer-events:none; }
   .nowLine::before { content:'▼'; position:absolute; top:-2px; left:50%; transform:translateX(-50%); color:#e5484d; font-size:10px; }
-  .nowLine::after { content:none; position:absolute; top:-14px; left:4px; font-size:10px; color:#e5484d; font-weight:700; background:rgba(22,21,18,.9); padding:0 3px; border-radius:2px; }
   .arenaStatusRow { display:flex; align-items:center; gap:16px; padding:10px 14px; background:var(--panel-2); border-radius:6px; border-left:4px solid var(--accent); }
   .arenaStatusRow.live { border-left-color:var(--green-2); background:rgba(98,153,36,.08); }
   .arenaStatusRow.finished { border-left-color:var(--muted); opacity:.7; }
@@ -394,7 +395,6 @@
   .catCard.bullet    { border-top:3px solid #c94a3a; }
   @media (max-width:600px) { .catRatingsGrid { grid-template-columns:repeat(2,1fr); } }
 
-  /* ====== МОБИЛЬНАЯ АДАПТАЦИЯ ====== */
   @media (max-width: 700px) {
     main { padding:10px 8px; }
     header.topbar { padding:0 8px; gap:2px; }
@@ -403,7 +403,6 @@
     header.topbar nav a { padding:14px 8px; font-size:11px; }
     header.topbar .userBtn { font-size:11px; padding:4px 6px; }
     header.topbar .userBtn .avatar { width:16px; height:16px; font-size:10px; }
-
     .gameWrap { display:flex; flex-direction:column; gap:10px; max-width:none; width:100%; align-items:stretch; }
     .col-board { order:1; width:100%; }
     .col-info  { order:2; width:100%; }
@@ -413,29 +412,26 @@
     .piece { font-size:min(9.5vw, 44px); }
     .dragGhost { width:44px; height:44px; font-size:min(9.5vw, 34px); }
     .sq .coord-f,.sq .coord-r { font-size:8px; }
-
     .movesPanel { height:160px; }
     .clockBox .clockTime { font-size:22px; }
     #chatBox { height:280px; }
     .bigActionsRow button { font-size:20px; padding:6px 10px; min-height:40px; min-width:40px; }
     .playerStrip { padding:5px 10px; }
     .playerStrip .rt { font-size:13px; }
-
     .profileHead { flex-direction:column; text-align:center; gap:12px; padding:16px 12px; }
     .profileAvatar { width:60px; height:60px; font-size:26px; }
     .profileHead .nameBlock h2 { justify-content:center; }
     .statsGrid { grid-template-columns:repeat(2,1fr); }
     .gameRow { grid-template-columns:36px 1fr 70px; gap:6px; font-size:12px; }
     .gameRow .date { display:none; }
-
     .arenaPage { display:flex; flex-direction:column; max-width:none; }
     .arenaLeft, .arenaCenter, .arenaRight { width:100%; min-width:0; max-width:none; }
     .arenaRightCol { height:auto; max-height:none; }
     .arenaJoinBtn { width:130px; min-width:130px; max-width:130px; font-size:12px; }
     .arenaTableHeader, .arenaTableRow { grid-template-columns:26px minmax(0,1fr) 42px 66px 42px; gap:6px; font-size:12px; }
     .arenaTableRow .score { font-size:13px; }
-
     .arenasHeader h1 { font-size:24px; }
+    .arenasHeader .ahNow { font-size:13px; }
   }
   @media (max-width: 380px) {
     .piece { font-size:min(10vw, 40px); }
@@ -522,7 +518,10 @@
   <section id="arenasScreen" class="screen">
     <div style="max-width:1100px; margin:0 auto;">
       <div class="arenasHeader">
-        <h1>Турниры <span class="mskBadge">МСК</span></h1>
+        <div class="ahLeft">
+          <h1>Турниры</h1>
+          <span class="ahNow"><span class="ahLabel">Сейчас:</span><span id="arenasNowClock">--:--</span> МСК</span>
+        </div>
         <button class="primary" onclick="refreshArenas(true)">↻ Обновить</button>
       </div>
       <div class="arenasGridWrap" id="arenasGridWrap">
@@ -698,24 +697,15 @@
 (function() {
   'use strict';
 
-  // ====== ВРЕМЯ В МСК ======
   const MSK_TZ = 'Europe/Moscow';
   function fmtMskHM(ts) {
-    return new Intl.DateTimeFormat('ru-RU', {
-      timeZone: MSK_TZ,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    }).format(new Date(ts));
+    return new Intl.DateTimeFormat('ru-RU', { timeZone: MSK_TZ, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ts));
   }
   window.fmtMskHM = fmtMskHM;
 
   const socket = io({
-    transports: ['websocket', 'polling'],
-    upgrade: true,
-    reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 1000
+    transports: ['websocket', 'polling'], upgrade: true,
+    reconnection: true, reconnectionAttempts: 10, reconnectionDelay: 1000
   });
 
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -796,7 +786,6 @@
   const EMOJI = { 'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙','k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟' };
 
   function escapeHtml(s) { return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
-
   function nickHtml(username, isAdminFlag, isModFlag) {
     if (!username) return '';
     const admin = (typeof isAdminFlag === 'boolean') ? isAdminFlag : (username === 'PeshkaSasha' || username === 'admin');
@@ -810,18 +799,11 @@
   function parseFen(fen) {
     const parts = fen.split(' ');
     const board = Array.from({length:8}, () => Array(8).fill(null));
-    parts[0].split('/').forEach((row, r) => {
-      let f = 0;
-      for (const ch of row) { if (/\d/.test(ch)) f += +ch; else board[r][f++] = ch; }
-    });
+    parts[0].split('/').forEach((row, r) => { let f = 0; for (const ch of row) { if (/\d/.test(ch)) f += +ch; else board[r][f++] = ch; } });
     return { board, turn: parts[1], castling: parts[2], ep: parts[3], half: +parts[4] || 0, full: +parts[5] || 1 };
   }
   function toFen(state) {
-    const rows = state.board.map(r => {
-      let s = '', e = 0;
-      for (const c of r) { if (c) { if (e) { s += e; e = 0; } s += c; } else e++; }
-      if (e) s += e; return s;
-    }).join('/');
+    const rows = state.board.map(r => { let s = '', e = 0; for (const c of r) { if (c) { if (e) { s += e; e = 0; } s += c; } else e++; } if (e) s += e; return s; }).join('/');
     return [rows, state.turn, state.castling, state.ep, state.half, state.full].join(' ');
   }
   const isWhitePiece = p => !!p && p === p.toUpperCase();
@@ -830,41 +812,16 @@
     const p = state.board[r][c]; if (!p) return [];
     const moves = []; const white = isWhitePiece(p); const type = p.toLowerCase();
     const dir = white ? -1 : 1;
-    const add = (rr, cc) => {
-      if (!inBoard(rr, cc)) return false;
-      const t = state.board[rr][cc];
-      if (t && isWhitePiece(t) === white) return false;
-      moves.push([rr, cc]);
-      return !t;
-    };
+    const add = (rr, cc) => { if (!inBoard(rr, cc)) return false; const t = state.board[rr][cc]; if (t && isWhitePiece(t) === white) return false; moves.push([rr, cc]); return !t; };
     if (type === 'p') {
-      const startRow = white ? 6 : 1;
-      const oneR = r + dir;
-      if (inBoard(oneR, c) && !state.board[oneR][c]) {
-        moves.push([oneR, c]);
-        const twoR = r + 2 * dir;
-        if (r === startRow && inBoard(twoR, c) && !state.board[twoR][c]) moves.push([twoR, c]);
-      }
-      for (const dc of [-1, 1]) {
-        const rr = r + dir, cc = c + dc;
-        if (!inBoard(rr, cc)) continue;
-        const t = state.board[rr][cc];
-        if (t && isWhitePiece(t) !== white) moves.push([rr, cc]);
-        const epTarget = String.fromCharCode(97 + cc) + (8 - rr);
-        if (state.ep && state.ep === epTarget && !t) moves.push([rr, cc]);
-      }
-    } else if (type === 'n') {
-      [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc]) => add(r+dr, c+dc));
-    } else if (type === 'k') {
+      const startRow = white ? 6 : 1, oneR = r + dir;
+      if (inBoard(oneR, c) && !state.board[oneR][c]) { moves.push([oneR, c]); const twoR = r + 2 * dir; if (r === startRow && inBoard(twoR, c) && !state.board[twoR][c]) moves.push([twoR, c]); }
+      for (const dc of [-1, 1]) { const rr = r + dir, cc = c + dc; if (!inBoard(rr, cc)) continue; const t = state.board[rr][cc]; if (t && isWhitePiece(t) !== white) moves.push([rr, cc]); const epTarget = String.fromCharCode(97 + cc) + (8 - rr); if (state.ep && state.ep === epTarget && !t) moves.push([rr, cc]); }
+    } else if (type === 'n') { [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc]) => add(r+dr, c+dc)); }
+    else if (type === 'k') {
       [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc]) => add(r+dr, c+dc));
-      if (white && r === 7 && c === 4) {
-        if (state.castling.includes('K') && !state.board[7][5] && !state.board[7][6] && state.board[7][7] === 'R') moves.push([7, 6]);
-        if (state.castling.includes('Q') && !state.board[7][3] && !state.board[7][2] && !state.board[7][1] && state.board[7][0] === 'R') moves.push([7, 2]);
-      }
-      if (!white && r === 0 && c === 4) {
-        if (state.castling.includes('k') && !state.board[0][5] && !state.board[0][6] && state.board[0][7] === 'r') moves.push([0, 6]);
-        if (state.castling.includes('q') && !state.board[0][3] && !state.board[0][2] && !state.board[0][1] && state.board[0][0] === 'r') moves.push([0, 2]);
-      }
+      if (white && r === 7 && c === 4) { if (state.castling.includes('K') && !state.board[7][5] && !state.board[7][6] && state.board[7][7] === 'R') moves.push([7, 6]); if (state.castling.includes('Q') && !state.board[7][3] && !state.board[7][2] && !state.board[7][1] && state.board[7][0] === 'R') moves.push([7, 2]); }
+      if (!white && r === 0 && c === 4) { if (state.castling.includes('k') && !state.board[0][5] && !state.board[0][6] && state.board[0][7] === 'r') moves.push([0, 6]); if (state.castling.includes('q') && !state.board[0][3] && !state.board[0][2] && !state.board[0][1] && state.board[0][0] === 'r') moves.push([0, 2]); }
     } else {
       const dirs = [];
       if (type === 'r' || type === 'q') dirs.push([-1,0],[1,0],[0,-1],[0,1]);
@@ -873,21 +830,12 @@
     }
     return moves;
   }
-  function findKing(state, white) {
-    const k = white ? 'K' : 'k';
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (state.board[r][c] === k) return [r, c];
-    return null;
-  }
+  function findKing(state, white) { const k = white ? 'K' : 'k'; for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (state.board[r][c] === k) return [r, c]; return null; }
   function isAttacked(state, r, c, byWhite) {
     for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
-      const p = state.board[rr][cc];
-      if (!p || isWhitePiece(p) !== byWhite) continue;
+      const p = state.board[rr][cc]; if (!p || isWhitePiece(p) !== byWhite) continue;
       const t = p.toLowerCase();
-      if (t === 'p') {
-        const dir = byWhite ? -1 : 1;
-        if (rr + dir === r && (cc - 1 === c || cc + 1 === c)) return true;
-        continue;
-      }
+      if (t === 'p') { const dir = byWhite ? -1 : 1; if (rr + dir === r && (cc - 1 === c || cc + 1 === c)) return true; continue; }
       if (pseudoMoves(state, rr, cc).some(([mr, mc]) => mr === r && mc === c)) return true;
     }
     return false;
@@ -896,48 +844,21 @@
   function applyMoveToCopy(state, from, to) {
     const copy = { board: state.board.map(row => row.slice()), turn: state.turn, castling: state.castling, ep: state.ep, half: state.half, full: state.full };
     const [fr, fc] = from, [tr, tc] = to;
-    const p = copy.board[fr][fc];
-    const white = isWhitePiece(p);
-    const type = p.toLowerCase();
-    if (type === 'p' && copy.ep) {
-      const target = String.fromCharCode(97 + tc) + (8 - tr);
-      if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null;
-    }
+    const p = copy.board[fr][fc]; const white = isWhitePiece(p); const type = p.toLowerCase();
+    if (type === 'p' && copy.ep) { const target = String.fromCharCode(97 + tc) + (8 - tr); if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null; }
     copy.board[tr][tc] = p; copy.board[fr][fc] = null;
     if (type === 'p' && (tr === 0 || tr === 7)) copy.board[tr][tc] = white ? 'Q' : 'q';
-    if (type === 'k' && Math.abs(tc - fc) === 2) {
-      const row = fr;
-      if (tc > fc) { copy.board[row][5] = copy.board[row][7]; copy.board[row][7] = null; }
-      else { copy.board[row][3] = copy.board[row][0]; copy.board[row][0] = null; }
-    }
+    if (type === 'k' && Math.abs(tc - fc) === 2) { const row = fr; if (tc > fc) { copy.board[row][5] = copy.board[row][7]; copy.board[row][7] = null; } else { copy.board[row][3] = copy.board[row][0]; copy.board[row][0] = null; } }
     let cast = copy.castling;
     if (type === 'k') cast = cast.replace(white ? /[KQ]/g : /[kq]/g, '');
-    if (type === 'r') {
-      if (fr === 7 && fc === 0) cast = cast.replace('Q', '');
-      if (fr === 7 && fc === 7) cast = cast.replace('K', '');
-      if (fr === 0 && fc === 0) cast = cast.replace('q', '');
-      if (fr === 0 && fc === 7) cast = cast.replace('k', '');
-    }
+    if (type === 'r') { if (fr === 7 && fc === 0) cast = cast.replace('Q', ''); if (fr === 7 && fc === 7) cast = cast.replace('K', ''); if (fr === 0 && fc === 0) cast = cast.replace('q', ''); if (fr === 0 && fc === 7) cast = cast.replace('k', ''); }
     if (!cast) cast = '-';
-    let ep = '-';
-    if (type === 'p' && Math.abs(tr - fr) === 2) ep = String.fromCharCode(97 + fc) + (8 - (fr + (tr - fr) / 2));
-    copy.castling = cast; copy.ep = ep;
-    copy.turn = white ? 'b' : 'w';
-    copy.full += 1;
+    let ep = '-'; if (type === 'p' && Math.abs(tr - fr) === 2) ep = String.fromCharCode(97 + fc) + (8 - (fr + (tr - fr) / 2));
+    copy.castling = cast; copy.ep = ep; copy.turn = white ? 'b' : 'w'; copy.full += 1;
     return copy;
   }
-  function legalMovesFor(state, r, c) {
-    const p = state.board[r][c]; if (!p) return [];
-    const white = isWhitePiece(p);
-    return pseudoMoves(state, r, c).filter(([rr, cc]) => !inCheck(applyMoveToCopy(state, [r, c], [rr, cc]), white));
-  }
-  function hasAnyLegalMove(state, white) {
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-      const p = state.board[r][c];
-      if (p && isWhitePiece(p) === white && legalMovesFor(state, r, c).length) return true;
-    }
-    return false;
-  }
+  function legalMovesFor(state, r, c) { const p = state.board[r][c]; if (!p) return []; const white = isWhitePiece(p); return pseudoMoves(state, r, c).filter(([rr, cc]) => !inCheck(applyMoveToCopy(state, [r, c], [rr, cc]), white)); }
+  function hasAnyLegalMove(state, white) { for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) { const p = state.board[r][c]; if (p && isWhitePiece(p) === white && legalMovesFor(state, r, c).length) return true; } return false; }
   function pieceSAN(p) { const t = p.toLowerCase(); if (t === 'n') return 'N'; if (t === 'b') return 'B'; if (t === 'r') return 'R'; if (t === 'q') return 'Q'; if (t === 'k') return 'K'; return ''; }
   function toSAN(state, from, to) {
     const [fr, fc] = from, [tr, tc] = to;
@@ -951,11 +872,7 @@
     else {
       san += pieceSAN(p);
       let ambiguous = false, sameFile = false, sameRank = false;
-      for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-        if (r === fr && c === fc) continue;
-        const q = state.board[r][c]; if (!q || q !== p) continue;
-        if (legalMovesFor(state, r, c).some(([mr,mc]) => mr === tr && mc === tc)) { ambiguous = true; if (c === fc) sameFile = true; if (r === fr) sameRank = true; }
-      }
+      for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) { if (r === fr && c === fc) continue; const q = state.board[r][c]; if (!q || q !== p) continue; if (legalMovesFor(state, r, c).some(([mr,mc]) => mr === tr && mc === tc)) { ambiguous = true; if (c === fc) sameFile = true; if (r === fr) sameRank = true; } }
       if (ambiguous) { if (!sameFile) san += String.fromCharCode(97 + fc); else if (!sameRank) san += (8 - fr); else san += String.fromCharCode(97 + fc) + (8 - fr); }
       if (isCapture) san += 'x';
       san += dest;
@@ -989,31 +906,14 @@
         const sq = document.createElement('div');
         sq.className = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
         sq.dataset.r = r; sq.dataset.c = c;
-        if (lastMove && viewIndex === -1) {
-          if ((lastMove.from[0] === r && lastMove.from[1] === c) || (lastMove.to[0] === r && lastMove.to[1] === c)) sq.classList.add('lastmove');
-        }
+        if (lastMove && viewIndex === -1) { if ((lastMove.from[0] === r && lastMove.from[1] === c) || (lastMove.to[0] === r && lastMove.to[1] === c)) sq.classList.add('lastmove'); }
         const isWhiteTurn = state.turn === 'w';
-        if (inCheck(state, isWhiteTurn)) {
-          const k = findKing(state, isWhiteTurn);
-          if (k && k[0] === r && k[1] === c) sq.classList.add('check');
-        }
+        if (inCheck(state, isWhiteTurn)) { const k = findKing(state, isWhiteTurn); if (k && k[0] === r && k[1] === c) sq.classList.add('check'); }
         if (selected && selected[0] === r && selected[1] === c) sq.classList.add('sel');
-        if (interactive) {
-          const isLegal = legalMoves.some(([mr, mc]) => mr === r && mc === c);
-          if (isLegal) { sq.classList.add('hint'); if (state.board[r][c]) sq.classList.add('capture'); }
-        }
-        if (premove) {
-          if (premove.to[0] === r && premove.to[1] === c) sq.classList.add('premove-target');
-          if (premove.from[0] === r && premove.from[1] === c) sq.classList.add('premove-from');
-        }
+        if (interactive) { const isLegal = legalMoves.some(([mr, mc]) => mr === r && mc === c); if (isLegal) { sq.classList.add('hint'); if (state.board[r][c]) sq.classList.add('capture'); } }
+        if (premove) { if (premove.to[0] === r && premove.to[1] === c) sq.classList.add('premove-target'); if (premove.from[0] === r && premove.from[1] === c) sq.classList.add('premove-from'); }
         const p = state.board[r][c];
-        if (p) {
-          const piece = document.createElement('span');
-          piece.className = 'piece ' + (isWhitePiece(p) ? 'w' : 'b');
-          piece.textContent = EMOJI[p];
-          if (dragging && dragging.from[0] === r && dragging.from[1] === c) piece.classList.add('dragging');
-          sq.appendChild(piece);
-        }
+        if (p) { const piece = document.createElement('span'); piece.className = 'piece ' + (isWhitePiece(p) ? 'w' : 'b'); piece.textContent = EMOJI[p]; if (dragging && dragging.from[0] === r && dragging.from[1] === c) piece.classList.add('dragging'); sq.appendChild(piece); }
         if (dr === 7) { const e = document.createElement('span'); e.className='coord-f'; e.textContent = String.fromCharCode(97 + c); sq.appendChild(e); }
         if (dc === 0) { const e = document.createElement('span'); e.className='coord-r'; e.textContent = 8 - r; sq.appendChild(e); }
         boardEl.appendChild(sq);
@@ -1030,20 +930,9 @@
     document.getElementById('bottomClock').classList.toggle('active', gameActive && !gameEnded && state.turn === myColor);
     const bar = document.getElementById('statusBar');
     if (gameEnded) { bar.className = 'statusYellow'; bar.textContent = 'Партия завершена'; }
-    else if (gameActive) {
-      const who = state.turn === 'w' ? 'Белые' : 'Чёрные';
-      bar.className = 'statusGreen';
-      let txt = `${who} — ${isMy ? 'ваш ход' : 'ход соперника'}`;
-      if (premove) txt += ' · премьюв';
-      bar.textContent = txt;
-    }
+    else if (gameActive) { const who = state.turn === 'w' ? 'Белые' : 'Чёрные'; bar.className = 'statusGreen'; let txt = `${who} — ${isMy ? 'ваш ход' : 'ход соперника'}`; if (premove) txt += ' · премьюв'; bar.textContent = txt; }
   }
-  function boardSquareFromEvent(ev) {
-    const el = document.elementFromPoint(ev.clientX, ev.clientY); if (!el) return null;
-    const sq = el.closest ? el.closest('.sq') : null;
-    if (!sq || sq.dataset.r == null) return null;
-    return [ +sq.dataset.r, +sq.dataset.c ];
-  }
+  function boardSquareFromEvent(ev) { const el = document.elementFromPoint(ev.clientX, ev.clientY); if (!el) return null; const sq = el.closest ? el.closest('.sq') : null; if (!sq || sq.dataset.r == null) return null; return [ +sq.dataset.r, +sq.dataset.c ]; }
   function applyUserMove(from, to, isPremove) {
     const state = parseFen(currentFen);
     const legal = legalMovesFor(state, from[0], from[1]);
@@ -1056,9 +945,7 @@
     const newFen = toFen(nextState);
     currentFen = newFen; lastMove = { from, to };
     moveHistory.push(san); moveFens.push(newFen);
-    premove = null;
-    renderMoves();
-    lastBoardHash = ''; renderBoard();
+    premove = null; renderMoves(); lastBoardHash = ''; renderBoard();
     socket.emit('move', { lobbyId, fen: newFen, turn: nextState.turn, san });
     if (isCapture) sndCapture(); else sndMove();
     checkGameEnd(nextState);
@@ -1071,24 +958,11 @@
     if (!myTurn) {
       if (premove && premove.to[0] === r && premove.to[1] === c) { premove = null; lastBoardHash = ''; renderBoard(); return; }
       const p = state.board[r][c];
-      if (p && isWhitePiece(p) === (myColor === 'w')) {
-        const leg = legalMovesFor(state, r, c);
-        if (leg.length) {
-          if (selected && selected[0] === r && selected[1] === c) { selected = null; legalMoves = []; }
-          else { selected = [r, c]; legalMoves = leg; }
-          lastBoardHash = ''; renderBoard();
-        }
-      } else if (selected) {
-        const leg = legalMoves.some(([mr, mc]) => mr === r && mc === c);
-        if (leg) { const from = selected; selected = null; legalMoves = []; applyUserMove(from, [r, c], true); }
-        else { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); }
-      }
+      if (p && isWhitePiece(p) === (myColor === 'w')) { const leg = legalMovesFor(state, r, c); if (leg.length) { if (selected && selected[0] === r && selected[1] === c) { selected = null; legalMoves = []; } else { selected = [r, c]; legalMoves = leg; } lastBoardHash = ''; renderBoard(); } }
+      else if (selected) { const leg = legalMoves.some(([mr, mc]) => mr === r && mc === c); if (leg) { const from = selected; selected = null; legalMoves = []; applyUserMove(from, [r, c], true); } else { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); } }
       return;
     }
-    if (selected) {
-      const isLegal = legalMoves.some(([mr, mc]) => mr === r && mc === c);
-      if (isLegal) { const from = selected; selected = null; legalMoves = []; applyUserMove(from, [r, c], false); return; }
-    }
+    if (selected) { const isLegal = legalMoves.some(([mr, mc]) => mr === r && mc === c); if (isLegal) { const from = selected; selected = null; legalMoves = []; applyUserMove(from, [r, c], false); return; } }
     const p = state.board[r][c];
     if (p && isWhitePiece(p) === (myColor === 'w')) { selected = [r, c]; legalMoves = legalMovesFor(state, r, c); }
     else { selected = null; legalMoves = []; }
@@ -1097,81 +971,40 @@
   document.getElementById('board').addEventListener('click', (ev) => {
     if (dragStartPos && (Math.abs(ev.clientX - dragStartPos.x) > 6 || Math.abs(ev.clientY - dragStartPos.y) > 6)) { dragStartPos = null; return; }
     dragStartPos = null;
-    const sq = ev.target.closest('.sq');
-    if (!sq || sq.dataset.r == null) return;
+    const sq = ev.target.closest('.sq'); if (!sq || sq.dataset.r == null) return;
     onSquareClick(+sq.dataset.r, +sq.dataset.c);
   });
   document.getElementById('board').addEventListener('mousedown', (ev) => {
     if (ev.button !== 0) return;
-    const sq = ev.target.closest('.sq');
-    if (!sq || sq.dataset.r == null) return;
+    const sq = ev.target.closest('.sq'); if (!sq || sq.dataset.r == null) return;
     const r = +sq.dataset.r, c = +sq.dataset.c;
     const state = parseFen(currentFen);
     const p = state.board[r][c]; if (!p) return;
-    const myTurn = state.turn === myColor;
-    const sameColor = isWhitePiece(p) === (myColor === 'w');
-    if (myTurn && sameColor) {
-      const leg = legalMovesFor(state, r, c); if (!leg.length) return;
-      selected = [r, c]; legalMoves = leg;
-      dragging = { from: [r, c], active: false };
-      dragStartPos = { x: ev.clientX, y: ev.clientY };
-      lastBoardHash = ''; renderBoard();
-      startDragGhost(p, ev.clientX, ev.clientY); ev.preventDefault(); return;
-    }
-    if (!myTurn && sameColor) {
-      const leg = legalMovesFor(state, r, c); if (!leg.length) return;
-      selected = [r, c]; legalMoves = leg;
-      dragging = { from: [r, c], active: false, premoveDrag: true };
-      dragStartPos = { x: ev.clientX, y: ev.clientY };
-      lastBoardHash = ''; renderBoard();
-      startDragGhost(p, ev.clientX, ev.clientY); ev.preventDefault();
-    }
+    const myTurn = state.turn === myColor, sameColor = isWhitePiece(p) === (myColor === 'w');
+    if (myTurn && sameColor) { const leg = legalMovesFor(state, r, c); if (!leg.length) return; selected = [r, c]; legalMoves = leg; dragging = { from: [r, c], active: false }; dragStartPos = { x: ev.clientX, y: ev.clientY }; lastBoardHash = ''; renderBoard(); startDragGhost(p, ev.clientX, ev.clientY); ev.preventDefault(); return; }
+    if (!myTurn && sameColor) { const leg = legalMovesFor(state, r, c); if (!leg.length) return; selected = [r, c]; legalMoves = leg; dragging = { from: [r, c], active: false, premoveDrag: true }; dragStartPos = { x: ev.clientX, y: ev.clientY }; lastBoardHash = ''; renderBoard(); startDragGhost(p, ev.clientX, ev.clientY); ev.preventDefault(); }
   });
   let ghostEl = null;
-  function startDragGhost(piece, x, y) {
-    if (ghostEl) { ghostEl.remove(); ghostEl = null; }
-    ghostEl = document.createElement('div');
-    ghostEl.className = 'dragGhost ' + (isWhitePiece(piece) ? 'w' : 'b');
-    ghostEl.textContent = EMOJI[piece];
-    ghostEl.style.left = x + 'px'; ghostEl.style.top = y + 'px'; ghostEl.style.display = 'none';
-    document.body.appendChild(ghostEl);
-  }
+  function startDragGhost(piece, x, y) { if (ghostEl) { ghostEl.remove(); ghostEl = null; } ghostEl = document.createElement('div'); ghostEl.className = 'dragGhost ' + (isWhitePiece(piece) ? 'w' : 'b'); ghostEl.textContent = EMOJI[piece]; ghostEl.style.left = x + 'px'; ghostEl.style.top = y + 'px'; ghostEl.style.display = 'none'; document.body.appendChild(ghostEl); }
   function moveGhost(x, y) { if (!ghostEl) return; ghostEl.style.display = ''; ghostEl.style.left = x + 'px'; ghostEl.style.top = y + 'px'; }
   function clearGhost() { if (ghostEl) { ghostEl.remove(); ghostEl = null; } }
-  document.addEventListener('mousemove', (ev) => {
-    if (!dragging) return;
-    if (!dragging.active) {
-      if (Math.abs(ev.clientX - dragStartPos.x) < 5 && Math.abs(ev.clientY - dragStartPos.y) < 5) return;
-      dragging.active = true; lastBoardHash = ''; renderBoard();
-    }
-    moveGhost(ev.clientX, ev.clientY);
-  });
+  document.addEventListener('mousemove', (ev) => { if (!dragging) return; if (!dragging.active) { if (Math.abs(ev.clientX - dragStartPos.x) < 5 && Math.abs(ev.clientY - dragStartPos.y) < 5) return; dragging.active = true; lastBoardHash = ''; renderBoard(); } moveGhost(ev.clientX, ev.clientY); });
   document.addEventListener('mouseup', (ev) => {
     if (!dragging) { dragStartPos = null; return; }
     if (!dragging.active) { dragging = null; clearGhost(); return; }
-    const target = boardSquareFromEvent(ev);
-    const wasPremove = !!dragging.premoveDrag;
-    const from = dragging.from;
+    const target = boardSquareFromEvent(ev); const wasPremove = !!dragging.premoveDrag; const from = dragging.from;
     dragging = null; clearGhost(); dragStartPos = null;
     if (!target) { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); return; }
-    if (target[0] === from[0] && target[1] === from[1]) {
-      selected = from; legalMoves = legalMovesFor(parseFen(currentFen), from[0], from[1]);
-      lastBoardHash = ''; renderBoard(); return;
-    }
-    const ok = applyUserMove(from, target, wasPremove);
-    if (!ok) { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); }
+    if (target[0] === from[0] && target[1] === from[1]) { selected = from; legalMoves = legalMovesFor(parseFen(currentFen), from[0], from[1]); lastBoardHash = ''; renderBoard(); return; }
+    const ok = applyUserMove(from, target, wasPremove); if (!ok) { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); }
   });
   function renderMoves() {
     const el = document.getElementById('movesList');
     el.innerHTML = '';
     for (let i = 0; i < moveHistory.length; i += 2) {
-      const row = document.createElement('div');
-      row.className = 'mvRow';
-      const num = (i / 2) + 1;
-      const w = moveHistory[i] || '';
-      const b = moveHistory[i + 1] || '';
-      const activeW = viewIndex === i;
-      const activeB = viewIndex === i + 1;
+      const row = document.createElement('div'); row.className = 'mvRow';
+      const num = (i / 2) + 1, w = moveHistory[i] || '', b = moveHistory[i + 1] || '';
+      const activeW = viewIndex === i, activeB = viewIndex === i + 1;
       row.innerHTML = `<span class="num">${num}.</span><span class="mv ${activeW ? 'current' : ''}" onclick="jumpToMove(${i})">${w}</span><span class="mv ${activeB ? 'current' : ''}" onclick="jumpToMove(${i+1})">${b}</span>`;
       el.appendChild(row);
     }
@@ -1179,32 +1012,15 @@
   }
   function jumpToMove(idx) { if (idx < 0 || idx >= moveHistory.length) return; viewIndex = idx; lastBoardHash = ''; renderBoard(); renderMoves(); }
   window.jumpToMove = jumpToMove;
-  function gotoMove(where) {
-    if (!moveHistory.length) return;
-    if (where === 'first') viewIndex = 0;
-    else if (where === 'last') viewIndex = -1;
-    else if (where === 'prev') viewIndex = viewIndex === -1 ? moveHistory.length - 2 : Math.max(0, viewIndex - 1);
-    else if (where === 'next') { if (viewIndex === -1) return; viewIndex++; if (viewIndex >= moveHistory.length - 1) viewIndex = -1; }
-    lastBoardHash = ''; renderBoard(); renderMoves();
-  }
+  function gotoMove(where) { if (!moveHistory.length) return; if (where === 'first') viewIndex = 0; else if (where === 'last') viewIndex = -1; else if (where === 'prev') viewIndex = viewIndex === -1 ? moveHistory.length - 2 : Math.max(0, viewIndex - 1); else if (where === 'next') { if (viewIndex === -1) return; viewIndex++; if (viewIndex >= moveHistory.length - 1) viewIndex = -1; } lastBoardHash = ''; renderBoard(); renderMoves(); }
   window.gotoMove = gotoMove;
-  function checkGameEnd(state) {
-    const sideToMoveWhite = state.turn === 'w';
-    if (!hasAnyLegalMove(state, sideToMoveWhite)) {
-      if (inCheck(state, sideToMoveWhite)) { sndMate(); endGame(sideToMoveWhite ? 'b' : 'w', 'Мат', true, currentGameIsArena); }
-      else { sndDraw(); endGame(null, 'Пат', true, currentGameIsArena); }
-    }
-  }
+  function checkGameEnd(state) { const sideToMoveWhite = state.turn === 'w'; if (!hasAnyLegalMove(state, sideToMoveWhite)) { if (inCheck(state, sideToMoveWhite)) { sndMate(); endGame(sideToMoveWhite ? 'b' : 'w', 'Мат', true, currentGameIsArena); } else { sndDraw(); endGame(null, 'Пат', true, currentGameIsArena); } } }
   function tryApplyPremove() {
     if (!premove) return;
-    const state = parseFen(currentFen);
-    if (state.turn !== myColor) return;
-    const { from, to } = premove;
-    const p = state.board[from[0]][from[1]];
-    premove = null;
+    const state = parseFen(currentFen); if (state.turn !== myColor) return;
+    const { from, to } = premove; const p = state.board[from[0]][from[1]]; premove = null;
     if (!p || isWhitePiece(p) !== (myColor === 'w')) { lastBoardHash = ''; renderBoard(); return; }
-    const leg = legalMovesFor(state, from[0], from[1]);
-    const ok = leg.some(([r, c]) => r === to[0] && c === to[1]);
+    const leg = legalMovesFor(state, from[0], from[1]); const ok = leg.some(([r, c]) => r === to[0] && c === to[1]);
     if (!ok) { lastBoardHash = ''; renderBoard(); return; }
     setTimeout(() => applyUserMove(from, to, false), 30);
   }
@@ -1237,8 +1053,7 @@
       if (!res || !res.ok) { document.getElementById('loginMsg').textContent = (res && res.msg) || 'Ошибка'; return; }
       me = res.user;
       try { localStorage.setItem('kingside_login', JSON.stringify({ username, password })); } catch (e) {}
-      updateTopbarUser();
-      navTo('lobby'); refreshLobbies(); refreshTopArenas(); refreshStats();
+      updateTopbarUser(); navTo('lobby'); refreshLobbies(); refreshTopArenas(); refreshStats();
     });
   }
   window.doLogin = doLogin;
@@ -1249,10 +1064,7 @@
     document.getElementById('userName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod) + ' (' + me.rating + ')';
     document.getElementById('userAvatar').textContent = me.username.charAt(0).toUpperCase();
   }
-  function logout() {
-    try { localStorage.removeItem('kingside_login'); } catch (e) {}
-    location.reload();
-  }
+  function logout() { try { localStorage.removeItem('kingside_login'); } catch (e) {} location.reload(); }
   window.logout = logout;
   function switchLobbyTab(tab) { currentLobbyTab = tab; document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab)); renderLobbyTab(); }
   window.switchLobbyTab = switchLobbyTab;
@@ -1306,11 +1118,7 @@
           row.className = 'lobbyRow' + (isMine ? ' mine' : '');
           row.style.cursor = isMine ? 'pointer' : 'default';
           row.innerHTML = `<div class="icon">♟</div><div class="name">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod)}${isMine ? '<span class="mineTag">(ваш вызов)</span>' : ''}</div><div class="time">${l.time}+${l.inc}</div><div class="mode">${l.status === 'waiting' ? 'ожидание' : 'идёт'}</div><div class="action"></div>`;
-          if (l.status === 'waiting' && !isMine) {
-            const btn = document.createElement('button'); btn.className = 'primary'; btn.textContent = 'Играть';
-            btn.onclick = (e) => { e.stopPropagation(); socket.emit('joinLobby', { id: l.id }, (r) => { if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; } lobbyId = r.id || l.id; }); };
-            row.querySelector('.action').appendChild(btn);
-          }
+          if (l.status === 'waiting' && !isMine) { const btn = document.createElement('button'); btn.className = 'primary'; btn.textContent = 'Играть'; btn.onclick = (e) => { e.stopPropagation(); socket.emit('joinLobby', { id: l.id }, (r) => { if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; } lobbyId = r.id || l.id; }); }; row.querySelector('.action').appendChild(btn); }
           if (isMine && l.status === 'waiting') { row.onclick = () => { if (!confirm('Отменить вызов?')) return; socket.emit('cancelLobby', { id: l.id }, () => refreshLobbies()); }; }
           wrap.appendChild(row);
         });
@@ -1366,18 +1174,8 @@
     if (!winner) { text = 'Ничья'; cls = ''; } else if (winner === myColor) { text = 'Победа!'; cls = 'win'; } else { text = 'Поражение'; cls = 'lose'; }
     title.textContent = text; title.className = 'grTitle ' + cls;
     sub.textContent = reason || ''; actions.innerHTML = '';
-    if (currentGameIsArena) {
-      const b1 = document.createElement('button'); b1.className = 'primary'; b1.textContent = 'Вернуться к турниру';
-      b1.onclick = () => { hideGameResultBar(); cleanupGame(); if (currentArenaId) openArenaPage(currentArenaId); else navTo('arenas'); };
-      actions.appendChild(b1);
-    } else {
-      const b1 = document.createElement('button'); b1.className = 'primary'; b1.textContent = 'Найти другого соперника';
-      b1.onclick = () => { hideGameResultBar(); cleanupGame(); navTo('lobby'); switchLobbyTab('waiting'); refreshLobbies(); };
-      actions.appendChild(b1);
-      const b2 = document.createElement('button'); b2.className = 'secondary'; b2.textContent = 'В лобби';
-      b2.onclick = () => { hideGameResultBar(); cleanupGame(); navTo('lobby'); };
-      actions.appendChild(b2);
-    }
+    if (currentGameIsArena) { const b1 = document.createElement('button'); b1.className = 'primary'; b1.textContent = 'Вернуться к турниру'; b1.onclick = () => { hideGameResultBar(); cleanupGame(); if (currentArenaId) openArenaPage(currentArenaId); else navTo('arenas'); }; actions.appendChild(b1); }
+    else { const b1 = document.createElement('button'); b1.className = 'primary'; b1.textContent = 'Найти другого соперника'; b1.onclick = () => { hideGameResultBar(); cleanupGame(); navTo('lobby'); switchLobbyTab('waiting'); refreshLobbies(); }; actions.appendChild(b1); const b2 = document.createElement('button'); b2.className = 'secondary'; b2.textContent = 'В лобби'; b2.onclick = () => { hideGameResultBar(); cleanupGame(); navTo('lobby'); }; actions.appendChild(b2); }
     bar.classList.add('show');
   }
   function endGame(winner, reason, fromServer, isArena) {
@@ -1389,21 +1187,9 @@
     socket.emit('getProfile', { username: me.username }, (res) => { if (res && res.ok) { me = res.user; updateTopbarUser(); } });
     refreshStats();
   }
-  function resign() {
-    if (!gameActive || gameEnded) return;
-    if (!confirm('Точно сдаться?')) return;
-    socket.emit('resign', { lobbyId });
-    endGame(myColor === 'w' ? 'b' : 'w', 'Сдача', true, currentGameIsArena);
-  }
+  function resign() { if (!gameActive || gameEnded) return; if (!confirm('Точно сдаться?')) return; socket.emit('resign', { lobbyId }); endGame(myColor === 'w' ? 'b' : 'w', 'Сдача', true, currentGameIsArena); }
   window.resign = resign;
-  function offerDraw() {
-    if (!gameActive || gameEnded) return;
-    if (pendingDrawOffer) { alert('Ничья уже предложена'); return; }
-    socket.emit('drawOffer', { lobbyId });
-    pendingDrawOffer = true;
-    document.getElementById('statusBar').className = 'statusYellow';
-    document.getElementById('statusBar').textContent = 'Ничья предложена. Ожидание соперника...';
-  }
+  function offerDraw() { if (!gameActive || gameEnded) return; if (pendingDrawOffer) { alert('Ничья уже предложена'); return; } socket.emit('drawOffer', { lobbyId }); pendingDrawOffer = true; document.getElementById('statusBar').className = 'statusYellow'; document.getElementById('statusBar').textContent = 'Ничья предложена. Ожидание соперника...'; }
   window.offerDraw = offerDraw;
   function flipBoard() { boardFlipped = !boardFlipped; lastBoardHash = ''; renderBoard(); }
   window.flipBoard = flipBoard;
@@ -1422,25 +1208,14 @@
     const div = document.createElement('div');
     div.className = 'msg'; div.dataset.msgId = msg.id || '';
     const time = fmtMskHM(msg.ts);
-    let modHtml = '';
-    if (me && me.isMod) modHtml = `<span class="modBtn" data-mod-btn="1" title="Модерация">⚙</span>`;
+    let modHtml = ''; if (me && me.isMod) modHtml = `<span class="modBtn" data-mod-btn="1" title="Модерация">⚙</span>`;
     div.innerHTML = `<span class="u">${nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
-    if (me && me.isMod) {
-      const btn = div.querySelector('.modBtn');
-      if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); openModMenu(ev, msg.id, msg.user, 'game', lobbyId); });
-    }
+    if (me && me.isMod) { const btn = div.querySelector('.modBtn'); if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); openModMenu(ev, msg.id, msg.user, 'game', lobbyId); }); }
     box.appendChild(div);
     while (box.children.length > 50) box.removeChild(box.firstChild);
     box.scrollTop = box.scrollHeight;
   }
-  function sendChat(e) {
-    e.preventDefault();
-    const input = document.getElementById('chatInput');
-    const text = input.value.trim();
-    if (!text || !lobbyId) return;
-    socket.emit('chatMessage', { lobbyId, text });
-    input.value = '';
-  }
+  function sendChat(e) { e.preventDefault(); const input = document.getElementById('chatInput'); const text = input.value.trim(); if (!text || !lobbyId) return; socket.emit('chatMessage', { lobbyId, text }); input.value = ''; }
   window.sendChat = sendChat;
   let modMenuEl = null;
   function closeModMenu() { if (modMenuEl) { modMenuEl.remove(); modMenuEl = null; } }
@@ -1456,15 +1231,9 @@
     document.body.appendChild(menu); modMenuEl = menu;
     menu.addEventListener('click', (e) => {
       const act = e.target.dataset.act;
-      if (act === 'del') {
-        const evName = scope === 'arena' ? 'modDeleteArenaMessage' : 'modDeleteMessage';
-        const payload = scope === 'arena' ? { arenaId: scopeId, msgId } : { lobbyId: scopeId, msgId };
-        socket.emit(evName, payload, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); closeModMenu(); });
-      } else if (act === 'mute') {
-        socket.emit('modMuteUser', { username, minutes: +e.target.dataset.min }, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); closeModMenu(); });
-      } else if (act === 'unmute') {
-        socket.emit('modUnmuteUser', { username }, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); closeModMenu(); });
-      }
+      if (act === 'del') { const evName = scope === 'arena' ? 'modDeleteArenaMessage' : 'modDeleteMessage'; const payload = scope === 'arena' ? { arenaId: scopeId, msgId } : { lobbyId: scopeId, msgId }; socket.emit(evName, payload, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); closeModMenu(); }); }
+      else if (act === 'mute') { socket.emit('modMuteUser', { username, minutes: +e.target.dataset.min }, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); closeModMenu(); }); }
+      else if (act === 'unmute') { socket.emit('modUnmuteUser', { username }, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); closeModMenu(); }); }
     });
   }
   document.addEventListener('click', (e) => { if (modMenuEl && !modMenuEl.contains(e.target)) closeModMenu(); });
@@ -1490,10 +1259,7 @@
     if (watchingGameId === id) return;
     if (watchingGameId) socket.emit('unwatchGame', { id: watchingGameId });
     watchingGameId = id; watchingGame = null; lastWatchBoardHash = '';
-    socket.emit('watchGame', { id }, (res) => {
-      if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось начать просмотр'); watchingGameId = null; return; }
-      watchingGame = res.game; renderWatchBoard();
-    });
+    socket.emit('watchGame', { id }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось начать просмотр'); watchingGameId = null; return; } watchingGame = res.game; renderWatchBoard(); });
   }
   window.watchGame = watchGame;
   function renderWatchBoard() {
@@ -1534,10 +1300,7 @@
     profileViewing = username;
     show('profileScreen');
     document.querySelectorAll('#mainNav a').forEach(a => a.classList.remove('active'));
-    socket.emit('getProfile', { username }, (res) => {
-      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      renderProfilePage(res.user, res.games, res.history);
-    });
+    socket.emit('getProfile', { username }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } renderProfilePage(res.user, res.games, res.history); });
   }
   window.openProfileView = openProfileView;
   function renderProfilePage(user, games, history) {
@@ -1547,10 +1310,7 @@
     if (user.role === 'admin') badges.push('<span class="roleBadge admin">👑 Админ</span>');
     if (user.role === 'moderator') badges.push('<span class="roleBadge mod">🛡 Модератор</span>');
     if (user.isDev) badges.push('<span class="roleBadge dev">⚙ Разраб</span>');
-    if (user.mutedUntil && user.mutedUntil > Date.now()) {
-      const mins = Math.ceil((user.mutedUntil - Date.now())/60000);
-      badges.push(`<span class="muteBadge">🔇 Мут ${mins} мин</span>`);
-    }
+    if (user.mutedUntil && user.mutedUntil > Date.now()) { const mins = Math.ceil((user.mutedUntil - Date.now())/60000); badges.push(`<span class="muteBadge">🔇 Мут ${mins} мин</span>`); }
     document.getElementById('pRoleBadges').innerHTML = badges.join(' ');
     const date = new Date(user.createdAt);
     document.getElementById('pSub').textContent = `На сайте с ${date.toLocaleDateString('ru-RU')} · ${user.games} партий`;
@@ -1561,48 +1321,29 @@
     const catEl = document.getElementById('catRatingsGrid');
     if (user.categories) {
       const cats = [{ key:'classical', name:'Классика', icon:'🐢' },{ key:'rapid', name:'Рапид', icon:'⏱' },{ key:'blitz', name:'Блиц', icon:'⚡' },{ key:'bullet', name:'Пуля', icon:'🔫' }];
-      catEl.innerHTML = cats.map(c => {
-        const r = user.categories[c.key] || { rating:user.rating, games:0 };
-        return `<div class="catCard ${c.key}"><div class="catIcon">${c.icon}</div><div class="catName">${c.name}</div><div class="catRating">${r.rating}</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">${r.games||0} партий</div></div>`;
-      }).join('');
+      catEl.innerHTML = cats.map(c => { const r = user.categories[c.key] || { rating:user.rating, games:0 }; return `<div class="catCard ${c.key}"><div class="catIcon">${c.icon}</div><div class="catName">${c.name}</div><div class="catRating">${r.rating}</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">${r.games||0} партий</div></div>`; }).join('');
     } else catEl.innerHTML = '';
     renderRatingChart(history);
     renderGamesList(games, user.username);
   }
-
   function renderRatingChart(history) {
     const wrap = document.getElementById('ratingChartWrap');
-    if (!history || history.length < 2) {
-      wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Недостаточно данных для графика</div>';
-      return;
-    }
-
+    if (!history || history.length < 2) { wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Недостаточно данных для графика</div>'; return; }
     const byDay = new Map();
     for (const h of history) {
       const d = new Date(h.ts);
       const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
       if (!byDay.has(key)) byDay.set(key, { key, ts: h.ts, first: h.rating, last: h.rating, min: h.rating, max: h.rating, count: 1 });
-      else {
-        const b = byDay.get(key);
-        b.ts = h.ts;
-        b.last = h.rating;
-        if (h.rating < b.min) b.min = h.rating;
-        if (h.rating > b.max) b.max = h.rating;
-        b.count++;
-      }
+      else { const b = byDay.get(key); b.ts = h.ts; b.last = h.rating; if (h.rating < b.min) b.min = h.rating; if (h.rating > b.max) b.max = h.rating; b.count++; }
     }
     const days = [...byDay.values()].sort((a,b) => a.ts - b.ts);
-
     const W = 900, H = 200, PADL = 44, PADR = 14, PADT = 16, PADB = 28;
-    const innerW = W - PADL - PADR;
-    const innerH = H - PADT - PADB;
-
+    const innerW = W - PADL - PADR, innerH = H - PADT - PADB;
     let minR, maxR, points, xFor, yFor, daysUsed;
     if (days.length >= 2) {
       daysUsed = days;
       const ratings = days.flatMap(d => [d.min, d.max, d.first, d.last]);
-      minR = Math.min(...ratings) - 20;
-      maxR = Math.max(...ratings) + 20;
+      minR = Math.min(...ratings) - 20; maxR = Math.max(...ratings) + 20;
       const rangeR = (maxR - minR) || 1;
       xFor = (i) => PADL + (i / (days.length - 1)) * innerW;
       yFor = (r) => PADT + innerH - ((r - minR) / rangeR) * innerH;
@@ -1610,16 +1351,13 @@
     } else {
       daysUsed = history.map(h => ({ ts: h.ts, last: h.rating, min: h.rating, max: h.rating, first: h.rating, count: 1 }));
       const ratings = history.map(h => h.rating);
-      minR = Math.min(...ratings) - 20;
-      maxR = Math.max(...ratings) + 20;
+      minR = Math.min(...ratings) - 20; maxR = Math.max(...ratings) + 20;
       const rangeR = (maxR - minR) || 1;
       xFor = (i) => PADL + (i / (history.length - 1)) * innerW;
       yFor = (r) => PADT + innerH - ((r - minR) / rangeR) * innerH;
       points = history.map((h, i) => ({ x: xFor(i), y: yFor(h.rating), day: { ts: h.ts, last: h.rating, min: h.rating, max: h.rating, count: 1 } }));
     }
-
     const pathD = points.map((p, i) => (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
-
     const gridLines = [];
     for (let g = 0; g <= 4; g++) {
       const y = PADT + (g / 4) * innerH;
@@ -1627,42 +1365,27 @@
       gridLines.push(`<line x1="${PADL}" y1="${y.toFixed(1)}" x2="${(W - PADR).toFixed(1)}" y2="${y.toFixed(1)}" stroke="#3a3833" stroke-width="1" stroke-dasharray="3,3"/>`);
       gridLines.push(`<text x="${PADL - 6}" y="${(y + 4).toFixed(1)}" fill="#7d7a72" font-size="11" text-anchor="end">${val}</text>`);
     }
-
     const xLabels = [];
     const maxLabels = Math.min(daysUsed.length, 8);
     const step = Math.max(1, Math.floor(daysUsed.length / maxLabels));
     for (let i = 0; i < daysUsed.length; i += step) {
-      const d = daysUsed[i];
-      const x = xFor(i);
-      const date = new Date(d.ts);
+      const d = daysUsed[i], x = xFor(i), date = new Date(d.ts);
       const label = String(date.getDate()).padStart(2,'0') + '.' + String(date.getMonth()+1).padStart(2,'0');
       xLabels.push(`<text x="${x.toFixed(1)}" y="${H - 8}" fill="#7d7a72" font-size="10" text-anchor="middle">${label}</text>`);
     }
     if (daysUsed.length > 1 && (daysUsed.length - 1) % step !== 0) {
-      const i = daysUsed.length - 1;
-      const d = daysUsed[i];
-      const x = xFor(i);
-      const date = new Date(d.ts);
+      const i = daysUsed.length - 1, d = daysUsed[i], x = xFor(i), date = new Date(d.ts);
       const label = String(date.getDate()).padStart(2,'0') + '.' + String(date.getMonth()+1).padStart(2,'0');
       xLabels.push(`<text x="${x.toFixed(1)}" y="${H - 8}" fill="#7d7a72" font-size="10" text-anchor="middle">${label}</text>`);
     }
-
-    const dayBars = points.map((p) => {
-      const yMin = yFor(p.day.min), yMax = yFor(p.day.max);
-      if (Math.abs(yMax - yMin) < 1) return '';
-      return `<line x1="${p.x.toFixed(1)}" y1="${yMin.toFixed(1)}" x2="${p.x.toFixed(1)}" y2="${yMax.toFixed(1)}" stroke="rgba(191,129,29,.35)" stroke-width="3" stroke-linecap="round"/>`;
-    }).join('');
-
+    const dayBars = points.map((p) => { const yMin = yFor(p.day.min), yMax = yFor(p.day.max); if (Math.abs(yMax - yMin) < 1) return ''; return `<line x1="${p.x.toFixed(1)}" y1="${yMin.toFixed(1)}" x2="${p.x.toFixed(1)}" y2="${yMax.toFixed(1)}" stroke="rgba(191,129,29,.35)" stroke-width="3" stroke-linecap="round"/>`; }).join('');
     const dots = points.map((p, i) => {
-      const isLast = i === points.length - 1;
-      const d = p.day;
+      const isLast = i === points.length - 1, d = p.day;
       const dateStr = new Date(d.ts).toLocaleDateString('ru-RU');
       const title = `${dateStr} · рейтинг: ${d.last}${d.count > 1 ? ' · партий: ' + d.count : ''}${d.min !== d.max ? ' · диапазон: ' + d.min + '–' + d.max : ''}`;
       return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${isLast ? 4.5 : 3}" fill="${isLast ? '#bf811d' : '#629924'}" stroke="#161512" stroke-width="1"><title>${escapeHtml(title)}</title></circle>`;
     }).join('');
-
     const areaD = pathD + ` L ${points[points.length-1].x.toFixed(1)},${(PADT + innerH).toFixed(1)} L ${points[0].x.toFixed(1)},${(PADT + innerH).toFixed(1)} Z`;
-
     wrap.innerHTML = `
       <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:200px;display:block">
         ${gridLines.join('')}
@@ -1672,13 +1395,8 @@
         ${dots}
         ${xLabels.join('')}
       </svg>
-      <div style="color:var(--muted);font-size:11px;margin-top:6px;text-align:center">
-        ${days.length >= 2
-          ? 'По дням · последний рейтинг дня · вертикальная полоса — разброс за день'
-          : 'По партиям · каждая точка — партия'}
-      </div>`;
+      <div style="color:var(--muted);font-size:11px;margin-top:6px;text-align:center">${days.length >= 2 ? 'По дням · последний рейтинг дня · вертикальная полоса — разброс за день' : 'По партиям · каждая точка — партия'}</div>`;
   }
-
   function renderGamesList(games, username) {
     const el = document.getElementById('gamesList');
     if (!games || !games.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px">Партий пока нет</div>'; return; }
@@ -1704,7 +1422,6 @@
       el.appendChild(row);
     });
   }
-
   function refreshArenas(force) {
     if (!force && !document.getElementById('arenasScreen').classList.contains('active')) return;
     socket.emit('getArenas', (res) => {
@@ -1739,9 +1456,7 @@
     }, 30000);
   }
   window.refreshArenas = refreshArenas;
-
   function formatMMSS(ms) { const t = Math.max(0, Math.floor(ms/1000)); return String(Math.floor(t/60)).padStart(2,'0') + ':' + String(t%60).padStart(2,'0'); }
-  // Форматирование всегда явно привязано к МСК (Europe/Moscow), независимо от часов устройства.
   function formatTime(s) { s = Math.max(0, Math.floor(s)); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
 
   // ====== ТАЙМЛАЙН АРЕН ======
@@ -1749,15 +1464,10 @@
     const wrap = document.getElementById('arenasGridWrap'); if (!wrap) return;
     if (!arenasCache || !arenasCache.length) { wrap.innerHTML = '<div class="arenasEmpty">Нет доступных арен</div>'; return; }
 
-    // Линия «сейчас» должна идти по реальному текущему моменту клиента.
-    // serverNow с backend может быть задержан/закэширован, поэтому не используем его
-    // для положения текущего времени. Часовой пояс берётся только при форматировании.
     const localNow = Date.now();
     const toClient = (ts) => ts - arenaServerOffsetMs;
 
     const isMobile = window.matchMedia('(max-width: 700px)').matches;
-    // Шкала размечена равными 10-минутными интервалами.
-    // Поэтому каждая отметка времени находится на одинаковом расстоянии от соседней.
     const SLOT_PX = isMobile ? 120 : 180;
     const SLOT_MS = 10 * 60 * 1000;
     const COLS = isMobile ? 24 : 36;
@@ -1765,34 +1475,24 @@
     const startMs = Math.floor(localNow / SLOT_MS) * SLOT_MS;
     const endMs = startMs + COLS * SLOT_MS;
 
-    // Сохраняем базу сетки для setInterval-обновления now-line.
     window.__arenaStartMs = startMs;
     window.__arenaSlotPx = SLOT_PX;
 
     const toPx = (ts) => ((ts - startMs) / SLOT_MS) * SLOT_PX;
 
     const visible = arenasCache
-      .map(a => ({
-        ...a,
-        // startsAt/endsAt приходят от сервера как абсолютные timestamps.
-        clientStartsAt: toClient(a.startsAt),
-        clientEndsAt: toClient(a.endsAt)
-      }))
+      .map(a => ({ ...a, clientStartsAt: toClient(a.startsAt), clientEndsAt: toClient(a.endsAt) }))
       .filter(a => a.clientEndsAt > startMs && a.clientStartsAt < endMs)
       .sort((a, b) => a.clientStartsAt - b.clientStartsAt);
 
     const rows = [];
     for (const arena of visible) {
       let placed = false;
-      for (const row of rows) {
-        const last = row[row.length - 1];
-        if (last.clientEndsAt <= arena.clientStartsAt) { row.push(arena); placed = true; break; }
-      }
+      for (const row of rows) { const last = row[row.length - 1]; if (last.clientEndsAt <= arena.clientStartsAt) { row.push(arena); placed = true; break; } }
       if (!placed) rows.push([arena]);
     }
 
     const rowWidth = COLS * SLOT_PX;
-
     let html = '<div class="arenasScroller"><div class="timeRow" style="width:' + rowWidth + 'px;">';
     for (let i = 0; i < COLS; i++) {
       const t = startMs + i * SLOT_MS;
@@ -1802,7 +1502,6 @@
     html += '</div>';
 
     const debug = !!window.KINGSIDE_DEBUG;
-
     for (const row of rows) {
       html += '<div class="arenaRowGrid" style="width:' + rowWidth + 'px;">';
       for (const arena of row) {
@@ -1838,7 +1537,6 @@
 
     const nowLeft = toPx(localNow);
     html += '<div class="nowLine" style="left:' + nowLeft.toFixed(2) + 'px;"></div></div>';
-
     wrap.innerHTML = html;
 
     const scroller = wrap.querySelector('.arenasScroller');
@@ -1848,12 +1546,7 @@
   let _resizeT = null;
   window.addEventListener('resize', () => {
     if (_resizeT) clearTimeout(_resizeT);
-    _resizeT = setTimeout(() => {
-      if (document.getElementById('arenasScreen').classList.contains('active')) {
-        lastArenasHash = '';
-        renderArenasGrid();
-      }
-    }, 200);
+    _resizeT = setTimeout(() => { if (document.getElementById('arenasScreen').classList.contains('active')) { lastArenasHash = ''; renderArenasGrid(); } }, 200);
   });
 
   function openArenaPage(arenaId) {
@@ -1863,12 +1556,7 @@
     document.querySelectorAll('#mainNav a').forEach(a => a.classList.remove('active'));
     document.getElementById('arenaChatMessages').innerHTML = '';
     lastArenaStateHash = ''; lastArenaGamesHash = '';
-    socket.emit('joinArenaRoom', { arenaId }, (res) => {
-      if (res && res.ok && Array.isArray(res.chat)) {
-        const box = document.getElementById('arenaChatMessages'); box.innerHTML = '';
-        res.chat.forEach(renderArenaChatMsg);
-      }
-    });
+    socket.emit('joinArenaRoom', { arenaId }, (res) => { if (res && res.ok && Array.isArray(res.chat)) { const box = document.getElementById('arenaChatMessages'); box.innerHTML = ''; res.chat.forEach(renderArenaChatMsg); } });
     loadArenaPage();
     if (arenaPageRefreshHandle) clearInterval(arenaPageRefreshHandle);
     arenaPageRefreshHandle = setInterval(() => { if (document.getElementById('arenaPageScreen').classList.contains('active')) loadArenaPage(); }, 5000);
@@ -1883,15 +1571,7 @@
     if (loadArenaPageBusy) return;
     loadArenaPageBusy = true;
     const arena = arenasCache.find(a => a.id === currentArenaId);
-    if (!arena) {
-      socket.emit('getArenas', (res) => {
-        arenasCache = (res && res.list) || [];
-        if (res && res.serverNow) arenaServerOffsetMs = res.serverNow - Date.now();
-        loadArenaPageBusy = false;
-        if (arenasCache.find(x => x.id === currentArenaId)) loadArenaPage();
-      });
-      return;
-    }
+    if (!arena) { socket.emit('getArenas', (res) => { arenasCache = (res && res.list) || []; if (res && res.serverNow) arenaServerOffsetMs = res.serverNow - Date.now(); loadArenaPageBusy = false; if (arenasCache.find(x => x.id === currentArenaId)) loadArenaPage(); }); return; }
     socket.emit('getArenaState', { arenaId: currentArenaId }, (state) => {
       loadArenaPageBusy = false;
       currentArenaState = state;
@@ -1909,9 +1589,7 @@
   }
   function tickArenaStatus() {
     if (!currentArenaId) return;
-    const row = document.getElementById('arenaStatusRow');
-    const lbl = document.getElementById('arenaStatusLabel');
-    const time = document.getElementById('arenaStatusTime');
+    const row = document.getElementById('arenaStatusRow'), lbl = document.getElementById('arenaStatusLabel'), time = document.getElementById('arenaStatusTime');
     if (!row || !lbl || !time) return;
     const serverNow = Date.now() + arenaServerOffsetMs;
     row.classList.remove('live', 'finished');
@@ -1932,15 +1610,8 @@
   function updateArenaJoinButton(state) {
     const wrap = document.getElementById('arenaJoinBtnWrap');
     if (state.phase === 'finished') { wrap.innerHTML = `<button class="secondary" disabled style="width:180px;">ЗАВЕРШЕНА</button>`; return; }
-    if (state.phase === 'waiting') {
-      if (state.joined) wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="leaveCurrentArena()">ОТМЕНИТЬ</button>`;
-      else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="joinCurrentArena()">УЧАСТВОВАТЬ</button>`;
-      return;
-    }
-    if (state.joined) {
-      if (state.paused) wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="pauseCurrentArena()">▶ ИГРАТЬ</button>`;
-      else wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="pauseCurrentArena()">⏸ ПАУЗА</button>`;
-    } else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="joinCurrentArena()">УЧАСТВОВАТЬ</button>`;
+    if (state.phase === 'waiting') { if (state.joined) wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="leaveCurrentArena()">ОТМЕНИТЬ</button>`; else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="joinCurrentArena()">УЧАСТВОВАТЬ</button>`; return; }
+    if (state.joined) { if (state.paused) wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="pauseCurrentArena()">▶ ИГРАТЬ</button>`; else wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="pauseCurrentArena()">⏸ ПАУЗА</button>`; } else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="joinCurrentArena()">УЧАСТВОВАТЬ</button>`;
   }
   function renderArenaPairingBox(state) {
     const box = document.getElementById('arenaPairingBox'); if (!box) return;
@@ -1971,32 +1642,19 @@
       return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''}"><span class="place ${placeCls}">${place}</span><span class="pname">${nickHtml(p.username, p.isAdmin, p.isMod)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
     }).join('');
   }
-  function filterArenaParticipants() {
-    if (currentArenaState && currentArenaId) {
-      const arena = arenasCache.find(a => a.id === currentArenaId);
-      if (arena) renderArenaParticipants(arena, currentArenaState);
-    }
-  }
+  function filterArenaParticipants() { if (currentArenaState && currentArenaId) { const arena = arenasCache.find(a => a.id === currentArenaId); if (arena) renderArenaParticipants(arena, currentArenaState); } }
   window.filterArenaParticipants = filterArenaParticipants;
   function renderArenaGamesList() {
-    const topEl = document.getElementById('arenaTopGame');
-    const listEl = document.getElementById('arenaGamesList');
+    const topEl = document.getElementById('arenaTopGame'), listEl = document.getElementById('arenaGamesList');
     if (!topEl || !listEl) return;
     socket.emit('getArenaGames', { arenaId: currentArenaId }, (res) => {
       if (!res || typeof res !== 'object') return;
-      const live = res.live || [];
-      const done = res.done || [];
+      const live = res.live || [], done = res.done || [];
       const hash = JSON.stringify({ live: live.map(g => [g.lobbyId, g.fen, g.timeW, g.timeB]), done: done.slice(0, 30).map(g => [g.white, g.black, g.result, g.finishedAt]) });
       if (hash === lastArenaGamesHash) return;
       lastArenaGamesHash = hash;
-      if (live.length) {
-        const g = live[0];
-        topEl.innerHTML = renderArenaTopGame(g);
-        const link = topEl.querySelector('.arenaTopGameLink');
-        if (link) link.onclick = () => watchGame(g.lobbyId);
-      } else {
-        topEl.innerHTML = '<div class="arenaTopGameEmpty">Сейчас никто не играет</div>';
-      }
+      if (live.length) { const g = live[0]; topEl.innerHTML = renderArenaTopGame(g); const link = topEl.querySelector('.arenaTopGameLink'); if (link) link.onclick = () => watchGame(g.lobbyId); }
+      else { topEl.innerHTML = '<div class="arenaTopGameEmpty">Сейчас никто не играет</div>'; }
       if (!done.length) { listEl.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>'; return; }
       listEl.innerHTML = done.slice(0, 50).map(g => {
         const resChar = g.result === 'w' ? '1-0' : (g.result === 'b' ? '0-1' : '½-½');
@@ -2004,96 +1662,33 @@
         const dateStr = fmtMskHM(g.finishedAt);
         const wR = g.whiteRating ? `<span class="rating"> ${g.whiteRating}</span>` : '';
         const bR = g.blackRating ? `<span class="rating"> ${g.blackRating}</span>` : '';
-        return `<div class="arenaGameCard">
-          <div class="row1">
-            <span class="name">⚪ ${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${wR}</span>
-            <span class="res ${resCls}">${resChar}</span>
-          </div>
-          <div class="row1">
-            <span class="name">⚫ ${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${bR}</span>
-          </div>
-          <div class="row2"><span>завершена</span><span>${dateStr}</span></div>
-        </div>`;
+        return `<div class="arenaGameCard"><div class="row1"><span class="name">⚪ ${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${wR}</span><span class="res ${resCls}">${resChar}</span></div><div class="row1"><span class="name">⚫ ${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${bR}</span></div><div class="row2"><span>завершена</span><span>${dateStr}</span></div></div>`;
       }).join('');
     });
   }
   function renderArenaTopGame(g) {
     const state = parseFen(g.fen);
-    const flip = false;
     let squares = '';
-    for (let dr = 0; dr < 8; dr++) {
-      for (let dc = 0; dc < 8; dc++) {
-        const r = flip ? 7 - dr : dr;
-        const c = flip ? 7 - dc : dc;
-        const cls = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
-        const p = state.board[r][c];
-        let inner = '';
-        if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW ? 'w' : 'b'}">${EMOJI[p]}</span>`; }
-        squares += `<div class="${cls}">${inner}</div>`;
-      }
-    }
-    const whiteActive = g.turn === 'w';
-    const blackActive = g.turn === 'b';
+    for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) { const r = dr, c = dc; const cls = 'sq ' + ((r + c) % 2 ? 'dark' : 'light'); const p = state.board[r][c]; let inner = ''; if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW ? 'w' : 'b'}">${EMOJI[p]}</span>`; } squares += `<div class="${cls}">${inner}</div>`; }
+    const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
     const wR = g.whiteRating ? `<span class="prat">${g.whiteRating}</span>` : '';
     const bR = g.blackRating ? `<span class="prat">${g.blackRating}</span>` : '';
-    return `
-      <div class="arenaTopGamePlayers">
-        <span class="playerRow">⚫ <span class="name">${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span>
-        <span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${formatTime(g.timeB)}</span>
-      </div>
-      <div class="arenaTopGameBoard">${squares}</div>
-      <div class="arenaTopGamePlayers">
-        <span class="playerRow">⚪ <span class="name">${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span>
-        <span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${formatTime(g.timeW)}</span>
-      </div>
-      <div class="arenaTopGameLink">▶ Смотреть партию</div>
-    `;
+    return `<div class="arenaTopGamePlayers"><span class="playerRow">⚫ <span class="name">${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span><span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${formatTime(g.timeB)}</span></div><div class="arenaTopGameBoard">${squares}</div><div class="arenaTopGamePlayers"><span class="playerRow">⚪ <span class="name">${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${formatTime(g.timeW)}</span></div><div class="arenaTopGameLink">▶ Смотреть партию</div>`;
   }
   function showArenaWinnerBanner(top3) {
-    const banner = document.getElementById('arenaWinnerBanner');
-    const podium = document.getElementById('awbPodium');
-    const medals = ['gold','silver','bronze'];
-    const places = ['🥇','🥈','🥉'];
+    const banner = document.getElementById('arenaWinnerBanner'), podium = document.getElementById('awbPodium');
+    const medals = ['gold','silver','bronze'], places = ['🥇','🥈','🥉'];
     const order = top3.length >= 3 ? [1,0,2] : top3.map((_,i)=>i);
     podium.innerHTML = order.map(i => { const p = top3[i]; if (!p) return ''; return `<div class="awbItem ${medals[i]}"><div class="place">${places[i]}</div><div class="n">${nickHtml(p.username, p.username === 'PeshkaSasha')}</div><div class="s">${p.score}</div></div>`; }).join('');
     banner.style.display = 'block';
   }
-  function joinCurrentArena() {
-    if (!currentArenaId) return;
-    socket.emit('joinArena', { arenaId: currentArenaId }, (res) => {
-      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      lastArenaStateHash = ''; lastArenaGamesHash = '';
-      loadArenaPage(); refreshArenas(true); renderArenaGamesList();
-    });
-  }
+  function joinCurrentArena() { if (!currentArenaId) return; socket.emit('joinArena', { arenaId: currentArenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } lastArenaStateHash = ''; lastArenaGamesHash = ''; loadArenaPage(); refreshArenas(true); renderArenaGamesList(); }); }
   window.joinCurrentArena = joinCurrentArena;
-  function pauseCurrentArena() {
-    if (!currentArenaId) return;
-    socket.emit('pauseArena', { arenaId: currentArenaId }, (res) => {
-      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      lastArenaStateHash = '';
-      loadArenaPage(); refreshArenas(true);
-    });
-  }
+  function pauseCurrentArena() { if (!currentArenaId) return; socket.emit('pauseArena', { arenaId: currentArenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } lastArenaStateHash = ''; loadArenaPage(); refreshArenas(true); }); }
   window.pauseCurrentArena = pauseCurrentArena;
-  function leaveCurrentArena() {
-    if (!currentArenaId) return;
-    if (!confirm('Отменить участие?')) return;
-    socket.emit('leaveArena', { arenaId: currentArenaId }, (res) => {
-      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      lastArenaStateHash = '';
-      loadArenaPage(); refreshArenas(true);
-    });
-  }
+  function leaveCurrentArena() { if (!currentArenaId) return; if (!confirm('Отменить участие?')) return; socket.emit('leaveArena', { arenaId: currentArenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } lastArenaStateHash = ''; loadArenaPage(); refreshArenas(true); }); }
   window.leaveCurrentArena = leaveCurrentArena;
-  function sendArenaChat(e) {
-    e.preventDefault();
-    const input = document.getElementById('arenaChatInput');
-    const text = input.value.trim();
-    if (!text || !currentArenaId) return;
-    socket.emit('arenaChat', { arenaId: currentArenaId, text });
-    input.value = '';
-  }
+  function sendArenaChat(e) { e.preventDefault(); const input = document.getElementById('arenaChatInput'); const text = input.value.trim(); if (!text || !currentArenaId) return; socket.emit('arenaChat', { arenaId: currentArenaId, text }); input.value = ''; }
   window.sendArenaChat = sendArenaChat;
   function renderArenaChatMsg(msg) {
     const box = document.getElementById('arenaChatMessages');
@@ -2105,10 +1700,7 @@
       let modHtml = '';
       if (me && me.isMod) modHtml = `<span class="modBtn always" title="Модерация" style="cursor:pointer;color:var(--muted);margin-left:6px;">⚙</span>`;
       div.innerHTML = `<span class="u">${nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
-      if (me && me.isMod) {
-        const btn = div.querySelector('.modBtn');
-        if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); openModMenu(ev, msg.id, msg.user, 'arena', currentArenaId); });
-      }
+      if (me && me.isMod) { const btn = div.querySelector('.modBtn'); if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); openModMenu(ev, msg.id, msg.user, 'arena', currentArenaId); }); }
     }
     box.appendChild(div);
     while (box.children.length > 200) box.removeChild(box.firstChild);
@@ -2120,29 +1712,19 @@
     document.getElementById('topClock').classList.toggle('low', oppTime <= 20);
     document.getElementById('bottomClock').classList.toggle('low', myTime <= 20);
   }
-  socket.on('stats', (s) => {
-    if (!s) return;
-    const e1 = document.getElementById('statOnline'), e2 = document.getElementById('statGames'), e3 = document.getElementById('statActive');
-    if (e1) e1.textContent = s.online; if (e2) e2.textContent = s.games; if (e3) e3.textContent = s.activeGames || 0;
-    if (document.getElementById('watchScreen').classList.contains('active')) refreshWatchList(false);
-  });
+  socket.on('stats', (s) => { if (!s) return; const e1 = document.getElementById('statOnline'), e2 = document.getElementById('statGames'), e3 = document.getElementById('statActive'); if (e1) e1.textContent = s.online; if (e2) e2.textContent = s.games; if (e3) e3.textContent = s.activeGames || 0; if (document.getElementById('watchScreen').classList.contains('active')) refreshWatchList(false); });
   socket.on('lobbiesUpdate', () => { if (document.getElementById('lobbyScreen').classList.contains('active')) refreshLobbies(); });
   socket.on('gameStart', ({ color, opponent, opponentRating: oppRating, time, inc: gameInc, lobbyId: id, fen, chat, arenaId, arenaName, opponentIsAdmin: oppIsAdmin, opponentIsMod: oppIsMod }) => {
     if (id) lobbyId = id;
-    myColor = color || 'w';
-    inc = gameInc || 0;
-    opponentName = opponent || 'Соперник';
-    opponentRating = oppRating || null;
+    myColor = color || 'w'; inc = gameInc || 0;
+    opponentName = opponent || 'Соперник'; opponentRating = oppRating || null;
     opponentIsAdmin = (typeof oppIsAdmin === 'boolean') ? oppIsAdmin : (opponentName === 'PeshkaSasha');
     myTime = time * 60; oppTime = time * 60;
     currentFen = fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
     selected = null; legalMoves = []; moveHistory = []; moveFens = [];
     viewIndex = -1; lastMove = null; premove = null;
-    gameActive = true; gameEnded = false; boardFlipped = false;
-    pendingDrawOffer = false;
-    currentGameIsArena = !!arenaId;
-    currentArenaId = arenaId || null;
-    currentArenaName = arenaName || null;
+    gameActive = true; gameEnded = false; boardFlipped = false; pendingDrawOffer = false;
+    currentGameIsArena = !!arenaId; currentArenaId = arenaId || null; currentArenaName = arenaName || null;
     lastBoardHash = '';
     document.getElementById('bottomName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod);
     document.getElementById('bottomRating').textContent = me.rating;
@@ -2157,8 +1739,7 @@
     document.getElementById('chatMessages').innerHTML = '';
     if (Array.isArray(chat)) chat.forEach(renderChatMsg);
     hideGameResultBar();
-    navTo('game');
-    renderBoard(); renderMoves(); updateTimers();
+    navTo('game'); renderBoard(); renderMoves(); updateTimers();
     sndStart();
   });
   socket.on('boardUpdate', ({ fen, san }) => {
@@ -2170,16 +1751,10 @@
     if (san) { if (san.includes('#')) sndMate(); else if (san.includes('+')) sndCheck(); else if (san.includes('x')) sndCapture(); else sndMove(); }
     checkGameEnd(state); tryApplyPremove();
   });
-  socket.on('timeUpdate', ({ timeW, timeB }) => {
-    if (!gameActive) return;
-    myTime = myColor === 'w' ? timeW : timeB;
-    oppTime = myColor === 'w' ? timeB : timeW;
-    updateTimers();
-  });
+  socket.on('timeUpdate', ({ timeW, timeB }) => { if (!gameActive) return; myTime = myColor === 'w' ? timeW : timeB; oppTime = myColor === 'w' ? timeB : timeW; updateTimers(); });
   socket.on('gameEnded', ({ result, reason, isArena, arenaId }) => {
     if (gameEnded) return;
-    let winner = null;
-    if (result === 'w') winner = 'w'; else if (result === 'b') winner = 'b';
+    let winner = null; if (result === 'w') winner = 'w'; else if (result === 'b') winner = 'b';
     if (reason !== 'Мат' && reason !== 'Пат') { if (!winner) sndDraw(); else if (winner === myColor) sndWin(); else sndLose(); }
     if (typeof isArena === 'boolean') currentGameIsArena = isArena;
     if (arenaId) currentArenaId = arenaId;
@@ -2193,51 +1768,17 @@
     const el2 = document.querySelector(`#arenaChatMessages .msg[data-msg-id="${msgId}"]`); if (el2) el2.remove();
   });
   socket.on('chatError', ({ msg }) => { alert(msg); });
-  socket.on('modAction', (info) => {
-    if (!info) return;
-    if (info.action === 'mute' && me && info.target === me.username) alert(`Вы заглушены на ${info.minutes} мин. модератором ${info.by}.`);
-    if (info.action === 'unmute' && me && info.target === me.username) alert('С вас снят мут.');
-  });
+  socket.on('modAction', (info) => { if (!info) return; if (info.action === 'mute' && me && info.target === me.username) alert(`Вы заглушены на ${info.minutes} мин. модератором ${info.by}.`); if (info.action === 'unmute' && me && info.target === me.username) alert('С вас снят мут.'); });
   socket.on('opponentLeft', () => { if (!gameActive) return; alert('Соперник отключился'); cleanupGame(); navTo('lobby'); });
   socket.on('connect_error', () => console.warn('Не удалось подключиться'));
   socket.on('arenaChatMessage', (msg) => { if (currentArenaId && msg.arenaId === currentArenaId) renderArenaChatMsg(msg); });
-  socket.on('arenaUpdate', ({ arenaId }) => {
-    if (currentArenaId === arenaId) {
-      lastArenaStateHash = ''; lastArenaGamesHash = '';
-      if (document.getElementById('arenaPageScreen').classList.contains('active')) { loadArenaPage(); renderArenaGamesList(); }
-    }
-    if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas();
-    if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas();
-  });
-  socket.on('arenaStarted', ({ arenaId }) => {
-    if (currentArenaId === arenaId) {
-      lastArenaStateHash = ''; lastArenaGamesHash = '';
-      if (document.getElementById('arenaPageScreen').classList.contains('active')) { loadArenaPage(); renderArenaGamesList(); }
-    }
-    if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas();
-    if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas();
-  });
-  socket.on('arenaFinished', ({ arenaId, top3 }) => {
-    if (currentArenaId === arenaId) {
-      lastArenaStateHash = ''; lastArenaGamesHash = '';
-      if (document.getElementById('arenaPageScreen').classList.contains('active')) { loadArenaPage(); renderArenaGamesList(); }
-      if (top3 && top3.length) showArenaWinnerBanner(top3);
-    }
-    if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas();
-    if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas();
-  });
+  socket.on('arenaUpdate', ({ arenaId }) => { if (currentArenaId === arenaId) { lastArenaStateHash = ''; lastArenaGamesHash = ''; if (document.getElementById('arenaPageScreen').classList.contains('active')) { loadArenaPage(); renderArenaGamesList(); } } if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas(); if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas(); });
+  socket.on('arenaStarted', ({ arenaId }) => { if (currentArenaId === arenaId) { lastArenaStateHash = ''; lastArenaGamesHash = ''; if (document.getElementById('arenaPageScreen').classList.contains('active')) { loadArenaPage(); renderArenaGamesList(); } } if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas(); if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas(); });
+  socket.on('arenaFinished', ({ arenaId, top3 }) => { if (currentArenaId === arenaId) { lastArenaStateHash = ''; lastArenaGamesHash = ''; if (document.getElementById('arenaPageScreen').classList.contains('active')) { loadArenaPage(); renderArenaGamesList(); } if (top3 && top3.length) showArenaWinnerBanner(top3); } if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas(); if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas(); });
   topArenasRefreshHandle = setInterval(() => {
     if (document.hidden) return;
     if (document.getElementById('lobbyScreen').classList.contains('active')) { refreshTopArenas(); refreshStats(); }
-    if (document.getElementById('watchScreen').classList.contains('active')) {
-      refreshWatchList(false);
-      if (watchingGameId) {
-        socket.emit('watchGame', { id: watchingGameId }, (res) => {
-          if (res && res.ok) { watchingGame = res.game; renderWatchBoard(); }
-          else { stopWatching(); refreshWatchList(true); }
-        });
-      }
-    }
+    if (document.getElementById('watchScreen').classList.contains('active')) { refreshWatchList(false); if (watchingGameId) { socket.emit('watchGame', { id: watchingGameId }, (res) => { if (res && res.ok) { watchingGame = res.game; renderWatchBoard(); } else { stopWatching(); refreshWatchList(true); } }); } }
   }, 5000);
   document.getElementById('password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
 
@@ -2247,21 +1788,16 @@
     if (!saved || !saved.username || !saved.password) return;
     try { document.getElementById('username').value = saved.username; } catch (e) {}
     socket.emit('register', { username: saved.username, password: saved.password }, (res) => {
-      if (!res || !res.ok) {
-        try { localStorage.removeItem('kingside_login'); } catch (e) {}
-        return;
-      }
-      me = res.user;
-      updateTopbarUser();
-      navTo('lobby');
-      refreshLobbies(); refreshTopArenas(); refreshStats();
+      if (!res || !res.ok) { try { localStorage.removeItem('kingside_login'); } catch (e) {} return; }
+      me = res.user; updateTopbarUser(); navTo('lobby'); refreshLobbies(); refreshTopArenas(); refreshStats();
     });
   })();
 
-  // ===== Автообновление now-line КАЖДУЮ СЕКУНДУ =====
-  // Использует базу сетки из последнего рендера (window.__arenaStartMs),
-  // чтобы now-line не «уезжал» относительно блоков и меток.
+  // ===== Автообновление now-line + метка текущего времени в заголовке =====
   setInterval(() => {
+    const localNow = Date.now();
+    const nowClock = document.getElementById('arenasNowClock');
+    if (nowClock) nowClock.textContent = fmtMskHM(localNow);
     if (!document.getElementById('arenasScreen').classList.contains('active')) return;
     const scroller = document.querySelector('#arenasGridWrap .arenasScroller');
     if (!scroller) return;
@@ -2271,19 +1807,11 @@
     if (!timeRow) return;
     const firstCell = timeRow.querySelector('.timeCell');
     if (!firstCell) return;
-    const SLOT_PX = (typeof window.__arenaSlotPx === 'number' && window.__arenaSlotPx > 0)
-      ? window.__arenaSlotPx
-      : (firstCell.getBoundingClientRect().width || 180);
+    const SLOT_PX = (typeof window.__arenaSlotPx === 'number' && window.__arenaSlotPx > 0) ? window.__arenaSlotPx : (firstCell.getBoundingClientRect().width || 180);
     const SLOT_MS = 10 * 60 * 1000;
-    // Считаем «сейчас» по реальному текущему моменту клиента.
-    const localNow = Date.now();
-    // Берём ту же базу, что использовал renderArenasGrid.
-    const startMs = (typeof window.__arenaStartMs === 'number')
-      ? window.__arenaStartMs
-      : Math.floor(localNow / SLOT_MS) * SLOT_MS;
+    const startMs = (typeof window.__arenaStartMs === 'number') ? window.__arenaStartMs : Math.floor(localNow / SLOT_MS) * SLOT_MS;
     const nowLeft = ((localNow - startMs) / SLOT_MS) * SLOT_PX;
     nowLine.style.left = nowLeft.toFixed(2) + 'px';
-    nowLine.removeAttribute('data-label');
     const cells = timeRow.querySelectorAll('.timeCell');
     const idx = Math.floor((localNow - startMs) / SLOT_MS);
     cells.forEach((c, i) => c.classList.toggle('now', i === idx && idx >= 0 && idx < cells.length));
