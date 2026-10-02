@@ -126,7 +126,7 @@
   .arenasEmpty { padding:60px 20px; text-align:center; color:var(--muted); font-size:14px; }
   .arenasScroller { overflow-x:auto; overflow-y:hidden; position:relative; }
   .timeRow { display:flex; padding:0; border-bottom:1px solid var(--border); background:var(--panel-2); position:sticky; top:0; z-index:2; height:32px; }
-  .timeCell { color:var(--muted); font-size:11px; text-align:center; font-weight:500; width:180px; min-width:180px; flex-shrink:0; padding:8px 0; border-right:1px solid rgba(58,56,51,.5); box-sizing:border-box; }
+  .timeCell { color:var(--muted); font-size:11px; text-align:center; font-weight:500; flex-shrink:0; padding:8px 0; border-right:1px solid rgba(58,56,51,.5); box-sizing:border-box; }
   .timeCell.now { color:var(--accent); font-weight:700; background:rgba(191,129,29,.08); }
   .arenaRowGrid { position:relative; height:52px; border-bottom:1px solid rgba(58,56,51,.35); }
   .arenaRowGrid:last-child { border-bottom:none; }
@@ -144,8 +144,10 @@
   .arenaBlock.blitz  { background:linear-gradient(180deg,#7db63a,#5a8a22); }
   .arenaBlock.rapid  { background:linear-gradient(180deg,#4a9ce8,#2f77b8); }
   .arenaBlock.classical { background:linear-gradient(180deg,#6f5fbf,#4a3d8f); }
+  .arenaDebug { position:absolute; bottom:-14px; left:0; font-size:10px; color:#e5484d; white-space:nowrap; pointer-events:none; }
   .nowLine { position:absolute; top:0; bottom:0; width:2px; background:#e5484d; z-index:3; pointer-events:none; }
   .nowLine::before { content:'▼'; position:absolute; top:-2px; left:50%; transform:translateX(-50%); color:#e5484d; font-size:10px; }
+  .nowLine::after { content:attr(data-label); position:absolute; top:-14px; left:4px; font-size:10px; color:#e5484d; font-weight:700; background:rgba(22,21,18,.9); padding:0 3px; border-radius:2px; }
   .arenaStatusRow { display:flex; align-items:center; gap:16px; padding:10px 14px; background:var(--panel-2); border-radius:6px; border-left:4px solid var(--accent); }
   .arenaStatusRow.live { border-left-color:var(--green-2); background:rgba(98,153,36,.08); }
   .arenaStatusRow.finished { border-left-color:var(--muted); opacity:.7; }
@@ -431,7 +433,6 @@
     .arenaTableRow .score { font-size:13px; }
 
     .arenasHeader h1 { font-size:24px; }
-    .timeCell { width:120px; min-width:120px; font-size:10px; }
   }
   @media (max-width: 380px) {
     .piece { font-size:min(10vw, 40px); }
@@ -1562,7 +1563,6 @@
       return;
     }
 
-    // Группируем по дням
     const byDay = new Map();
     for (const h of history) {
       const d = new Date(h.ts);
@@ -1698,8 +1698,9 @@
       const serverNow = (res && res.serverNow) || Date.now();
       arenaServerOffsetMs = serverNow - Date.now();
       arenasCache = list;
-      socket.emit('getMyArenaStates', (states) => {
-        arenaStatesCache = states || {};
+      socket.emit('getMyArenaStates', (r2) => {
+        arenaStatesCache = (r2 && r2.states) || {};
+        if (r2 && r2.serverNow) arenaServerOffsetMs = r2.serverNow - Date.now();
         const hash = JSON.stringify(arenasCache) + '|' + JSON.stringify(arenaStatesCache);
         if (hash === lastArenasHash && !force) return;
         lastArenasHash = hash; renderArenasGrid();
@@ -1713,8 +1714,8 @@
           const serverNow = (res && res.serverNow) || Date.now();
           arenaServerOffsetMs = serverNow - Date.now();
           arenasCache = list;
-          socket.emit('getMyArenaStates', (states) => {
-            arenaStatesCache = states || {};
+          socket.emit('getMyArenaStates', (r2) => {
+            arenaStatesCache = (r2 && r2.states) || {};
             const hash = JSON.stringify(arenasCache) + '|' + JSON.stringify(arenaStatesCache);
             if (hash === lastArenasHash) return;
             lastArenasHash = hash; renderArenasGrid();
@@ -1729,38 +1730,32 @@
   function formatMMSS(ms) { const t = Math.max(0, Math.floor(ms/1000)); return String(Math.floor(t/60)).padStart(2,'0') + ':' + String(t%60).padStart(2,'0'); }
   function formatTime(s) { s = Math.max(0, Math.floor(s)); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
 
-  // ====== ТАЙМЛАЙН АРЕН: точная привязка блока к [startsAt, endsAt] ======
+  // ====== ТАЙМЛАЙН АРЕН: ТОЧНАЯ привязка блока к [startsAt, endsAt] ======
   function renderArenasGrid() {
     const wrap = document.getElementById('arenasGridWrap'); if (!wrap) return;
     if (!arenasCache || !arenasCache.length) { wrap.innerHTML = '<div class="arenasEmpty">Нет доступных арен</div>'; return; }
 
-    // now с поправкой на сервер
+    // "сейчас" с поправкой на сервер
     const now = Date.now() + arenaServerOffsetMs;
 
-    // Ширина одного 10-мин слота — берём реальную ширину .timeCell из CSS.
-    let SLOT_PX = 180;
-    const probe = document.createElement('div');
-    probe.className = 'timeCell';
-    probe.style.position = 'absolute';
-    probe.style.visibility = 'hidden';
-    probe.style.width = '';
-    probe.style.minWidth = '';
-    document.body.appendChild(probe);
-    const measured = probe.getBoundingClientRect().width;
-    document.body.removeChild(probe);
-    if (measured > 0) SLOT_PX = Math.round(measured);
+    // Фиксированные размеры (desktop / mobile)
+    const isMobile = window.matchMedia('(max-width: 700px)').matches;
+    const SLOT_PX = isMobile ? 120 : 180;      // 10 минут в пикселях
+    const SLOT_MS = 10 * 60 * 1000;            // 10 минут
+    const COLS = isMobile ? 24 : 36;
 
-    const SLOT_MS = 10 * 60 * 1000;
-    const COLS = 36;
-
+    // startMs — округление now вниз до 10-минутного слота.
+    // ВАЖНО: используем UTC-getTime (без TZ-преобразований) — timestamp уже абсолютный.
     const startMs = Math.floor(now / SLOT_MS) * SLOT_MS;
     const endMs = startMs + COLS * SLOT_MS;
 
+    // Линейное преобразование времени в пиксели.
     const toPx = (ts) => ((ts - startMs) / SLOT_MS) * SLOT_PX;
 
     const visible = arenasCache.filter(a => a.endsAt > startMs && a.startsAt < endMs);
     const sorted = visible.slice().sort((a, b) => a.startsAt - b.startsAt);
 
+    // Раскладка по дорожкам
     const rows = [];
     for (const arena of sorted) {
       let placed = false;
@@ -1781,6 +1776,8 @@
     }
     html += '</div>';
 
+    const debug = !!window.KINGSIDE_DEBUG;
+
     for (const row of rows) {
       html += '<div class="arenaRowGrid" style="width:' + rowWidth + 'px;">';
       for (const arena of row) {
@@ -1798,21 +1795,24 @@
         const clickAttr = clickable ? 'onclick="openArenaPage(\'' + arena.id + '\')"' : '';
         const cursorStyle = clickable ? 'cursor:pointer' : 'cursor:default';
         const showInfo = width >= 100;
+        const dur = Math.round((arena.endsAt - arena.startsAt) / 60000);
         html += '<div class="' + cls + '" '
               + 'style="left:' + left.toFixed(2) + 'px; width:' + width.toFixed(2) + 'px; ' + cursorStyle + '" '
               + 'data-start="' + arena.startsAt + '" data-end="' + arena.endsAt + '" '
               + 'data-starts="' + fmtHHMM(arena.startsAt) + '" data-ends="' + fmtHHMM(arena.endsAt) + '" '
+              + 'data-duration-min="' + dur + '" '
               + clickAttr
-              + ' title="' + escapeHtml(arena.name) + ' · ' + tinfo + ' · ' + fmtHHMM(arena.startsAt) + '–' + fmtHHMM(arena.endsAt) + '">'
+              + ' title="' + escapeHtml(arena.name) + ' · ' + tinfo + ' · ' + fmtHHMM(arena.startsAt) + '–' + fmtHHMM(arena.endsAt) + ' (' + dur + ' мин)">'
               + '<div class="tname">' + escapeHtml(arena.name) + '</div>'
               + (showInfo ? '<div class="tinfo"><span>' + tinfo + '</span><span>👥 ' + participantsCount + '</span></div>' : '')
+              + (debug ? '<div class="arenaDebug">' + fmtHHMM(arena.startsAt) + '–' + fmtHHMM(arena.endsAt) + ' (' + dur + 'м) L=' + left.toFixed(0) + ' W=' + width.toFixed(0) + '</div>' : '')
               + '</div>';
       }
       html += '</div>';
     }
 
     const nowLeft = toPx(now);
-    html += '<div class="nowLine" style="left:' + nowLeft.toFixed(2) + 'px;"></div></div>';
+    html += '<div class="nowLine" style="left:' + nowLeft.toFixed(2) + 'px;" data-label="' + fmtHHMM(now) + '"></div></div>';
 
     wrap.innerHTML = html;
 
@@ -2216,7 +2216,6 @@
   }, 5000);
   document.getElementById('password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
 
-  // Автологин при загрузке страницы
   (function tryAutoLogin() {
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem('kingside_login') || 'null'); } catch (e) {}
