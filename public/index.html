@@ -655,11 +655,6 @@
       </div>
       <div class="col-board">
         <div id="boardWrap"><div id="board"></div></div>
-        <div class="gameResultBar" id="gameResultBar">
-          <div class="grTitle" id="grTitle">—</div>
-          <div class="grSub" id="grSub">—</div>
-          <div class="grActions" id="grActions"></div>
-        </div>
       </div>
       <div class="col-info">
         <div class="clockBox" id="topClock"><div class="clockTime" id="topTime">--:--</div></div>
@@ -687,6 +682,11 @@
         </div>
         <div id="statusBar" class="statusGreen">Ожидание соперника...</div>
         <div class="clockBox" id="bottomClock"><div class="clockTime" id="bottomTime">--:--</div></div>
+        <div class="gameResultBar" id="gameResultBar">
+          <div class="grTitle" id="grTitle">—</div>
+          <div class="grSub" id="grSub">—</div>
+          <div class="grActions" id="grActions"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -782,6 +782,7 @@
   let dragging = null;
   let dragStartPos = null;
   let premove = null;
+  let rematchRequested = false;
 
   const EMOJI = { 'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙','k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟' };
 
@@ -819,8 +820,19 @@
     } else if (type === 'n') { [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc]) => add(r+dr, c+dc)); }
     else if (type === 'k') {
       [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc]) => add(r+dr, c+dc));
-      if (white && r === 7 && c === 4) { if (state.castling.includes('K') && !state.board[7][5] && !state.board[7][6] && state.board[7][7] === 'R') moves.push([7, 6]); if (state.castling.includes('Q') && !state.board[7][3] && !state.board[7][2] && !state.board[7][1] && state.board[7][0] === 'R') moves.push([7, 2]); }
-      if (!white && r === 0 && c === 4) { if (state.castling.includes('k') && !state.board[0][5] && !state.board[0][6] && state.board[0][7] === 'r') moves.push([0, 6]); if (state.castling.includes('q') && !state.board[0][3] && !state.board[0][2] && !state.board[0][1] && state.board[0][0] === 'r') moves.push([0, 2]); }
+      // Рокировки — только если король не под шахом
+      if (white && r === 7 && c === 4 && !isAttacked(state, 7, 4, false)) {
+        if (state.castling.includes('K') && !state.board[7][5] && !state.board[7][6] && state.board[7][7] === 'R'
+            && !isAttacked(state, 7, 5, false) && !isAttacked(state, 7, 6, false)) moves.push([7, 6]);
+        if (state.castling.includes('Q') && !state.board[7][3] && !state.board[7][2] && !state.board[7][1] && state.board[7][0] === 'R'
+            && !isAttacked(state, 7, 3, false) && !isAttacked(state, 7, 2, false)) moves.push([7, 2]);
+      }
+      if (!white && r === 0 && c === 4 && !isAttacked(state, 0, 4, true)) {
+        if (state.castling.includes('k') && !state.board[0][5] && !state.board[0][6] && state.board[0][7] === 'r'
+            && !isAttacked(state, 0, 5, true) && !isAttacked(state, 0, 6, true)) moves.push([0, 6]);
+        if (state.castling.includes('q') && !state.board[0][3] && !state.board[0][2] && !state.board[0][1] && state.board[0][0] === 'r'
+            && !isAttacked(state, 0, 3, true) && !isAttacked(state, 0, 2, true)) moves.push([0, 2]);
+      }
     } else {
       const dirs = [];
       if (type === 'r' || type === 'q') dirs.push([-1,0],[1,0],[0,-1],[0,1]);
@@ -835,6 +847,8 @@
       const p = state.board[rr][cc]; if (!p || isWhitePiece(p) !== byWhite) continue;
       const t = p.toLowerCase();
       if (t === 'p') { const dir = byWhite ? -1 : 1; if (rr + dir === r && (cc - 1 === c || cc + 1 === c)) return true; continue; }
+      // Король не атакует по «псевдо-ходам» рокировкой — проверяем только обычные ходы
+      if (t === 'k') { if (Math.abs(rr - r) <= 1 && Math.abs(cc - c) <= 1 && (rr !== r || cc !== c)) return true; continue; }
       if (pseudoMoves(state, rr, cc).some(([mr, mc]) => mr === r && mc === c)) return true;
     }
     return false;
@@ -1169,7 +1183,6 @@
     socket.emit('createLobby', { time, inc }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
       if (res.matched) {
-        // Сервер соединил нас с уже ожидающим — игра начнётся через gameStart
         lobbyId = res.id;
         return;
       }
@@ -1179,6 +1192,7 @@
       gameActive = false; gameEnded = false; boardFlipped = false;
       premove = null; opponentName = '—'; opponentRating = null; opponentIsAdmin = false;
       currentGameIsArena = false; currentArenaName = null; lastBoardHash = '';
+      rematchRequested = false;
       resetGameUI(); hideGameResultBar();
       navTo('game'); renderBoard(); renderMoves();
       document.getElementById('statusBar').className = 'statusGreen';
@@ -1204,7 +1218,7 @@
     gameActive = false; selected = null; legalMoves = []; lobbyId = null;
     moveHistory = []; moveFens = []; viewIndex = -1; lastMove = null;
     gameEnded = false; currentGameIsArena = false; currentArenaName = null;
-    premove = null; lastBoardHash = '';
+    premove = null; lastBoardHash = ''; rematchRequested = false;
     document.getElementById('chatMessages').innerHTML = '';
   }
   function hideGameResultBar() { document.getElementById('gameResultBar').classList.remove('show'); }
@@ -1222,15 +1236,27 @@
       b1.onclick = () => { hideGameResultBar(); cleanupGame(); if (currentArenaId) openArenaPage(currentArenaId); else navTo('arenas'); };
       actions.appendChild(b1);
     } else {
-      const b1 = document.createElement('button'); b1.className = 'primary'; b1.textContent = 'Найти другого соперника';
-      b1.onclick = () => { hideGameResultBar(); cleanupGame(); navTo('lobby'); switchLobbyTab('waiting'); refreshLobbies(); };
+      const b1 = document.createElement('button'); b1.className = 'primary'; b1.textContent = 'Реванш';
+      b1.onclick = () => requestRematch();
       actions.appendChild(b1);
+      const b2 = document.createElement('button'); b2.className = 'secondary'; b2.textContent = 'Новая партия';
+      b2.onclick = () => { hideGameResultBar(); cleanupGame(); navTo('lobby'); switchLobbyTab('create'); };
+      actions.appendChild(b2);
     }
     bar.classList.add('show');
   }
+  function requestRematch() {
+    if (!lobbyId) return;
+    if (rematchRequested) { alert('Реванш уже предложен'); return; }
+    socket.emit('rematchRequest', { lobbyId }, (res) => {
+      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
+      if (res.started) { /* уже началось через gameStart */ }
+      else { rematchRequested = true; document.getElementById('statusBar').className = 'statusYellow'; document.getElementById('statusBar').textContent = 'Реванш предложен. Ожидание соперника...'; }
+    });
+  }
   function endGame(winner, reason, fromServer, isArena) {
     if (gameEnded) return;
-    gameEnded = true; gameActive = false; premove = null;
+    gameEnded = true; gameActive = false; premove = null; rematchRequested = false;
     if (typeof isArena === 'boolean') currentGameIsArena = isArena;
     showGameResultBar(winner, reason);
     if (!fromServer) socket.emit('gameOver', { lobbyId, result: winner || 'draw' });
@@ -1252,6 +1278,16 @@
     overlay.appendChild(box); document.body.appendChild(overlay);
     document.getElementById('drawAcceptBtn').onclick = () => { socket.emit('drawAccept', { lobbyId }); overlay.remove(); };
     document.getElementById('drawDeclineBtn').onclick = () => { socket.emit('drawDecline', { lobbyId }); overlay.remove(); };
+  }
+  function showRematchOfferDialog(from) {
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:200;padding:20px;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#262522;border-radius:10px;padding:24px;max-width:360px;width:100%;border:1px solid #3a3833;color:#e8e6e3;text-align:center;';
+    box.innerHTML = `<div style="font-size:18px;margin-bottom:8px;">⚔ Предложение реванша</div><div style="color:#7d7a72;font-size:13px;margin-bottom:20px;">${escapeHtml(from)} предлагает реванш.</div><div style="display:flex;gap:10px;justify-content:center;"><button id="rematchAcceptBtn" style="padding:10px 22px;background:#629924;border:none;color:#fff;font-weight:600;border-radius:4px;cursor:pointer;">Принять</button><button id="rematchDeclineBtn" style="padding:10px 22px;background:#2d2c29;border:1px solid #3a3833;color:#bfbdb6;border-radius:4px;cursor:pointer;">Отклонить</button></div>`;
+    overlay.appendChild(box); document.body.appendChild(overlay);
+    document.getElementById('rematchAcceptBtn').onclick = () => { socket.emit('rematchRequest', { lobbyId }, () => {}); overlay.remove(); };
+    document.getElementById('rematchDeclineBtn').onclick = () => { socket.emit('rematchDecline', { lobbyId }); overlay.remove(); };
   }
   function renderChatMsg(msg) {
     const box = document.getElementById('chatMessages');
@@ -1774,7 +1810,7 @@
     viewIndex = -1; lastMove = null; premove = null;
     gameActive = true; gameEnded = false; boardFlipped = false; pendingDrawOffer = false;
     currentGameIsArena = !!arenaId; currentArenaId = arenaId || null; currentArenaName = arenaName || null;
-    lastBoardHash = '';
+    lastBoardHash = ''; rematchRequested = false;
     document.getElementById('bottomName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod);
     document.getElementById('bottomRating').textContent = me.rating;
     document.getElementById('bottomDot').className = 'dot ' + (myColor === 'w' ? 'w' : 'b');
@@ -1811,6 +1847,8 @@
   });
   socket.on('drawOffered', ({ from }) => showDrawOfferDialog(from || 'Соперник'));
   socket.on('drawDeclined', () => { document.getElementById('statusBar').className = 'statusYellow'; document.getElementById('statusBar').textContent = 'Соперник отклонил ничью'; pendingDrawOffer = false; });
+  socket.on('rematchOffered', ({ from }) => showRematchOfferDialog(from || 'Соперник'));
+  socket.on('rematchDeclined', () => { rematchRequested = false; document.getElementById('statusBar').className = 'statusYellow'; document.getElementById('statusBar').textContent = 'Соперник отклонил реванш'; });
   socket.on('chatMessage', (msg) => renderChatMsg(msg));
   socket.on('chatMessageDeleted', ({ msgId }) => {
     const el = document.querySelector(`#chatMessages .msg[data-msg-id="${msgId}"]`); if (el) el.remove();
