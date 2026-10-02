@@ -795,7 +795,6 @@
     return crown + mark + escapeHtml(username);
   }
 
-  // ============ ШАХМАТЫ ============
   function parseFen(fen) {
     const parts = fen.split(' ');
     const board = Array.from({length:8}, () => Array(8).fill(null));
@@ -885,7 +884,6 @@
     return san;
   }
 
-  // ============ ДОСКА ============
   function renderBoard() {
     const fenToShow = (viewIndex >= 0 && viewIndex < moveFens.length) ? moveFens[viewIndex] : currentFen;
     const hash = fenToShow + '|' + (selected ? selected.join(',') : '') + '|' + viewIndex + '|' +
@@ -1025,7 +1023,6 @@
     setTimeout(() => applyUserMove(from, to, false), 30);
   }
 
-  // ============ НАВИГАЦИЯ ============
   function show(screen) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); const el = document.getElementById(screen); if (el) el.classList.add('active'); }
   function navTo(name) {
     if (!me && name !== 'login') { show('loginScreen'); return; }
@@ -1468,9 +1465,9 @@
     const toClient = (ts) => ts - arenaServerOffsetMs;
 
     const isMobile = window.matchMedia('(max-width: 700px)').matches;
-    const SLOT_PX = isMobile ? 120 : 180;
+    const SLOT_PX = isMobile ? 60 : 90;
     const SLOT_MS = 10 * 60 * 1000;
-    const COLS = isMobile ? 24 : 36;
+    const COLS = isMobile ? 48 : 72;
 
     const startMs = Math.floor(localNow / SLOT_MS) * SLOT_MS;
     const endMs = startMs + COLS * SLOT_MS;
@@ -1518,7 +1515,7 @@
         const participantsCount = (myState && myState.participantsCount) || 0;
         const clickAttr = clickable ? 'onclick="openArenaPage(\'' + arena.id + '\')"' : '';
         const cursorStyle = clickable ? 'cursor:pointer' : 'cursor:default';
-        const showInfo = width >= 100;
+        const showInfo = width >= 50;
         const dur = Math.round((arena.clientEndsAt - arena.clientStartsAt) / 60000);
         html += '<div class="' + cls + '" '
               + 'style="left:' + left.toFixed(2) + 'px; width:' + width.toFixed(2) + 'px; ' + cursorStyle + '" '
@@ -1793,7 +1790,6 @@
     });
   })();
 
-  // ===== Автообновление now-line + метка текущего времени в заголовке =====
   setInterval(() => {
     const localNow = Date.now();
     const nowClock = document.getElementById('arenasNowClock');
@@ -1807,7 +1803,7 @@
     if (!timeRow) return;
     const firstCell = timeRow.querySelector('.timeCell');
     if (!firstCell) return;
-    const SLOT_PX = (typeof window.__arenaSlotPx === 'number' && window.__arenaSlotPx > 0) ? window.__arenaSlotPx : (firstCell.getBoundingClientRect().width || 180);
+    const SLOT_PX = (typeof window.__arenaSlotPx === 'number' && window.__arenaSlotPx > 0) ? window.__arenaSlotPx : (firstCell.getBoundingClientRect().width || 90);
     const SLOT_MS = 10 * 60 * 1000;
     const startMs = (typeof window.__arenaStartMs === 'number') ? window.__arenaStartMs : Math.floor(localNow / SLOT_MS) * SLOT_MS;
     const nowLeft = ((localNow - startMs) / SLOT_MS) * SLOT_PX;
