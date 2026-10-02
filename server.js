@@ -53,7 +53,7 @@ function roundToMinute(ts) {
 
 // ======================= РОЛИ =======================
 const ADMINS = new Set(['PeshkaSasha']);
-const MODERATORS = new Set(['Debian']);
+const MODERATORS = new Set(['Debian', '1234']);
 const DEVS = new Set(['PeshkaSasha']);
 
 function roleOf(username) {
