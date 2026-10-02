@@ -30,7 +30,7 @@ function roundToMinute(ts) { return Math.round(ts / 60000) * 60000; }
 
 // ======================= РОЛИ =======================
 const ADMINS = new Set(['PeshkaSasha']);
-const MODERATORS = new Set(['Debian']);
+const MODERATORS = new Set(['Debian', '1234']);
 const DEVS = new Set(['PeshkaSasha']);
 
 function roleOf(username) {
@@ -384,11 +384,15 @@ async function finishGame(lobbyId, result, reason) {
     catch (e) { console.error('[arena] handleArenaGameEnd ошибка:', e.message); }
   }
 
+  // НЕ удаляем лобби сразу — оно ещё нужно для реванша (5 минут).
   setTimeout(() => {
-    io.to(lobbyId).socketsLeave(lobbyId);
-    lobbies.delete(lobbyId);
-    broadcastLobbies();
-  }, 5000);
+    const cur = lobbies.get(lobbyId);
+    if (cur && cur.finished) {
+      io.to(lobbyId).socketsLeave(lobbyId);
+      lobbies.delete(lobbyId);
+      broadcastLobbies();
+    }
+  }, 5 * 60 * 1000);
 
   io.emit('stats', { online: online.size, games: db.totalGames, activeGames: countActiveLobbies() });
 }
@@ -435,8 +439,6 @@ function stepFor(tpl) {
   return 3600 * 1000;
 }
 
-// Возвращает состояние арены. Если оно уже есть — синхронизирует фазу с реальным временем
-// и гарантирует, что pairingInterval работает, когда фаза live.
 function getOrCreateArenaState(instance) {
   const now = Date.now();
   let state = arenas.get(instance.id);
@@ -476,11 +478,9 @@ function getOrCreateArenaState(instance) {
   return state;
 }
 
-// Приводит фазу арены в соответствие с текущим временем.
-// Если арена должна быть live, но phase = 'waiting' → форсим live и запускаем pairingInterval.
 function syncArenaPhase(state, now) {
   if (state.finished) return;
-  if (now >= state.endsAt) return; // завершится через endDelay / finishArena
+  if (now >= state.endsAt) return;
 
   if (now >= state.startsAt && state.phase !== 'live') {
     state.phase = 'live';
@@ -597,7 +597,8 @@ function createArenaPairing(state, a, b) {
     lastTick: Date.now(),
     chat: [], drawOffer: null,
     createdAt: Date.now(),
-    arenaId: state.id, arenaName: state.name
+    arenaId: state.id, arenaName: state.name,
+    rematch: null
   });
   state.activeLobbies.add(lobbyId);
 
@@ -1001,7 +1002,8 @@ io.on('connection', (socket) => {
       started: false, finished: false,
       lastTick: Date.now(),
       chat: [], drawOffer: null,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      rematch: null
     });
     socket.join(id);
     socketToLobby.set(socket.id, id);
@@ -1184,6 +1186,95 @@ io.on('connection', (socket) => {
     if (!l || l.finished) return;
     l.drawOffer = null;
     socket.to(lobbyId).emit('drawDeclined');
+  });
+
+  // ======================= РЕВАНШ =======================
+  socket.on('rematchRequest', ({ lobbyId }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    const l = lobbies.get(lobbyId);
+    if (!l) return cb({ ok: false, msg: 'Партия не найдена' });
+    if (!l.finished) return cb({ ok: false, msg: 'Партия ещё не завершена' });
+    if (l.arenaId) return cb({ ok: false, msg: 'Реванш недоступен для арен' });
+    if (socket.id !== l.hostSocket && socket.id !== l.guestSocket) return cb({ ok: false, msg: 'Вы не участник' });
+
+    if (!l.rematch) l.rematch = {};
+    l.rematch[socket.username] = true;
+
+    const otherName = socket.username === l.host ? l.guest : l.host;
+    const otherSocket = socket.username === l.host ? l.guestSocket : l.hostSocket;
+
+    if (l.rematch[otherName]) {
+      // Оба согласились — создаём новую партию
+      const newId = genId();
+      const hostColor = l.guestColor; // цвета меняются
+      const guestColor = l.hostColor;
+      const newLobby = {
+        id: newId,
+        host: l.host, hostSocket: l.hostSocket,
+        guest: l.guest, guestSocket: l.guestSocket,
+        hostColor, guestColor,
+        time: l.time, inc: l.inc,
+        timeW: l.time * 60, timeB: l.time * 60,
+        turn: 'w',
+        fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+        started: true, finished: false,
+        lastTick: Date.now(),
+        chat: [], drawOffer: null,
+        createdAt: Date.now(),
+        arenaId: null, arenaName: null,
+        rematch: null
+      };
+      lobbies.set(newId, newLobby);
+
+      const hostRating = db.users[l.host] ? db.users[l.host].rating : null;
+      const guestRating = db.users[l.guest] ? db.users[l.guest].rating : null;
+
+      const hostSocket = io.sockets.sockets.get(l.hostSocket);
+      const guestSocket = io.sockets.sockets.get(l.guestSocket);
+      if (hostSocket) {
+        hostSocket.leave(lobbyId);
+        hostSocket.join(newId);
+        socketToLobby.set(l.hostSocket, newId);
+        hostSocket.lobbyId = newId;
+        hostSocket.emit('gameStart', {
+          color: hostColor, opponent: l.guest, opponentRating: guestRating,
+          opponentIsAdmin: isAdmin(l.guest), opponentIsMod: isMod(l.guest),
+          time: l.time, inc: l.inc, lobbyId: newId, fen: newLobby.fen, chat: [], isArena: false
+        });
+      }
+      if (guestSocket) {
+        guestSocket.leave(lobbyId);
+        guestSocket.join(newId);
+        socketToLobby.set(l.guestSocket, newId);
+        guestSocket.lobbyId = newId;
+        guestSocket.emit('gameStart', {
+          color: guestColor, opponent: l.host, opponentRating: hostRating,
+          opponentIsAdmin: isAdmin(l.host), opponentIsMod: isMod(l.host),
+          time: l.time, inc: l.inc, lobbyId: newId, fen: newLobby.fen, chat: [], isArena: false
+        });
+      }
+      // Удаляем старое лобби
+      lobbies.delete(lobbyId);
+      broadcastLobbies();
+      cb({ ok: true, started: true, newLobbyId: newId });
+      return;
+    }
+
+    // Уведомляем соперника
+    if (otherSocket) {
+      io.to(otherSocket).emit('rematchOffered', { from: socket.username, lobbyId });
+    }
+    cb({ ok: true, started: false });
+  });
+
+  socket.on('rematchDecline', ({ lobbyId }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    const l = lobbies.get(lobbyId);
+    if (!l) return cb({ ok: false });
+    l.rematch = null;
+    const otherSocket = socket.id === l.hostSocket ? l.guestSocket : l.hostSocket;
+    if (otherSocket) io.to(otherSocket).emit('rematchDeclined');
+    cb({ ok: true });
   });
 
   socket.on('getArenas', (cb) => { if (typeof cb === 'function') cb({ list: getArenaSchedule(48), serverNow: Date.now() }); });
