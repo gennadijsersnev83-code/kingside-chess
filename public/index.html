@@ -335,18 +335,69 @@
   .bigActionsRow button.danger:hover { color:#ff8080; }
   .statusGreen { background:var(--green); color:#0b0b0b; text-align:center; font-weight:600; padding:6px 10px; border-radius:4px; font-size:13px; min-height:32px; line-height:20px; }
   .statusYellow { background:var(--panel); border-left:3px solid var(--accent); color:var(--text); padding:8px 12px; border-radius:4px; font-size:13px; min-height:32px; }
-  .gameResultCompact { display: none; flex-direction: column; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 10px 10px; text-align: center; gap: 8px; width: 100%; box-sizing: border-box; overflow: hidden; }
+
+  /* ============================================================
+     КОМПАКТНАЯ ПАНЕЛЬ РЕЗУЛЬТАТА (LICHESS-STYLE)
+     Строго в пределах правой колонки, между двумя участниками.
+     ============================================================ */
+  .gameResultCompact {
+    display: none;
+    flex-direction: column;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 10px 10px;
+    text-align: center;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    overflow: hidden;
+  }
   .gameResultCompact.show { display: flex; }
-  .gameResultCompact .grTitle { font-size: 15px; font-weight: 700; color: var(--text-bright); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gameResultCompact .grTitle {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-bright);
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   .gameResultCompact .grTitle.win { color: var(--green-2); }
   .gameResultCompact .grTitle.lose { color: #ff7b7b; }
-  .gameResultCompact .grSub { font-size: 12px; color: var(--muted); font-style: italic; margin-top: -4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .gameResultCompact .grBtn { display: block; width: 100%; padding: 9px 8px; border-radius: 4px; font-weight: 700; font-size: 12px; letter-spacing: .5px; text-transform: uppercase; border: none; cursor: pointer; text-align: center; transition: background .15s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box; }
+  .gameResultCompact .grSub {
+    font-size: 12px;
+    color: var(--muted);
+    font-style: italic;
+    margin-top: -4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .gameResultCompact .grBtn {
+    display: block;
+    width: 100%;
+    padding: 9px 8px;
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+    border: none;
+    cursor: pointer;
+    text-align: center;
+    transition: background .15s;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-sizing: border-box;
+  }
   .gameResultCompact .grBtn.rematch { background: #629924; color: #fff; }
   .gameResultCompact .grBtn.rematch:hover { background: #7dbe30; }
   .gameResultCompact .grBtn.rematch:disabled { background: #3a5014; color: #888; cursor: not-allowed; }
   .gameResultCompact .grBtn.findOpp { background: var(--panel-2); color: var(--text-bright); border: 1px solid var(--border); }
   .gameResultCompact .grBtn.findOpp:hover { background: var(--panel-hover); }
+
   .col-chat { display:flex; flex-direction:column; gap:8px; min-width:0; }
   #chatBox { background:var(--panel); border:1px solid var(--border); border-radius:4px; display:flex; flex-direction:column; height:420px; overflow:hidden; }
   #chatTabs { display:flex; border-bottom:1px solid var(--border); }
@@ -403,57 +454,8 @@
   .catCard.rapid     { border-top:3px solid #4a9ce8; }
   .catCard.blitz     { border-top:3px solid #7db63a; }
   .catCard.bullet    { border-top:3px solid #c94a3a; }
-  .learnWrap { display:grid; grid-template-columns:280px 1fr; gap:20px; max-width:1100px; margin:0 auto; align-items:start; }
-  @media (max-width:900px) { .learnWrap { grid-template-columns:1fr; } }
-  .learnSidebar { background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden; display:flex; flex-direction:column; }
-  .learnSidebarHeader { padding:12px 14px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:12px; font-weight:700; color:var(--text-bright); text-transform:uppercase; letter-spacing:.5px; }
-  .learnList { flex:1; overflow-y:auto; max-height:520px; }
-  .learnItem { padding:10px 14px; border-bottom:1px solid rgba(58,56,51,.35); cursor:pointer; font-size:13px; color:var(--text); display:flex; align-items:center; gap:10px; transition:.15s; }
-  .learnItem:hover { background:var(--panel-hover); color:var(--text-bright); }
-  .learnItem.active { background:rgba(191,129,29,.12); border-left:3px solid var(--accent); padding-left:11px; color:var(--text-bright); font-weight:600; }
-  .learnItem .lIcon { font-size:16px; width:20px; text-align:center; flex-shrink:0; }
-  .learnItem .lTitle { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .learnItem .lDone { color:var(--green-2); font-size:14px; }
-  .learnProgress { padding:10px 14px; border-top:1px solid var(--border); background:var(--panel-2); }
-  .learnProgressBar { height:6px; background:var(--border); border-radius:3px; overflow:hidden; }
-  .learnProgressBar > div { height:100%; background:var(--green-2); width:0%; transition: width .3s; }
-  .learnProgressText { color:var(--muted); font-size:11px; margin-top:6px; text-align:center; }
-  .learnMain { background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
-  .learnHeader { display:flex; justify-content:space-between; align-items:center; padding:14px 16px; background:var(--panel-2); border-bottom:1px solid var(--border); gap:10px; flex-wrap:wrap; }
-  .learnTitle { font-size:16px; font-weight:700; color:var(--text-bright); }
-  .learnSubtitle { font-size:12px; color:var(--muted); margin-top:2px; }
-  .learnNavBtns { display:flex; gap:8px; }
-  .learnNavBtns button { padding:6px 14px; font-size:13px; min-height:32px; }
-  .learnBody { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:16px; padding:16px; align-items:start; }
-  @media (max-width:800px) { .learnBody { grid-template-columns:1fr; } }
-  .learnBoardWrap { width:100%; aspect-ratio:1/1; max-width:480px; margin:0 auto; }
-  .learnBoard { display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); width:100%; height:100%; border:3px solid #0a0a0a; border-radius:4px; box-shadow:0 8px 30px rgba(0,0,0,.5); user-select:none; overflow:hidden; }
-  .learnBoard .sq { display:flex; align-items:center; justify-content:center; position:relative; cursor:pointer; line-height:1; overflow:hidden; }
-  .learnBoard .sq.light { background:var(--light-sq); }
-  .learnBoard .sq.dark { background:var(--dark-sq); }
-  .learnBoard .sq.sel::after { content:''; position:absolute; inset:0; box-shadow:inset 0 0 0 4px #ffd54f; pointer-events:none; }
-  .learnBoard .sq.hint::before { content:''; position:absolute; width:30%; height:30%; border-radius:50%; background:rgba(40,40,40,.35); pointer-events:none; z-index:2; }
-  .learnBoard .sq.hint.capture::before { width:100%; height:100%; border-radius:0; background:transparent; box-shadow:inset 0 0 0 5px rgba(224,82,82,.75); }
-  .learnBoard .sq.goal { box-shadow:inset 0 0 0 4px rgba(98,153,36,.9); }
-  .learnBoard .sq.lastmove { background:var(--yellow-sq) !important; }
-  .learnBoard .sq .coord-f, .learnBoard .sq .coord-r { position:absolute; font-size:10px; font-weight:700; pointer-events:none; }
-  .learnBoard .sq.light .coord-f, .learnBoard .sq.light .coord-r { color:rgba(0,0,0,.5); }
-  .learnBoard .sq.dark .coord-f, .learnBoard .sq.dark .coord-r { color:rgba(255,255,255,.6); }
-  .learnBoard .sq .coord-f { bottom:2px; right:3px; }
-  .learnBoard .sq .coord-r { top:2px; left:3px; }
-  .learnBoard .piece { pointer-events:none; display:flex; align-items:center; justify-content:center; width:100%; height:100%; font-size:clamp(20px, 5.5vw, 44px); line-height:1; position:relative; z-index:1; }
-  .learnBoard .piece.w { color:#fff; text-shadow:-1px -1px 0 #1a1a1a,1px -1px 0 #1a1a1a,-1px 1px 0 #1a1a1a,1px 1px 0 #1a1a1a,0 0 3px rgba(0,0,0,.4); }
-  .learnBoard .piece.b { color:#1e1e1e; text-shadow:-1px -1px 0 #ddd,1px -1px 0 #ddd,-1px 1px 0 #ddd,1px 1px 0 #ddd,0 0 3px rgba(255,255,255,.35); }
-  .learnPanel { display:flex; flex-direction:column; gap:12px; }
-  .learnTask { background:var(--panel-2); border-radius:6px; padding:14px; font-size:13px; line-height:1.5; color:var(--text-bright); border-left:3px solid var(--accent); }
-  .learnHint { background:var(--panel-2); border-radius:6px; padding:10px 12px; font-size:12px; color:var(--muted); line-height:1.4; display:none; }
-  .learnHint.show { display:block; }
-  .learnFeedback { text-align:center; font-weight:600; font-size:14px; padding:8px; border-radius:4px; min-height:36px; display:none; }
-  .learnFeedback.show { display:block; }
-  .learnFeedback.ok { background:var(--green); color:#0b0b0b; }
-  .learnFeedback.err { background:var(--red); color:#fff; }
-  .learnButtons { display:flex; gap:8px; }
-  .learnButtons button { flex:1; padding:10px; font-weight:600; font-size:13px; }
+  @media (max-width:600px) { .catRatingsGrid { grid-template-columns:repeat(2,1fr); } }
+
   @media (max-width: 700px) {
     main { padding:10px 8px; }
     header.topbar { padding:0 8px; gap:2px; }
@@ -492,9 +494,10 @@
     .arenaTableRow .score { font-size:13px; }
     .arenasHeader h1 { font-size:24px; }
     .arenasHeader .ahNow { font-size:13px; }
-    .learnWrap { grid-template-columns:1fr; }
   }
-  @media (max-width: 380px) { .piece { font-size:min(10vw, 40px); } }
+  @media (max-width: 380px) {
+    .piece { font-size:min(10vw, 40px); }
+  }
 </style>
 </head>
 <body>
@@ -687,44 +690,12 @@
   </section>
 
   <section id="learnScreen" class="screen">
-    <div class="learnWrap">
-      <aside class="learnSidebar">
-        <div class="learnSidebarHeader">🎓 Уроки</div>
-        <div class="learnList" id="learnList"></div>
-        <div class="learnProgress">
-          <div class="learnProgressBar" id="learnProgressBar"><div></div></div>
-          <div class="learnProgressText" id="learnProgressText">Пройдено: 0 из 0</div>
-        </div>
-      </aside>
-      <main class="learnMain">
-        <div class="learnHeader">
-          <div>
-            <div class="learnTitle" id="learnTitle">—</div>
-            <div class="learnSubtitle" id="learnSubtitle">—</div>
-          </div>
-          <div class="learnNavBtns">
-            <button class="secondary" onclick="learnPrev()">← Назад</button>
-            <button class="secondary" onclick="learnNext()">Вперёд →</button>
-          </div>
-        </div>
-        <div class="learnBody">
-          <div class="learnBoardWrap">
-            <div id="learnBoard" class="learnBoard"></div>
-          </div>
-          <div class="learnPanel">
-            <div class="learnTask" id="learnTask">—</div>
-            <div class="learnHint" id="learnHint"></div>
-            <div class="learnFeedback" id="learnFeedback"></div>
-            <div class="learnButtons">
-              <button class="primary" onclick="learnReset()">↺ Сбросить</button>
-              <button class="primary" id="learnSkipBtn" onclick="learnSkip()" style="background:var(--panel-2);color:var(--text-bright);border:1px solid var(--border)">Пропустить →</button>
-            </div>
-          </div>
-        </div>
-      </main>
+    <div class="arenasEmpty" style="padding:80px 20px">
+      <div style="font-size:48px;margin-bottom:16px">🎓</div>
+      <h2 style="color:var(--text-bright);font-weight:400">Обучение</h2>
+      <p>Раздел в разработке</p>
     </div>
   </section>
-
   <section id="communityScreen" class="screen">
     <div class="arenasEmpty" style="padding:80px 20px">
       <div style="font-size:48px;margin-bottom:16px">💬</div>
@@ -749,11 +720,13 @@
         <div id="boardWrap"><div id="board"></div></div>
       </div>
       <div class="col-info">
+        <!-- Соперник сверху -->
         <div class="clockBox" id="topClock"><div class="clockTime" id="topTime">--:--</div></div>
         <div class="playerStrip" id="topStrip">
           <div class="side"><span class="dot" id="topDot"></span><span class="nm" id="topName" onclick="openOpponentProfile()">—</span></div>
           <span class="rt" id="topRating"></span>
         </div>
+
         <div class="movesPanel" id="movesPanel">
           <div class="movesToolbar">
             <button title="В начало" onclick="gotoMove('first')">⏮</button>
@@ -763,17 +736,23 @@
           </div>
           <div class="movesList" id="movesList"></div>
         </div>
+
+        <!-- Кнопки управления: во время партии; скрываются когда партия завершена -->
         <div class="bigActionsRow" id="bigActionsRow">
           <button title="Сдаться" class="danger" onclick="resign()">🏳</button>
           <button title="Предложить ничью" onclick="offerDraw()">½</button>
           <button title="Перевернуть доску" onclick="flipBoard()">⇅</button>
         </div>
+
+        <!-- Панель результата в стиле Lichess — МЕЖДУ игроками -->
         <div class="gameResultCompact" id="gameResultCompact">
           <div class="grTitle" id="grTitleCompact">—</div>
           <div class="grSub" id="grSubCompact">—</div>
           <button class="grBtn rematch" id="grRematchBtn" onclick="requestRematch()">РЕВАНШ</button>
           <button class="grBtn findOpp" id="grFindBtn" onclick="findNewOpponent()">НАЙТИ ДРУГОГО СОПЕРНИКА</button>
         </div>
+
+        <!-- Ты снизу -->
         <div class="playerStrip" id="bottomStrip">
           <div class="side"><span class="dot" id="bottomDot"></span><span class="nm" id="bottomName" onclick="navTo('profile')">—</span></div>
           <span class="rt" id="bottomRating"></span>
@@ -817,6 +796,7 @@
       osc.start(t0); osc.stop(t0 + dur + 0.02);
     } catch (e) {}
   }
+  // ==== ЗВУКИ С ЗАЩИТОЙ ОТ ДУБЛИРОВАНИЯ ====
   const _lastSound = { move: 0, capture: 0, check: 0, mate: 0, draw: 0, win: 0, lose: 0, start: 0 };
   const SOUND_COOLDOWN = 80;
   function _canPlay(key) {
@@ -1164,7 +1144,6 @@
     if (name === 'lobby') { refreshLobbies(); refreshTopArenas(); refreshStats(); }
     if (name === 'watch') refreshWatchList(true);
     if (name === 'arenas') refreshArenas(true);
-    if (name === 'learn') initLearn();
     if (name === 'profile') { if (profileViewing) openProfileView(profileViewing); else if (me) openProfileView(me.username); }
   }
   window.navTo = navTo;
@@ -1368,7 +1347,9 @@
       findBtn.onclick = () => { hideGameResultBar(); cleanupGame(); navTo('lobby'); switchLobbyTab('create'); };
     }
     bar.classList.add('show');
+    // Сжимаем панель ходов, чтобы всё поместилось без скролла
     document.getElementById('movesPanel').classList.add('compact');
+    // Скрываем кнопки сдачи/ничьей/переворота во время показа результата
     document.getElementById('bigActionsRow').style.display = 'none';
   }
   function requestRematch() {
@@ -1376,7 +1357,7 @@
     if (rematchRequested) { alert('Реванш уже предложен'); return; }
     socket.emit('rematchRequest', { lobbyId }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      if (res.started) { }
+      if (res.started) { /* уже началось через gameStart */ }
       else {
         rematchRequested = true;
         const btn = document.getElementById('grRematchBtn');
@@ -2121,365 +2102,6 @@
       tryResumeGame();
     });
   })();
-
-  // ============================================================
-  //                     РАЗДЕЛ "ОБУЧЕНИЕ"
-  // ============================================================
-
-  const LEARN_STORAGE_KEY = 'kingside_learn_progress_v1';
-
-  function loadLearnProgress() {
-    try { return JSON.parse(localStorage.getItem(LEARN_STORAGE_KEY) || '{}'); }
-    catch (e) { return {}; }
-  }
-  function saveLearnProgress(p) {
-    try { localStorage.setItem(LEARN_STORAGE_KEY, JSON.stringify(p)); } catch (e) {}
-  }
-  let learnProgress = loadLearnProgress();
-  let learnCurrentIndex = 0;
-  let learnState = null;
-
-  const LESSONS = [
-    {
-      id: 'rook',
-      icon: '♜',
-      title: 'Ладья',
-      subtitle: 'Ходит по прямым линиям',
-      fen: '8/8/8/3R4/8/8/8/8 w - - 0 1',
-      playerColor: 'w',
-      kind: 'move',
-      task: 'Ладья ходит по горизонтали и вертикали на любое количество клеток. Сделай ход ладьёй d5 → f5 (вправо по горизонтали).',
-      hint: 'Нажми на ладью на d5, потом на клетку f5.',
-      goal: { from: [3, 3], to: [3, 5] }
-    },
-    {
-      id: 'bishop',
-      icon: '♝',
-      title: 'Слон',
-      subtitle: 'Ходит по диагоналям',
-      fen: '8/8/8/3B4/8/8/8/8 w - - 0 1',
-      playerColor: 'w',
-      kind: 'move',
-      task: 'Слон ходит только по диагонали. Сделай ход слоном d5 → g8 (вверх-вправо).',
-      hint: 'Нажми на слона d5, потом на g8 — по диагонали.',
-      goal: { from: [3, 3], to: [0, 6] }
-    },
-    {
-      id: 'queen',
-      icon: '♛',
-      title: 'Ферзь',
-      subtitle: 'Самый сильный',
-      fen: '8/8/8/3Q4/8/8/8/8 w - - 0 1',
-      playerColor: 'w',
-      kind: 'move',
-      task: 'Ферзь ходит и по прямым, и по диагоналям. Сделай ход ферзём d5 → d8 (вверх по вертикали).',
-      hint: 'Нажми на ферзя d5, потом на d8.',
-      goal: { from: [3, 3], to: [0, 3] }
-    },
-    {
-      id: 'knight',
-      icon: '♞',
-      title: 'Конь',
-      subtitle: 'Ходит буквой «Г»',
-      fen: '8/8/8/3N4/8/8/8/8 w - - 0 1',
-      playerColor: 'w',
-      kind: 'move',
-      task: 'Конь ходит буквой «Г»: две клетки по одной оси и одна по другой. Сделай ход конём d5 → e7.',
-      hint: 'Нажми на коня d5, потом на e7 (две вверх, одна вправо).',
-      goal: { from: [3, 3], to: [1, 4] }
-    },
-    {
-      id: 'king',
-      icon: '♚',
-      title: 'Король',
-      subtitle: 'Ходит на одну клетку',
-      fen: '8/8/8/3K4/8/8/8/8 w - - 0 1',
-      playerColor: 'w',
-      kind: 'move',
-      task: 'Король ходит на одну клетку в любую сторону. Сделай ход королём d5 → e5.',
-      hint: 'Нажми на короля d5, потом на e5 (вправо).',
-      goal: { from: [3, 3], to: [3, 4] }
-    },
-    {
-      id: 'pawn',
-      icon: '♟',
-      title: 'Пешка',
-      subtitle: 'Ходит вперёд, бьёт по диагонали',
-      fen: '8/8/8/8/8/8/4P3/8 w - - 0 1',
-      playerColor: 'w',
-      kind: 'move',
-      task: 'Пешка ходит только вперёд. Сделай ход пешкой e2 → e4 (на две клетки — так можно только с начальной позиции).',
-      hint: 'Нажми на пешку e2, потом на e4.',
-      goal: { from: [6, 4], to: [4, 4] }
-    },
-    {
-      id: 'capture',
-      icon: '✕',
-      title: 'Взятие',
-      subtitle: 'Как брать фигуры',
-      fen: '8/8/8/8/4p3/3P4/8/8 w - - 0 1',
-      playerColor: 'w',
-      kind: 'move',
-      task: 'Пешка бьёт по диагонали. Возьми чёрную пешку на e4 своей пешкой d3.',
-      hint: 'Нажми на белую пешку d3, потом на чёрную пешку e4 (по диагонали).',
-      goal: { from: [5, 3], to: [4, 4] }
-    },
-    {
-      id: 'check',
-      icon: '⚠',
-      title: 'Шах',
-      subtitle: 'Угроза королю',
-      fen: '8/8/8/8/8/8/4R3/4k3 w - - 0 1',
-      playerColor: 'w',
-      kind: 'move',
-      task: 'Шах — это угроза королю. Поставь шах чёрному королю: переведи ладью e2 → e8.',
-      hint: 'Ладья встанет на одну вертикаль с королём — это шах.',
-      goal: { from: [6, 4], to: [0, 4] }
-    },
-    {
-      id: 'mate1',
-      icon: '🏆',
-      title: 'Мат ферзём',
-      subtitle: 'Простейший мат',
-      fen: '8/8/8/8/8/8/5Q2/6k1 w - - 0 1',
-      playerColor: 'w',
-      kind: 'move',
-      task: 'Мат — это шах, от которого нет защиты. Поставь мат чёрному королю: ферзь f2 → f1.',
-      hint: 'Ферзь подойдёт вплотную к королю с шахом, и у него не будет ходов.',
-      goal: { from: [6, 5], to: [7, 5] }
-    },
-    {
-      id: 'mate2',
-      icon: '🏆',
-      title: 'Мат ладьёй',
-      subtitle: 'Мат в один ход',
-      fen: '7k/8/8/8/8/8/8/R6K w - - 0 1',
-      playerColor: 'w',
-      kind: 'move',
-      task: 'Поставь мат чёрному королю на h8: ладья a1 → a8.',
-      hint: 'Ладья встанет на 8-ю горизонталь и отрежет короля.',
-      goal: { from: [7, 0], to: [0, 0] }
-    },
-    {
-      id: 'pat',
-      icon: '½',
-      title: 'Пат',
-      subtitle: 'Ничья без шаха',
-      fen: '7k/5Q2/6K1/8/8/8/8/8 b - - 0 1',
-      playerColor: 'b',
-      kind: 'free',
-      task: 'Пат — это позиция, когда у игрока нет ни одного легального хода, но при этом нет шаха. В такой ситуации партия заканчивается ничьей. Это важное правило: иногда слабейшая сторона спасается патом.',
-      hint: 'Просто нажми «Понятно →», когда изучишь позицию.',
-      goal: null
-    },
-    {
-      id: 'pin',
-      icon: '📌',
-      title: 'Связка (пин)',
-      subtitle: 'Фигура блокирует другую',
-      fen: '8/8/8/8/8/8/1q6/4K2R w - - 0 1',
-      playerColor: 'w',
-      kind: 'free',
-      task: 'Связка — это когда фигура не может двигаться, потому что за ней находится более ценная фигура (например, король). На этом примере чёрный ферзь b2 связан с королём e1... на самом деле здесь белый король в шахе. Связка — важный тактический приём, изучи её в партиях.',
-      hint: 'Связка часто выигрывает фигуру: связанная фигура не может двигаться или теряет защиту.',
-      goal: null
-    }
-  ];
-
-  function initLearn() {
-    renderLearnSidebar();
-    learnCurrentIndex = 0;
-    // Продолжим с первого непройденного
-    for (let i = 0; i < LESSONS.length; i++) {
-      if (!learnProgress[LESSONS[i].id]) { learnCurrentIndex = i; break; }
-    }
-    loadLesson(learnCurrentIndex);
-  }
-  window.initLearn = initLearn;
-
-  function renderLearnSidebar() {
-    const list = document.getElementById('learnList');
-    if (!list) return;
-    list.innerHTML = LESSONS.map((l, i) => {
-      const done = !!learnProgress[l.id];
-      return `<div class="learnItem" data-idx="${i}" onclick="selectLesson(${i})">
-        <span class="lIcon">${l.icon}</span>
-        <span class="lTitle">${escapeHtml(l.title)}</span>
-        ${done ? '<span class="lDone">✓</span>' : ''}
-      </div>`;
-    }).join('');
-    updateLearnProgress();
-    highlightLearnItem();
-  }
-  function highlightLearnItem() {
-    document.querySelectorAll('.learnItem').forEach(el => {
-      el.classList.toggle('active', +el.dataset.idx === learnCurrentIndex);
-    });
-  }
-  function updateLearnProgress() {
-    const done = LESSONS.filter(l => learnProgress[l.id]).length;
-    const total = LESSONS.length;
-    const pct = total ? Math.round((done / total) * 100) : 0;
-    const bar = document.getElementById('learnProgressBar');
-    if (bar) bar.firstElementChild.style.width = pct + '%';
-    const txt = document.getElementById('learnProgressText');
-    if (txt) txt.textContent = `Пройдено: ${done} из ${total}`;
-  }
-  function selectLesson(idx) {
-    if (idx < 0 || idx >= LESSONS.length) return;
-    learnCurrentIndex = idx;
-    loadLesson(idx);
-  }
-  window.selectLesson = selectLesson;
-
-  function loadLesson(idx) {
-    const lesson = LESSONS[idx];
-    if (!lesson) return;
-    document.getElementById('learnTitle').textContent = lesson.title;
-    document.getElementById('learnSubtitle').textContent = lesson.subtitle;
-    document.getElementById('learnTask').textContent = lesson.task;
-    const hintEl = document.getElementById('learnHint');
-    hintEl.textContent = lesson.hint || '';
-    hintEl.classList.toggle('show', !!lesson.hint);
-    const fb = document.getElementById('learnFeedback');
-    fb.className = 'learnFeedback';
-    fb.textContent = '';
-    const skipBtn = document.getElementById('learnSkipBtn');
-    skipBtn.textContent = learnProgress[lesson.id] ? 'Далее →' : 'Пропустить →';
-    learnState = {
-      lesson,
-      fen: lesson.fen,
-      selected: null,
-      legalMoves: [],
-      lastMove: null,
-      completed: !!learnProgress[lesson.id]
-    };
-    renderLearnBoard();
-    highlightLearnItem();
-  }
-
-  function renderLearnBoard() {
-    const el = document.getElementById('learnBoard');
-    if (!el || !learnState) return;
-    const state = parseFen(learnState.fen);
-    el.innerHTML = '';
-    const flip = learnState.lesson.playerColor === 'b';
-    for (let dr = 0; dr < 8; dr++) {
-      for (let dc = 0; dc < 8; dc++) {
-        const r = flip ? 7 - dr : dr;
-        const c = flip ? 7 - dc : dc;
-        const sq = document.createElement('div');
-        sq.className = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
-        sq.dataset.r = r; sq.dataset.c = c;
-        if (learnState.lastMove) {
-          const lm = learnState.lastMove;
-          if ((lm.from[0] === r && lm.from[1] === c) || (lm.to[0] === r && lm.to[1] === c)) sq.classList.add('lastmove');
-        }
-        if (learnState.selected && learnState.selected[0] === r && learnState.selected[1] === c) sq.classList.add('sel');
-        if (learnState.legalMoves.some(([mr, mc]) => mr === r && mc === c)) {
-          sq.classList.add('hint');
-          if (state.board[r][c]) sq.classList.add('capture');
-        }
-        // Подсветка цели — куда надо пойти
-        if (learnState.lesson.goal && !learnState.completed) {
-          const g = learnState.lesson.goal;
-          if (g.to[0] === r && g.to[1] === c) sq.classList.add('goal');
-        }
-        const p = state.board[r][c];
-        if (p) {
-          const piece = document.createElement('span');
-          piece.className = 'piece ' + (isWhitePiece(p) ? 'w' : 'b');
-          piece.textContent = EMOJI[p];
-          sq.appendChild(piece);
-        }
-        if (dr === 7) { const e = document.createElement('span'); e.className='coord-f'; e.textContent = String.fromCharCode(97 + c); sq.appendChild(e); }
-        if (dc === 0) { const e = document.createElement('span'); e.className='coord-r'; e.textContent = 8 - r; sq.appendChild(e); }
-        sq.addEventListener('click', () => onLearnSquareClick(r, c));
-        el.appendChild(sq);
-      }
-    }
-  }
-
-  function onLearnSquareClick(r, c) {
-    if (!learnState) return;
-    if (learnState.completed && learnState.lesson.kind === 'free') return;
-    const lesson = learnState.lesson;
-    const state = parseFen(learnState.fen);
-    const mySide = lesson.playerColor === 'w';
-    const myTurn = state.turn === lesson.playerColor;
-    if (!myTurn) return;
-
-    const p = state.board[r][c];
-    if (learnState.selected) {
-      const isLegal = learnState.legalMoves.some(([mr, mc]) => mr === r && mc === c);
-      if (isLegal) {
-        const from = learnState.selected;
-        const nextState = applyMoveToCopy(state, from, [r, c]);
-        learnState.fen = toFen(nextState);
-        learnState.lastMove = { from, to: [r, c] };
-        learnState.selected = null;
-        learnState.legalMoves = [];
-        // Проверим цель
-        if (lesson.goal && from[0] === lesson.goal.from[0] && from[1] === lesson.goal.from[1] && r === lesson.goal.to[0] && c === lesson.goal.to[1]) {
-          learnState.completed = true;
-          learnProgress[lesson.id] = true;
-          saveLearnProgress(learnProgress);
-          renderLearnSidebar();
-          showLearnFeedback('✓ Верно! Урок пройден.', 'ok');
-          const skipBtn = document.getElementById('learnSkipBtn');
-          skipBtn.textContent = 'Далее →';
-        } else {
-          showLearnFeedback('Ход сделан. Попробуй ещё раз, чтобы попасть в цель.', '');
-        }
-        renderLearnBoard();
-        return;
-      }
-    }
-    if (p && isWhitePiece(p) === mySide) {
-      learnState.selected = [r, c];
-      learnState.legalMoves = legalMovesFor(state, r, c);
-      renderLearnBoard();
-    } else {
-      learnState.selected = null;
-      learnState.legalMoves = [];
-      renderLearnBoard();
-    }
-  }
-
-  function showLearnFeedback(text, cls) {
-    const fb = document.getElementById('learnFeedback');
-    fb.textContent = text;
-    fb.className = 'learnFeedback show ' + (cls || '');
-  }
-  function learnReset() {
-    if (!learnState) return;
-    learnState.fen = learnState.lesson.fen;
-    learnState.selected = null;
-    learnState.legalMoves = [];
-    learnState.lastMove = null;
-    const fb = document.getElementById('learnFeedback');
-    fb.className = 'learnFeedback';
-    fb.textContent = '';
-    renderLearnBoard();
-  }
-  window.learnReset = learnReset;
-  function learnSkip() {
-    if (learnCurrentIndex < LESSONS.length - 1) {
-      learnCurrentIndex++;
-      loadLesson(learnCurrentIndex);
-    } else {
-      showLearnFeedback('✓ Все уроки пройдены! Отличная работа.', 'ok');
-    }
-  }
-  window.learnSkip = learnSkip;
-  function learnPrev() {
-    if (learnCurrentIndex > 0) { learnCurrentIndex--; loadLesson(learnCurrentIndex); }
-  }
-  window.learnPrev = learnPrev;
-  function learnNext() {
-    if (learnCurrentIndex < LESSONS.length - 1) { learnCurrentIndex++; loadLesson(learnCurrentIndex); }
-  }
-  window.learnNext = learnNext;
 
   setInterval(() => {
     const localNow = Date.now();
