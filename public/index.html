@@ -33,6 +33,7 @@
   header.topbar .userBtn .avatar { width:20px; height:20px; border-radius:50%; background:var(--accent); color:#161512; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; }
   .crown { color:var(--gold); margin-right:2px; text-shadow:0 0 4px rgba(255,213,79,.6); }
   .modMark { display:inline-block; color:#e5484d; font-weight:900; margin:0 3px 0 1px; font-size:13px; line-height:1; text-shadow:0 0 4px rgba(229,72,77,.7); vertical-align:middle; }
+  .botBadge { display:inline-flex; align-items:center; gap:3px; padding:1px 7px; border-radius:10px; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; background:linear-gradient(180deg,#4a3d8f,#2a2557); color:#c9bfff; border:1px solid #6f5fbf; }
   .onlineDot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#629924; margin-right:5px; flex-shrink:0; vertical-align:middle; box-shadow:0 0 4px rgba(98,153,36,.7); }
   .offlineDot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#555; margin-right:5px; flex-shrink:0; vertical-align:middle; }
   .backToGameBtn { background:var(--green); border:none; color:#fff; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:700; display:none; align-items:center; gap:6px; white-space:nowrap; animation:pulse 1.6s infinite; }
@@ -58,8 +59,8 @@
   #loginScreen input { flex:1; min-width:0; }
   #loginMsg { color:#e58a8a; min-height:20px; text-align:center; font-size:13px; }
   .hint-text { color:var(--muted); font-size:12px; text-align:center; }
-  .homeWrap { display:grid; grid-template-columns:280px 1fr 240px; gap:20px; max-width:1140px; margin:24px auto 0; align-items:start; }
-  @media (max-width:980px) { .homeWrap { grid-template-columns:1fr; } }
+  .homeWrap { display:grid; grid-template-columns:280px 1fr 280px; gap:20px; max-width:1200px; margin:24px auto 0; align-items:start; }
+  @media (max-width:1050px) { .homeWrap { grid-template-columns:1fr; } }
   .homeLeft,.homeRight { display:flex; flex-direction:column; gap:12px; }
   .sideTitle { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; margin-bottom:8px; }
   .topArenaCard { background:var(--panel); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:6px; padding:10px 12px; cursor:pointer; transition:.15s; min-height:54px; }
@@ -68,6 +69,15 @@
   .topArenaCard .taInfo { display:flex; justify-content:space-between; font-size:12px; color:var(--muted); }
   .topArenaCard.live { border-left-color:var(--green-2); }
   .topArenaCard.live .taInfo b { color:var(--green-2); }
+  .lobbyActions { display:flex; flex-direction:column; gap:8px; }
+  .lobbyActionBtn { display:flex; align-items:center; gap:10px; background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:12px 14px; color:var(--text-bright); cursor:pointer; text-align:left; font-size:13px; font-weight:600; transition:.15s; min-height:52px; }
+  .lobbyActionBtn:hover { background:var(--panel-hover); border-color:var(--accent); }
+  .lobbyActionBtn .laIcon { font-size:20px; flex-shrink:0; }
+  .lobbyActionBtn .laTitle { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lobbyActionBtn.botBtn { background:linear-gradient(180deg,#3a2f6e,#25204a); border-color:#6f5fbf; }
+  .lobbyActionBtn.botBtn:hover { background:linear-gradient(180deg,#4a3d8f,#2f2a5e); border-color:#8a78d9; }
+  .lobbyActionBtn.challengeBtn { background:linear-gradient(180deg,#3a2f1c,#26200f); border-color:var(--accent); }
+  .lobbyActionBtn.challengeBtn:hover { background:linear-gradient(180deg,#4a3d24,#2f2714); }
   .statsBox { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:12px 14px; }
   .statsBox .statRow { display:flex; justify-content:space-between; align-items:baseline; padding:6px 0; border-bottom:1px solid rgba(58,56,51,.4); min-height:30px; }
   .statsBox .statRow:last-child { border-bottom:none; }
@@ -135,8 +145,6 @@
   .arenasScroller { overflow-x:auto; overflow-y:hidden; position:relative; }
   .timeRow { display:flex; padding:0; border-bottom:1px solid var(--border); background:var(--panel-2); position:sticky; top:0; z-index:2; height:32px; }
   .timeCell { color:var(--muted); font-size:11px; text-align:left; font-weight:500; flex-shrink:0; padding:0; border-right:1px solid rgba(58,56,51,.5); box-sizing:border-box; position:relative; overflow:visible; }
-  .timeTick { position:absolute; top:8px; width:33.3333%; white-space:nowrap; text-align:center; transform:translateX(-50%); pointer-events:none; }
-  .timeTick.first { transform:none; text-align:left; padding-left:4px; box-sizing:border-box; }
   .timeCell.now { color:var(--accent); font-weight:700; background:rgba(191,129,29,.08); }
   .arenaRowGrid { position:relative; height:52px; border-bottom:1px solid rgba(58,56,51,.35); }
   .arenaRowGrid:last-child { border-bottom:none; }
@@ -149,12 +157,12 @@
   .arenaBlock.live .tname::before { content:'● '; animation:pulse 1.5s infinite; }
   .arenaBlock.live { box-shadow:0 0 0 2px rgba(255,255,255,.3), 0 0 12px rgba(255,200,80,.35); }
   .arenaBlock.joined { outline:2px solid #fff; outline-offset:-2px; }
+  .arenaBlock.botFriendly { box-shadow:0 0 0 2px rgba(160,140,255,.5); }
   @keyframes pulse { 50% { opacity:.4 } }
   .arenaBlock.bullet { background:linear-gradient(180deg,#c94a3a,#a53030); }
   .arenaBlock.blitz  { background:linear-gradient(180deg,#7db63a,#5a8a22); }
   .arenaBlock.rapid  { background:linear-gradient(180deg,#4a9ce8,#2f77b8); }
   .arenaBlock.classical { background:linear-gradient(180deg,#6f5fbf,#4a3d8f); }
-  .arenaDebug { position:absolute; bottom:-14px; left:0; font-size:10px; color:#e5484d; white-space:nowrap; pointer-events:none; }
   .nowLine { position:absolute; top:0; bottom:0; width:2px; background:#e5484d; z-index:3; pointer-events:none; }
   .nowLine::before { content:'▼'; position:absolute; top:-2px; left:50%; transform:translateX(-50%); color:#e5484d; font-size:10px; }
   .arenaStatusRow { display:flex; align-items:center; gap:16px; padding:10px 14px; background:var(--panel-2); border-radius:6px; border-left:4px solid var(--accent); }
@@ -203,6 +211,7 @@
   .arenaTableRow:hover { background:var(--panel-hover); }
   .arenaTableRow.me { background:rgba(191,129,29,.12); border-left:3px solid var(--accent); padding-left:9px; }
   .arenaTableRow.paused { opacity:.55; }
+  .arenaTableRow.botRow { background:rgba(74,61,143,.08); }
   .arenaTableRow .place { color:var(--muted); font-weight:700; font-size:14px; overflow:hidden; }
   .arenaTableRow .place.top1 { color:#ffd54f; }
   .arenaTableRow .place.top2 { color:#d0d0d0; }
@@ -234,14 +243,8 @@
   .arenaLeft   { width:280px; min-width:280px; max-width:280px; display:flex; flex-direction:column; gap:12px; }
   .arenaCenter { width:480px; min-width:480px; max-width:480px; display:flex; flex-direction:column; gap:10px; }
   .arenaRight  { width:300px; min-width:300px; max-width:300px; display:flex; flex-direction:column; }
-  @media (max-width:1110px) {
-    .arenaLeft { width:260px; min-width:260px; max-width:260px; }
-    .arenaCenter { width:auto; min-width:0; max-width:none; }
-    .arenaRight { width:280px; min-width:280px; max-width:280px; }
-  }
-  @media (max-width:940px) {
-    .arenaLeft, .arenaCenter, .arenaRight { width:100%; min-width:0; max-width:none; }
-  }
+  @media (max-width:1110px) { .arenaLeft { width:260px; min-width:260px; max-width:260px; } .arenaCenter { width:auto; min-width:0; max-width:none; } .arenaRight { width:280px; min-width:280px; max-width:280px; } }
+  @media (max-width:940px) { .arenaLeft, .arenaCenter, .arenaRight { width:100%; min-width:0; max-width:none; } }
   .arenaRightCol { height:576px; min-height:576px; max-height:576px; background:var(--panel); border:1px solid var(--border); border-radius:6px; display:flex; flex-direction:column; overflow:hidden; }
   .arenaGamesHeader { flex:0 0 auto; padding:8px 12px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
   .arenaTopGame { flex:0 0 auto; padding:8px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:6px; box-sizing:border-box; }
@@ -387,6 +390,7 @@
   .profileHead { display:flex; align-items:center; gap:20px; padding:20px; background:var(--panel); border:1px solid var(--border); border-radius:8px; margin-bottom:16px; }
   .profileAvatar { width:72px; height:72px; border-radius:50%; background:var(--accent); color:#161512; display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:700; flex-shrink:0; position:relative; }
   .profileAvatar .pCrown { position:absolute; top:-20px; left:50%; transform:translateX(-50%); font-size:28px; }
+  .profileAvatar.botAvatar { background:linear-gradient(180deg,#4a3d8f,#2a2557); color:#c9bfff; }
   .profileHead .nameBlock h2 { margin:0 0 4px; color:var(--text-bright); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .profileHead .nameBlock .sub { color:var(--muted); font-size:13px; }
   .roleBadge { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; border:1px solid currentColor; }
@@ -493,20 +497,21 @@
     .arenasHeader h1 { font-size:24px; }
     .arenasHeader .ahNow { font-size:13px; }
     .learnWrap { grid-template-columns:1fr; }
+    .homeWrap { grid-template-columns:1fr; }
   }
   @media (max-width: 380px) { .piece { font-size:min(10vw, 40px); } }
 
-  /* Модалка выбора бота */
   .botModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); align-items:center; justify-content:center; z-index:200; padding:20px; }
   .botModal.show { display:flex; }
-  .botModalBox { background:#262522; border:1px solid #3a3833; border-radius:10px; padding:22px; max-width:440px; width:100%; color:#e8e6e3; }
+  .botModalBox { background:#262522; border:1px solid #3a3833; border-radius:10px; padding:22px; max-width:460px; width:100%; color:#e8e6e3; max-height:90vh; overflow-y:auto; }
   .botModalBox h3 { margin:0 0 14px; font-weight:600; }
   .botModalLabel { font-size:12px; color:#7d7a72; margin-bottom:10px; text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
-  .botLevelsGrid { display:flex; gap:8px; margin-bottom:16px; }
-  .botLevelsGrid button { flex:1; padding:10px 6px; border-radius:6px; border:1px solid #3a3833; background:#2d2c29; color:#e8e6e3; cursor:pointer; font-weight:600; }
+  .botLevelsGrid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:16px; }
+  .botLevelsGrid button { padding:12px 10px; border-radius:6px; border:1px solid #3a3833; background:#2d2c29; color:#e8e6e3; cursor:pointer; font-weight:600; }
   .botLevelsGrid button.active { border-color:#bf811d; background:rgba(191,129,29,.15); }
   .botLevelsGrid button .btitle { font-size:13px; }
   .botLevelsGrid button .brating { font-size:11px; color:#7d7a72; margin-top:2px; }
+  .botLevelsGrid button.masterBtn.active { border-color:#a56ce8; background:rgba(165,108,232,.15); }
   .botTimesGrid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:18px; }
   .botTimesGrid button { padding:8px 4px; border-radius:6px; border:1px solid #3a3833; background:#2d2c29; color:#e8e6e3; cursor:pointer; font-weight:600; font-size:13px; }
   .botTimesGrid button.active { border-color:#bf811d; background:rgba(191,129,29,.15); }
@@ -566,7 +571,18 @@
         <div class="lobbyContent" id="lobbyTabContent"></div>
       </div>
       <aside class="homeRight">
-        <div class="sideTitle">📊 Статистика</div>
+        <div class="sideTitle">Действия</div>
+        <div class="lobbyActions">
+          <button class="lobbyActionBtn challengeBtn" onclick="switchLobbyTab('create')">
+            <span class="laIcon">⚔</span>
+            <span class="laTitle">Создать запрос на игру</span>
+          </button>
+          <button class="lobbyActionBtn botBtn" onclick="openBotDialog()">
+            <span class="laIcon">🤖</span>
+            <span class="laTitle">Сыграть с компьютером</span>
+          </button>
+        </div>
+        <div class="sideTitle" style="margin-top:16px">📊 Статистика</div>
         <div class="statsBox">
           <div class="statRow"><span class="lbl">Игроков на сайте</span><span class="val" id="statOnline">0</span></div>
           <div class="statRow"><span class="lbl">Партий на сайте</span><span class="val" id="statGames">0</span></div>
@@ -805,7 +821,7 @@
 
 <div id="botDialog" class="botModal">
   <div class="botModalBox">
-    <h3>🤖 Игра с ботом</h3>
+    <h3>🤖 Игра с компьютером</h3>
     <div class="botModalLabel">Уровень</div>
     <div id="botLevels" class="botLevelsGrid"></div>
     <div class="botModalLabel">Контроль времени</div>
@@ -850,7 +866,9 @@
     } catch (e) {}
   }
   const _lastSound = { move: 0, capture: 0, check: 0, mate: 0, draw: 0, win: 0, lose: 0, start: 0 };
-  const SOUND_COOLDOWN = 80;
+  const SOUND_COOLDOWN = 100;
+  let lastSoundSan = '';
+  let lastSoundTime = 0;
   function _canPlay(key) {
     const now = performance.now();
     if (now - _lastSound[key] < SOUND_COOLDOWN) return false;
@@ -867,6 +885,9 @@
   function sndStart()   { if (!_canPlay('start')) return;   playTone(523, 0.10, 'sine', 0.18); playTone(659, 0.12, 'sine', 0.16, 0.09); playTone(784, 0.16, 'sine', 0.14, 0.18); }
   function playMoveSound(san) {
     if (!san) return;
+    const now = performance.now();
+    if (san === lastSoundSan && now - lastSoundTime < 300) return;
+    lastSoundSan = san; lastSoundTime = now;
     if (san.includes('#'))      sndMate();
     else if (san.includes('+')) sndCheck();
     else if (san.includes('x')) sndCapture();
@@ -883,6 +904,7 @@
   let opponentRating = null;
   let opponentIsAdmin = false;
   let opponentOnline = true;
+  let opponentIsBot = false;
   let isBotGame = false;
   let currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
   let selected = null;
@@ -923,19 +945,22 @@
   let watchingGame = null;
   let dragging = null;
   let dragStartPos = null;
-  let premove = null;
+  let premove = null;           // { from, to, san }
+  let pendingPremove = null;    // отложенный премьюв для отправки
   let rematchRequested = false;
 
   const EMOJI = { 'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙','k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟' };
 
   function escapeHtml(s) { return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
-  function nickHtml(username, isAdminFlag, isModFlag) {
+  function nickHtml(username, isAdminFlag, isModFlag, isBotFlag) {
     if (!username) return '';
     const admin = (typeof isAdminFlag === 'boolean') ? isAdminFlag : (username === 'PeshkaSasha' || username === 'admin');
     const mod = (typeof isModFlag === 'boolean') ? isModFlag : false;
+    const bot = !!isBotFlag;
     const crown = admin ? '<span class="crown">👑</span>' : '';
     const mark = (!admin && mod) ? '<span class="modMark" title="Модератор">!</span>' : '';
-    return crown + mark + escapeHtml(username);
+    const botTag = bot ? '<span class="botBadge" style="margin-right:4px">🤖 BOT</span>' : '';
+    return botTag + crown + mark + escapeHtml(username);
   }
   function onlineDotHtml(online) {
     return online
@@ -1173,12 +1198,16 @@
   function checkGameEnd(state) { const sideToMoveWhite = state.turn === 'w'; if (!hasAnyLegalMove(state, sideToMoveWhite)) { if (inCheck(state, sideToMoveWhite)) { sndMate(); endGame(sideToMoveWhite ? 'b' : 'w', 'Мат', true, currentGameIsArena); } else { sndDraw(); endGame(null, 'Пат', true, currentGameIsArena); } } }
   function tryApplyPremove() {
     if (!premove) return;
-    const state = parseFen(currentFen); if (state.turn !== myColor) return;
-    const { from, to } = premove; const p = state.board[from[0]][from[1]]; premove = null;
-    if (!p || isWhitePiece(p) !== (myColor === 'w')) { lastBoardHash = ''; renderBoard(); return; }
-    const leg = legalMovesFor(state, from[0], from[1]); const ok = leg.some(([r, c]) => r === to[0] && c === to[1]);
-    if (!ok) { lastBoardHash = ''; renderBoard(); return; }
-    setTimeout(() => applyUserMove(from, to, false), 30);
+    const state = parseFen(currentFen);
+    if (state.turn !== myColor) return;
+    const p = state.board[premove.from[0]][premove.from[1]];
+    if (!p || isWhitePiece(p) !== (myColor === 'w')) { premove = null; lastBoardHash = ''; renderBoard(); return; }
+    const leg = legalMovesFor(state, premove.from[0], premove.from[1]);
+    const ok = leg.some(([r, c]) => r === premove.to[0] && c === premove.to[1]);
+    if (!ok) { premove = null; lastBoardHash = ''; renderBoard(); return; }
+    const mv = premove;
+    premove = null;
+    setTimeout(() => { applyUserMove(mv.from, mv.to, false); }, 50);
   }
 
   function show(screen) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); const el = document.getElementById(screen); if (el) el.classList.add('active'); }
@@ -1218,7 +1247,7 @@
     if (!me) return;
     document.getElementById('userBtn').style.display = 'flex';
     document.getElementById('logoutBtn').style.display = 'block';
-    document.getElementById('userName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod) + ' (' + me.rating + ')';
+    document.getElementById('userName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod, me.isBot) + ' (' + me.rating + ')';
     document.getElementById('userAvatar').textContent = me.username.charAt(0).toUpperCase();
   }
   function logout() { try { localStorage.removeItem('kingside_login'); localStorage.removeItem('kingside_active_lobby'); } catch (e) {} location.reload(); }
@@ -1234,7 +1263,8 @@
       box.innerHTML = list.map(a => {
         const cls = 'topArenaCard' + (a.phase === 'live' ? ' live' : '');
         const phaseText = a.phase === 'live' ? 'идёт сейчас' : 'ждёт старта';
-        return `<div class="${cls}" onclick="openArenaPage('${a.id}')"><div class="taName">${escapeHtml(a.name)}</div><div class="taInfo"><span>${a.timeControl}+${a.increment}</span><span><b>${a.participantsCount}</b> 👥 · ${phaseText}</span></div></div>`;
+        const botTag = a.botFriendly ? ' 🤖' : '';
+        return `<div class="${cls}" onclick="openArenaPage('${a.id}')"><div class="taName">${escapeHtml(a.name)}${botTag}</div><div class="taInfo"><span>${a.timeControl}+${a.increment}</span><span><b>${a.participantsCount}</b> 👥 · ${phaseText}</span></div></div>`;
       }).join('');
     });
   }
@@ -1258,7 +1288,6 @@
         <div class="quickGrid">
           ${[{t:1,i:0,name:'Пуля'},{t:2,i:1,name:'Пуля'},{t:3,i:0,name:'Блиц'},{t:3,i:2,name:'Блиц'},{t:5,i:0,name:'Блиц'},{t:5,i:3,name:'Блиц'},{t:10,i:0,name:'Рапид'},{t:10,i:5,name:'Рапид'},{t:15,i:10,name:'Рапид'},{t:30,i:0,name:'Классика'},{t:30,i:20,name:'Классика'}].map(({t,i,name}) => `<button class="quickBtn" onclick="quickStart(${t},${i})"><div class="qb-time">${t}+${i}</div><div class="qb-name">${name}</div></button>`).join('')}
           <button class="quickBtn custom" onclick="showCustomGame()"><div class="qb-time">Своя</div><div class="qb-name">игра</div></button>
-          <button class="quickBtn" style="grid-column:1/-1;background:linear-gradient(180deg,#4a3d8f,#2a2557);border-color:#6f5fbf" onclick="openBotDialog()"><div class="qb-time" style="font-size:18px;color:#e8e6e3">🤖 Играть с ботом</div><div class="qb-name" style="color:#bfb6ff">Лёгкий · Средний · Сложный</div></button>
         </div>
         <div id="customGamePanel" style="display:none; margin-top:14px; padding:14px; background:var(--panel-2); border-radius:6px;">
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
@@ -1271,29 +1300,19 @@
         </div>`;
       return;
     }
-
     socket.emit('getLobbies', (list) => {
       el.innerHTML = '';
       const current = new Map();
-      if (list && list.length) {
-        for (const l of list) if (l.status === 'waiting') current.set(l.id, l);
-      }
+      if (list && list.length) for (const l of list) if (l.status === 'waiting') current.set(l.id, l);
       const now = Date.now();
-      for (const [id, data] of knownWaitingLobbies) {
-        if (!current.has(id)) disappearedLobbies.set(id, { data, removedAt: now + 5000 });
-      }
+      for (const [id, data] of knownWaitingLobbies) if (!current.has(id)) disappearedLobbies.set(id, { data, removedAt: now + 5000 });
       knownWaitingLobbies = current;
-      for (const [id, info] of disappearedLobbies) {
-        if (Date.now() > info.removedAt) disappearedLobbies.delete(id);
-      }
-
+      for (const [id, info] of disappearedLobbies) if (Date.now() > info.removedAt) disappearedLobbies.delete(id);
       const allItems = [];
       for (const [id, l] of current) allItems.push({ kind: 'waiting', id, data: l });
       for (const [id, info] of disappearedLobbies) allItems.push({ kind: 'started', id, data: info.data });
       if (!allItems.length) { el.innerHTML = '<div class="arenaEmpty">Нет активных вызовов.</div>'; return; }
-
       allItems.sort((a, b) => { if (a.kind !== b.kind) return a.kind === 'started' ? -1 : 1; return (b.data.time || 0) - (a.data.time || 0); });
-
       const wrap = document.createElement('div'); wrap.className = 'lobbyList';
       for (const item of allItems) {
         const l = item.data;
@@ -1301,9 +1320,7 @@
         const row = document.createElement('div');
         row.className = 'lobbyRow' + (isMine && item.kind === 'waiting' ? ' mine' : '');
         if (item.kind === 'started') {
-          row.style.opacity = '0.45';
-          row.style.cursor = 'default';
-          row.style.transition = 'opacity .4s';
+          row.style.opacity = '0.45'; row.style.cursor = 'default'; row.style.transition = 'opacity .4s';
           row.innerHTML = `<div class="icon">⚔</div><div class="name">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod)}</div><div class="time">${l.time}+${l.inc}</div><div class="mode" style="color:var(--green-2);font-weight:600;">партия началась</div><div class="action"></div>`;
         } else {
           row.style.cursor = isMine ? 'pointer' : 'default';
@@ -1319,25 +1336,20 @@
         wrap.appendChild(row);
       }
       el.appendChild(wrap);
-
-      if (disappearedLobbies.size) {
-        setTimeout(() => { if (currentLobbyTab === 'waiting') renderLobbyTab(); }, 5200);
-      }
+      if (disappearedLobbies.size) setTimeout(() => { if (currentLobbyTab === 'waiting') renderLobbyTab(); }, 5200);
     });
   }
   function refreshLobbies() { if (document.getElementById('lobbyScreen').classList.contains('active')) renderLobbyTab(); }
   function quickStart(time, inc) {
     socket.emit('createLobby', { time, inc }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      if (res.matched) {
-        lobbyId = res.id;
-        return;
-      }
+      if (res.matched) { lobbyId = res.id; return; }
       lobbyId = res.id; myColor = 'w';
       currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
       moveHistory = []; moveFens = []; viewIndex = -1; lastMove = null;
       gameActive = false; gameEnded = false; boardFlipped = false;
       premove = null; opponentName = '—'; opponentRating = null; opponentIsAdmin = false;
+      opponentIsBot = false;
       currentGameIsArena = false; currentArenaName = null; lastBoardHash = '';
       rematchRequested = false; isBotGame = false;
       resetGameUI(); hideGameResultBar();
@@ -1356,7 +1368,7 @@
     document.getElementById('topRating').textContent = '';
     document.getElementById('topDot').className = 'dot';
     document.getElementById('topTime').textContent = '--:--';
-    document.getElementById('bottomName').innerHTML = me ? nickHtml(me.username, me.isAdmin, me.isMod) : '—';
+    document.getElementById('bottomName').innerHTML = me ? nickHtml(me.username, me.isAdmin, me.isMod, me.isBot) : '—';
     document.getElementById('bottomRating').textContent = me ? me.rating : '';
     document.getElementById('bottomDot').className = 'dot';
     document.getElementById('bottomTime').textContent = '--:--';
@@ -1365,7 +1377,7 @@
     gameActive = false; selected = null; legalMoves = []; lobbyId = null;
     moveHistory = []; moveFens = []; viewIndex = -1; lastMove = null;
     gameEnded = false; currentGameIsArena = false; currentArenaName = null;
-    premove = null; lastBoardHash = ''; rematchRequested = false; isBotGame = false;
+    premove = null; lastBoardHash = ''; rematchRequested = false; isBotGame = false; opponentIsBot = false;
     document.getElementById('chatMessages').innerHTML = '';
     document.getElementById('movesPanel').classList.remove('compact');
     try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
@@ -1386,10 +1398,8 @@
     else { text = (myColor === 'w' ? '0-1' : '1-0') + ' Поражение'; cls = 'lose'; }
     title.textContent = text; title.className = 'grTitle ' + cls;
     sub.textContent = reason || '';
-
     const rematchBtn = document.getElementById('grRematchBtn');
     const findBtn = document.getElementById('grFindBtn');
-
     if (currentGameIsArena) {
       rematchBtn.style.display = 'none';
       findBtn.textContent = 'ВЕРНУТЬСЯ К ТУРНИРУ';
@@ -1410,13 +1420,8 @@
     if (rematchRequested) { alert('Реванш уже предложен'); return; }
     socket.emit('rematchRequest', { lobbyId }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      if (res.started) { }
-      else {
-        rematchRequested = true;
-        const btn = document.getElementById('grRematchBtn');
-        btn.disabled = true;
-        btn.textContent = 'ОЖИДАНИЕ...';
-      }
+      if (res.started) {}
+      else { rematchRequested = true; const btn = document.getElementById('grRematchBtn'); btn.disabled = true; btn.textContent = 'ОЖИДАНИЕ...'; }
     });
   }
   window.requestRematch = requestRematch;
@@ -1558,10 +1563,13 @@
   }
   window.openProfileView = openProfileView;
   function renderProfilePage(user, games, history) {
-    document.getElementById('pAvatarBig').innerHTML = (user.isAdmin ? '<span class="pCrown">👑</span>' : '') + user.username.charAt(0).toUpperCase();
+    const avatarEl = document.getElementById('pAvatarBig');
+    avatarEl.className = 'profileAvatar' + (user.isBot ? ' botAvatar' : '');
+    avatarEl.innerHTML = (user.isAdmin ? '<span class="pCrown">👑</span>' : '') + (user.isBot ? '🤖' : user.username.charAt(0).toUpperCase());
     const onlinePrefix = onlineDotHtml(user.online);
-    document.getElementById('pName').innerHTML = onlinePrefix + nickHtml(user.username, user.isAdmin, user.isMod);
+    document.getElementById('pName').innerHTML = onlinePrefix + nickHtml(user.username, user.isAdmin, user.isMod, user.isBot);
     const badges = [];
+    if (user.isBot) badges.push('<span class="botBadge">🤖 Бот</span>');
     if (user.role === 'admin') badges.push('<span class="roleBadge admin">👑 Админ</span>');
     if (user.role === 'moderator') badges.push('<span class="roleBadge mod">🛡 Модератор</span>');
     if (user.isDev) badges.push('<span class="roleBadge dev">⚙ Разраб</span>');
@@ -1715,39 +1723,30 @@
   window.refreshArenas = refreshArenas;
   function formatMMSS(ms) { const t = Math.max(0, Math.floor(ms/1000)); return String(Math.floor(t/60)).padStart(2,'0') + ':' + String(t%60).padStart(2,'0'); }
   function formatTime(s) { s = Math.max(0, Math.floor(s)); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
-
   function renderArenasGrid() {
     const wrap = document.getElementById('arenasGridWrap'); if (!wrap) return;
     if (!arenasCache || !arenasCache.length) { wrap.innerHTML = '<div class="arenasEmpty">Нет доступных арен</div>'; return; }
-
     const localNow = Date.now();
     const toClient = (ts) => ts - arenaServerOffsetMs;
-
     const isMobile = window.matchMedia('(max-width: 700px)').matches;
     const SLOT_PX = isMobile ? 60 : 90;
     const SLOT_MS = 10 * 60 * 1000;
     const COLS = isMobile ? 48 : 72;
-
     const startMs = Math.floor(localNow / SLOT_MS) * SLOT_MS;
     const endMs = startMs + COLS * SLOT_MS;
-
     window.__arenaStartMs = startMs;
     window.__arenaSlotPx = SLOT_PX;
-
     const toPx = (ts) => ((ts - startMs) / SLOT_MS) * SLOT_PX;
-
     const visible = arenasCache
       .map(a => ({ ...a, clientStartsAt: toClient(a.startsAt), clientEndsAt: toClient(a.endsAt) }))
       .filter(a => a.clientEndsAt > startMs && a.clientStartsAt < endMs)
       .sort((a, b) => a.clientStartsAt - b.clientStartsAt);
-
     const rows = [];
     for (const arena of visible) {
       let placed = false;
       for (const row of rows) { const last = row[row.length - 1]; if (last.clientEndsAt <= arena.clientStartsAt) { row.push(arena); placed = true; break; } }
       if (!placed) rows.push([arena]);
     }
-
     const rowWidth = COLS * SLOT_PX;
     let html = '<div class="arenasScroller"><div class="timeRow" style="width:' + rowWidth + 'px;">';
     for (let i = 0; i < COLS; i++) {
@@ -1756,8 +1755,6 @@
       html += '<div class="timeCell' + (isNow ? ' now' : '') + '" style="width:' + SLOT_PX + 'px;min-width:' + SLOT_PX + 'px;">' + fmtMskHM(t) + '</div>';
     }
     html += '</div>';
-
-    const debug = !!window.KINGSIDE_DEBUG;
     for (const row of rows) {
       html += '<div class="arenaRowGrid" style="width:' + rowWidth + 'px;">';
       for (const arena of row) {
@@ -1768,43 +1765,37 @@
         const colorClass = arena.color || 'blitz';
         const myState = arenaStatesCache[arena.id];
         const joined = myState && myState.joined;
-        const clickable = true;
-        const cls = 'arenaBlock ' + colorClass + (isPast && !isLive ? ' past' : '') + (isLive ? ' live' : '') + (joined ? ' joined' : '');
+        const cls = 'arenaBlock ' + colorClass + (isPast && !isLive ? ' past' : '') + (isLive ? ' live' : '') + (joined ? ' joined' : '') + (arena.botFriendly ? ' botFriendly' : '');
         const tinfo = arena.timeControl + '+' + arena.increment;
         const participantsCount = (myState && myState.participantsCount) || 0;
-        const clickAttr = clickable ? 'onclick="openArenaPage(\'' + arena.id + '\')"' : '';
-        const cursorStyle = clickable ? 'cursor:pointer' : 'cursor:default';
+        const clickAttr = 'onclick="openArenaPage(\'' + arena.id + '\')"';
         const showInfo = width >= 50;
         const dur = Math.round((arena.clientEndsAt - arena.clientStartsAt) / 60000);
+        const botMark = arena.botFriendly ? '🤖 ' : '';
         html += '<div class="' + cls + '" '
-              + 'style="left:' + left.toFixed(2) + 'px; width:' + width.toFixed(2) + 'px; ' + cursorStyle + '" '
+              + 'style="left:' + left.toFixed(2) + 'px; width:' + width.toFixed(2) + 'px; cursor:pointer" '
               + 'data-start="' + arena.clientStartsAt + '" data-end="' + arena.clientEndsAt + '" '
               + 'data-starts="' + fmtMskHM(arena.clientStartsAt) + '" data-ends="' + fmtMskHM(arena.clientEndsAt) + '" '
               + 'data-duration-min="' + dur + '" '
               + clickAttr
-              + ' title="' + escapeHtml(arena.name) + ' · ' + tinfo + ' · ' + fmtMskHM(arena.clientStartsAt) + '–' + fmtMskHM(arena.clientEndsAt) + ' МСК (' + dur + ' мин)">'
-              + '<div class="tname">' + escapeHtml(arena.name) + '</div>'
+              + ' title="' + escapeHtml(botMark + arena.name) + ' · ' + tinfo + ' · ' + fmtMskHM(arena.clientStartsAt) + '–' + fmtMskHM(arena.clientEndsAt) + ' МСК (' + dur + ' мин)">'
+              + '<div class="tname">' + botMark + escapeHtml(arena.name) + '</div>'
               + (showInfo ? '<div class="tinfo"><span>' + tinfo + '</span><span>👥 ' + participantsCount + '</span></div>' : '')
-              + (debug ? '<div class="arenaDebug">' + fmtMskHM(arena.clientStartsAt) + '–' + fmtMskHM(arena.clientEndsAt) + ' (' + dur + 'м) L=' + left.toFixed(0) + ' W=' + width.toFixed(0) + '</div>' : '')
               + '</div>';
       }
       html += '</div>';
     }
-
     const nowLeft = toPx(localNow);
     html += '<div class="nowLine" style="left:' + nowLeft.toFixed(2) + 'px;"></div></div>';
     wrap.innerHTML = html;
-
     const scroller = wrap.querySelector('.arenasScroller');
     if (scroller) scroller.scrollLeft = Math.max(0, nowLeft - scroller.clientWidth / 4);
   }
-
   let _resizeT = null;
   window.addEventListener('resize', () => {
     if (_resizeT) clearTimeout(_resizeT);
     _resizeT = setTimeout(() => { if (document.getElementById('arenasScreen').classList.contains('active')) { lastArenasHash = ''; renderArenasGrid(); } }, 200);
   });
-
   function openArenaPage(arenaId) {
     if (currentArenaId && currentArenaId !== arenaId) socket.emit('leaveArenaRoom', { arenaId: currentArenaId });
     currentArenaId = arenaId;
@@ -1890,12 +1881,13 @@
       const placeCls = place === 1 ? 'top1' : place === 2 ? 'top2' : place === 3 ? 'top3' : '';
       const isMe = myName && p.username === myName;
       const totalGames = (p.wins || 0) + (p.draws || 0) + (p.losses || 0);
-      const greenDot = p.online ? '<span class="pgreen">●</span>' : '';
+      const greenDot = p.isBot ? '<span class="pgreen" style="color:#a56ce8">🤖</span>' : (p.online ? '<span class="pgreen">●</span>' : '');
       const pauseTag = p.paused ? '<span class="ppause">⏸</span>' : '';
       let streakTag = '';
       if (p.winStreak >= 3) streakTag = `<span class="streak">🔥${p.winStreak}</span>`;
       else if (p.drawStreak >= 2) streakTag = `<span class="streak">½${p.drawStreak}</span>`;
-      return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''}"><span class="place ${placeCls}">${place}</span><span class="pname">${nickHtml(p.username, p.isAdmin, p.isMod)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
+      const botCls = p.isBot ? 'botRow' : '';
+      return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''} ${botCls}"><span class="place ${placeCls}">${place}</span><span class="pname">${nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
     }).join('');
   }
   function filterArenaParticipants() { if (currentArenaState && currentArenaId) { const arena = arenasCache.find(a => a.id === currentArenaId); if (arena) renderArenaParticipants(arena, currentArenaState); } }
@@ -1984,6 +1976,8 @@
       opponentName = s.opponent; opponentRating = s.opponentRating;
       opponentIsAdmin = s.opponentIsAdmin;
       opponentOnline = !!s.opponentOnline;
+      opponentIsBot = !!s.isBot;
+      isBotGame = !!s.isBot;
       inc = s.inc;
       myTime = myColor === 'w' ? s.timeW : s.timeB;
       oppTime = myColor === 'w' ? s.timeB : s.timeW;
@@ -1992,13 +1986,11 @@
       gameEnded = !!s.finished; gameActive = !s.finished;
       currentGameIsArena = !!s.arenaId; currentArenaId = s.arenaId || null;
       currentArenaName = s.arenaName || null;
-      isBotGame = !!s.isBot;
       lastBoardHash = ''; rematchRequested = false;
-
-      document.getElementById('bottomName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod);
+      document.getElementById('bottomName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod, me.isBot);
       document.getElementById('bottomRating').textContent = me.rating;
       document.getElementById('bottomDot').className = 'dot ' + (myColor === 'w' ? 'w' : 'b');
-      document.getElementById('topName').innerHTML = onlineDotHtml(opponentOnline) + nickHtml(opponentName, opponentIsAdmin, false);
+      document.getElementById('topName').innerHTML = onlineDotHtml(opponentOnline) + nickHtml(opponentName, opponentIsAdmin, false, opponentIsBot);
       document.getElementById('topRating').textContent = opponentRating || '';
       document.getElementById('topDot').className = 'dot ' + (myColor === 'w' ? 'b' : 'w');
       updateTimers();
@@ -2024,6 +2016,8 @@
       opponentName = s.opponent; opponentRating = s.opponentRating;
       opponentIsAdmin = s.opponentIsAdmin;
       opponentOnline = !!s.opponentOnline;
+      opponentIsBot = !!s.isBot;
+      isBotGame = !!s.isBot;
       inc = s.inc;
       myTime = myColor === 'w' ? s.timeW : s.timeB;
       oppTime = myColor === 'w' ? s.timeB : s.timeW;
@@ -2032,13 +2026,11 @@
       gameEnded = !!s.finished; gameActive = !s.finished;
       currentGameIsArena = !!s.arenaId; currentArenaId = s.arenaId || null;
       currentArenaName = s.arenaName || null;
-      isBotGame = !!s.isBot;
       lastBoardHash = ''; rematchRequested = false;
-
-      document.getElementById('bottomName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod);
+      document.getElementById('bottomName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod, me.isBot);
       document.getElementById('bottomRating').textContent = me.rating;
       document.getElementById('bottomDot').className = 'dot ' + (myColor === 'w' ? 'w' : 'b');
-      document.getElementById('topName').innerHTML = onlineDotHtml(opponentOnline) + nickHtml(opponentName, opponentIsAdmin, false);
+      document.getElementById('topName').innerHTML = onlineDotHtml(opponentOnline) + nickHtml(opponentName, opponentIsAdmin, false, opponentIsBot);
       document.getElementById('topRating').textContent = opponentRating || '';
       document.getElementById('topDot').className = 'dot ' + (myColor === 'w' ? 'b' : 'w');
       updateTimers();
@@ -2054,13 +2046,14 @@
   });
   socket.on('stats', (s) => { if (!s) return; const e1 = document.getElementById('statOnline'), e2 = document.getElementById('statGames'), e3 = document.getElementById('statActive'); if (e1) e1.textContent = s.online; if (e2) e2.textContent = s.games; if (e3) e3.textContent = s.activeGames || 0; if (document.getElementById('watchScreen').classList.contains('active')) refreshWatchList(false); });
   socket.on('lobbiesUpdate', () => { if (document.getElementById('lobbyScreen').classList.contains('active')) refreshLobbies(); });
-  socket.on('gameStart', ({ color, opponent, opponentRating: oppRating, time, inc: gameInc, lobbyId: id, fen, chat, arenaId, arenaName, opponentIsAdmin: oppIsAdmin, opponentIsMod: oppIsMod, opponentOnline: oppOnline, isBot: isBotFlag, botName }) => {
+  socket.on('gameStart', ({ color, opponent, opponentRating: oppRating, time, inc: gameInc, lobbyId: id, fen, chat, arenaId, arenaName, opponentIsAdmin: oppIsAdmin, opponentIsMod: oppIsMod, opponentOnline: oppOnline, opponentIsBot: oppIsBot, isBot: isBotFlag, botName }) => {
     if (id) lobbyId = id;
     myColor = color || 'w'; inc = gameInc || 0;
     opponentName = opponent || 'Соперник'; opponentRating = oppRating || null;
     opponentIsAdmin = (typeof oppIsAdmin === 'boolean') ? oppIsAdmin : (opponentName === 'PeshkaSasha');
     opponentOnline = (typeof oppOnline === 'boolean') ? oppOnline : true;
-    isBotGame = !!isBotFlag;
+    opponentIsBot = !!(oppIsBot || isBotFlag || (opponentName && (opponentName === 'BotEasy' || opponentName === 'BotMedium' || opponentName === 'BotHard' || opponentName === 'BotMaster')));
+    isBotGame = !!isBotFlag || opponentIsBot;
     myTime = time * 60; oppTime = time * 60;
     currentFen = fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
     selected = null; legalMoves = []; moveHistory = []; moveFens = [];
@@ -2068,11 +2061,11 @@
     gameActive = true; gameEnded = false; boardFlipped = false; pendingDrawOffer = false;
     currentGameIsArena = !!arenaId; currentArenaId = arenaId || null; currentArenaName = arenaName || null;
     lastBoardHash = ''; rematchRequested = false;
-    document.getElementById('bottomName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod);
+    document.getElementById('bottomName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod, me.isBot);
     document.getElementById('bottomRating').textContent = me.rating;
     document.getElementById('bottomDot').className = 'dot ' + (myColor === 'w' ? 'w' : 'b');
     document.getElementById('bottomTime').textContent = formatTime(time * 60);
-    document.getElementById('topName').innerHTML = onlineDotHtml(opponentOnline) + nickHtml(opponentName, opponentIsAdmin, oppIsMod);
+    document.getElementById('topName').innerHTML = onlineDotHtml(opponentOnline) + nickHtml(opponentName, opponentIsAdmin, oppIsMod, opponentIsBot);
     document.getElementById('topRating').textContent = opponentRating || '';
     document.getElementById('topDot').className = 'dot ' + (myColor === 'w' ? 'b' : 'w');
     document.getElementById('topTime').textContent = formatTime(time * 60);
@@ -2096,11 +2089,12 @@
     checkGameEnd(state); tryApplyPremove();
   });
   socket.on('timeUpdate', ({ timeW, timeB }) => { if (!gameActive) return; myTime = myColor === 'w' ? timeW : timeB; oppTime = myColor === 'w' ? timeB : timeW; updateTimers(); });
-  socket.on('gameEnded', ({ result, reason, isArena, arenaId }) => {
+  socket.on('gameEnded', ({ result, reason, isArena, arenaId, isBot }) => {
     if (gameEnded) return;
     let winner = null; if (result === 'w') winner = 'w'; else if (result === 'b') winner = 'b';
     if (reason !== 'Мат' && reason !== 'Пат') { if (!winner) sndDraw(); else if (winner === myColor) sndWin(); else sndLose(); }
     if (typeof isArena === 'boolean') currentGameIsArena = isArena;
+    if (typeof isBot === 'boolean') isBotGame = isBot;
     if (arenaId) currentArenaId = arenaId;
     endGame(winner, reason, true, currentGameIsArena);
   });
@@ -2117,14 +2111,14 @@
     if (username === opponentName) {
       opponentOnline = true;
       const strip = document.getElementById('topName');
-      if (strip) strip.innerHTML = onlineDotHtml(true) + nickHtml(opponentName, opponentIsAdmin, false);
+      if (strip) strip.innerHTML = onlineDotHtml(true) + nickHtml(opponentName, opponentIsAdmin, false, opponentIsBot);
     }
   });
   socket.on('opponentOffline', ({ username }) => {
     if (username === opponentName) {
       opponentOnline = false;
       const strip = document.getElementById('topName');
-      if (strip) strip.innerHTML = onlineDotHtml(false) + nickHtml(opponentName, opponentIsAdmin, false);
+      if (strip) strip.innerHTML = onlineDotHtml(false) + nickHtml(opponentName, opponentIsAdmin, false, opponentIsBot);
     }
   });
   socket.on('chatMessage', (msg) => renderChatMsg(msg));
@@ -2148,11 +2142,11 @@
   }, 5000);
   document.getElementById('password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
 
-  // ============ ДИАЛОГ БОТА ============
   const BOT_LEVELS = [
     { level: 1, name: 'BotEasy',   title: 'Лёгкий',  rating: 1000 },
     { level: 2, name: 'BotMedium', title: 'Средний', rating: 1300 },
-    { level: 3, name: 'BotHard',   title: 'Сложный', rating: 1600 }
+    { level: 3, name: 'BotHard',   title: 'Сложный', rating: 1600 },
+    { level: 4, name: 'BotMaster', title: 'Мастер',  rating: 2000, isMaster: true }
   ];
   const BOT_TIMES = [
     { t: 1,  i: 0,  label: '1+0' },
@@ -2163,7 +2157,6 @@
     { t: 30, i: 0,  label: '30+0' }
   ];
   let botDialogState = { level: 2, time: 5, inc: 0 };
-
   function openBotDialog() {
     const dlg = document.getElementById('botDialog');
     if (!dlg) return;
@@ -2171,10 +2164,7 @@
     dlg.classList.add('show');
   }
   window.openBotDialog = openBotDialog;
-  function closeBotDialog() {
-    const dlg = document.getElementById('botDialog');
-    if (dlg) dlg.classList.remove('show');
-  }
+  function closeBotDialog() { const dlg = document.getElementById('botDialog'); if (dlg) dlg.classList.remove('show'); }
   window.closeBotDialog = closeBotDialog;
   function renderBotDialogContents() {
     const levelsEl = document.getElementById('botLevels');
@@ -2182,7 +2172,9 @@
     if (!levelsEl || !timesEl) return;
     levelsEl.innerHTML = BOT_LEVELS.map(l => {
       const active = botDialogState.level === l.level;
-      return `<button data-level="${l.level}" class="${active ? 'active' : ''}"><div class="btitle">${l.title}</div><div class="brating">${l.rating}</div></button>`;
+      const cls = active ? 'active' : '';
+      const extra = l.isMaster ? 'masterBtn' : '';
+      return `<button data-level="${l.level}" class="${cls} ${extra}"><div class="btitle">${l.title}</div><div class="brating">${l.rating}</div></button>`;
     }).join('');
     timesEl.innerHTML = BOT_TIMES.map(t => {
       const active = botDialogState.time === t.t && botDialogState.inc === t.i;
@@ -2204,87 +2196,45 @@
     if (e.target === document.getElementById('botDialog')) closeBotDialog();
   });
 
-  // ============ ОБУЧЕНИЕ ============
   const LEARN_STORAGE_KEY = 'kingside_learn_progress_v1';
   function loadLearnProgress() { try { return JSON.parse(localStorage.getItem(LEARN_STORAGE_KEY) || '{}'); } catch (e) { return {}; } }
   function saveLearnProgress(p) { try { localStorage.setItem(LEARN_STORAGE_KEY, JSON.stringify(p)); } catch (e) {} }
   let learnProgress = loadLearnProgress();
   let learnCurrentIndex = 0;
   let learnState = null;
-
   const LESSONS = [
-    { id: 'rook', icon: '♜', title: 'Ладья', subtitle: 'Ходит по прямым линиям',
-      fen: '8/8/8/3R4/8/8/8/8 w - - 0 1', playerColor: 'w', kind: 'move',
-      task: 'Ладья ходит по горизонтали и вертикали. Сделай ход ладьёй d5 → f5.',
-      hint: 'Нажми на ладью d5, потом на f5.',
-      goal: { from: [3, 3], to: [3, 5] } },
-    { id: 'bishop', icon: '♝', title: 'Слон', subtitle: 'Ходит по диагоналям',
-      fen: '8/8/8/3B4/8/8/8/8 w - - 0 1', playerColor: 'w', kind: 'move',
-      task: 'Слон ходит только по диагонали. Сделай ход слоном d5 → g8.',
-      hint: 'Нажми на слона d5, потом на g8.',
-      goal: { from: [3, 3], to: [0, 6] } },
-    { id: 'queen', icon: '♛', title: 'Ферзь', subtitle: 'Самый сильный',
-      fen: '8/8/8/3Q4/8/8/8/8 w - - 0 1', playerColor: 'w', kind: 'move',
-      task: 'Ферзь ходит и по прямым, и по диагоналям. Сделай ход ферзём d5 → d8.',
-      hint: 'Нажми на ферзя d5, потом на d8.',
-      goal: { from: [3, 3], to: [0, 3] } },
-    { id: 'knight', icon: '♞', title: 'Конь', subtitle: 'Ходит буквой «Г»',
-      fen: '8/8/8/3N4/8/8/8/8 w - - 0 1', playerColor: 'w', kind: 'move',
-      task: 'Конь ходит буквой «Г». Сделай ход конём d5 → e7.',
-      hint: 'Нажми на коня d5, потом на e7.',
-      goal: { from: [3, 3], to: [1, 4] } },
-    { id: 'king', icon: '♚', title: 'Король', subtitle: 'Ходит на одну клетку',
-      fen: '8/8/8/3K4/8/8/8/8 w - - 0 1', playerColor: 'w', kind: 'move',
-      task: 'Король ходит на одну клетку. Сделай ход королём d5 → e5.',
-      hint: 'Нажми на короля d5, потом на e5.',
-      goal: { from: [3, 3], to: [3, 4] } },
-    { id: 'pawn', icon: '♟', title: 'Пешка', subtitle: 'Ходит вперёд',
-      fen: '8/8/8/8/8/8/4P3/8 w - - 0 1', playerColor: 'w', kind: 'move',
-      task: 'Пешка ходит только вперёд. Сделай ход пешкой e2 → e4 (на две клетки).',
-      hint: 'Нажми на пешку e2, потом на e4.',
-      goal: { from: [6, 4], to: [4, 4] } },
-    { id: 'capture', icon: '✕', title: 'Взятие', subtitle: 'Как брать фигуры',
-      fen: '8/8/8/8/4p3/3P4/8/8 w - - 0 1', playerColor: 'w', kind: 'move',
-      task: 'Пешка бьёт по диагонали. Возьми чёрную пешку на e4 своей пешкой d3.',
-      hint: 'Нажми на пешку d3, потом на чёрную пешку e4.',
-      goal: { from: [5, 3], to: [4, 4] } },
-    { id: 'check', icon: '⚠', title: 'Шах', subtitle: 'Угроза королю',
-      fen: '8/8/8/8/8/8/4R3/4k3 w - - 0 1', playerColor: 'w', kind: 'move',
-      task: 'Поставь шах чёрному королю: переведи ладью e2 → e8.',
-      hint: 'Ладья встанет на одну вертикаль с королём.',
-      goal: { from: [6, 4], to: [0, 4] } },
-    { id: 'mate1', icon: '🏆', title: 'Мат ферзём', subtitle: 'Простейший мат',
-      fen: '8/8/8/8/8/8/5Q2/6k1 w - - 0 1', playerColor: 'w', kind: 'move',
-      task: 'Поставь мат: ферзь f2 → f1.',
-      hint: 'Ферзь подойдёт вплотную к королю с шахом.',
-      goal: { from: [6, 5], to: [7, 5] } },
-    { id: 'mate2', icon: '🏆', title: 'Мат ладьёй', subtitle: 'Мат в один ход',
-      fen: '7k/8/8/8/8/8/8/R6K w - - 0 1', playerColor: 'w', kind: 'move',
-      task: 'Поставь мат: ладья a1 → a8.',
-      hint: 'Ладья отрежет короля на 8-й горизонтали.',
-      goal: { from: [7, 0], to: [0, 0] } },
-    { id: 'pat', icon: '½', title: 'Пат', subtitle: 'Ничья без шаха',
-      fen: '7k/5Q2/6K1/8/8/8/8/8 b - - 0 1', playerColor: 'b', kind: 'free',
-      task: 'Пат — позиция, когда у игрока нет легальных ходов, но нет и шаха. Партия заканчивается ничьей.',
-      hint: 'Изучи позицию и нажми «Понятно».',
-      goal: null },
-    { id: 'pin', icon: '📌', title: 'Связка', subtitle: 'Фигура блокирует другую',
-      fen: '8/8/8/8/8/8/1q6/4K2R w - - 0 1', playerColor: 'w', kind: 'free',
-      task: 'Связка — фигура не может двигаться, потому что за ней более ценная фигура (например, король).',
-      hint: 'Изучи позицию и нажми «Понятно».',
-      goal: null }
+    { id: 'rook', icon: '♜', title: 'Ладья', subtitle: 'Ходит по прямым линиям', fen: '8/8/8/3R4/8/8/8/8 w - - 0 1', playerColor: 'w', kind: 'move',
+      task: 'Ладья ходит по горизонтали и вертикали. Сделай ход ладьёй d5 → f5.', hint: 'Нажми на ладью d5, потом на f5.', goal: { from: [3, 3], to: [3, 5] } },
+    { id: 'bishop', icon: '♝', title: 'Слон', subtitle: 'Ходит по диагоналям', fen: '8/8/8/3B4/8/8/8/8 w - - 0 1', playerColor: 'w', kind: 'move',
+      task: 'Слон ходит только по диагонали. Сделай ход слоном d5 → g8.', hint: 'Нажми на слона d5, потом на g8.', goal: { from: [3, 3], to: [0, 6] } },
+    { id: 'queen', icon: '♛', title: 'Ферзь', subtitle: 'Самый сильный', fen: '8/8/8/3Q4/8/8/8/8 w - - 0 1', playerColor: 'w', kind: 'move',
+      task: 'Ферзь ходит и по прямым, и по диагоналям. Сделай ход ферзём d5 → d8.', hint: 'Нажми на ферзя d5, потом на d8.', goal: { from: [3, 3], to: [0, 3] } },
+    { id: 'knight', icon: '♞', title: 'Конь', subtitle: 'Ходит буквой «Г»', fen: '8/8/8/3N4/8/8/8/8 w - - 0 1', playerColor: 'w', kind: 'move',
+      task: 'Конь ходит буквой «Г». Сделай ход конём d5 → e7.', hint: 'Нажми на коня d5, потом на e7.', goal: { from: [3, 3], to: [1, 4] } },
+    { id: 'king', icon: '♚', title: 'Король', subtitle: 'Ходит на одну клетку', fen: '8/8/8/3K4/8/8/8/8 w - - 0 1', playerColor: 'w', kind: 'move',
+      task: 'Король ходит на одну клетку. Сделай ход королём d5 → e5.', hint: 'Нажми на короля d5, потом на e5.', goal: { from: [3, 3], to: [3, 4] } },
+    { id: 'pawn', icon: '♟', title: 'Пешка', subtitle: 'Ходит вперёд', fen: '8/8/8/8/8/8/4P3/8 w - - 0 1', playerColor: 'w', kind: 'move',
+      task: 'Пешка ходит только вперёд. Сделай ход пешкой e2 → e4.', hint: 'Нажми на пешку e2, потом на e4.', goal: { from: [6, 4], to: [4, 4] } },
+    { id: 'capture', icon: '✕', title: 'Взятие', subtitle: 'Как брать фигуры', fen: '8/8/8/8/4p3/3P4/8/8 w - - 0 1', playerColor: 'w', kind: 'move',
+      task: 'Пешка бьёт по диагонали. Возьми чёрную пешку на e4 своей пешкой d3.', hint: 'Нажми на пешку d3, потом на чёрную пешку e4.', goal: { from: [5, 3], to: [4, 4] } },
+    { id: 'check', icon: '⚠', title: 'Шах', subtitle: 'Угроза королю', fen: '8/8/8/8/8/8/4R3/4k3 w - - 0 1', playerColor: 'w', kind: 'move',
+      task: 'Поставь шах чёрному королю: переведи ладью e2 → e8.', hint: 'Ладья встанет на одну вертикаль с королём.', goal: { from: [6, 4], to: [0, 4] } },
+    { id: 'mate1', icon: '🏆', title: 'Мат ферзём', subtitle: 'Простейший мат', fen: '8/8/8/8/8/8/5Q2/6k1 w - - 0 1', playerColor: 'w', kind: 'move',
+      task: 'Поставь мат: ферзь f2 → f1.', hint: 'Ферзь подойдёт вплотную к королю с шахом.', goal: { from: [6, 5], to: [7, 5] } },
+    { id: 'mate2', icon: '🏆', title: 'Мат ладьёй', subtitle: 'Мат в один ход', fen: '7k/8/8/8/8/8/8/R6K w - - 0 1', playerColor: 'w', kind: 'move',
+      task: 'Поставь мат: ладья a1 → a8.', hint: 'Ладья отрежет короля на 8-й горизонтали.', goal: { from: [7, 0], to: [0, 0] } },
+    { id: 'pat', icon: '½', title: 'Пат', subtitle: 'Ничья без шаха', fen: '7k/5Q2/6K1/8/8/8/8/8 b - - 0 1', playerColor: 'b', kind: 'free',
+      task: 'Пат — позиция, когда у игрока нет легальных ходов, но нет и шаха. Партия заканчивается ничьей.', hint: 'Изучи позицию и нажми «Понятно».', goal: null },
+    { id: 'pin', icon: '📌', title: 'Связка', subtitle: 'Фигура блокирует другую', fen: '8/8/8/8/8/8/1q6/4K2R w - - 0 1', playerColor: 'w', kind: 'free',
+      task: 'Связка — фигура не может двигаться, потому что за ней более ценная фигура (например, король).', hint: 'Изучи позицию и нажми «Понятно».', goal: null }
   ];
-
   function initLearn() {
     renderLearnSidebar();
     learnCurrentIndex = 0;
-    for (let i = 0; i < LESSONS.length; i++) {
-      if (!learnProgress[LESSONS[i].id]) { learnCurrentIndex = i; break; }
-    }
+    for (let i = 0; i < LESSONS.length; i++) if (!learnProgress[LESSONS[i].id]) { learnCurrentIndex = i; break; }
     loadLesson(learnCurrentIndex);
   }
   window.initLearn = initLearn;
-
   function renderLearnSidebar() {
     const list = document.getElementById('learnList');
     if (!list) return;
@@ -2299,11 +2249,7 @@
     updateLearnProgress();
     highlightLearnItem();
   }
-  function highlightLearnItem() {
-    document.querySelectorAll('.learnItem').forEach(el => {
-      el.classList.toggle('active', +el.dataset.idx === learnCurrentIndex);
-    });
-  }
+  function highlightLearnItem() { document.querySelectorAll('.learnItem').forEach(el => { el.classList.toggle('active', +el.dataset.idx === learnCurrentIndex); }); }
   function updateLearnProgress() {
     const done = LESSONS.filter(l => learnProgress[l.id]).length;
     const total = LESSONS.length;
@@ -2313,13 +2259,8 @@
     const txt = document.getElementById('learnProgressText');
     if (txt) txt.textContent = `Пройдено: ${done} из ${total}`;
   }
-  function selectLesson(idx) {
-    if (idx < 0 || idx >= LESSONS.length) return;
-    learnCurrentIndex = idx;
-    loadLesson(idx);
-  }
+  function selectLesson(idx) { if (idx < 0 || idx >= LESSONS.length) return; learnCurrentIndex = idx; loadLesson(idx); }
   window.selectLesson = selectLesson;
-
   function loadLesson(idx) {
     const lesson = LESSONS[idx];
     if (!lesson) return;
@@ -2338,7 +2279,6 @@
     renderLearnBoard();
     highlightLearnItem();
   }
-
   function renderLearnBoard() {
     const el = document.getElementById('learnBoard');
     if (!el || !learnState) return;
@@ -2352,26 +2292,12 @@
         const sq = document.createElement('div');
         sq.className = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
         sq.dataset.r = r; sq.dataset.c = c;
-        if (learnState.lastMove) {
-          const lm = learnState.lastMove;
-          if ((lm.from[0] === r && lm.from[1] === c) || (lm.to[0] === r && lm.to[1] === c)) sq.classList.add('lastmove');
-        }
+        if (learnState.lastMove) { const lm = learnState.lastMove; if ((lm.from[0] === r && lm.from[1] === c) || (lm.to[0] === r && lm.to[1] === c)) sq.classList.add('lastmove'); }
         if (learnState.selected && learnState.selected[0] === r && learnState.selected[1] === c) sq.classList.add('sel');
-        if (learnState.legalMoves.some(([mr, mc]) => mr === r && mc === c)) {
-          sq.classList.add('hint');
-          if (state.board[r][c]) sq.classList.add('capture');
-        }
-        if (learnState.lesson.goal && !learnState.completed) {
-          const g = learnState.lesson.goal;
-          if (g.to[0] === r && g.to[1] === c) sq.classList.add('goal');
-        }
+        if (learnState.legalMoves.some(([mr, mc]) => mr === r && mc === c)) { sq.classList.add('hint'); if (state.board[r][c]) sq.classList.add('capture'); }
+        if (learnState.lesson.goal && !learnState.completed) { const g = learnState.lesson.goal; if (g.to[0] === r && g.to[1] === c) sq.classList.add('goal'); }
         const p = state.board[r][c];
-        if (p) {
-          const piece = document.createElement('span');
-          piece.className = 'piece ' + (isWhitePiece(p) ? 'w' : 'b');
-          piece.textContent = EMOJI[p];
-          sq.appendChild(piece);
-        }
+        if (p) { const piece = document.createElement('span'); piece.className = 'piece ' + (isWhitePiece(p) ? 'w' : 'b'); piece.textContent = EMOJI[p]; sq.appendChild(piece); }
         if (dr === 7) { const e = document.createElement('span'); e.className='coord-f'; e.textContent = String.fromCharCode(97 + c); sq.appendChild(e); }
         if (dc === 0) { const e = document.createElement('span'); e.className='coord-r'; e.textContent = 8 - r; sq.appendChild(e); }
         sq.addEventListener('click', () => onLearnSquareClick(r, c));
@@ -2379,7 +2305,6 @@
       }
     }
   }
-
   function onLearnSquareClick(r, c) {
     if (!learnState) return;
     if (learnState.completed && learnState.lesson.kind === 'free') return;
@@ -2388,7 +2313,6 @@
     const mySide = lesson.playerColor === 'w';
     const myTurn = state.turn === lesson.playerColor;
     if (!myTurn) return;
-
     const p = state.board[r][c];
     if (learnState.selected) {
       const isLegal = learnState.legalMoves.some(([mr, mc]) => mr === r && mc === c);
@@ -2424,7 +2348,6 @@
       renderLearnBoard();
     }
   }
-
   function showLearnFeedback(text, cls) {
     const fb = document.getElementById('learnFeedback');
     fb.textContent = text;
