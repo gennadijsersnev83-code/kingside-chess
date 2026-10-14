@@ -1273,7 +1273,9 @@
           row.innerHTML = `<div class="icon">⚔</div><div class="name">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod)}</div><div class="time">${l.time}+${l.inc}</div><div class="mode" style="color:var(--green-2);font-weight:600;">партия началась</div><div class="action"></div>`;
         } else {
           row.style.cursor = isMine ? 'pointer' : 'default';
-          row.innerHTML = `<div class="icon">${l.isBot ? '🤖' : '♟'}</div><div class="name">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod, l.isBot)}${isMine ? '<span class="mineTag">(ваш вызов)</span>' : ''}</div><div class="time">${l.time}+${l.inc}</div><div class="mode">ожидание</div><div class="action"></div>`;
+          const botLabel = l.isBot ? '🤖 бот' : '♟';
+          const modeText = l.isBot ? 'ждёт соперника' : 'ожидание';
+          row.innerHTML = `<div class="icon">${botLabel}</div><div class="name">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod, l.isBot)}${isMine ? '<span class="mineTag">(ваш вызов)</span>' : ''}</div><div class="time">${l.time}+${l.inc}</div><div class="mode">${modeText}</div><div class="action"></div>`;
           if (!isMine) {
             const btn = document.createElement('button'); btn.className = 'primary'; btn.textContent = 'Играть';
             btn.onclick = (e) => { e.stopPropagation(); socket.emit('joinLobby', { id: l.id }, (r) => { if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; } lobbyId = r.id || l.id; }); };
