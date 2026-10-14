@@ -2,1282 +2,410 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const fs = require('fs');
 const crypto = require('crypto');
-const { Pool } = require('pg');
 
 const app = express();
 const server = http.createServer(app);
-
 const io = new Server(server, {
-  cors: { origin: '*' },
   transports: ['websocket', 'polling'],
-  pingTimeout: 60000,
-  pingInterval: 25000
+  pingTimeout: 30000,
+  pingInterval: 10000
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ======================= ВРЕМЯ В МСК =======================
-const MSK_OFFSET_MS = 3 * 3600 * 1000;
-function mskParts(ts) {
-  const d = new Date(ts + MSK_OFFSET_MS);
-  return { y: d.getUTCFullYear(), mo: d.getUTCMonth(), d: d.getUTCDate(), h: d.getUTCHours(), mi: d.getUTCMinutes(), s: d.getUTCSeconds() };
-}
-function fromMsk(y, mo, d, h, mi, s) { return Date.UTC(y, mo, d, h, mi, s || 0) - MSK_OFFSET_MS; }
-function fmtMskHM(ts) { const p = mskParts(ts); return String(p.h).padStart(2, '0') + ':' + String(p.mi).padStart(2, '0'); }
-function roundToMinute(ts) { return Math.round(ts / 60000) * 60000; }
+// ============================================================
+//  ХРАНИЛИЩЕ (JSON-файл, без БД)
+// ============================================================
+const DATA_FILE = path.join(__dirname, 'data.json');
+let db = { users: {} };
 
-// ======================= РОЛИ =======================
-const ADMINS = new Set(['PeshkaSasha']);
-const MODERATORS = new Set(['Debian']);
-const DEVS = new Set(['PeshkaSasha']);
-function roleOf(username) {
-  if (ADMINS.has(username) || DEVS.has(username)) return 'admin';
-  if (MODERATORS.has(username)) return 'moderator';
-  return 'user';
-}
-function isAdmin(username) { return ADMINS.has(username) || DEVS.has(username); }
-function isMod(username) { return isAdmin(username) || MODERATORS.has(username); }
-function isDev(username) { return DEVS.has(username); }
-
-// ======================= БАЗА =======================
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
-
-let db = { users: {}, totalGames: 0 };
-
-async function initDB() {
+function loadData() {
   try {
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        username TEXT PRIMARY KEY,
-        password_hash TEXT NOT NULL,
-        salt TEXT NOT NULL,
-        rating INTEGER NOT NULL DEFAULT 1200,
-        wins INTEGER NOT NULL DEFAULT 0,
-        losses INTEGER NOT NULL DEFAULT 0,
-        draws INTEGER NOT NULL DEFAULT 0,
-        games INTEGER NOT NULL DEFAULT 0,
-        created_at BIGINT NOT NULL
-      );
-    `);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_classical INTEGER;`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_rapid INTEGER;`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_blitz INTEGER;`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_bullet INTEGER;`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wins_classical INTEGER DEFAULT 0;`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wins_rapid INTEGER DEFAULT 0;`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wins_blitz INTEGER DEFAULT 0;`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wins_bullet INTEGER DEFAULT 0;`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS losses_classical INTEGER DEFAULT 0;`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS losses_rapid INTEGER DEFAULT 0;`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS losses_blitz INTEGER DEFAULT 0;`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS losses_bullet INTEGER DEFAULT 0;`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS games_classical INTEGER DEFAULT 0;`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS games_rapid INTEGER DEFAULT 0;`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS games_blitz INTEGER DEFAULT 0;`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS games_bullet INTEGER DEFAULT 0;`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS muted_until BIGINT DEFAULT 0;`);
-    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_bot BOOLEAN DEFAULT FALSE;`);
-    await pool.query(`UPDATE users SET rating_classical = rating WHERE rating_classical IS NULL;`);
-    await pool.query(`UPDATE users SET rating_rapid     = rating WHERE rating_rapid     IS NULL;`);
-    await pool.query(`UPDATE users SET rating_blitz     = rating WHERE rating_blitz     IS NULL;`);
-    await pool.query(`UPDATE users SET rating_bullet    = rating WHERE rating_bullet    IS NULL;`);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS games (
-        id SERIAL PRIMARY KEY,
-        white TEXT NOT NULL,
-        black TEXT NOT NULL,
-        result TEXT NOT NULL,
-        reason TEXT,
-        time_control REAL,
-        increment INTEGER,
-        white_before INTEGER,
-        black_before INTEGER,
-        white_after INTEGER,
-        black_after INTEGER,
-        finished_at BIGINT NOT NULL
-      );
-    `);
-    await pool.query(`ALTER TABLE games ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'blitz';`);
-    await pool.query(`ALTER TABLE games ADD COLUMN IF NOT EXISTS is_arena BOOLEAN DEFAULT FALSE;`);
-    await pool.query(`ALTER TABLE games ADD COLUMN IF NOT EXISTS arena_name TEXT;`);
-    await pool.query(`ALTER TABLE games ADD COLUMN IF NOT EXISTS is_bot BOOLEAN DEFAULT FALSE;`);
-
-    const cnt = await pool.query('SELECT COUNT(*)::int AS n FROM games');
-    db.totalGames = cnt.rows[0].n || 0;
-    console.log(`[DB] Схема готова. Всего партий в БД: ${db.totalGames}`);
-  } catch (err) {
-    console.error('[DB] Ошибка создания схемы:', err.message || err.code || err);
-    throw err;
-  }
-}
-
-function emptyRatingBlock(base) { return { rating: base, wins: 0, losses: 0, games: 0 }; }
-
-async function loadDB() {
-  try {
-    const res = await pool.query('SELECT * FROM users');
-    db.users = {};
-    for (const row of res.rows) {
-      db.users[row.username] = {
-        passwordHash: row.password_hash, salt: row.salt,
-        rating: row.rating, wins: row.wins, losses: row.losses,
-        draws: row.draws, games: row.games,
-        createdAt: Number(row.created_at),
-        mutedUntil: Number(row.muted_until || 0),
-        isBot: !!row.is_bot,
-        categories: {
-          classical: { rating: row.rating_classical != null ? row.rating_classical : row.rating, wins: row.wins_classical || 0, losses: row.losses_classical || 0, games: row.games_classical || 0 },
-          rapid:     { rating: row.rating_rapid     != null ? row.rating_rapid     : row.rating, wins: row.wins_rapid     || 0, losses: row.losses_rapid     || 0, games: row.games_rapid     || 0 },
-          blitz:     { rating: row.rating_blitz     != null ? row.rating_blitz     : row.rating, wins: row.wins_blitz     || 0, losses: row.losses_blitz     || 0, games: row.games_blitz     || 0 },
-          bullet:    { rating: row.rating_bullet    != null ? row.rating_bullet    : row.rating, wins: row.wins_bullet    || 0, losses: row.losses_bullet    || 0, games: row.games_bullet    || 0 }
-        }
-      };
+    if (fs.existsSync(DATA_FILE)) {
+      db = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
     }
-    const cnt = await pool.query('SELECT COUNT(*)::int AS n FROM games');
-    db.totalGames = cnt.rows[0].n || 0;
-
-    for (const bot of BOTS) {
-      const existing = db.users[bot.name];
-      if (!existing) {
-        db.users[bot.name] = {
-          passwordHash: '', salt: '', rating: bot.rating,
-          wins: 0, losses: 0, draws: 0, games: 0,
-          createdAt: Date.now(), mutedUntil: 0, isBot: true,
-          categories: {
-            classical: emptyRatingBlock(bot.rating), rapid: emptyRatingBlock(bot.rating),
-            blitz: emptyRatingBlock(bot.rating), bullet: emptyRatingBlock(bot.rating)
-          }
-        };
-        try {
-          await pool.query(
-            `INSERT INTO users (username, password_hash, salt, rating, wins, losses, draws, games, created_at,
-                                rating_classical, rating_rapid, rating_blitz, rating_bullet,
-                                wins_classical, wins_rapid, wins_blitz, wins_bullet,
-                                losses_classical, losses_rapid, losses_blitz, losses_bullet,
-                                games_classical, games_rapid, games_blitz, games_bullet,
-                                muted_until, is_bot)
-             VALUES ($1,$2,$3,$4,0,0,0,0,$5,$4,$4,$4,$4,0,0,0,0,0,0,0,0,0,0,0,0,0,TRUE)`,
-            [bot.name, '', '', bot.rating, Date.now()]
-          );
-        } catch (e) { console.error('[DB] Ошибка вставки бота:', e.message); }
-      } else {
-        existing.isBot = true;
-      }
-    }
-
-    console.log(`[DB] Загружено: ${Object.keys(db.users).length} игроков, ${db.totalGames} партий`);
-  } catch (err) {
-    console.error('[DB] Ошибка загрузки:', err.message || err.code || err);
-  }
+  } catch (e) { console.error('loadData:', e.message); }
 }
-
-async function saveUser(username) {
-  const u = db.users[username];
-  if (!u) return;
-  const c = u.categories || {};
-  const get = (k, f) => (c[k] ? c[k][f] : 0);
-  try {
-    await pool.query(
-      `INSERT INTO users (username, password_hash, salt, rating, wins, losses, draws, games, created_at,
-                          rating_classical, rating_rapid, rating_blitz, rating_bullet,
-                          wins_classical, wins_rapid, wins_blitz, wins_bullet,
-                          losses_classical, losses_rapid, losses_blitz, losses_bullet,
-                          games_classical, games_rapid, games_blitz, games_bullet,
-                          muted_until, is_bot)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
-       ON CONFLICT (username) DO UPDATE SET
-         rating = EXCLUDED.rating, wins = EXCLUDED.wins, losses = EXCLUDED.losses, draws = EXCLUDED.draws, games = EXCLUDED.games,
-         rating_classical = EXCLUDED.rating_classical, rating_rapid = EXCLUDED.rating_rapid,
-         rating_blitz = EXCLUDED.rating_blitz, rating_bullet = EXCLUDED.rating_bullet,
-         wins_classical = EXCLUDED.wins_classical, wins_rapid = EXCLUDED.wins_rapid,
-         wins_blitz = EXCLUDED.wins_blitz, wins_bullet = EXCLUDED.wins_bullet,
-         losses_classical = EXCLUDED.losses_classical, losses_rapid = EXCLUDED.losses_rapid,
-         losses_blitz = EXCLUDED.losses_blitz, losses_bullet = EXCLUDED.losses_bullet,
-         games_classical = EXCLUDED.games_classical, games_rapid = EXCLUDED.games_rapid,
-         games_blitz = EXCLUDED.games_blitz, games_bullet = EXCLUDED.games_bullet,
-         muted_until = EXCLUDED.muted_until,
-         is_bot = EXCLUDED.is_bot`,
-      [
-        username, u.passwordHash, u.salt, u.rating, u.wins, u.losses, u.draws, u.games, u.createdAt,
-        c.classical ? c.classical.rating : u.rating,
-        c.rapid ? c.rapid.rating : u.rating,
-        c.blitz ? c.blitz.rating : u.rating,
-        c.bullet ? c.bullet.rating : u.rating,
-        get('classical','wins'), get('rapid','wins'), get('blitz','wins'), get('bullet','wins'),
-        get('classical','losses'), get('rapid','losses'), get('blitz','losses'), get('bullet','losses'),
-        get('classical','games'), get('rapid','games'), get('blitz','games'), get('bullet','games'),
-        u.mutedUntil || 0,
-        !!u.isBot
-      ]
-    );
-  } catch (err) {
-    console.error(`[DB] saveUser(${username}) ошибка:`, err.message || err.code || err);
-    throw err;
-  }
+function saveData() {
+  try { fs.writeFileSync(DATA_FILE, JSON.stringify(db, null, 2)); }
+  catch (e) { console.error('saveData:', e.message); }
 }
-
-async function saveGame(game) {
-  try {
-    await pool.query(
-      `INSERT INTO games (white, black, result, reason, time_control, increment,
-                          white_before, black_before, white_after, black_after, finished_at,
-                          category, is_arena, arena_name, is_bot)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
-      [game.white, game.black, game.result, game.reason,
-       game.timeControl, game.increment,
-       game.whiteBefore, game.blackBefore, game.whiteAfter, game.blackAfter,
-       game.finishedAt, game.category || 'blitz', !!game.isArena, game.arenaName || null, !!game.isBot]
-    );
-    db.totalGames++;
-  } catch (err) {
-    console.error('[DB] saveGame ошибка:', err.message || err.code || err);
-    throw err;
-  }
-}
-
-// ======================= ПАРОЛИ =======================
-function hashPassword(password, salt) { return crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256').toString('hex'); }
-function newSalt() { return crypto.randomBytes(16).toString('hex'); }
-function verifyPassword(password, salt, hash) {
-  const test = hashPassword(password, salt);
-  try { return crypto.timingSafeEqual(Buffer.from(test, 'hex'), Buffer.from(hash, 'hex')); }
-  catch (e) { return false; }
-}
-
-// ======================= ЭЛО =======================
-function kFactor(rating, games) { if (games < 30) return 40; if (rating < 2400) return 20; return 10; }
-function eloDelta(myRating, oppRating, score, k) {
-  const expected = 1 / (1 + Math.pow(10, (oppRating - myRating) / 400));
-  return Math.round(k * (score - expected));
-}
-function categoryOf(timeMin) {
-  if (timeMin < 3) return 'bullet';
-  if (timeMin < 10) return 'blitz';
-  if (timeMin < 30) return 'rapid';
-  return 'classical';
-}
-
-// ======================= УТИЛИТЫ =======================
-function genId() { return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6); }
-function publicUser(name) {
-  const u = db.users[name];
-  if (!u) return null;
-  return {
-    username: name, rating: u.rating, wins: u.wins, losses: u.losses, draws: u.draws, games: u.games,
-    createdAt: u.createdAt, role: roleOf(name), isAdmin: isAdmin(name), isMod: isMod(name), isDev: isDev(name),
-    mutedUntil: u.mutedUntil || 0, categories: u.categories || null, isBot: !!u.isBot
-  };
-}
-function isUserOnline(username) {
-  for (const [, name] of online.entries()) if (name === username) return true;
-  return false;
-}
-
-// ======================= ХРАНИЛИЩА =======================
-const online = new Map();
-const lobbies = new Map();
-const socketToLobby = new Map();
-const arenas = new Map();
-
-function countActiveLobbies() {
-  let n = 0;
-  for (const l of lobbies.values()) { if (l.finished) continue; if (l.started) n++; }
-  return n;
-}
-function countOnline() {
-  let n = online.size;
-  for (const bot of BOTS) if (db.users[bot.name]) n++;
-  return n;
-}
-function broadcastOnline() {
-  const on = countOnline();
-  io.emit('onlineCount', on);
-  io.emit('stats', { online: on, games: db.totalGames, activeGames: countActiveLobbies() });
-}
-function broadcastLobbies() { io.emit('lobbiesUpdate'); }
-
-function cleanupStuckPlaying() {
-  for (const state of arenas.values()) {
-    for (const p of state.participants.values()) {
-      if (p.isPlaying) {
-        const l = p.lobbyId ? lobbies.get(p.lobbyId) : null;
-        if (!l || l.finished) {
-          p.isPlaying = false; p.lobbyId = null;
-          if (!p.paused) p.waitingSince = Date.now();
-          // Сброс состояния бота
-          if (p.isBot) {
-            const beh = botInitBehavior(p.username);
-            if (beh.state === 'playing') {
-              beh.state = 'in_arena';
-              beh.activityId = state.id;
-              beh.lastChange = Date.now();
-            }
-          }
-        }
-      }
-    }
-  }
-}
-setInterval(cleanupStuckPlaying, 10000);
-
-function buildGamesList() {
-  const list = [];
-  for (const [id, l] of lobbies.entries()) {
-    if (l.finished || !l.started) continue;
-    const whiteName = l.hostColor === 'w' ? l.host : l.guest;
-    const blackName = l.hostColor === 'b' ? l.host : l.guest;
-    const whiteU = db.users[whiteName];
-    const blackU = db.users[blackName];
-    list.push({
-      id, white: whiteName, black: blackName,
-      whiteRating: whiteU ? whiteU.rating : null,
-      blackRating: blackU ? blackU.rating : null,
-      whiteIsAdmin: isAdmin(whiteName), blackIsAdmin: isAdmin(blackName),
-      whiteIsMod: isMod(whiteName), blackIsMod: isMod(blackName),
-      timeW: l.timeW, timeB: l.timeB, turn: l.turn,
-      timeControl: l.time, increment: l.inc,
-      isArena: !!l.arenaId, arenaName: l.arenaName || null, fen: l.fen
-    });
-  }
-  list.sort((a, b) => (b.isArena ? 1 : 0) - (a.isArena ? 1 : 0));
-  return list;
-}
-
-// ======================= ФИНАЛИЗАЦИЯ =======================
-async function finishGame(lobbyId, result, reason) {
-  const l = lobbies.get(lobbyId);
-  if (!l || l.finished) return;
-  l.finished = true;
-  l.started = false;
-
-  const hostUser = db.users[l.host];
-  const guestUser = db.users[l.guest];
-  if (!hostUser || !guestUser) { lobbies.delete(lobbyId); return; }
-
-  const isBotGame = !!l.isBot;
-  const whiteName = l.hostColor === 'w' ? l.host : l.guest;
-  const blackName = l.hostColor === 'b' ? l.host : l.guest;
-  const whiteUser = db.users[whiteName];
-  const blackUser = db.users[blackName];
-
-  const cat = categoryOf(l.time);
-  if (!whiteUser.categories) whiteUser.categories = {};
-  if (!blackUser.categories) blackUser.categories = {};
-  if (!whiteUser.categories[cat]) whiteUser.categories[cat] = emptyRatingBlock(whiteUser.rating);
-  if (!blackUser.categories[cat]) blackUser.categories[cat] = emptyRatingBlock(blackUser.rating);
-
-  const wc = whiteUser.categories[cat];
-  const bc = blackUser.categories[cat];
-  const whiteBefore = wc.rating;
-  const blackBefore = bc.rating;
-
-  let whiteScore = 0.5, blackScore = 0.5;
-  if (result === 'w') { whiteScore = 1; blackScore = 0; }
-  else if (result === 'b') { whiteScore = 0; blackScore = 1; }
-
-  const kWhite = kFactor(whiteBefore, wc.games);
-  const kBlack = kFactor(blackBefore, bc.games);
-  const whiteDelta = eloDelta(whiteBefore, blackBefore, whiteScore, kWhite);
-  const blackDelta = eloDelta(blackBefore, whiteBefore, blackScore, kBlack);
-  let whiteAfter = whiteBefore + whiteDelta;
-  let blackAfter = blackBefore + blackDelta;
-
-  if (whiteUser.isBot) whiteAfter = Math.max(800, Math.min(3000, whiteAfter));
-  if (blackUser.isBot) blackAfter = Math.max(800, Math.min(3000, blackAfter));
-
-  wc.rating = whiteAfter;
-  if (result === 'w') wc.wins++; else if (result === 'b') wc.losses++;
-  wc.games++;
-  bc.rating = blackAfter;
-  if (result === 'b') bc.wins++; else if (result === 'w') bc.losses++;
-  bc.games++;
-
-  whiteUser.rating = whiteAfter;
-  if (result === 'w') whiteUser.wins++; else if (result === 'b') whiteUser.losses++; else whiteUser.draws++;
-  whiteUser.games++;
-  blackUser.rating = blackAfter;
-  if (result === 'b') blackUser.wins++; else if (result === 'w') blackUser.losses++; else blackUser.draws++;
-  blackUser.games++;
-
-  const gameRecord = {
-    white: whiteName, black: blackName, result, reason,
-    timeControl: l.time, increment: l.inc,
-    whiteBefore, blackBefore, whiteAfter, blackAfter,
-    finishedAt: Date.now(), category: cat,
-    isArena: !!l.arenaId, arenaName: l.arenaName || null,
-    isBot: isBotGame
-  };
-
-  try {
-    await saveUser(whiteName);
-    await saveUser(blackName);
-    await saveGame(gameRecord);
-  } catch (err) { console.error('[DB] Ошибка сохранения партии:', err.message || err.code || err); }
-
-  const isArena = !!l.arenaId;
-  io.to(lobbyId).emit('gameEnded', {
-    result, reason, whiteDelta, blackDelta, whiteAfter, blackAfter, category: cat,
-    isArena, arenaId: l.arenaId || null, arenaName: l.arenaName || null,
-    isBot: isBotGame
-  });
-
-  if (l.arenaId) {
-    try { handleArenaGameEnd(l.arenaId, lobbyId, result, whiteName, blackName); }
-    catch (e) { console.error('[arena] handleArenaGameEnd ошибка:', e.message); }
-  }
-
-  setTimeout(() => {
-    const cur = lobbies.get(lobbyId);
-    if (cur) {
-      io.to(lobbyId).socketsLeave(lobbyId);
-      lobbies.delete(lobbyId);
-      broadcastLobbies();
-    }
-  }, 2000);
-
-  broadcastOnline();
-}
-
-// ======================= АРЕНЫ =======================
-const ARENA_TEMPLATES = [
-  { id: 'bullet-halfhour', name: 'Получасовая пуля', description: '1+0 · рейтинговая', timeControl: 1, increment: 0, durationMin: 27, repeat: 'every30', color: 'bullet', botFriendly: false },
-  { id: 'blitz-hourly', name: 'Ежечасная блиц-арена', description: '3+2 · рейтинговая', timeControl: 3, increment: 2, durationMin: 57, repeat: 'hourly', color: 'blitz', botFriendly: false },
-  { id: 'rapid-2h', name: 'Двухчасовая рапид-арена', description: '10+0 · рейтинговая', timeControl: 10, increment: 0, durationMin: 117, repeat: 'every2h', color: 'rapid', botFriendly: false },
-  { id: 'classical-4h', name: 'Классическая арена', description: '30+0 · классика', timeControl: 30, increment: 0, durationMin: 237, repeat: 'every4h', color: 'classical', botFriendly: false },
-  { id: 'bot-blitz-hourly', name: 'Блиц-арена с ботами', description: '3+2 · люди и боты', timeControl: 3, increment: 2, durationMin: 57, repeat: 'hourly', color: 'blitz', botFriendly: true },
-  { id: 'bot-rapid-2h', name: 'Рапид-арена с ботами', description: '10+0 · люди и боты', timeControl: 10, increment: 0, durationMin: 117, repeat: 'every2h', color: 'rapid', botFriendly: true }
-];
-function nextStartFor(tpl, now) {
-  const p = mskParts(now);
-  if (tpl.repeat === 'every30') { if (p.mi < 30) return fromMsk(p.y, p.mo, p.d, p.h, 30, 0); return fromMsk(p.y, p.mo, p.d, p.h + 1, 0, 0); }
-  if (tpl.repeat === 'hourly') { const c = fromMsk(p.y, p.mo, p.d, p.h, 0, 0); if (c >= now) return c; return fromMsk(p.y, p.mo, p.d, p.h + 1, 0, 0); }
-  if (tpl.repeat === 'every2h') { const eh = p.h - (p.h % 2); const c = fromMsk(p.y, p.mo, p.d, eh, 0, 0); if (c >= now) return c; return fromMsk(p.y, p.mo, p.d, eh + 2, 0, 0); }
-  if (tpl.repeat === 'every4h') { const fh = p.h - (p.h % 4); const c = fromMsk(p.y, p.mo, p.d, fh, 0, 0); if (c >= now) return c; return fromMsk(p.y, p.mo, p.d, fh + 4, 0, 0); }
-  return roundToMinute(now + 3600000);
-}
-function stepFor(tpl) {
-  if (tpl.repeat === 'hourly') return 3600 * 1000;
-  if (tpl.repeat === 'every30') return 30 * 60 * 1000;
-  if (tpl.repeat === 'every2h') return 2 * 3600 * 1000;
-  if (tpl.repeat === 'every4h') return 4 * 3600 * 1000;
-  return 3600 * 1000;
-}
-function getOrCreateArenaState(instance) {
-  const now = Date.now();
-  let state = arenas.get(instance.id);
-  if (state) { state.startsAt = instance.startsAt; state.endsAt = instance.endsAt; state.botFriendly = instance.botFriendly; syncArenaPhase(state, now); return state; }
-  state = {
-    id: instance.id, templateId: instance.templateId, name: instance.name,
-    description: instance.description, timeControl: instance.timeControl, increment: instance.increment,
-    startsAt: instance.startsAt, endsAt: instance.endsAt, color: instance.color,
-    botFriendly: !!instance.botFriendly,
-    phase: 'waiting', participants: new Map(), finished: false, top3: null,
-    pairingInterval: null, cleanupTimer: null, pairingNow: null,
-    activeLobbies: new Set(), chat: [], chatViewers: new Set(), finishedGames: [],
-    botsJoined: false
-  };
-  arenas.set(instance.id, state);
-  scheduleArena(state);
-  syncArenaPhase(state, now);
-  return state;
-}
-function joinBotsToArena(state) {
-  if (!state.botFriendly || state.botsJoined) return;
-  state.botsJoined = true;
-  for (const bot of BOTS) {
-    if (state.participants.has(bot.name)) continue;
-    // Не все боты сразу — только 2-3 случайных
-    if (Math.random() < 0.5) continue;
-    const botUser = db.users[bot.name];
-    state.participants.set(bot.name, {
-      username: bot.name,
-      rating: botUser ? botUser.rating : bot.rating,
-      score: 0, wins: 0, draws: 0, losses: 0,
-      winStreak: 0, drawStreak: 0,
-      socketId: 'BOT:' + bot.name,
-      lobbyId: null, isPlaying: false, paused: false,
-      waitingSince: Date.now(), isBot: true, botLevel: bot.level
-    });
-    const beh = botInitBehavior(bot.name);
-    beh.state = 'in_arena';
-    beh.activityId = state.id;
-    beh.lastChange = Date.now();
-  }
-}
-function syncArenaPhase(state, now) {
-  if (state.finished) return;
-  if (now >= state.endsAt) return;
-  if (now >= state.startsAt && state.phase !== 'live') {
-    state.phase = 'live';
-    if (state.botFriendly) joinBotsToArena(state);
-  }
-}
-function scheduleArena(state) {
-  const now = Date.now();
-  const startDelay = Math.max(0, state.startsAt - now);
-  const endDelay = Math.max(0, state.endsAt - now);
-  if (startDelay > 0) {
-    setTimeout(() => {
-      if (state.finished) return;
-      state.phase = 'live';
-      if (state.botFriendly) joinBotsToArena(state);
-      io.emit('arenaUpdate', { arenaId: state.id });
-      io.emit('arenaStarted', { arenaId: state.id, arenaName: state.name });
-      const sysMsg = { id: 'sys' + Date.now(), system: true, text: `⚔ Арена "${state.name}" началась!`, ts: Date.now(), arenaId: state.id };
-      state.chat.push(sysMsg); if (state.chat.length > 300) state.chat.shift();
-      io.emit('arenaChatMessage', sysMsg);
-      if (!state.pairingInterval) state.pairingInterval = setInterval(() => tryPair(state), 3000);
-      tryPair(state);
-    }, startDelay);
-  } else if (now < state.endsAt && !state.finished) {
-    state.phase = 'live';
-    if (state.botFriendly) joinBotsToArena(state);
-    if (!state.pairingInterval) state.pairingInterval = setInterval(() => tryPair(state), 3000);
-    tryPair(state);
-  }
-  if (endDelay > 0) setTimeout(() => finishArena(state), endDelay);
-  else finishArena(state);
-}
-
-// Бот максимум 1 партия за раз (глобально)
-const MAX_BOT_GAMES = 1;
-// Максимум одновременных бот-партий в одной арене
-const MAX_BOT_GAMES_PER_ARENA = 2;
-
-function botActiveGamesCount(botName) {
-  let n = 0;
-  for (const l of lobbies.values()) {
-    if (l.finished) continue;
-    if (!l.isBot) continue;
-    if (l.botName === botName || l.botName2 === botName) n++;
-  }
-  return n;
-}
-function botIsBusy(botName) {
-  return botActiveGamesCount(botName) >= MAX_BOT_GAMES;
-}
-function botGamesInArena(arenaId) {
-  let n = 0;
-  for (const l of lobbies.values()) {
-    if (l.finished) continue;
-    if (!l.isBot) continue;
-    if (l.arenaId === arenaId) n++;
-  }
-  return n;
-}
-function isAvailableForPairing(p, arenaId) {
-  if (!p) return false;
-  if (p.paused) return false;
-  if (p.isBot) {
-    if (botIsBusy(p.username)) return false;
-    // Ограничение на количество бот-партий в арене
-    if (arenaId && botGamesInArena(arenaId) >= MAX_BOT_GAMES_PER_ARENA) return false;
-    return true;
-  }
-  if (!p.socketId) return false;
-  if (!io.sockets.sockets.has(p.socketId)) return false;
-  return true;
-}
+loadData();
 
 // ============================================================
-//  ЖИВОЕ ПОВЕДЕНИЕ БОТОВ
-//  Состояния: idle | in_lobby | in_arena | playing
+//  БОТЫ (простой движок, без лагов)
 // ============================================================
-const BOT_BEHAVIOR = new Map();
-
-function botInitBehavior(botName) {
-  if (!BOT_BEHAVIOR.has(botName)) {
-    BOT_BEHAVIOR.set(botName, {
-      state: 'idle',
-      activityId: null,
-      lastChange: Date.now(),
-      nextDecision: Date.now() + 2000 + Math.random() * 5000
-    });
-  }
-  return BOT_BEHAVIOR.get(botName);
-}
-
-function botCloseOwnWaitingLobby(botName) {
-  let closed = false;
-  for (const [id, l] of lobbies.entries()) {
-    if (!l.finished && !l.started && l.host === botName && l.isBot) {
-      lobbies.delete(id);
-      closed = true;
-    }
-  }
-  if (closed) broadcastLobbies();
-  return closed;
-}
-
-function botLeaveArena(botName, arenaId) {
-  const state = arenas.get(arenaId);
-  if (!state) return;
-  const p = state.participants.get(botName);
-  if (p && !p.isPlaying) {
-    state.participants.delete(botName);
-    const sysMsg = { id: 'sys' + Date.now(), system: true, text: `${botName} покинул арену`, ts: Date.now(), arenaId };
-    state.chat.push(sysMsg); if (state.chat.length > 300) state.chat.shift();
-    io.to('arena:' + arenaId).emit('arenaChatMessage', sysMsg);
-    io.emit('arenaUpdate', { arenaId });
-  }
-}
-
-function botJoinArena(botName, arenaId) {
-  const state = arenas.get(arenaId);
-  if (!state || state.finished || state.phase === 'finished') return false;
-  if (state.participants.has(botName)) return false;
-  const botUser = db.users[botName];
-  state.participants.set(botName, {
-    username: botName,
-    rating: botUser ? botUser.rating : 1200,
-    score: 0, wins: 0, draws: 0, losses: 0, winStreak: 0, drawStreak: 0,
-    socketId: 'BOT:' + botName,
-    lobbyId: null, isPlaying: false, paused: false,
-    waitingSince: Date.now(), isBot: true
-  });
-  const sysMsg = { id: 'sys' + Date.now(), system: true, text: `${botName} присоединился к арене`, ts: Date.now(), arenaId };
-  state.chat.push(sysMsg); if (state.chat.length > 300) state.chat.shift();
-  io.to('arena:' + arenaId).emit('arenaChatMessage', sysMsg);
-  io.emit('arenaUpdate', { arenaId });
-  return true;
-}
-
-function botBehaviorTick() {
-  const now = Date.now();
-  for (const bot of BOTS) {
-    const beh = botInitBehavior(bot.name);
-    if (now < beh.nextDecision) continue;
-    beh.nextDecision = now + 3000 + Math.random() * 6000;
-
-    // Играет — ничего не делаем
-    if (botIsBusy(bot.name)) {
-      if (beh.state !== 'playing') {
-        beh.state = 'playing';
-        beh.lastChange = now;
-        botCloseOwnWaitingLobby(bot.name);
-      }
-      continue;
-    }
-
-    // Был playing, но партия закончилась
-    if (beh.state === 'playing') {
-      beh.state = 'idle';
-      beh.activityId = null;
-      beh.lastChange = now;
-    }
-
-    // Сидит в арене
-    if (beh.state === 'in_arena') {
-      const state = arenas.get(beh.activityId);
-      if (!state || state.finished || state.phase === 'finished') {
-        beh.state = 'idle'; beh.activityId = null;
-      } else {
-        const p = state.participants.get(bot.name);
-        if (p && p.isPlaying) {
-          beh.state = 'playing';
-          beh.lastChange = now;
-          continue;
-        }
-        // Иногда ставим/снимаем паузу
-        if (p && Math.random() < 0.03) {
-          p.paused = !p.paused;
-          if (!p.paused) p.waitingSince = Date.now();
-          io.emit('arenaUpdate', { arenaId: beh.activityId });
-        }
-        // Иногда уходим из арены
-        if (Math.random() < 0.04) {
-          botLeaveArena(bot.name, beh.activityId);
-          beh.state = 'idle'; beh.activityId = null;
-          beh.lastChange = now;
-        }
-      }
-      continue;
-    }
-
-    // Сидит в зале ожидания
-    if (beh.state === 'in_lobby') {
-      const l = lobbies.get(beh.activityId);
-      if (!l || l.finished || l.started) {
-        beh.state = 'idle'; beh.activityId = null;
-      } else if (now - beh.lastChange > 40000 && Math.random() < 0.25) {
-        botCloseOwnWaitingLobby(bot.name);
-        beh.state = 'idle'; beh.activityId = null;
-        beh.lastChange = now;
-      }
-      continue;
-    }
-
-    // idle — выбираем занятие
-    const r = Math.random();
-
-    // 40% — пойти в живую/скорую арену с ботами
-    if (r < 0.40) {
-      const candidates = [...arenas.values()].filter(s =>
-        !s.finished && s.botFriendly &&
-        (s.phase === 'live' || s.phase === 'waiting') &&
-        !s.participants.has(bot.name)
-      );
-      if (candidates.length) {
-        candidates.sort((a, b) => {
-          const aLive = a.phase === 'live' ? 0 : 1;
-          const bLive = b.phase === 'live' ? 0 : 1;
-          if (aLive !== bLive) return aLive - bLive;
-          return a.startsAt - b.startsAt;
-        });
-        const chosen = candidates[0];
-        if (botJoinArena(bot.name, chosen.id)) {
-          beh.state = 'in_arena';
-          beh.activityId = chosen.id;
-          beh.lastChange = now;
-          continue;
-        }
-      }
-    }
-
-    // 35% — выставить заявку в зал ожидания
-    if (r < 0.75) {
-      // Не более одной заявки от бота одновременно
-      let alreadyHasLobby = false;
-      for (const l of lobbies.values()) {
-        if (!l.finished && !l.started && l.host === bot.name && l.isBot) { alreadyHasLobby = true; break; }
-      }
-      if (!alreadyHasLobby) {
-        const tc = BOT_WAITING_TIMES[Math.floor(Math.random() * BOT_WAITING_TIMES.length)];
-        const id = genId();
-        lobbies.set(id, {
-          id, host: bot.name, hostSocket: null, guest: null, guestSocket: null,
-          hostColor: null, guestColor: null, time: tc.t, inc: tc.i,
-          timeW: tc.t * 60, timeB: tc.t * 60, turn: 'w',
-          fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-          started: false, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
-          createdAt: Date.now(), rematch: null, isBot: true, botName: bot.name, botColor: 'b', history: []
-        });
-        beh.state = 'in_lobby';
-        beh.activityId = id;
-        beh.lastChange = now;
-        broadcastLobbies();
-        continue;
-      }
-    }
-    // остальное — idle
-  }
-}
-setInterval(botBehaviorTick, 5000);
-setTimeout(botBehaviorTick, 3000);
-
-const BOT_WAITING_TIMES = [
-  { t: 1, i: 0 }, { t: 3, i: 0 }, { t: 5, i: 0 }, { t: 10, i: 0 }
-];
-
-// Жеребьёвка: идёт всегда, когда арена live
-function tryPair(state) {
-  if (state.finished || state.phase !== 'live') return;
-
-  const hasHumans = [...state.participants.values()].some(p => !p.isBot);
-  const hasViewers = state.chatViewers.size > 0;
-
-  // Если только боты и никто не смотрит — собираем реже, чтобы не грузить CPU
-  if (!hasHumans && !hasViewers) {
-    if (Math.random() > 0.25) return;
-  }
-
-  // Ограничение на количество одновременных партий в арене
-  const currentActive = state.activeLobbies.size;
-  if (currentActive >= 6) return; // не более 6 партий одновременно в арене
-
-  const available = [];
-  for (const [username, p] of state.participants.entries()) {
-    if (!isAvailableForPairing(p, state.id)) continue;
-    if (!p.waitingSince) p.waitingSince = Date.now();
-    available.push(p);
-  }
-  if (available.length < 2) { state.pairingNow = available.length === 1 ? available[0].username : null; return; }
-  state.pairingNow = null;
-  available.sort((a, b) => a.waitingSince - b.waitingSince);
-  const used = new Set();
-  let pairsCreated = 0;
-  const MAX_PAIRS_PER_TICK = 2;
-  for (let i = 0; i < available.length && pairsCreated < MAX_PAIRS_PER_TICK; i++) {
-    const a = available[i];
-    if (used.has(a.username)) continue;
-    let best = null, bestDiff = Infinity;
-    for (let j = 0; j < available.length; j++) {
-      if (i === j) continue;
-      const b = available[j];
-      if (used.has(b.username)) continue;
-      if (a.isBot && b.isBot) {
-        const humansWaiting = available.some(p => !p.isBot && !used.has(p.username));
-        if (humansWaiting) continue;
-        // бот-бот пара — только с шансом 30% и если не превышен лимит
-        if (Math.random() < 0.7) continue;
-        if (botGamesInArena(state.id) >= MAX_BOT_GAMES_PER_ARENA) continue;
-      }
-      const diff = Math.abs((a.score || 0) - (b.score || 0));
-      if (diff < bestDiff) { bestDiff = diff; best = b; }
-    }
-    if (!best) continue;
-    createArenaPairing(state, a, best);
-    used.add(a.username); used.add(best.username);
-    a.waitingSince = null; best.waitingSince = null;
-    pairsCreated++;
-  }
-}
-
-function createArenaPairing(state, a, b) {
-  const lobbyId = genId();
-  const hostIsWhite = Math.random() < 0.5;
-  const hostColor = hostIsWhite ? 'w' : 'b';
-  const guestColor = hostIsWhite ? 'b' : 'w';
-  const time = state.timeControl;
-  const inc = state.increment;
-  const aIsBot = !!a.isBot;
-  const bIsBot = !!b.isBot;
-  const isBotGame = aIsBot || bIsBot;
-
-  lobbies.set(lobbyId, {
-    id: lobbyId, host: a.username, hostSocket: a.socketId, guest: b.username, guestSocket: b.socketId,
-    hostColor, guestColor, time, inc, timeW: time * 60, timeB: time * 60, turn: 'w',
-    fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-    started: true, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
-    createdAt: Date.now(), arenaId: state.id, arenaName: state.name, rematch: null,
-    isBot: isBotGame,
-    botColor: aIsBot ? hostColor : (bIsBot ? guestColor : null),
-    botName: aIsBot ? a.username : (bIsBot ? b.username : null),
-    botColor2: bIsBot && aIsBot ? guestColor : null,
-    botName2: bIsBot && aIsBot ? b.username : null,
-    history: []
-  });
-  state.activeLobbies.add(lobbyId);
-  a.isPlaying = true; a.lobbyId = lobbyId;
-  b.isPlaying = true; b.lobbyId = lobbyId;
-
-  // Обновляем состояния поведения
-  if (aIsBot) { const bh = botInitBehavior(a.username); bh.state = 'playing'; bh.lastChange = Date.now(); }
-  if (bIsBot) { const bh = botInitBehavior(b.username); bh.state = 'playing'; bh.lastChange = Date.now(); }
-
-  const aSocket = a.isBot ? null : io.sockets.sockets.get(a.socketId);
-  const bSocket = b.isBot ? null : io.sockets.sockets.get(b.socketId);
-  const aUser = db.users[a.username];
-  const bUser = db.users[b.username];
-  if (aSocket) {
-    aSocket.join(lobbyId);
-    aSocket.emit('gameStart', { color: hostColor, opponent: b.username, opponentRating: bUser ? bUser.rating : null, opponentIsAdmin: isAdmin(b.username), opponentIsMod: isMod(b.username), opponentIsBot: !!b.isBot, opponentOnline: true, time, inc, lobbyId, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', chat: [], arenaId: state.id, arenaName: state.name, isBot: isBotGame });
-  }
-  if (bSocket) {
-    bSocket.join(lobbyId);
-    bSocket.emit('gameStart', { color: guestColor, opponent: a.username, opponentRating: aUser ? aUser.rating : null, opponentIsAdmin: isAdmin(a.username), opponentIsMod: isMod(a.username), opponentIsBot: !!a.isBot, opponentOnline: true, time, inc, lobbyId, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', chat: [], arenaId: state.id, arenaName: state.name, isBot: isBotGame });
-  }
-  io.emit('arenaUpdate', { arenaId: state.id });
-  broadcastOnline();
-
-  if (isBotGame && lobbyId) {
-    // Задержка перед первым ходом бота, чтобы не грузить CPU
-    setTimeout(() => scheduleBotMove(lobbyId), 500 + Math.random() * 500);
-  }
-}
-function calcArenaPoints(p, result) {
-  if (result === 'win') { const s = (p.winStreak || 0) + 1; p.winStreak = s; p.drawStreak = 0; return s >= 3 ? 4 : 2; }
-  if (result === 'draw') { const s = (p.drawStreak || 0) + 1; p.drawStreak = s; p.winStreak = 0; return s >= 2 ? 2 : 1; }
-  p.winStreak = 0; p.drawStreak = 0; return 0;
-}
-function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
-  const state = arenas.get(arenaId);
-  if (!state) return;
-  state.activeLobbies.delete(lobbyId);
-  if (!state.finishedGames) state.finishedGames = [];
-  const wU = db.users[whiteName]; const bU = db.users[blackName]; const l = lobbies.get(lobbyId);
-  state.finishedGames.push({
-    white: whiteName, black: blackName, whiteRating: wU ? wU.rating : null, blackRating: bU ? bU.rating : null,
-    whiteIsAdmin: isAdmin(whiteName), blackIsAdmin: isAdmin(blackName), whiteIsMod: isMod(whiteName), blackIsMod: isMod(blackName),
-    result, fen: l ? l.fen : 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-    turn: l ? l.turn : 'w', finishedAt: Date.now()
-  });
-  if (state.finishedGames.length > 200) state.finishedGames.shift();
-  const whiteP = state.participants.get(whiteName);
-  const blackP = state.participants.get(blackName);
-  if (state.finished || !whiteP || !blackP) {
-    if (whiteP) { whiteP.isPlaying = false; whiteP.lobbyId = null; }
-    if (blackP) { blackP.isPlaying = false; blackP.lobbyId = null; }
-    io.emit('arenaUpdate', { arenaId }); return;
-  }
-  if (result === 'w') { whiteP.score += calcArenaPoints(whiteP, 'win'); whiteP.wins++; blackP.losses++; calcArenaPoints(blackP, 'loss'); }
-  else if (result === 'b') { blackP.score += calcArenaPoints(blackP, 'win'); blackP.wins++; whiteP.losses++; calcArenaPoints(whiteP, 'loss'); }
-  else { whiteP.score += calcArenaPoints(whiteP, 'draw'); blackP.score += calcArenaPoints(blackP, 'draw'); whiteP.draws++; blackP.draws++; }
-  whiteP.isPlaying = false; blackP.isPlaying = false;
-  whiteP.lobbyId = null; blackP.lobbyId = null;
-  if (!whiteP.paused) whiteP.waitingSince = Date.now();
-  if (!blackP.paused) blackP.waitingSince = Date.now();
-  // Освобождаем поведение ботов
-  if (whiteP.isBot) { const bh = botInitBehavior(whiteName); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
-  if (blackP.isBot) { const bh = botInitBehavior(blackName); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
-  setTimeout(() => tryPair(state), 300);
-  io.emit('arenaUpdate', { arenaId });
-}
-function finishArena(state) {
-  if (state.finished) return;
-  state.finished = true; state.phase = 'finished';
-  if (state.pairingInterval) { clearInterval(state.pairingInterval); state.pairingInterval = null; }
-  for (const p of state.participants.values()) { p.isPlaying = false; p.lobbyId = null; }
-  const all = [...state.participants.values()].sort((a, b) => {
-    if (b.score !== a.score) return b.score - a.score;
-    if (b.wins !== a.wins) return b.wins - a.wins;
-    return b.rating - a.rating;
-  });
-  state.top3 = all.slice(0, 3).map(p => ({ username: p.username, score: p.score, wins: p.wins, draws: p.draws, losses: p.losses, rating: p.rating }));
-  const sysMsg = { id: 'sys' + Date.now(), system: true, text: `🏆 Арена "${state.name}" завершена!`, ts: Date.now(), arenaId: state.id };
-  state.chat.push(sysMsg); if (state.chat.length > 300) state.chat.shift();
-  io.emit('arenaChatMessage', sysMsg);
-  io.emit('arenaFinished', { arenaId: state.id, arenaName: state.name, top3: state.top3 });
-  io.emit('arenaUpdate', { arenaId: state.id });
-  // Освобождаем ботов из этой арены и удаляем их из participants
-  for (const [name, p] of [...state.participants.entries()]) {
-    if (p.isBot) {
-      const bh = botInitBehavior(name);
-      if (bh.state === 'in_arena' && bh.activityId === state.id) {
-        bh.state = 'idle'; bh.activityId = null; bh.lastChange = Date.now();
-      }
-      state.participants.delete(name);
-    }
-  }
-  state.cleanupTimer = setTimeout(() => {
-    if (state.chatViewers.size === 0) arenas.delete(state.id);
-    else setTimeout(() => arenas.delete(state.id), 30 * 60 * 1000);
-  }, 2 * 60 * 60 * 1000);
-}
-function getArenaSchedule(hoursAhead) {
-  hoursAhead = hoursAhead || 48;
-  const now = Date.now();
-  const finishedCutoff = now - 60 * 60 * 1000;
-  const end = now + hoursAhead * 3600 * 1000;
-  const result = [];
-  for (const tpl of ARENA_TEMPLATES) {
-    const scanStart = now - tpl.durationMin * 60 * 1000 - 60 * 1000;
-    let t = nextStartFor(tpl, scanStart);
-    const step = stepFor(tpl);
-    let safety = 0;
-    while (t <= end && safety < 300) {
-      safety++;
-      const endsAt = roundToMinute(t + tpl.durationMin * 60 * 1000);
-      let status;
-      if (t > now) status = 'upcoming';
-      else if (now < endsAt) status = 'live';
-      else status = 'finished';
-      if (status === 'finished' && endsAt < finishedCutoff) { t += step; continue; }
-      const instance = { id: `${tpl.id}-${t}`, templateId: tpl.id, name: tpl.name, description: tpl.description, timeControl: tpl.timeControl, increment: tpl.increment, durationMin: tpl.durationMin, color: tpl.color, startsAt: t, endsAt, status, botFriendly: !!tpl.botFriendly };
-      result.push(instance);
-      const createAheadMs = 24 * 3600 * 1000;
-      if (status === 'live' || (status === 'upcoming' && t - now < createAheadMs)) getOrCreateArenaState(instance);
-      t += step;
-    }
-  }
-  return result.sort((a, b) => a.startsAt - b.startsAt);
-}
-function getTopLiveArenas() {
-  const now = Date.now();
-  const list = [];
-  for (const state of arenas.values()) {
-    if (state.finished) continue;
-    if (state.endsAt < now) continue;
-    if (state.phase !== 'live' && state.phase !== 'waiting') continue;
-    list.push({ id: state.id, name: state.name, phase: state.phase, color: state.color, participantsCount: state.participants.size, timeControl: state.timeControl, increment: state.increment, startsAt: state.startsAt, endsAt: state.endsAt, botFriendly: !!state.botFriendly });
-  }
-  list.sort((a, b) => { if (b.participantsCount !== a.participantsCount) return b.participantsCount - a.participantsCount; return a.startsAt - b.startsAt; });
-  return list.slice(0, 3);
-}
-
-// ======================= ТИКЕР =======================
-setInterval(() => {
-  const now = Date.now();
-  for (const [id, lobby] of lobbies.entries()) {
-    if (!lobby.started || lobby.finished) continue;
-    const side = lobby.turn;
-    if (side !== 'w' && side !== 'b') continue;
-    const elapsed = Math.floor((now - lobby.lastTick) / 1000);
-    if (elapsed <= 0) continue;
-    lobby.lastTick = now;
-    if (side === 'w') lobby.timeW = Math.max(0, lobby.timeW - elapsed);
-    else              lobby.timeB = Math.max(0, lobby.timeB - elapsed);
-    if (!lobby.isBot) {
-      io.to(id).emit('timeUpdate', { timeW: lobby.timeW, timeB: lobby.timeB, serverNow: now });
-    }
-    if (lobby.timeW <= 0) finishGame(id, 'b', 'Время');
-    else if (lobby.timeB <= 0) finishGame(id, 'w', 'Время');
-  }
-}, 1000);
-
-// ======================= МОДЕРАЦИЯ =======================
-function checkMute(username) {
-  const u = db.users[username]; if (!u) return 0;
-  const until = u.mutedUntil || 0;
-  if (until <= Date.now()) return 0;
-  return until;
-}
-function setMute(username, minutes) {
-  const u = db.users[username]; if (!u) return false;
-  u.mutedUntil = Date.now() + minutes * 60 * 1000;
-  saveUser(username).catch(() => {});
-  return true;
-}
-function clearMute(username) {
-  const u = db.users[username]; if (!u) return false;
-  u.mutedUntil = 0; saveUser(username).catch(() => {});
-  return true;
-}
-
-// ======================= БОТЫ =======================
 const BOTS = [
-  { name: 'BotEasy',   rating: 1000, level: 1, title: 'Лёгкий',   desc: 'для новичков' },
-  { name: 'BotMedium', rating: 1300, level: 2, title: 'Средний',  desc: 'подумает' },
-  { name: 'BotHard',   rating: 1600, level: 3, title: 'Сложный',  desc: 'тактика' },
-  { name: 'BotMaster', rating: 2000, level: 4, title: 'Мастер',   desc: 'сильный соперник' }
+  { name: 'BotEasy',   rating: 800,  level: 1, title: 'Легко' },
+  { name: 'BotMedium', rating: 1200, level: 2, title: 'Средне' },
+  { name: 'BotHard',   rating: 1600, level: 3, title: 'Сложно' },
+  { name: 'BotMaster', rating: 2000, level: 4, title: 'Мастер' }
 ];
 const BOT_NAMES = new Set(BOTS.map(b => b.name));
 
-// ============================================================
-//  ШАХМАТНЫЙ ДВИЖОК ДЛЯ БОТА
-// ============================================================
-const PIECE_VALUES = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
-const PST = {
-  p: [[0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20,10,10],[5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-5,-10,0,0,-10,-5,5],[5,10,10,-20,-20,10,10,5],[0,0,0,0,0,0,0,0]],
-  n: [[-50,-40,-30,-30,-30,-30,-40,-50],[-40,-20,0,0,0,0,-20,-40],[-30,0,10,15,15,10,0,-30],[-30,5,15,20,20,15,5,-30],[-30,0,15,20,20,15,0,-30],[-30,5,10,15,15,10,5,-30],[-40,-20,0,5,5,0,-20,-40],[-50,-40,-30,-30,-30,-30,-40,-50]],
-  b: [[-20,-10,-10,-10,-10,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,10,10,5,0,-10],[-10,5,5,10,10,5,5,-10],[-10,0,10,10,10,10,0,-10],[-10,10,10,10,10,10,10,-10],[-10,5,0,0,0,0,5,-10],[-20,-10,-10,-10,-10,-10,-10,-20]],
-  r: [[0,0,0,0,0,0,0,0],[5,10,10,10,10,10,10,5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[0,0,0,5,5,0,0,0]],
-  q: [[-20,-10,-10,-5,-5,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,5,5,5,0,-10],[-5,0,5,5,5,5,0,-5],[0,0,5,5,5,5,0,-5],[-10,5,5,5,5,5,0,-10],[-10,0,5,0,0,0,0,-10],[-20,-10,-10,-5,-5,-10,-10,-20]],
-  k: [[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-20,-30,-30,-40,-40,-30,-30,-20],[-10,-20,-20,-20,-20,-20,-20,-10],[20,20,0,0,0,0,20,20],[20,30,10,0,0,10,30,20]]
-};
-const TT_CACHE = new Map();
-const TT_MAX = 200000;
-function ttKey(state) { return state.board.map(row => row.map(c => c || '.').join('')).join('/') + state.turn + state.castling + state.ep; }
-function ttGet(k) { return TT_CACHE.get(k); }
-function ttSet(k, d, s) { if (TT_CACHE.size > TT_MAX) TT_CACHE.clear(); TT_CACHE.set(k, { depth: d, score: s }); }
+// Простой бот: random для level 1, material+capture для 2-4
+function pickBotMove(fen, level) {
+  const state = parseFen(fen);
+  const white = state.turn === 'w';
+  const moves = allLegalMoves(state, white);
+  if (!moves.length) return null;
+  if (level === 1) return moves[Math.floor(Math.random() * moves.length)];
 
-function botParseFen(fen) {
+  // Оцениваем каждый ход: материал + бонус за захват
+  let best = null, bestScore = -Infinity;
+  for (const [from, to] of moves) {
+    const captured = state.board[to[0]][to[1]];
+    let score = 0;
+    if (captured) {
+      const v = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 }[captured.toLowerCase()] || 0;
+      score += v * 10;
+    }
+    // Небольшой рандом, чтобы не играл одинаково
+    score += Math.random() * (level === 2 ? 3 : level === 3 ? 1.5 : 0.5);
+    // Центр
+    score += (3.5 - Math.abs(to[1] - 3.5)) * 0.1;
+    if (score > bestScore) { bestScore = score; best = [from, to]; }
+  }
+  return best;
+}
+
+// ============================================================
+//  ШАХМАТНЫЙ ДВИЖОК (для бота и валидации)
+// ============================================================
+function parseFen(fen) {
   const parts = fen.split(' ');
-  const board = Array.from({length:8}, () => Array(8).fill(null));
-  parts[0].split('/').forEach((row, r) => { let f = 0; for (const ch of row) { if (/\d/.test(ch)) f += +ch; else board[r][f++] = ch; } });
+  const board = Array.from({ length: 8 }, () => Array(8).fill(null));
+  parts[0].split('/').forEach((row, r) => {
+    let f = 0;
+    for (const ch of row) {
+      if (/\d/.test(ch)) f += +ch;
+      else board[r][f++] = ch;
+    }
+  });
   return { board, turn: parts[1], castling: parts[2], ep: parts[3], half: +parts[4] || 0, full: +parts[5] || 1 };
 }
-function botToFen(state) {
-  const rows = state.board.map(r => { let s = '', e = 0; for (const c of r) { if (c) { if (e) { s += e; e = 0; } s += c; } else e++; } if (e) s += e; return s; }).join('/');
-  return [rows, state.turn, state.castling, state.ep, state.half, state.full].join(' ');
+function toFen(s) {
+  const rows = s.board.map(r => {
+    let str = '', e = 0;
+    for (const c of r) { if (c) { if (e) { str += e; e = 0; } str += c; } else e++; }
+    if (e) str += e;
+    return str;
+  }).join('/');
+  return [rows, s.turn, s.castling, s.ep, s.half, s.full].join(' ');
 }
-const botIsWhite = p => !!p && p === p.toUpperCase();
-const botInBoard = (r,c) => r >= 0 && r < 8 && c >= 0 && c < 8;
-function botPseudoMoves(state, r, c) {
-  const p = state.board[r][c]; if (!p) return [];
-  const moves = []; const white = botIsWhite(p); const type = p.toLowerCase();
+const isWhite = p => !!p && p === p.toUpperCase();
+const inB = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+
+function pseudoMoves(state, r, c) {
+  const p = state.board[r][c];
+  if (!p) return [];
+  const moves = [];
+  const white = isWhite(p);
+  const type = p.toLowerCase();
   const dir = white ? -1 : 1;
-  const add = (rr, cc) => { if (!botInBoard(rr, cc)) return false; const t = state.board[rr][cc]; if (t && botIsWhite(t) === white) return false; moves.push([rr, cc]); return !t; };
+  const add = (rr, cc) => {
+    if (!inB(rr, cc)) return false;
+    const t = state.board[rr][cc];
+    if (t && isWhite(t) === white) return false;
+    moves.push([rr, cc]);
+    return !t;
+  };
   if (type === 'p') {
-    const startRow = white ? 6 : 1, oneR = r + dir;
-    if (botInBoard(oneR, c) && !state.board[oneR][c]) { moves.push([oneR, c]); const twoR = r + 2 * dir; if (r === startRow && botInBoard(twoR, c) && !state.board[twoR][c]) moves.push([twoR, c]); }
-    for (const dc of [-1, 1]) { const rr = r + dir, cc = c + dc; if (!botInBoard(rr, cc)) continue; const t = state.board[rr][cc]; if (t && botIsWhite(t) !== white) moves.push([rr, cc]); const epTarget = String.fromCharCode(97 + cc) + (8 - rr); if (state.ep && state.ep === epTarget && !t) moves.push([rr, cc]); }
-  } else if (type === 'n') { [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc]) => add(r+dr, c+dc)); }
-  else if (type === 'k') {
-    [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc]) => add(r+dr, c+dc));
-    if (white && r === 7 && c === 4) {
-      if (state.castling.includes('K') && !state.board[7][5] && !state.board[7][6] && state.board[7][7] === 'R') moves.push([7, 6]);
-      if (state.castling.includes('Q') && !state.board[7][3] && !state.board[7][2] && !state.board[7][1] && state.board[7][0] === 'R') moves.push([7, 2]);
+    const startRow = white ? 6 : 1;
+    const oneR = r + dir;
+    if (inB(oneR, c) && !state.board[oneR][c]) {
+      moves.push([oneR, c]);
+      const twoR = r + 2 * dir;
+      if (r === startRow && inB(twoR, c) && !state.board[twoR][c]) moves.push([twoR, c]);
     }
-    if (!white && r === 0 && c === 4) {
-      if (state.castling.includes('k') && !state.board[0][5] && !state.board[0][6] && state.board[0][7] === 'r') moves.push([0, 6]);
-      if (state.castling.includes('q') && !state.board[0][3] && !state.board[0][2] && !state.board[0][1] && state.board[0][0] === 'r') moves.push([0, 2]);
+    for (const dc of [-1, 1]) {
+      const rr = r + dir, cc = c + dc;
+      if (!inB(rr, cc)) continue;
+      const t = state.board[rr][cc];
+      if (t && isWhite(t) !== white) moves.push([rr, cc]);
+      const epT = String.fromCharCode(97 + cc) + (8 - rr);
+      if (state.ep && state.ep === epT && !t) moves.push([rr, cc]);
+    }
+  } else if (type === 'n') {
+    [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc]) => add(r+dr, c+dc));
+  } else if (type === 'k') {
+    [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc]) => add(r+dr, c+dc));
+    if (white && r === 7 && c === 4 && !isAttacked(state, 7, 4, false)) {
+      if (state.castling.includes('K') && !state.board[7][5] && !state.board[7][6] && state.board[7][7] === 'R'
+        && !isAttacked(state, 7, 5, false) && !isAttacked(state, 7, 6, false)) moves.push([7, 6]);
+      if (state.castling.includes('Q') && !state.board[7][3] && !state.board[7][2] && !state.board[7][1] && state.board[7][0] === 'R'
+        && !isAttacked(state, 7, 3, false) && !isAttacked(state, 7, 2, false)) moves.push([7, 2]);
+    }
+    if (!white && r === 0 && c === 4 && !isAttacked(state, 0, 4, true)) {
+      if (state.castling.includes('k') && !state.board[0][5] && !state.board[0][6] && state.board[0][7] === 'r'
+        && !isAttacked(state, 0, 5, true) && !isAttacked(state, 0, 6, true)) moves.push([0, 6]);
+      if (state.castling.includes('q') && !state.board[0][3] && !state.board[0][2] && !state.board[0][1] && state.board[0][0] === 'r'
+        && !isAttacked(state, 0, 3, true) && !isAttacked(state, 0, 2, true)) moves.push([0, 2]);
     }
   } else {
     const dirs = [];
     if (type === 'r' || type === 'q') dirs.push([-1,0],[1,0],[0,-1],[0,1]);
     if (type === 'b' || type === 'q') dirs.push([-1,-1],[-1,1],[1,-1],[1,1]);
-    for (const [dr, dc] of dirs) { let rr = r + dr, cc = c + dc; while (add(rr, cc)) { rr += dr; cc += dc; } }
+    for (const [dr, dc] of dirs) {
+      let rr = r + dr, cc = c + dc;
+      while (add(rr, cc)) { rr += dr; cc += dc; }
+    }
   }
   return moves;
 }
-function botFindKing(state, white) { const k = white ? 'K' : 'k'; for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (state.board[r][c] === k) return [r, c]; return null; }
-function botIsAttacked(state, r, c, byWhite) {
+function findKing(state, white) {
+  const k = white ? 'K' : 'k';
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (state.board[r][c] === k) return [r, c];
+  return null;
+}
+function isAttacked(state, r, c, byWhite) {
   for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
-    const p = state.board[rr][cc]; if (!p || botIsWhite(p) !== byWhite) continue;
+    const p = state.board[rr][cc];
+    if (!p || isWhite(p) !== byWhite) continue;
     const t = p.toLowerCase();
-    if (t === 'p') { const dir = byWhite ? -1 : 1; if (rr + dir === r && (cc - 1 === c || cc + 1 === c)) return true; continue; }
-    if (t === 'k') { if (Math.abs(rr - r) <= 1 && Math.abs(cc - c) <= 1 && (rr !== r || cc !== c)) return true; continue; }
-    if (botPseudoMoves(state, rr, cc).some(([mr, mc]) => mr === r && mc === c)) return true;
+    if (t === 'p') {
+      const dir = byWhite ? -1 : 1;
+      if (rr + dir === r && (cc - 1 === c || cc + 1 === c)) return true;
+      continue;
+    }
+    if (t === 'k') {
+      if (Math.abs(rr - r) <= 1 && Math.abs(cc - c) <= 1 && (rr !== r || cc !== c)) return true;
+      continue;
+    }
+    if (pseudoMoves(state, rr, cc).some(([mr, mc]) => mr === r && mc === c)) return true;
   }
   return false;
 }
-function botInCheck(state, white) { const k = botFindKing(state, white); if (!k) return false; return botIsAttacked(state, k[0], k[1], !white); }
-function botApplyMove(state, from, to) {
-  const copy = { board: state.board.map(row => row.slice()), turn: state.turn, castling: state.castling, ep: state.ep, half: state.half, full: state.full };
+function inCheck(state, white) {
+  const k = findKing(state, white);
+  if (!k) return false;
+  return isAttacked(state, k[0], k[1], !white);
+}
+function applyMove(state, from, to) {
+  const copy = {
+    board: state.board.map(row => row.slice()),
+    turn: state.turn, castling: state.castling, ep: state.ep,
+    half: state.half, full: state.full
+  };
   const [fr, fc] = from, [tr, tc] = to;
-  const p = copy.board[fr][fc]; const white = botIsWhite(p); const type = p.toLowerCase();
-  if (type === 'p' && copy.ep) { const target = String.fromCharCode(97 + tc) + (8 - tr); if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null; }
-  copy.board[tr][tc] = p; copy.board[fr][fc] = null;
+  const p = copy.board[fr][fc];
+  const white = isWhite(p);
+  const type = p.toLowerCase();
+  if (type === 'p' && copy.ep) {
+    const target = String.fromCharCode(97 + tc) + (8 - tr);
+    if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null;
+  }
+  copy.board[tr][tc] = p;
+  copy.board[fr][fc] = null;
   if (type === 'p' && (tr === 0 || tr === 7)) copy.board[tr][tc] = white ? 'Q' : 'q';
-  if (type === 'k' && Math.abs(tc - fc) === 2) { const row = fr; if (tc > fc) { copy.board[row][5] = copy.board[row][7]; copy.board[row][7] = null; } else { copy.board[row][3] = copy.board[row][0]; copy.board[row][0] = null; } }
+  if (type === 'k' && Math.abs(tc - fc) === 2) {
+    const row = fr;
+    if (tc > fc) { copy.board[row][5] = copy.board[row][7]; copy.board[row][7] = null; }
+    else { copy.board[row][3] = copy.board[row][0]; copy.board[row][0] = null; }
+  }
   let cast = copy.castling;
   if (type === 'k') cast = cast.replace(white ? /[KQ]/g : /[kq]/g, '');
-  if (type === 'r') { if (fr === 7 && fc === 0) cast = cast.replace('Q', ''); if (fr === 7 && fc === 7) cast = cast.replace('K', ''); if (fr === 0 && fc === 0) cast = cast.replace('q', ''); if (fr === 0 && fc === 7) cast = cast.replace('k', ''); }
+  if (type === 'r') {
+    if (fr === 7 && fc === 0) cast = cast.replace('Q', '');
+    if (fr === 7 && fc === 7) cast = cast.replace('K', '');
+    if (fr === 0 && fc === 0) cast = cast.replace('q', '');
+    if (fr === 0 && fc === 7) cast = cast.replace('k', '');
+  }
   if (!cast) cast = '-';
-  let ep = '-'; if (type === 'p' && Math.abs(tr - fr) === 2) ep = String.fromCharCode(97 + fc) + (8 - (fr + (tr - fr) / 2));
-  copy.castling = cast; copy.ep = ep; copy.turn = white ? 'b' : 'w'; copy.full += 1;
+  let ep = '-';
+  if (type === 'p' && Math.abs(tr - fr) === 2) {
+    ep = String.fromCharCode(97 + fc) + (8 - (fr + (tr - fr) / 2));
+  }
+  copy.castling = cast;
+  copy.ep = ep;
+  copy.turn = white ? 'b' : 'w';
+  copy.full += 1;
   return copy;
 }
-function botLegalMovesFor(state, r, c) {
-  const p = state.board[r][c]; if (!p) return [];
-  const white = botIsWhite(p);
-  return botPseudoMoves(state, r, c).filter(([rr, cc]) => !botInCheck(botApplyMove(state, [r, c], [rr, cc]), white));
+function legalMovesFor(state, r, c) {
+  const p = state.board[r][c];
+  if (!p) return [];
+  const white = isWhite(p);
+  return pseudoMoves(state, r, c).filter(([rr, cc]) => !inCheck(applyMove(state, [r, c], [rr, cc]), white));
 }
-function botAllLegalMoves(state, white) {
+function allLegalMoves(state, white) {
   const res = [];
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = state.board[r][c]; if (!p || botIsWhite(p) !== white) continue;
-    for (const [rr, cc] of botLegalMovesFor(state, r, c)) res.push([[r,c],[rr,cc]]);
+    const p = state.board[r][c];
+    if (!p || isWhite(p) !== white) continue;
+    for (const [rr, cc] of legalMovesFor(state, r, c)) res.push([[r, c], [rr, cc]]);
   }
   return res;
 }
-function botEval(state) {
-  let score = 0;
-  let whiteBishops = 0, blackBishops = 0;
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = state.board[r][c]; if (!p) continue;
-    const white = botIsWhite(p); const t = p.toLowerCase();
-    let v = PIECE_VALUES[t] || 0;
-    if (t !== 'k') { const table = PST[t]; if (table) { const rr = white ? r : 7 - r; v += table[rr][c]; } }
-    if (t === 'b') { if (white) whiteBishops++; else blackBishops++; }
-    score += white ? v : -v;
-  }
-  if (whiteBishops >= 2) score += 30;
-  if (blackBishops >= 2) score -= 30;
-  const wK = botFindKing(state, true), bK = botFindKing(state, false);
-  if (wK) {
-    const attackers = botAllLegalMoves(state, false).filter(([f, t]) => state.board[t[0]][t[1]] === 'K');
-    if (attackers.length > 0) score -= 500;
-  }
-  if (bK) {
-    const attackers = botAllLegalMoves(state, true).filter(([f, t]) => state.board[t[0]][t[1]] === 'k');
-    if (attackers.length > 0) score += 500;
-  }
-  return score;
+function hasAnyLegalMove(state, white) {
+  return allLegalMoves(state, white).length > 0;
 }
-function moveScore(state, from, to) {
-  const target = state.board[to[0]][to[1]];
-  const piece = state.board[from[0]][from[1]];
-  if (!target) return 0;
-  const victimVal = PIECE_VALUES[target.toLowerCase()] || 0;
-  const attackerVal = PIECE_VALUES[piece.toLowerCase()] || 0;
-  return victimVal * 10 - attackerVal;
-}
-function botQuiescence(state, alpha, beta, maximizing, depthLeft) {
-  if (depthLeft <= 0) return botEval(state);
-  const stand = botEval(state);
-  if (maximizing) { if (stand >= beta) return beta; if (stand > alpha) alpha = stand; }
-  else { if (stand <= alpha) return alpha; if (stand < beta) beta = stand; }
-  const white = state.turn === 'w';
-  const captures = botAllLegalMoves(state, white).filter(([f, t]) => state.board[t[0]][t[1]]);
-  captures.sort((a, b) => moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]));
-  if (maximizing) {
-    for (const [from, to] of captures) {
-      const next = botApplyMove(state, from, to);
-      const score = botQuiescence(next, alpha, beta, false, depthLeft - 1);
-      if (score >= beta) return beta;
-      if (score > alpha) alpha = score;
-    }
-    return alpha;
+function toSAN(state, from, to) {
+  const [fr, fc] = from, [tr, tc] = to;
+  const p = state.board[fr][fc];
+  if (!p) return '';
+  const t = p.toLowerCase();
+  const isCap = !!state.board[tr][tc] || (t === 'p' && fc !== tc);
+  const dest = String.fromCharCode(97 + tc) + (8 - tr);
+  if (t === 'k' && Math.abs(tc - fc) === 2) return tc > fc ? 'O-O' : 'O-O-O';
+  let san = '';
+  if (t === 'p') {
+    if (isCap) san += String.fromCharCode(97 + fc) + 'x';
+    san += dest;
   } else {
-    for (const [from, to] of captures) {
-      const next = botApplyMove(state, from, to);
-      const score = botQuiescence(next, alpha, beta, true, depthLeft - 1);
-      if (score <= alpha) return alpha;
-      if (score < beta) beta = score;
+    san += t === 'n' ? 'N' : t.toUpperCase();
+    let amb = false, sameFile = false, sameRank = false;
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      if (r === fr && c === fc) continue;
+      const q = state.board[r][c];
+      if (!q || q !== p) continue;
+      if (legalMovesFor(state, r, c).some(([mr, mc]) => mr === tr && mc === tc)) {
+        amb = true;
+        if (c === fc) sameFile = true;
+        if (r === fr) sameRank = true;
+      }
     }
-    return beta;
+    if (amb) {
+      if (!sameFile) san += String.fromCharCode(97 + fc);
+      else if (!sameRank) san += (8 - fr);
+      else san += String.fromCharCode(97 + fc) + (8 - fr);
+    }
+    if (isCap) san += 'x';
+    san += dest;
   }
+  const next = applyMove(state, from, to);
+  const nextWhite = next.turn === 'w';
+  const isChk = inCheck(next, nextWhite);
+  const hasM = hasAnyLegalMove(next, nextWhite);
+  if (isChk && !hasM) san += '#';
+  else if (isChk) san += '+';
+  return san;
 }
-function botMinimax(state, depth, alpha, beta, maximizing) {
-  const key = ttKey(state);
-  const cached = ttGet(key);
-  if (cached && cached.depth >= depth) return cached.score;
-  if (depth === 0) return botQuiescence(state, alpha, beta, maximizing, 2);
+function checkEnd(state) {
   const white = state.turn === 'w';
-  const moves = botAllLegalMoves(state, white);
-  if (!moves.length) {
-    if (botInCheck(state, white)) return white ? -99999 + (10 - depth) : 99999 - (10 - depth);
-    return 0;
+  if (!hasAnyLegalMove(state, white)) {
+    if (inCheck(state, white)) return { result: white ? 'b' : 'w', reason: 'Мат' };
+    return { result: 'draw', reason: 'Пат' };
   }
-  moves.sort((a, b) => moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]));
-  let best;
-  if (maximizing) {
-    best = -Infinity;
-    for (let i = 0; i < moves.length; i++) {
-      const [from, to] = moves[i];
-      const next = botApplyMove(state, from, to);
-      const isCapture = !!state.board[to[0]][to[1]];
-      let reduction = 0;
-      if (!isCapture && i >= 4 && depth >= 3) reduction = 1;
-      const score = botMinimax(next, depth - 1 - reduction, alpha, beta, false);
-      if (score > best) best = score;
-      if (best > alpha) alpha = best;
-      if (beta <= alpha) break;
-    }
-  } else {
-    best = Infinity;
-    for (let i = 0; i < moves.length; i++) {
-      const [from, to] = moves[i];
-      const next = botApplyMove(state, from, to);
-      const isCapture = !!state.board[to[0]][to[1]];
-      let reduction = 0;
-      if (!isCapture && i >= 4 && depth >= 3) reduction = 1;
-      const score = botMinimax(next, depth - 1 - reduction, alpha, beta, true);
-      if (score < best) best = score;
-      if (best < beta) beta = best;
-      if (beta <= alpha) break;
-    }
+  return null;
+}
+
+// ============================================================
+//  ПОЛЬЗОВАТЕЛИ
+// ============================================================
+function hash(pw, salt) {
+  return crypto.pbkdf2Sync(pw, salt, 50000, 32, 'sha256').toString('hex');
+}
+function newSalt() { return crypto.randomBytes(16).toString('hex'); }
+
+function publicUser(name) {
+  const u = db.users[name];
+  if (!u) return null;
+  return {
+    username: name, rating: u.rating, wins: u.wins, losses: u.losses, draws: u.draws, games: u.games,
+    isBot: !!u.isBot, createdAt: u.createdAt
+  };
+}
+function ensureBotUser(bot) {
+  if (!db.users[bot.name]) {
+    db.users[bot.name] = {
+      passwordHash: '', salt: '', rating: bot.rating,
+      wins: 0, losses: 0, draws: 0, games: 0,
+      isBot: true, createdAt: Date.now()
+    };
   }
-  ttSet(key, depth, best);
-  return best;
 }
-function getBotParams(rating, baseTimeMin) {
-  let depth, noise;
-  if (rating < 1100)      { depth = 1; noise = 60; }
-  else if (rating < 1350) { depth = 2; noise = 25; }
-  else if (rating < 1500) { depth = 2; noise = 12; }
-  else if (rating < 1700) { depth = 3; noise = 5; }
-  else if (rating < 1850) { depth = 3; noise = 2; }
-  else if (rating < 2000) { depth = 4; noise = 0; }
-  else if (rating < 2200) { depth = 4; noise = 0; }
-  else                    { depth = 5; noise = 0; }
-  if (baseTimeMin <= 1) depth = Math.min(depth, 1);
-  else if (baseTimeMin <= 2) depth = Math.min(depth, 2);
-  else if (baseTimeMin <= 3) depth = Math.min(depth, 3);
-  else if (baseTimeMin <= 5) depth = Math.min(depth, 3);
-  return { depth, noise };
-}
-function pickBotMoveByRating(fen, rating, baseTimeMin) {
-  const state = botParseFen(fen);
-  const white = state.turn === 'w';
-  const moves = botAllLegalMoves(state, white);
-  if (!moves.length) return null;
-  const { depth, noise } = getBotParams(rating, baseTimeMin);
-  if (moves.length === 1) return moves[0];
-  moves.sort((a, b) => moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]));
-  const scored = moves.map(([from, to]) => {
-    const next = botApplyMove(state, from, to);
-    let score = botMinimax(next, depth - 1, -Infinity, Infinity, !white);
-    if (noise > 0) score += (Math.random() * 2 - 1) * noise;
-    return { from, to, score };
+BOTS.forEach(ensureBotUser);
+saveData();
+
+// ============================================================
+//  ЛОББИ И АРЕНЫ
+// ============================================================
+const online = new Map();        // socketId -> username
+const lobbies = new Map();       // id -> lobby
+const socketToLobby = new Map(); // socketId -> lobbyId
+
+function genId() { return Math.random().toString(36).slice(2, 10); }
+
+function broadcastLobbies() {
+  const list = [];
+  for (const [id, l] of lobbies) {
+    if (l.finished || l.arenaId) continue;
+    list.push({
+      id, host: l.host, time: l.time, inc: l.inc,
+      status: l.guest ? 'playing' : 'waiting',
+      isBot: !!l.isBot
+    });
+  }
+  io.emit('lobbies', list);
+  io.emit('stats', {
+    online: online.size + BOTS.length,
+    games: Object.values(db.users).reduce((s, u) => s + u.games, 0) / 2 | 0,
+    active: [...lobbies.values()].filter(l => l.started && !l.finished).length
   });
-  scored.sort((a, b) => white ? b.score - a.score : a.score - b.score);
-  if (rating < 1100 && scored.length > 2 && Math.random() < 0.4) return scored[1 + Math.floor(Math.random() * 2)];
-  if (rating < 1350 && scored.length > 1 && Math.random() < 0.25) return scored[1];
-  if (rating < 1500 && scored.length > 1 && Math.random() < 0.1) return scored[1];
-  return scored[0];
 }
-function evaluateCurrentPosition(fen) {
-  const state = botParseFen(fen);
-  return botEval(state);
+
+function finishGame(lobbyId, result, reason) {
+  const l = lobbies.get(lobbyId);
+  if (!l || l.finished) return;
+  l.finished = true;
+
+  const whiteName = l.hostColor === 'w' ? l.host : l.guest;
+  const blackName = l.hostColor === 'b' ? l.host : l.guest;
+  const wu = db.users[whiteName], bu = db.users[blackName];
+  if (!wu || !bu) { lobbies.delete(lobbyId); return; }
+
+  // ELO
+  const k = 32;
+  const expW = 1 / (1 + Math.pow(10, (bu.rating - wu.rating) / 400));
+  const expB = 1 - expW;
+  let sW = 0.5, sB = 0.5;
+  if (result === 'w') { sW = 1; sB = 0; }
+  else if (result === 'b') { sW = 0; sB = 1; }
+  const dW = Math.round(k * (sW - expW));
+  const dB = Math.round(k * (sB - expB));
+  wu.rating += dW; bu.rating += dB;
+  wu.games++; bu.games++;
+  if (result === 'w') { wu.wins++; bu.losses++; }
+  else if (result === 'b') { bu.wins++; wu.losses++; }
+  else { wu.draws++; bu.draws++; }
+
+  // Обновляем статистику ботов, но рейтинг не трогаем
+  if (wu.isBot) wu.rating -= dW;
+  if (bu.isBot) bu.rating -= dB;
+  saveData();
+
+  io.to(lobbyId).emit('gameEnded', { result, reason, whiteDelta: dW, blackDelta: dB });
+  io.to(lobbyId).emit('timeUpdate', { timeW: l.timeW, timeB: l.timeB });
+
+  setTimeout(() => {
+    if (lobbies.has(lobbyId)) {
+      io.to(lobbyId).socketsLeave(lobbyId);
+      lobbies.delete(lobbyId);
+      broadcastLobbies();
+    }
+  }, 3000);
 }
+
+// ============================================================
+//  ТИКЕР ЧАСОВ
+// ============================================================
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, l] of lobbies) {
+    if (!l.started || l.finished) continue;
+    const elapsed = Math.floor((now - l.lastTick) / 1000);
+    if (elapsed <= 0) continue;
+    l.lastTick = now;
+    if (l.turn === 'w') l.timeW = Math.max(0, l.timeW - elapsed);
+    else l.timeB = Math.max(0, l.timeB - elapsed);
+    io.to(id).emit('timeUpdate', { timeW: l.timeW, timeB: l.timeB });
+    if (l.timeW <= 0) finishGame(id, 'b', 'Время');
+    else if (l.timeB <= 0) finishGame(id, 'w', 'Время');
+  }
+}, 1000);
 
 // ============================================================
 //  ХОД БОТА
@@ -1285,134 +413,32 @@ function evaluateCurrentPosition(fen) {
 function scheduleBotMove(lobbyId) {
   const l = lobbies.get(lobbyId);
   if (!l || l.finished || !l.isBot) return;
-  const currentTurn = l.turn;
-  const botColor = (l.botColor === currentTurn) ? l.botColor : (l.botColor2 === currentTurn ? l.botColor2 : null);
-  const botName = (botColor === l.botColor) ? l.botName : (botColor === l.botColor2 ? l.botName2 : null);
-  if (!botColor || !botName) return;
+  const botColor = l.botColor;
+  if (l.turn !== botColor) return;
 
-  const botTimeLeft = botColor === 'w' ? l.timeW : l.timeB;
-  const baseTime = l.time * 60;
-  const state = botParseFen(l.fen);
-  const botIsWhiteTurn = botColor === 'w';
-  const botMoves = botAllLegalMoves(state, botIsWhiteTurn);
-
-  // Определяем, бот-бот ли это партия
-  const isBotVsBot = !!l.botName2;
-
-  let baseDelay;
-  if (baseTime <= 60)       baseDelay = 60;
-  else if (baseTime <= 120) baseDelay = 100;
-  else if (baseTime <= 300) baseDelay = 200;
-  else if (baseTime <= 600) baseDelay = 350;
-  else if (baseTime <= 900) baseDelay = 500;
-  else                      baseDelay = 800;
-
-  // Для бот-бот партий увеличиваем задержку, чтобы не грузить CPU
-  if (isBotVsBot) {
-    baseDelay = Math.max(baseDelay, 300);
-  }
-
-  let complexity = 1.0;
-  if (botMoves.length <= 2)       complexity *= 0.4;
-  else if (botMoves.length <= 5)  complexity *= 0.7;
-  else if (botMoves.length >= 25) complexity *= 1.4;
-  else if (botMoves.length >= 15) complexity *= 1.2;
-  if (botInCheck(state, botIsWhiteTurn)) complexity *= 1.5;
-
-  let hasCapture = false;
-  for (const [from, to] of botMoves) if (state.board[to[0]][to[1]]) { hasCapture = true; break; }
-  if (hasCapture) complexity *= 1.1;
-
-  let reactionMultiplier = 1.0;
-  if (l.history && l.history.length > 0) {
-    const lastMove = l.history[l.history.length - 1];
-    if (lastMove && lastMove.captured && lastMove.byColor !== botColor) {
-      const val = PIECE_VALUES[lastMove.captured.toLowerCase()] || 0;
-      if (val >= 900)      reactionMultiplier = 2.0;
-      else if (val >= 500) reactionMultiplier = 1.7;
-      else if (val >= 300) reactionMultiplier = 1.3;
-      else                 reactionMultiplier = 1.1;
-    } else if (lastMove && lastMove.captured && lastMove.byColor === botColor) {
-      reactionMultiplier = 0.8;
-    }
-  }
-
-  if (botTimeLeft < 10) { baseDelay = 30; complexity = 1.0; reactionMultiplier = 1.0; }
-  else if (botTimeLeft < 30) { baseDelay = Math.min(baseDelay, 80); complexity = Math.min(complexity, 1.2); reactionMultiplier = Math.min(reactionMultiplier, 1.3); }
-
-  let delay = baseDelay * complexity * reactionMultiplier;
-  const maxThinkMs = Math.max(80, Math.floor(botTimeLeft * 120));
-  if (delay > maxThinkMs) delay = maxThinkMs;
-  if (delay < 20) delay = 20;
-
-  const botUser = db.users[botName];
-  const botRating = botUser ? botUser.rating : 1500;
-
+  const delay = 300 + Math.random() * 500;
   setTimeout(() => {
     const cur = lobbies.get(lobbyId);
-    if (!cur || cur.finished) return;
-    if (cur.turn !== botColor) return;
-    // Проверяем, что бот всё ещё в этой партии
-    const stillBot = (cur.botColor === botColor && cur.botName === botName) ||
-                     (cur.botColor2 === botColor && cur.botName2 === botName);
-    if (!stillBot) return;
-
-    const st = botParseFen(cur.fen);
-    const evalScore = botEval(st);
-    const botSign = botColor === 'w' ? 1 : -1;
-    const myEval = evalScore * botSign;
-
-    if (myEval < -900 && st.full > 25) {
-      if (Math.random() < 0.6) {
-        const winner = botColor === 'w' ? 'b' : 'w';
-        finishGame(lobbyId, winner, 'Сдача');
-        return;
-      }
-    }
-
-    if (Math.abs(myEval) < 40 && st.full > 40 && !cur.drawOffer) {
-      if (Math.random() < 0.1) {
-        cur.drawOffer = { by: botColor, at: Date.now(), fromBot: true };
-        if (cur.hostSocket) io.to(cur.hostSocket).emit('drawOffered', { from: botName });
-        if (cur.guestSocket) io.to(cur.guestSocket).emit('drawOffered', { from: botName });
-      }
-    }
-
-    const mv = pickBotMoveByRating(cur.fen, botRating, cur.time);
+    if (!cur || cur.finished || cur.turn !== botColor) return;
+    const bot = db.users[l.botName];
+    const level = (BOTS.find(b => b.name === l.botName) || {}).level || 2;
+    const mv = pickBotMove(cur.fen, level);
     if (!mv) return;
-    const { from, to } = mv;
-    const legal = botLegalMovesFor(st, from[0], from[1]);
+    const [from, to] = mv;
+    const state = parseFen(cur.fen);
+    const legal = legalMovesFor(state, from[0], from[1]);
     if (!legal.some(([r, c]) => r === to[0] && c === to[1])) return;
 
-    const captured = st.board[to[0]][to[1]];
-    const nextState = botApplyMove(st, from, to);
-    if (!cur.history) cur.history = [];
-    cur.history.push({ from, to, captured: captured || null, byColor: botColor, ts: Date.now() });
-    if (cur.history.length > 10) cur.history.shift();
+    const san = toSAN(state, from, to);
+    const next = applyMove(state, from, to);
+    cur.fen = toFen(next);
+    cur.turn = next.turn;
+    cur.lastTick = Date.now();
 
-    const now = Date.now();
-    const elapsed = Math.floor((now - cur.lastTick) / 1000);
-    if (botColor === 'w') cur.timeW = Math.max(0, cur.timeW - elapsed) + cur.inc;
-    else cur.timeB = Math.max(0, cur.timeB - elapsed) + cur.inc;
-    cur.lastTick = now;
-    cur.fen = botToFen(nextState);
-    cur.turn = nextState.turn;
-    cur.drawOffer = null;
+    io.to(lobbyId).emit('boardUpdate', { fen: cur.fen, san });
 
-    io.to(lobbyId).emit('boardUpdate', { fen: cur.fen, turn: cur.turn, san: null });
-    const humanSocket = (cur.hostSocket && !cur.isBot) ? io.sockets.sockets.get(cur.hostSocket) : null;
-    if (humanSocket) humanSocket.emit('timeUpdate', { timeW: cur.timeW, timeB: cur.timeB, serverNow: now });
-
-    const sideToMoveWhite = cur.turn === 'w';
-    const hasMoves = botAllLegalMoves(botParseFen(cur.fen), sideToMoveWhite).length > 0;
-    if (!hasMoves) {
-      if (botInCheck(botParseFen(cur.fen), sideToMoveWhite)) finishGame(lobbyId, sideToMoveWhite ? 'b' : 'w', 'Мат');
-      else finishGame(lobbyId, 'draw', 'Пат');
-    } else if (cur.isBot && ((cur.botColor && cur.turn === cur.botColor) || (cur.botColor2 && cur.turn === cur.botColor2))) {
-      // бот-бот: следующий ход с задержкой, чтобы не грузить CPU
-      const nextDelay = isBotVsBot ? (400 + Math.random() * 600) : (250 + Math.random() * 400);
-      setTimeout(() => scheduleBotMove(lobbyId), nextDelay);
-    }
+    const end = checkEnd(next);
+    if (end) finishGame(lobbyId, end.result, end.reason);
   }, delay);
 }
 
@@ -1420,241 +446,114 @@ function scheduleBotMove(lobbyId) {
 //  SOCKET.IO
 // ============================================================
 io.on('connection', (socket) => {
-  socket.emit('onlineCount', countOnline());
-  socket.emit('stats', { online: countOnline(), games: db.totalGames, activeGames: countActiveLobbies() });
-
-  socket.on('register', async ({ username, password }, cb) => {
+  socket.on('register', ({ username, password }, cb) => {
     if (typeof cb !== 'function') return;
     if (!username || !password) return cb({ ok: false, msg: 'Заполните поля' });
-    if (BOT_NAMES.has(username)) return cb({ ok: false, msg: 'Это имя зарезервировано' });
-    if (typeof username !== 'string' || username.length < 2 || username.length > 32) return cb({ ok: false, msg: 'Логин 2–32 символа' });
-    if (!/^[a-zA-Zа-яА-Я0-9_\-]+$/.test(username)) return cb({ ok: false, msg: 'Логин: буквы, цифры, _ и -' });
-    if (password.length < 3) return cb({ ok: false, msg: 'Пароль минимум 3 символа' });
-    if (password.length > 128) return cb({ ok: false, msg: 'Пароль слишком длинный' });
+    if (BOT_NAMES.has(username)) return cb({ ok: false, msg: 'Имя занято' });
+    if (username.length < 2 || username.length > 24) return cb({ ok: false, msg: 'Логин 2-24' });
+    if (!/^[a-zA-Z0-9_\-а-яА-Я]+$/.test(username)) return cb({ ok: false, msg: 'Только буквы, цифры, _ -' });
 
-    let user = db.users[username];
-    if (user) {
-      if (!verifyPassword(password, user.salt, user.passwordHash)) return cb({ ok: false, msg: 'Неверный пароль' });
+    let u = db.users[username];
+    if (u) {
+      if (!u.salt || u.isBot) return cb({ ok: false, msg: 'Это бот' });
+      const h = hash(password, u.salt);
+      if (h !== u.passwordHash) return cb({ ok: false, msg: 'Неверный пароль' });
     } else {
       const salt = newSalt();
-      const passwordHash = hashPassword(password, salt);
-      const base = 1200;
-      db.users[username] = {
-        passwordHash, salt, rating: base, wins: 0, losses: 0, draws: 0, games: 0,
-        createdAt: Date.now(), mutedUntil: 0, isBot: false,
-        categories: {
-          classical: emptyRatingBlock(base), rapid: emptyRatingBlock(base),
-          blitz: emptyRatingBlock(base), bullet: emptyRatingBlock(base)
-        }
+      u = {
+        passwordHash: hash(password, salt), salt,
+        rating: 1200, wins: 0, losses: 0, draws: 0, games: 0,
+        isBot: false, createdAt: Date.now()
       };
-      try { await saveUser(username); }
-      catch (err) { console.error('[DB] Ошибка сохранения пользователя:', err.message || err.code || err); }
+      db.users[username] = u;
+      saveData();
     }
     online.set(socket.id, username);
     socket.username = username;
     cb({ ok: true, user: publicUser(username) });
-    broadcastOnline();
+    broadcastLobbies();
   });
 
-  socket.on('getProfile', async ({ username }, cb) => {
+  socket.on('getStats', (cb) => {
     if (typeof cb !== 'function') return;
-    const u = db.users[username];
-    if (!u) return cb({ ok: false, msg: 'Игрок не найден' });
-    try {
-      const gamesRes = await pool.query(`SELECT * FROM games WHERE white = $1 OR black = $1 ORDER BY finished_at DESC LIMIT 50`, [username]);
-      const games = gamesRes.rows.map(r => ({
-        white: r.white, black: r.black, result: r.result, reason: r.reason,
-        timeControl: r.time_control, increment: r.increment,
-        whiteBefore: r.white_before, blackBefore: r.black_before,
-        whiteAfter: r.white_after, blackAfter: r.black_after,
-        finishedAt: Number(r.finished_at), category: r.category || 'blitz',
-        isBot: !!r.is_bot
-      }));
-      const historyRes = await pool.query(`SELECT white, black, white_after, black_after, finished_at FROM games WHERE white = $1 OR black = $1 ORDER BY finished_at ASC`, [username]);
-      const history = [{ ts: u.createdAt, rating: 1200 }];
-      for (const r of historyRes.rows) {
-        const isWhite = r.white === username;
-        history.push({ ts: Number(r.finished_at), rating: isWhite ? r.white_after : r.black_after });
-      }
-      const user = publicUser(username);
-      user.online = isUserOnline(username) || !!u.isBot;
-      cb({ ok: true, user, games, history });
-    } catch (err) {
-      console.error('[DB] Ошибка загрузки профиля:', err.message || err.code || err);
-      cb({ ok: false, msg: 'Ошибка базы данных' });
-    }
-  });
-
-  socket.on('getStats', (cb) => { if (typeof cb === 'function') cb({ online: countOnline(), games: db.totalGames, activeGames: countActiveLobbies() }); });
-  socket.on('getTopArenas', (cb) => { if (typeof cb === 'function') cb(getTopLiveArenas()); });
-  socket.on('getLiveGames', (cb) => { if (typeof cb === 'function') cb(buildGamesList()); });
-
-  socket.on('getBots', (cb) => {
-    if (typeof cb !== 'function') return;
-    cb(BOTS.map(b => {
-      const u = db.users[b.name];
-      return { name: b.name, title: b.title, desc: b.desc, level: b.level, rating: u ? u.rating : b.rating, games: u ? u.games : 0, wins: u ? u.wins : 0, losses: u ? u.losses : 0, draws: u ? u.draws : 0, initialRating: b.rating };
-    }));
-  });
-
-  socket.on('getGameState', ({ lobbyId: lid }, cb) => {
-    if (typeof cb !== 'function') return;
-    const l = lobbies.get(lid);
-    if (!l) return cb({ ok: false, msg: 'Партия не найдена' });
-    if (socket.username !== l.host && socket.username !== l.guest) return cb({ ok: false, msg: 'Вы не участник' });
-    if (l.host === socket.username) l.hostSocket = socket.id;
-    else l.guestSocket = socket.id;
-    if (socket.username === l.host && !l.guestSocket && !l.isBot) return cb({ ok: false, msg: 'Соперник ещё не подключился' });
-    socket.join(lid);
-    socketToLobby.set(socket.id, lid);
-    socket.lobbyId = lid;
-    const myColor = socket.username === l.host ? l.hostColor : l.guestColor;
-    const opponentName = socket.username === l.host ? l.guest : l.host;
-    const opponentU = db.users[opponentName];
     cb({
-      ok: true,
-      state: {
-        myColor, opponent: opponentName,
-        opponentRating: opponentU ? opponentU.rating : null,
-        opponentIsAdmin: isAdmin(opponentName), opponentIsMod: isMod(opponentName),
-        opponentOnline: isUserOnline(opponentName) || BOT_NAMES.has(opponentName),
-        time: l.time, inc: l.inc, timeW: l.timeW, timeB: l.timeB, turn: l.turn,
-        fen: l.fen, chat: l.chat, arenaId: l.arenaId, arenaName: l.arenaName,
-        finished: l.finished, isBot: !!l.isBot
-      }
+      online: online.size + BOTS.length,
+      games: Object.values(db.users).reduce((s, u) => s + u.games, 0) / 2 | 0,
+      active: [...lobbies.values()].filter(l => l.started && !l.finished).length
     });
   });
-
-  socket.on('watchGame', ({ id }, cb) => {
-    const l = lobbies.get(id);
-    if (!l || l.finished || !l.started) { if (typeof cb === 'function') cb({ ok: false, msg: 'Партия недоступна' }); return; }
-    socket.join('watch:' + id);
-    const whiteName = l.hostColor === 'w' ? l.host : l.guest;
-    const blackName = l.hostColor === 'b' ? l.host : l.guest;
-    if (typeof cb === 'function') cb({
-      ok: true,
-      game: {
-        id, white: whiteName, black: blackName,
-        whiteRating: db.users[whiteName] ? db.users[whiteName].rating : null,
-        blackRating: db.users[blackName] ? db.users[blackName].rating : null,
-        whiteIsAdmin: isAdmin(whiteName), blackIsAdmin: isAdmin(blackName),
-        whiteIsMod: isMod(whiteName), blackIsMod: isMod(blackName),
-        timeW: l.timeW, timeB: l.timeB, turn: l.turn,
-        timeControl: l.time, increment: l.inc, fen: l.fen,
-        isArena: !!l.arenaId, arenaName: l.arenaName || null
-      }
-    });
-  });
-
-  socket.on('unwatchGame', ({ id }) => { socket.leave('watch:' + id); });
 
   socket.on('getLobbies', (cb) => {
     if (typeof cb !== 'function') return;
     const list = [];
-    for (const [id, l] of lobbies.entries()) {
+    for (const [id, l] of lobbies) {
       if (l.finished || l.arenaId) continue;
-      list.push({ id, host: l.host, time: l.time, inc: l.inc, hostIsAdmin: isAdmin(l.host), hostIsMod: isMod(l.host), status: l.guest ? 'playing' : 'waiting', isBot: !!l.isBot });
+      list.push({ id, host: l.host, time: l.time, inc: l.inc, status: l.guest ? 'playing' : 'waiting', isBot: !!l.isBot });
     }
     cb(list);
   });
 
+  socket.on('getBots', (cb) => {
+    if (typeof cb !== 'function') return;
+    cb(BOTS.map(b => ({ name: b.name, title: b.title, level: b.level, rating: db.users[b.name].rating })));
+  });
+
+  socket.on('getProfile', ({ username }, cb) => {
+    if (typeof cb !== 'function') return;
+    const u = db.users[username];
+    if (!u) return cb({ ok: false, msg: 'Не найден' });
+    cb({ ok: true, user: publicUser(username) });
+  });
+
+  // Создать лобби (человек-человек)
   socket.on('createLobby', ({ time, inc }, cb) => {
     if (typeof cb !== 'function') return;
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
-    time = Math.max(0.5, Math.min(60, +time || 5));
-    inc  = Math.max(0, Math.min(60, +inc || 0));
-    let matched = null;
-    for (const [, l] of lobbies.entries()) {
+    time = Math.max(1, Math.min(60, +time || 5));
+    inc = Math.max(0, Math.min(60, +inc || 0));
+
+    // Ищем совпадение
+    for (const [, l] of lobbies) {
       if (l.finished || l.arenaId || l.isBot || l.guest) continue;
-      if (l.host === socket.username || l.hostSocket === socket.id) continue;
-      if (Number(l.time) !== time || Number(l.inc) !== inc) continue;
-      matched = l;
-      break;
-    }
-    if (matched) {
-      matched.guest = socket.username;
-      matched.guestSocket = socket.id;
+      if (l.host === socket.username) continue;
+      if (l.time !== time || l.inc !== inc) continue;
+      // Нашли — присоединяемся
+      l.guest = socket.username;
+      l.guestSocket = socket.id;
       const hostIsWhite = Math.random() < 0.5;
-      matched.hostColor = hostIsWhite ? 'w' : 'b';
-      matched.guestColor = hostIsWhite ? 'b' : 'w';
-      matched.started = true;
-      matched.lastTick = Date.now();
-      socket.join(matched.id);
-      socketToLobby.set(socket.id, matched.id);
-      socket.lobbyId = matched.id;
-      const hostRating = db.users[matched.host] ? db.users[matched.host].rating : null;
-      const guestRating = db.users[socket.username] ? db.users[socket.username].rating : null;
-      io.to(matched.hostSocket).emit('gameStart', { color: matched.hostColor, opponent: matched.guest, opponentRating: guestRating, opponentIsAdmin: isAdmin(matched.guest), opponentIsMod: isMod(matched.guest), opponentOnline: true, time: matched.time, inc: matched.inc, lobbyId: matched.id, fen: matched.fen, chat: matched.chat, isArena: false });
-      io.to(matched.guestSocket).emit('gameStart', { color: matched.guestColor, opponent: matched.host, opponentRating: hostRating, opponentIsAdmin: isAdmin(matched.host), opponentIsMod: isMod(matched.host), opponentOnline: true, time: matched.time, inc: matched.inc, lobbyId: matched.id, fen: matched.fen, chat: matched.chat, isArena: false });
-      cb({ ok: true, id: matched.id, matched: true });
+      l.hostColor = hostIsWhite ? 'w' : 'b';
+      l.guestColor = hostIsWhite ? 'b' : 'w';
+      l.started = true;
+      l.lastTick = Date.now();
+      socket.join(l.id);
+      socketToLobby.set(socket.id, l.id);
+      io.to(l.hostSocket).emit('gameStart', {
+        color: l.hostColor, opponent: l.guest, opponentRating: db.users[l.guest].rating,
+        time: l.time, inc: l.inc, lobbyId: l.id, fen: l.fen, isBot: false
+      });
+      io.to(l.guestSocket).emit('gameStart', {
+        color: l.guestColor, opponent: l.host, opponentRating: db.users[l.host].rating,
+        time: l.time, inc: l.inc, lobbyId: l.id, fen: l.fen, isBot: false
+      });
+      cb({ ok: true, id: l.id, matched: true });
       broadcastLobbies();
-      broadcastOnline();
       return;
     }
+    // Создаём новое
     const id = genId();
     lobbies.set(id, {
-      id, host: socket.username, hostSocket: socket.id, guest: null, guestSocket: null,
-      hostColor: null, guestColor: null, time, inc, timeW: time * 60, timeB: time * 60,
+      id, host: socket.username, hostSocket: socket.id,
+      guest: null, guestSocket: null,
+      hostColor: null, guestColor: null,
+      time, inc, timeW: time * 60, timeB: time * 60,
       turn: 'w', fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-      started: false, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
-      createdAt: Date.now(), rematch: null, isBot: false, history: []
+      started: false, finished: false, lastTick: Date.now(),
+      isBot: false
     });
     socket.join(id);
     socketToLobby.set(socket.id, id);
-    socket.lobbyId = id;
     cb({ ok: true, id });
     broadcastLobbies();
-  });
-
-  socket.on('playWithBot', ({ time, inc, botName }, cb) => {
-    if (typeof cb !== 'function') cb = () => {};
-    if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
-    time = Math.max(0.5, Math.min(60, +time || 5));
-    inc = Math.max(0, Math.min(60, +inc || 0));
-    const bot = BOTS.find(b => b.name === botName);
-    if (!bot) return cb({ ok: false, msg: 'Бот не найден' });
-    if (botIsBusy(bot.name)) return cb({ ok: false, msg: 'Бот занят другой партией' });
-    const botUser = db.users[bot.name];
-    const botRating = botUser ? botUser.rating : bot.rating;
-    const id = genId();
-    lobbies.set(id, {
-      id, host: socket.username, hostSocket: socket.id, guest: bot.name, guestSocket: null,
-      hostColor: 'w', guestColor: 'b', time, inc, timeW: time * 60, timeB: time * 60,
-      turn: 'w', fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-      started: true, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
-      createdAt: Date.now(), rematch: null, isBot: true, botName: bot.name, botColor: 'b', history: []
-    });
-    socket.join(id);
-    socketToLobby.set(socket.id, id);
-    socket.lobbyId = id;
-    const beh = botInitBehavior(bot.name);
-    beh.state = 'playing';
-    beh.lastChange = Date.now();
-    botCloseOwnWaitingLobby(bot.name);
-    io.to(socket.id).emit('gameStart', {
-      color: 'w', opponent: bot.name, opponentRating: botRating,
-      opponentIsAdmin: false, opponentIsMod: false, opponentOnline: true,
-      time, inc, lobbyId: id, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-      chat: [], isArena: false, isBot: true, botName: bot.name
-    });
-    cb({ ok: true, id });
-    broadcastLobbies();
-    broadcastOnline();
-  });
-
-  socket.on('cancelLobby', ({ id }, cb) => {
-    if (typeof cb !== 'function') cb = () => {};
-    if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
-    const l = lobbies.get(id);
-    if (!l) return cb({ ok: false, msg: 'Лобби не найдено' });
-    if (l.host !== socket.username) return cb({ ok: false, msg: 'Это не ваше лобби' });
-    if (l.started) return cb({ ok: false, msg: 'Партия уже началась' });
-    io.to(id).emit('opponentLeft');
-    lobbies.delete(id);
-    socketToLobby.delete(socket.id);
-    socket.lobbyId = null;
-    broadcastLobbies();
-    cb({ ok: true });
   });
 
   socket.on('joinLobby', ({ id }, cb) => {
@@ -1662,8 +561,7 @@ io.on('connection', (socket) => {
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
     const l = lobbies.get(id);
     if (!l) return cb({ ok: false, msg: 'Лобби не найдено' });
-    if (l.finished) return cb({ ok: false, msg: 'Партия завершена' });
-    if (l.guest) return cb({ ok: false, msg: 'Лобби занято' });
+    if (l.guest) return cb({ ok: false, msg: 'Занято' });
     if (l.host === socket.username) return cb({ ok: false, msg: 'Это ваше лобби' });
     l.guest = socket.username;
     l.guestSocket = socket.id;
@@ -1674,529 +572,167 @@ io.on('connection', (socket) => {
     l.lastTick = Date.now();
     socket.join(id);
     socketToLobby.set(socket.id, id);
-    socket.lobbyId = id;
-    const hostRating = db.users[l.host] ? db.users[l.host].rating : null;
-    const guestRating = db.users[l.guest] ? db.users[l.guest].rating : null;
-    if (l.isBot) {
-      const beh = botInitBehavior(l.host);
-      beh.state = 'playing';
-      beh.lastChange = Date.now();
-    }
-    io.to(l.hostSocket).emit('gameStart', { color: l.hostColor, opponent: l.guest, opponentRating: guestRating, opponentIsAdmin: isAdmin(l.guest), opponentIsMod: isMod(l.guest), opponentOnline: true, time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat, isArena: false, isBot: !!l.isBot, botName: l.isBot ? l.host : undefined });
-    io.to(l.guestSocket).emit('gameStart', { color: l.guestColor, opponent: l.host, opponentRating: hostRating, opponentIsAdmin: isAdmin(l.host), opponentIsMod: isMod(l.host), opponentOnline: true, time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat, isArena: false, isBot: !!l.isBot, botName: l.isBot ? l.host : undefined });
-    if (l.isBot) {
-      setTimeout(() => scheduleBotMove(l.id), 500);
-    }
-    cb({ ok: true, id });
+    io.to(l.hostSocket).emit('gameStart', {
+      color: l.hostColor, opponent: l.guest, opponentRating: db.users[l.guest].rating,
+      time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, isBot: !!l.isBot
+    });
+    io.to(l.guestSocket).emit('gameStart', {
+      color: l.guestColor, opponent: l.host, opponentRating: db.users[l.host].rating,
+      time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, isBot: !!l.isBot
+    });
+    if (l.isBot) setTimeout(() => scheduleBotMove(id), 500);
+    cb({ ok: true });
     broadcastLobbies();
-    broadcastOnline();
   });
 
-  socket.on('move', ({ lobbyId, fen, turn, san }) => {
+  socket.on('cancelLobby', ({ id }) => {
+    const l = lobbies.get(id);
+    if (!l || l.host !== socket.username || l.started) return;
+    lobbies.delete(id);
+    socketToLobby.delete(socket.id);
+    broadcastLobbies();
+  });
+
+  // Игра с ботом
+  socket.on('playWithBot', ({ time, inc, botName }, cb) => {
+    if (typeof cb !== 'function') return;
+    if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
+    const bot = BOTS.find(b => b.name === botName);
+    if (!bot) return cb({ ok: false, msg: 'Бот не найден' });
+    time = Math.max(1, Math.min(60, +time || 5));
+    inc = Math.max(0, Math.min(60, +inc || 0));
+    const id = genId();
+    lobbies.set(id, {
+      id, host: socket.username, hostSocket: socket.id,
+      guest: botName, guestSocket: null,
+      hostColor: 'w', guestColor: 'b',
+      time, inc, timeW: time * 60, timeB: time * 60,
+      turn: 'w', fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+      started: true, finished: false, lastTick: Date.now(),
+      isBot: true, botName, botColor: 'b'
+    });
+    socket.join(id);
+    socketToLobby.set(socket.id, id);
+    io.to(socket.id).emit('gameStart', {
+      color: 'w', opponent: botName, opponentRating: db.users[botName].rating,
+      time, inc, lobbyId: id, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+      isBot: true
+    });
+    cb({ ok: true, id });
+    broadcastLobbies();
+  });
+
+  socket.on('move', ({ lobbyId, fen, san }) => {
     const l = lobbies.get(lobbyId);
     if (!l || l.finished || !l.started) return;
-    if (socket.id !== l.hostSocket && socket.id !== l.guestSocket) return;
     const myColor = socket.id === l.hostSocket ? l.hostColor : l.guestColor;
     if (l.turn !== myColor) return;
-    if (typeof fen !== 'string' || fen.split(' ').length < 6) return;
+    if (typeof fen !== 'string') return;
     const newTurn = fen.split(' ')[1];
     if (newTurn === l.turn) return;
 
-    try {
-      const oldState = botParseFen(l.fen);
-      const newState = botParseFen(fen);
-      let fromSq = null, toSq = null, captured = null;
-      for (let r = 0; r < 8 && !fromSq; r++) for (let c = 0; c < 8; c++) if (oldState.board[r][c] && !newState.board[r][c]) { fromSq = [r, c]; break; }
-      if (fromSq) {
-        const piece = oldState.board[fromSq[0]][fromSq[1]];
-        for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-          const oldP = oldState.board[r][c], newP = newState.board[r][c];
-          if (newP === piece && oldP !== piece && !(r === fromSq[0] && c === fromSq[1])) {
-            toSq = [r, c]; captured = (oldP && oldP !== piece) ? oldP : null;
-            break;
-          }
-        }
-      }
-      if (!l.history) l.history = [];
-      l.history.push({ from: fromSq, to: toSq, captured, byColor: myColor, ts: Date.now() });
-      if (l.history.length > 10) l.history.shift();
-    } catch (e) {}
-
+    // Обновляем часы
     const now = Date.now();
     const elapsed = Math.floor((now - l.lastTick) / 1000);
     if (myColor === 'w') l.timeW = Math.max(0, l.timeW - elapsed) + l.inc;
-    else                 l.timeB = Math.max(0, l.timeB - elapsed) + l.inc;
+    else l.timeB = Math.max(0, l.timeB - elapsed) + l.inc;
     l.lastTick = now;
+
     l.fen = fen;
     l.turn = newTurn;
-    l.drawOffer = null;
+    io.to(lobbyId).emit('boardUpdate', { fen, san });
+    io.to(lobbyId).emit('timeUpdate', { timeW: l.timeW, timeB: l.timeB });
 
-    io.to(lobbyId).emit('boardUpdate', { fen, turn: newTurn, san: san || null });
-    io.to(lobbyId).emit('timeUpdate', { timeW: l.timeW, timeB: l.timeB, serverNow: now });
-    socket.to('watch:' + lobbyId).emit('boardUpdate', { fen, turn: newTurn, san: san || null });
-    socket.to('watch:' + lobbyId).emit('timeUpdate', { timeW: l.timeW, timeB: l.timeB, serverNow: now });
+    const state = parseFen(fen);
+    const end = checkEnd(state);
+    if (end) { finishGame(lobbyId, end.result, end.reason); return; }
 
-    if (l.isBot && ((l.botColor === l.turn) || (l.botColor2 && l.botColor2 === l.turn))) {
-      scheduleBotMove(lobbyId);
-    }
+    if (l.isBot && l.turn === l.botColor) scheduleBotMove(lobbyId);
   });
 
   socket.on('resign', ({ lobbyId }) => {
     const l = lobbies.get(lobbyId);
     if (!l || l.finished) return;
     const myColor = socket.id === l.hostSocket ? l.hostColor : l.guestColor;
-    const winner = myColor === 'w' ? 'b' : 'w';
-    finishGame(lobbyId, winner, 'Сдача');
-  });
-
-  socket.on('gameOver', ({ lobbyId, result }) => {
-    if (!lobbies.has(lobbyId)) return;
-    finishGame(lobbyId, result, 'Завершено');
-  });
-
-  socket.on('chatMessage', ({ lobbyId, text }) => {
-    const l = lobbies.get(lobbyId);
-    if (!l || !socket.username) return;
-    const muteUntil = checkMute(socket.username);
-    if (muteUntil > 0) {
-      const mins = Math.ceil((muteUntil - Date.now()) / 60000);
-      socket.emit('chatError', { msg: `Вы заглушены ещё ${mins} мин.` });
-      return;
-    }
-    if (typeof text !== 'string') return;
-    text = text.trim().slice(0, 300);
-    if (!text) return;
-    const msg = { id: 'm' + Date.now() + Math.random().toString(36).slice(2, 6), user: socket.username, userIsAdmin: isAdmin(socket.username), userIsMod: isMod(socket.username), text, ts: Date.now() };
-    l.chat.push(msg);
-    if (l.chat.length > 50) l.chat.shift();
-    io.to(lobbyId).emit('chatMessage', msg);
-  });
-
-  socket.on('modDeleteMessage', ({ lobbyId, msgId }, cb) => {
-    if (typeof cb !== 'function') cb = () => {};
-    if (!isMod(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
-    const l = lobbies.get(lobbyId);
-    if (!l) return cb({ ok: false, msg: 'Лобби нет' });
-    const idx = l.chat.findIndex(m => m.id === msgId);
-    if (idx < 0) return cb({ ok: false, msg: 'Сообщение не найдено' });
-    l.chat.splice(idx, 1);
-    io.to(lobbyId).emit('chatMessageDeleted', { msgId, scope: 'game', lobbyId });
-    cb({ ok: true });
-  });
-
-  socket.on('modMuteUser', ({ username, minutes }, cb) => {
-    if (typeof cb !== 'function') cb = () => {};
-    if (!isMod(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
-    if (!db.users[username]) return cb({ ok: false, msg: 'Игрок не найден' });
-    if (isAdmin(username) && !isAdmin(socket.username)) return cb({ ok: false, msg: 'Нельзя замутить админа' });
-    minutes = Math.max(1, Math.min(7 * 24 * 60, +minutes || 10));
-    setMute(username, minutes);
-    const until = Date.now() + minutes * 60 * 1000;
-    io.emit('modAction', { action: 'mute', by: socket.username, target: username, minutes, until, ts: Date.now() });
-    cb({ ok: true, until });
-  });
-
-  socket.on('modUnmuteUser', ({ username }, cb) => {
-    if (typeof cb !== 'function') cb = () => {};
-    if (!isMod(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
-    if (!db.users[username]) return cb({ ok: false, msg: 'Игрок не найден' });
-    clearMute(username);
-    io.emit('modAction', { action: 'unmute', by: socket.username, target: username, ts: Date.now() });
-    cb({ ok: true });
-  });
-
-  socket.on('getMuteStatus', (cb) => {
-    if (typeof cb !== 'function') return;
-    if (!socket.username) return cb({ mutedUntil: 0 });
-    cb({ mutedUntil: checkMute(socket.username) });
+    finishGame(lobbyId, myColor === 'w' ? 'b' : 'w', 'Сдача');
   });
 
   socket.on('drawOffer', ({ lobbyId }) => {
     const l = lobbies.get(lobbyId);
-    if (!l || l.finished || !l.started) return;
-    if (socket.id !== l.hostSocket && socket.id !== l.guestSocket) return;
-    l.drawOffer = { by: socket.id, at: Date.now() };
-    socket.to(lobbyId).emit('drawOffered', { from: socket.username });
+    if (!l || l.finished) return;
+    socket.to(lobbyId).emit('drawOffered');
     if (l.isBot) {
-      const botColor = l.botColor === l.hostColor ? l.botColor : l.botColor2;
-      const botName = l.botColor === l.hostColor ? l.botName : l.botName2;
-      const botUser = db.users[botName];
-      const botRating = botUser ? botUser.rating : 1500;
-      const evalScore = evaluateCurrentPosition(l.fen);
-      const botSign = botColor === 'w' ? 1 : -1;
-      const myEval = evalScore * botSign;
-      let accept = false;
-      if (botRating < 1100)      accept = myEval < 100;
-      else if (botRating < 1500) accept = myEval < 30;
-      else if (botRating < 1800) accept = myEval < 0;
-      else if (botRating < 2000) accept = myEval < -20;
-      else                       accept = myEval < -50;
-      setTimeout(() => {
-        const cur = lobbies.get(lobbyId);
-        if (!cur || cur.finished || !cur.drawOffer) return;
-        cur.drawOffer = null;
-        if (accept) {
-          finishGame(lobbyId, 'draw', 'Ничья по согласию');
-        } else {
-          socket.emit('drawDeclined');
-        }
-      }, 400 + Math.random() * 800);
+      // Бот соглашается, если материал примерно равен
+      const state = parseFen(l.fen);
+      let score = 0;
+      const vals = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+      for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+        const p = state.board[r][c];
+        if (!p) continue;
+        const v = vals[p.toLowerCase()] || 0;
+        score += isWhite(p) ? v : -v;
+      }
+      const botSign = l.botColor === 'w' ? 1 : -1;
+      if (score * botSign < 1) {
+        setTimeout(() => finishGame(lobbyId, 'draw', 'Ничья'), 500);
+      } else {
+        setTimeout(() => socket.emit('drawDeclined'), 500);
+      }
     }
   });
+
   socket.on('drawAccept', ({ lobbyId }) => {
-    const l = lobbies.get(lobbyId);
-    if (!l || l.finished) return;
-    l.drawOffer = null;
-    finishGame(lobbyId, 'draw', 'Ничья по согласию');
+    if (!lobbies.has(lobbyId)) return;
+    finishGame(lobbyId, 'draw', 'Ничья');
   });
+
   socket.on('drawDecline', ({ lobbyId }) => {
-    const l = lobbies.get(lobbyId);
-    if (!l || l.finished) return;
-    l.drawOffer = null;
     socket.to(lobbyId).emit('drawDeclined');
   });
 
-  socket.on('rematchRequest', ({ lobbyId }, cb) => {
-    if (typeof cb !== 'function') cb = () => {};
-    const l = lobbies.get(lobbyId);
-    if (!l) return cb({ ok: false, msg: 'Партия не найдена' });
-    if (!l.finished) return cb({ ok: false, msg: 'Партия ещё не завершена' });
-    if (l.isBot) {
-      const botName = l.botName || l.botName2;
-      const bot = BOTS.find(b => b.name === botName);
-      if (!bot) return cb({ ok: false, msg: 'Бот не найден' });
-      if (botIsBusy(bot.name)) return cb({ ok: true, started: false, declined: true });
-      const botUser = db.users[bot.name];
-      const botRating = botUser ? botUser.rating : bot.rating;
-      let agreeChance = 0.9;
-      if (botRating >= 1900) agreeChance = 0.35;
-      else if (botRating >= 1700) agreeChance = 0.55;
-      else if (botRating >= 1400) agreeChance = 0.7;
-      setTimeout(() => {
-        if (Math.random() > agreeChance) { cb({ ok: true, started: false, declined: true }); return; }
-        if (botIsBusy(bot.name)) { cb({ ok: true, started: false, declined: true }); return; }
-        const newId = genId();
-        lobbies.set(newId, {
-          id: newId, host: l.host, hostSocket: l.hostSocket,
-          guest: bot.name, guestSocket: null,
-          hostColor: 'w', guestColor: 'b',
-          time: l.time, inc: l.inc, timeW: l.time * 60, timeB: l.time * 60,
-          turn: 'w', fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-          started: true, finished: false, lastTick: Date.now(),
-          chat: [], drawOffer: null, createdAt: Date.now(),
-          rematch: null, isBot: true, botName: bot.name, botColor: 'b', history: []
-        });
-        const beh = botInitBehavior(bot.name);
-        beh.state = 'playing';
-        beh.lastChange = Date.now();
-        const hostSocket = io.sockets.sockets.get(l.hostSocket);
-        if (hostSocket) {
-          hostSocket.leave(lobbyId);
-          hostSocket.join(newId);
-          socketToLobby.set(l.hostSocket, newId);
-          hostSocket.lobbyId = newId;
-          hostSocket.emit('gameStart', {
-            color: 'w', opponent: bot.name, opponentRating: botRating,
-            opponentIsAdmin: false, opponentIsMod: false, opponentOnline: true,
-            time: l.time, inc: l.inc, lobbyId: newId,
-            fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-            chat: [], isArena: false, isBot: true, botName: bot.name
-          });
-        }
-        lobbies.delete(lobbyId);
-        broadcastLobbies();
-        cb({ ok: true, started: true, newLobbyId: newId });
-      }, 300 + Math.random() * 1000);
-      return;
-    }
-    if (l.arenaId) return cb({ ok: false, msg: 'Реванш недоступен для арен' });
-    if (socket.id !== l.hostSocket && socket.id !== l.guestSocket) return cb({ ok: false, msg: 'Вы не участник' });
-    if (!l.rematch) l.rematch = {};
-    l.rematch[socket.username] = true;
-    const otherName = socket.username === l.host ? l.guest : l.host;
-    const otherSocket = socket.username === l.host ? l.guestSocket : l.hostSocket;
-    if (l.rematch[otherName]) {
-      const newId = genId();
-      const newLobby = {
-        id: newId, host: l.host, hostSocket: l.hostSocket, guest: l.guest, guestSocket: l.guestSocket,
-        hostColor: l.guestColor, guestColor: l.hostColor, time: l.time, inc: l.inc,
-        timeW: l.time * 60, timeB: l.time * 60, turn: 'w',
-        fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-        started: true, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
-        createdAt: Date.now(), arenaId: null, arenaName: null, rematch: null, isBot: false, history: []
-      };
-      lobbies.set(newId, newLobby);
-      const hostRating = db.users[l.host] ? db.users[l.host].rating : null;
-      const guestRating = db.users[l.guest] ? db.users[l.guest].rating : null;
-      const hostSocket = io.sockets.sockets.get(l.hostSocket);
-      const guestSocket = io.sockets.sockets.get(l.guestSocket);
-      if (hostSocket) {
-        hostSocket.leave(lobbyId); hostSocket.join(newId); socketToLobby.set(l.hostSocket, newId); hostSocket.lobbyId = newId;
-        hostSocket.emit('gameStart', { color: l.guestColor, opponent: l.guest, opponentRating: guestRating, opponentIsAdmin: isAdmin(l.guest), opponentIsMod: isMod(l.guest), opponentOnline: isUserOnline(l.guest), time: l.time, inc: l.inc, lobbyId: newId, fen: newLobby.fen, chat: [], isArena: false });
-      }
-      if (guestSocket) {
-        guestSocket.leave(lobbyId); guestSocket.join(newId); socketToLobby.set(l.guestSocket, newId); guestSocket.lobbyId = newId;
-        guestSocket.emit('gameStart', { color: l.hostColor, opponent: l.host, opponentRating: hostRating, opponentIsAdmin: isAdmin(l.host), opponentIsMod: isMod(l.host), opponentOnline: isUserOnline(l.host), time: l.time, inc: l.inc, lobbyId: newId, fen: newLobby.fen, chat: [], isArena: false });
-      }
-      lobbies.delete(lobbyId);
-      broadcastLobbies();
-      cb({ ok: true, started: true, newLobbyId: newId });
-      return;
-    }
-    if (otherSocket) io.to(otherSocket).emit('rematchOffered', { from: socket.username, lobbyId });
-    cb({ ok: true, started: false });
-  });
-
-  socket.on('rematchDecline', ({ lobbyId }, cb) => {
-    if (typeof cb !== 'function') cb = () => {};
-    const l = lobbies.get(lobbyId);
-    if (!l) return cb({ ok: false });
-    l.rematch = null;
-    const otherSocket = socket.id === l.hostSocket ? l.guestSocket : l.hostSocket;
-    if (otherSocket) io.to(otherSocket).emit('rematchDeclined');
-    cb({ ok: true });
-  });
-
-  socket.on('getArenas', (cb) => { if (typeof cb === 'function') cb({ list: getArenaSchedule(48), serverNow: Date.now() }); });
-
-  socket.on('getMyArenaStates', (cb) => {
+  socket.on('getGameState', ({ lobbyId }, cb) => {
     if (typeof cb !== 'function') return;
-    const states = {};
-    for (const [id, state] of arenas.entries()) {
-      const p = socket.username ? state.participants.get(socket.username) : null;
-      states[id] = { joined: !!p, paused: !!(p && p.paused), participantsCount: state.participants.size, phase: state.phase, score: p ? p.score : 0, botFriendly: !!state.botFriendly };
-    }
-    cb({ states, serverNow: Date.now() });
-  });
-
-  socket.on('getArenaState', ({ arenaId }, cb) => {
-    if (typeof cb !== 'function') return;
-    const state = arenas.get(arenaId);
-    if (!state) return cb({ joined: false, paused: false, participants: [], participantsCount: 0, phase: 'waiting', timeLeftMin: 0, timeLeftMs: 0, top3: null, pairingNow: null, startsAt: 0, endsAt: 0, serverNow: Date.now(), botFriendly: false });
-    for (const p of state.participants.values()) {
-      if (p.isPlaying) {
-        const l = p.lobbyId ? lobbies.get(p.lobbyId) : null;
-        if (!l || l.finished) {
-          p.isPlaying = false; p.lobbyId = null;
-          if (!p.paused) p.waitingSince = Date.now();
-          if (p.isBot) {
-            const beh = botInitBehavior(p.username);
-            if (beh.state === 'playing') {
-              beh.state = 'in_arena';
-              beh.activityId = state.id;
-              beh.lastChange = Date.now();
-            }
-          }
-        }
-      }
-    }
-    const participants = [...state.participants.values()].map(p => ({
-      username: p.username, rating: p.rating, score: p.score, wins: p.wins, draws: p.draws, losses: p.losses,
-      winStreak: p.winStreak || 0, drawStreak: p.drawStreak || 0,
-      paused: !!p.paused, isPlaying: !!p.isPlaying,
-      isAdmin: isAdmin(p.username), isMod: isMod(p.username),
-      online: p.isBot ? true : (p.socketId && io.sockets.sockets.has(p.socketId)),
-      isBot: !!p.isBot
-    })).sort((a, b) => b.score - a.score || b.rating - a.rating);
-    const meP = socket.username ? state.participants.get(socket.username) : null;
+    const l = lobbies.get(lobbyId);
+    if (!l) return cb({ ok: false, msg: 'Нет партии' });
+    if (socket.username !== l.host && socket.username !== l.guest) return cb({ ok: false, msg: 'Не участник' });
+    if (socket.username === l.host) l.hostSocket = socket.id;
+    else l.guestSocket = socket.id;
+    socket.join(lobbyId);
+    socketToLobby.set(socket.id, lobbyId);
+    const myColor = socket.username === l.host ? l.hostColor : l.guestColor;
+    const opp = socket.username === l.host ? l.guest : l.host;
     cb({
-      joined: !!meP, paused: !!(meP && meP.paused), participants,
-      participantsCount: participants.length, phase: state.phase,
-      timeLeftMs: Math.max(0, state.endsAt - Date.now()),
-      timeLeftMin: Math.round(Math.max(0, state.endsAt - Date.now()) / 60000),
-      top3: state.top3, pairingNow: state.pairingNow,
-      startsAt: state.startsAt, endsAt: state.endsAt, serverNow: Date.now(),
-      botFriendly: !!state.botFriendly
-    });
-  });
-
-  socket.on('joinArenaRoom', ({ arenaId }, cb) => {
-    if (typeof cb !== 'function') cb = () => {};
-    const state = arenas.get(arenaId);
-    if (!state) return cb({ ok: false, msg: 'Арена не найдена' });
-    socket.join('arena:' + arenaId);
-    state.chatViewers.add(socket.id);
-    cb({ ok: true, chat: state.chat || [] });
-    tryPair(state);
-  });
-  socket.on('leaveArenaRoom', ({ arenaId }) => {
-    const state = arenas.get(arenaId);
-    socket.leave('arena:' + arenaId);
-    if (state) state.chatViewers.delete(socket.id);
-  });
-
-  socket.on('getArenaGames', ({ arenaId }, cb) => {
-    if (typeof cb !== 'function') return;
-    const state = arenas.get(arenaId);
-    const live = [], done = [];
-    if (state) {
-      for (const [id, l] of lobbies.entries()) {
-        if (l.arenaId !== arenaId || l.finished) continue;
-        const wName = l.hostColor === 'w' ? l.host : l.guest;
-        const bName = l.hostColor === 'b' ? l.host : l.guest;
-        const wU = db.users[wName]; const bU = db.users[bName];
-        live.push({
-          lobbyId: id, white: wName, black: bName,
-          whiteIsAdmin: isAdmin(wName), blackIsAdmin: isAdmin(bName),
-          whiteIsMod: isMod(wName), blackIsMod: isMod(bName),
-          whiteRating: wU ? wU.rating : null, blackRating: bU ? bU.rating : null,
-          timeW: l.timeW, timeB: l.timeB, turn: l.turn, fen: l.fen,
-          moveCount: l.fen ? (+l.fen.split(' ')[5] || 1) : 1, live: true
-        });
+      ok: true,
+      state: {
+        myColor, opponent: opp, opponentRating: db.users[opp] ? db.users[opp].rating : null,
+        time: l.time, inc: l.inc, timeW: l.timeW, timeB: l.timeB, turn: l.turn,
+        fen: l.fen, finished: l.finished, isBot: !!l.isBot
       }
-    }
-    if (state && Array.isArray(state.finishedGames)) {
-      const arr = state.finishedGames.slice().reverse();
-      for (const g of arr) {
-        done.push({
-          lobbyId: null, white: g.white, black: g.black,
-          whiteIsAdmin: g.whiteIsAdmin, blackIsAdmin: g.blackIsAdmin,
-          whiteIsMod: isMod(g.white), blackIsMod: isMod(g.black),
-          whiteRating: g.whiteRating, blackRating: g.blackRating, result: g.result,
-          fen: g.fen, turn: g.turn || 'w', timeW: 0, timeB: 0, finishedAt: g.finishedAt, live: false
-        });
-      }
-    }
-    let topRating = 0;
-    if (state) for (const p of state.participants.values()) if (p.rating > topRating) topRating = p.rating;
-    live.sort((a, b) => Math.max(b.whiteRating||0, b.blackRating||0) - Math.max(a.whiteRating||0, a.blackRating||0));
-    done.sort((a, b) => Math.max(b.whiteRating||0, b.blackRating||0) - Math.max(a.whiteRating||0, a.blackRating||0));
-    cb({ live, done, topRating, featured: live[0] || done[0] || null });
-  });
-
-  socket.on('joinArena', ({ arenaId }, cb) => {
-    if (typeof cb !== 'function') return;
-    if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
-    const state = arenas.get(arenaId);
-    if (!state) return cb({ ok: false, msg: 'Арена не найдена' });
-    if (state.finished || state.phase === 'finished') return cb({ ok: false, msg: 'Арена завершена' });
-    if (state.participants.has(socket.username)) return cb({ ok: true, msg: 'Уже участвуете' });
-    state.participants.set(socket.username, {
-      username: socket.username,
-      rating: db.users[socket.username] ? db.users[socket.username].rating : 1200,
-      score: 0, wins: 0, draws: 0, losses: 0, winStreak: 0, drawStreak: 0,
-      socketId: socket.id, lobbyId: null, isPlaying: false, paused: false, waitingSince: Date.now(), isBot: false
     });
-    const sysMsg = { id: 'sys' + Date.now(), system: true, text: `${socket.username} присоединился к арене`, ts: Date.now(), arenaId: state.id };
-    state.chat.push(sysMsg); if (state.chat.length > 300) state.chat.shift();
-    io.to('arena:' + state.id).emit('arenaChatMessage', sysMsg);
-    io.emit('arenaUpdate', { arenaId });
-    if (state.phase === 'live') tryPair(state);
-    cb({ ok: true });
-  });
-
-  socket.on('leaveArena', ({ arenaId }, cb) => {
-    if (typeof cb !== 'function') cb = () => {};
-    const state = arenas.get(arenaId);
-    if (!state) return cb({ ok: false, msg: 'Арена не найдена' });
-    if (state.phase !== 'waiting') return cb({ ok: false, msg: 'Нельзя сняться после старта арены — используйте паузу' });
-    const p = state.participants.get(socket.username);
-    if (p && !p.isPlaying) {
-      state.participants.delete(socket.username);
-      const sysMsg = { id: 'sys' + Date.now(), system: true, text: `${socket.username} покинул арену`, ts: Date.now(), arenaId: state.id };
-      state.chat.push(sysMsg); if (state.chat.length > 300) state.chat.shift();
-      io.to('arena:' + state.id).emit('arenaChatMessage', sysMsg);
-      io.emit('arenaUpdate', { arenaId });
-    }
-    cb({ ok: true });
-  });
-
-  socket.on('pauseArena', ({ arenaId }, cb) => {
-    if (typeof cb !== 'function') cb = () => {};
-    const state = arenas.get(arenaId);
-    if (!state) return cb({ ok: false, msg: 'Арена не найдена' });
-    if (state.finished || state.phase === 'finished') return cb({ ok: false, msg: 'Арена завершена' });
-    const p = state.participants.get(socket.username);
-    if (!p) return cb({ ok: false, msg: 'Вы не участвуете' });
-    p.paused = !p.paused;
-    if (!p.paused) p.waitingSince = Date.now();
-    io.emit('arenaUpdate', { arenaId });
-    cb({ ok: true, paused: p.paused });
-  });
-
-  socket.on('arenaChat', ({ arenaId, text }) => {
-    const state = arenas.get(arenaId);
-    if (!state || !socket.username) return;
-    const muteUntil = checkMute(socket.username);
-    if (muteUntil > 0) {
-      const mins = Math.ceil((muteUntil - Date.now()) / 60000);
-      socket.emit('chatError', { msg: `Вы заглушены ещё ${mins} мин.` });
-      return;
-    }
-    if (typeof text !== 'string') return;
-    text = text.trim().slice(0, 300);
-    if (!text) return;
-    const msg = { id: 'a' + Date.now() + Math.random().toString(36).slice(2, 6), user: socket.username, userIsAdmin: isAdmin(socket.username), userIsMod: isMod(socket.username), text, ts: Date.now(), arenaId };
-    state.chat.push(msg); if (state.chat.length > 300) state.chat.shift();
-    io.to('arena:' + arenaId).emit('arenaChatMessage', msg);
-  });
-
-  socket.on('modDeleteArenaMessage', ({ arenaId, msgId }, cb) => {
-    if (typeof cb !== 'function') cb = () => {};
-    if (!isMod(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
-    const state = arenas.get(arenaId);
-    if (!state) return cb({ ok: false, msg: 'Арена не найдена' });
-    const idx = state.chat.findIndex(m => m.id === msgId);
-    if (idx < 0) return cb({ ok: false, msg: 'Сообщение не найдено' });
-    state.chat.splice(idx, 1);
-    io.to('arena:' + arenaId).emit('chatMessageDeleted', { msgId, scope: 'arena', arenaId });
-    cb({ ok: true });
   });
 
   socket.on('disconnect', () => {
     online.delete(socket.id);
-    if (socket.username) {
-      for (const state of arenas.values()) {
-        const p = state.participants.get(socket.username);
-        if (p && p.socketId === socket.id) p.socketId = null;
-        state.chatViewers.delete(socket.id);
-        // Если бот отключился (не должен, но на всякий)
-        if (p && p.isBot && p.isPlaying) {
-          const l = p.lobbyId ? lobbies.get(p.lobbyId) : null;
-          if (l && !l.finished) {
-            // Завершаем партию
-            const myColor = p.lobbyId === l.id ? (l.hostColor === 'w' ? 'b' : 'w') : null;
-          }
-          p.isPlaying = false; p.lobbyId = null;
-          const beh = botInitBehavior(p.username);
-          if (beh.state === 'playing') {
-            beh.state = 'in_arena';
-            beh.activityId = state.id;
-            beh.lastChange = Date.now();
-          }
-        }
-      }
-    }
     const lobbyId = socketToLobby.get(socket.id);
     socketToLobby.delete(socket.id);
     if (lobbyId) {
       const l = lobbies.get(lobbyId);
       if (l && !l.finished && !l.started) {
-        io.to(lobbyId).emit('opponentLeft');
         lobbies.delete(lobbyId);
-        io.emit('lobbiesUpdate');
+        broadcastLobbies();
       }
     }
-    broadcastOnline();
+    broadcastLobbies();
   });
 });
 
-// ======================= ЗАПУСК =======================
-(async () => {
-  try { await initDB(); await loadDB(); }
-  catch (err) { console.error('[DB] Не удалось инициализировать базу данных:', err.message || err.code || err); }
-
-  getArenaSchedule(48);
-
-  const PORT = process.env.PORT || 3000;
-  server.listen(PORT, '0.0.0.0', () => {
-    console.log('==================================================');
-    console.log('  Kingside — сервер запущен');
-    console.log(`  Порт: ${PORT}`);
-    console.log('==================================================');
-  });
-})();
-
-process.on('SIGINT', () => { process.exit(0); });
-process.on('SIGTERM', () => { process.exit(0); });
-process.on('uncaughtException', (err) => { console.error('[Server] Ошибка:', err); });
+// ============================================================
+//  ЗАПУСК
+// ============================================================
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, '0.0.0.0', () => {
+  console.log('=================================');
+  console.log('  Kingside v2 запущен');
+  console.log('  http://localhost:' + PORT);
+  console.log('=================================');
+});
