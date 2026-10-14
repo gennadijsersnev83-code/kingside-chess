@@ -1056,14 +1056,50 @@
     if (!gameActive || gameEnded || viewIndex !== -1) return;
     const state = parseFen(currentFen);
     const myTurn = state.turn === myColor;
+    // Если сейчас не наш ход — ставим премьюв
     if (!myTurn) {
-      if (premove && premove.to[0] === r && premove.to[1] === c) { premove = null; lastBoardHash = ''; renderBoard(); return; }
       const p = state.board[r][c];
-      if (p && isWhitePiece(p) === (myColor === 'w')) { const leg = legalMovesFor(state, r, c); if (leg.length) { if (selected && selected[0] === r && selected[1] === c) { selected = null; legalMoves = []; } else { selected = [r, c]; legalMoves = leg; } lastBoardHash = ''; renderBoard(); } }
-      else if (selected) { const leg = legalMoves.some(([mr, mc]) => mr === r && mc === c); if (leg) { const from = selected; selected = null; legalMoves = []; applyUserMove(from, [r, c], true); } else { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); } }
+      const isMyPiece = p && isWhitePiece(p) === (myColor === 'w');
+      if (selected) {
+        // Уже что-то выбрано — пытаемся поставить премьюв на эту клетку
+        const from = selected;
+        // Проверяем, что ход валиден (в текущей позиции), но не выполняем
+        // Для премьюва достаточно, чтобы фигура была нашей и клетка отличалась
+        if (from[0] === r && from[1] === c) {
+          // Клик по той же клетке — снимаем выделение
+          selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); return;
+        }
+        const piece = state.board[from[0]][from[1]];
+        if (piece && isWhitePiece(piece) === (myColor === 'w')) {
+          // Ставим премьюв (валидность проверим при выполнении)
+          premove = { from, to: [r, c], san: '' };
+          selected = null; legalMoves = [];
+          lastBoardHash = ''; renderBoard();
+          return;
+        } else {
+          selected = null; legalMoves = [];
+        }
+      }
+      // Если выбрана своя фигура — показываем её ходы как подсказку (для премьюва)
+      if (isMyPiece) {
+        selected = [r, c];
+        legalMoves = legalMovesFor(state, r, c);
+        lastBoardHash = ''; renderBoard();
+      } else {
+        selected = null; legalMoves = [];
+        lastBoardHash = ''; renderBoard();
+      }
       return;
     }
-    if (selected) { const isLegal = legalMoves.some(([mr, mc]) => mr === r && mc === c); if (isLegal) { const from = selected; selected = null; legalMoves = []; applyUserMove(from, [r, c], false); return; } }
+    // Наш ход
+    if (premove) {
+      // Клик по цели премьюва — отменяем
+      if (premove.to[0] === r && premove.to[1] === c) { premove = null; lastBoardHash = ''; renderBoard(); return; }
+    }
+    if (selected) {
+      const isLegal = legalMoves.some(([mr, mc]) => mr === r && mc === c);
+      if (isLegal) { const from = selected; selected = null; legalMoves = []; applyUserMove(from, [r, c], false); return; }
+    }
     const p = state.board[r][c];
     if (p && isWhitePiece(p) === (myColor === 'w')) { selected = [r, c]; legalMoves = legalMovesFor(state, r, c); }
     else { selected = null; legalMoves = []; }
@@ -1097,7 +1133,13 @@
     dragging = null; clearGhost(); dragStartPos = null;
     if (!target) { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); return; }
     if (target[0] === from[0] && target[1] === from[1]) { selected = from; legalMoves = legalMovesFor(parseFen(currentFen), from[0], from[1]); lastBoardHash = ''; renderBoard(); return; }
-    const ok = applyUserMove(from, target, wasPremove); if (!ok) { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); }
+    if (wasPremove) {
+      // Премьюв: ставим без проверки, проверим при выполнении
+      premove = { from, to: target, san: '' };
+      selected = null; legalMoves = []; lastBoardHash = ''; renderBoard();
+      return;
+    }
+    const ok = applyUserMove(from, target, false); if (!ok) { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); }
   });
   function renderMoves() {
     const el = document.getElementById('movesList');
