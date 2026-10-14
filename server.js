@@ -377,11 +377,9 @@ async function finishGame(lobbyId, result, reason) {
   let whiteAfter = whiteBefore + whiteDelta;
   let blackAfter = blackBefore + blackDelta;
 
-  // Боты никогда не опускаются ниже 800 и не поднимаются выше 3000
   if (whiteUser.isBot) whiteAfter = Math.max(800, Math.min(3000, whiteAfter));
   if (blackUser.isBot) blackAfter = Math.max(800, Math.min(3000, blackAfter));
 
-  // Обновляем рейтинг у ОБОИХ, включая ботов
   wc.rating = whiteAfter;
   if (result === 'w') wc.wins++; else if (result === 'b') wc.losses++;
   wc.games++;
@@ -441,8 +439,8 @@ const ARENA_TEMPLATES = [
   { id: 'blitz-hourly', name: 'Ежечасная блиц-арена', description: '3+2 · рейтинговая', timeControl: 3, increment: 2, durationMin: 57, repeat: 'hourly', color: 'blitz', botFriendly: false },
   { id: 'rapid-2h', name: 'Двухчасовая рапид-арена', description: '10+0 · рейтинговая', timeControl: 10, increment: 0, durationMin: 117, repeat: 'every2h', color: 'rapid', botFriendly: false },
   { id: 'classical-4h', name: 'Классическая арена', description: '30+0 · классика', timeControl: 30, increment: 0, durationMin: 237, repeat: 'every4h', color: 'classical', botFriendly: false },
-  { id: 'bot-blitz-hourly', name: '🤖 Блиц-арена с ботами', description: '3+2 · люди и боты', timeControl: 3, increment: 2, durationMin: 57, repeat: 'hourly', color: 'blitz', botFriendly: true },
-  { id: 'bot-rapid-2h', name: '🤖 Рапид-арена с ботами', description: '10+0 · люди и боты', timeControl: 10, increment: 0, durationMin: 117, repeat: 'every2h', color: 'rapid', botFriendly: true }
+  { id: 'bot-blitz-hourly', name: 'Блиц-арена с ботами', description: '3+2 · люди и боты', timeControl: 3, increment: 2, durationMin: 57, repeat: 'hourly', color: 'blitz', botFriendly: true },
+  { id: 'bot-rapid-2h', name: 'Рапид-арена с ботами', description: '10+0 · люди и боты', timeControl: 10, increment: 0, durationMin: 117, repeat: 'every2h', color: 'rapid', botFriendly: true }
 ];
 function nextStartFor(tpl, now) {
   const p = mskParts(now);
@@ -592,7 +590,8 @@ function createArenaPairing(state, a, b) {
     createdAt: Date.now(), arenaId: state.id, arenaName: state.name, rematch: null,
     isBot: isBotGame,
     botColor: aIsBot ? hostColor : (bIsBot ? guestColor : null),
-    botName: aIsBot ? a.username : (bIsBot ? b.username : null)
+    botName: aIsBot ? a.username : (bIsBot ? b.username : null),
+    history: []
   });
   state.activeLobbies.add(lobbyId);
   a.isPlaying = true; a.lobbyId = lobbyId;
@@ -919,16 +918,26 @@ function botMinimax(state, depth, alpha, beta, maximizing) {
     return best;
   }
 }
-function pickBotMove(fen, level) {
+
+// Адаптивная глубина в зависимости от уровня и контроля времени
+function pickBotMoveAdaptive(fen, level, baseTimeMin) {
   const state = botParseFen(fen);
   const white = state.turn === 'w';
   const moves = botAllLegalMoves(state, white);
   if (!moves.length) return null;
-  let depth, noise;
-  if (level === 1) { depth = 1; noise = 90; }
-  else if (level === 2) { depth = 2; noise = 30; }
-  else if (level === 3) { depth = 3; noise = 5; }
-  else { depth = 4; noise = 0; }
+
+  let maxDepth, noise;
+  if (level === 1) { maxDepth = 1; noise = 90; }
+  else if (level === 2) { maxDepth = 2; noise = 30; }
+  else if (level === 3) { maxDepth = 3; noise = 5; }
+  else { maxDepth = 4; noise = 0; }
+
+  let depth = maxDepth;
+  if (baseTimeMin <= 1) depth = Math.min(depth, 1);
+  else if (baseTimeMin <= 2) depth = Math.min(depth, 2);
+  else if (baseTimeMin <= 5) depth = Math.min(depth, 2);
+  else if (baseTimeMin <= 10) depth = Math.min(depth, 3);
+
   const scored = moves.map(([from, to]) => {
     const next = botApplyMove(state, from, to);
     let score = botMinimax(next, depth - 1, -Infinity, Infinity, !white);
@@ -942,24 +951,115 @@ function pickBotMove(fen, level) {
   return scored[0];
 }
 
+// ============================================================
+//  ЧЕЛОВЕКОПОДОБНЫЙ ХОД БОТА
+// ============================================================
 function scheduleBotMove(lobbyId) {
   const l = lobbies.get(lobbyId);
   if (!l || l.finished || !l.isBot) return;
   const botColor = l.botColor;
   if (l.turn !== botColor) return;
-  const delay = 400 + Math.floor(Math.random() * 1400);
+
+  const botTimeLeft = botColor === 'w' ? l.timeW : l.timeB;
+  const baseTime = l.time * 60;
+  const state = botParseFen(l.fen);
+  const botIsWhiteTurn = botColor === 'w';
+  const botMoves = botAllLegalMoves(state, botIsWhiteTurn);
+
+  // ============ 1. БАЗОВАЯ ЧЕЛОВЕЧЕСКАЯ ЗАДЕРЖКА ============
+  let baseDelay;
+  if (baseTime <= 60)       baseDelay = 80;      // 1+0
+  else if (baseTime <= 120) baseDelay = 150;     // 2+1
+  else if (baseTime <= 300) baseDelay = 300;     // 3+0, 5+0
+  else if (baseTime <= 600) baseDelay = 500;     // 10+0
+  else if (baseTime <= 900) baseDelay = 700;     // 15+10
+  else                      baseDelay = 1200;    // 30+0
+
+  // ============ 2. АНАЛИЗ СЛОЖНОСТИ ПОЗИЦИИ ============
+  let complexity = 1.0;
+
+  if (botMoves.length <= 2)       complexity *= 0.4;
+  else if (botMoves.length <= 5)  complexity *= 0.7;
+  else if (botMoves.length >= 25) complexity *= 1.4;
+  else if (botMoves.length >= 15) complexity *= 1.2;
+
+  if (botInCheck(state, botIsWhiteTurn)) complexity *= 1.8;
+
+  let hasCapture = false, hasCheck = false, hasPromotion = false;
+  for (const [from, to] of botMoves) {
+    const target = state.board[to[0]][to[1]];
+    if (target) hasCapture = true;
+    const p = state.board[from[0]][from[1]];
+    if (p && p.toLowerCase() === 'p' && (to[0] === 0 || to[0] === 7)) hasPromotion = true;
+    const next = botApplyMove(state, from, to);
+    if (botInCheck(next, !botIsWhiteTurn)) hasCheck = true;
+  }
+  if (hasCapture)    complexity *= 1.15;
+  if (hasCheck)      complexity *= 1.25;
+  if (hasPromotion)  complexity *= 1.5;
+
+  // ============ 3. РЕАКЦИЯ НА ПОТЕРЮ МАТЕРИАЛА ============
+  let reactionMultiplier = 1.0;
+  if (l.history && l.history.length > 0) {
+    const lastMove = l.history[l.history.length - 1];
+    if (lastMove && lastMove.captured && lastMove.byColor !== botColor) {
+      const val = PIECE_VALUES[lastMove.captured.toLowerCase()] || 0;
+      if (val >= 900)      reactionMultiplier = 2.5;
+      else if (val >= 500) reactionMultiplier = 2.0;
+      else if (val >= 300) reactionMultiplier = 1.5;
+      else                 reactionMultiplier = 1.2;
+    } else if (lastMove && lastMove.captured && lastMove.byColor === botColor) {
+      reactionMultiplier = 0.7;
+    }
+  }
+
+  // ============ 4. УЧЁТ МАЛОГО ВРЕМЕНИ ============
+  if (botTimeLeft < 10) {
+    baseDelay = 40;
+    complexity = 1.0;
+    reactionMultiplier = 1.0;
+  } else if (botTimeLeft < 30) {
+    baseDelay = Math.min(baseDelay, 120);
+    complexity = Math.min(complexity, 1.2);
+    reactionMultiplier = Math.min(reactionMultiplier, 1.3);
+  } else if (botTimeLeft < 60) {
+    complexity = Math.min(complexity, 1.5);
+    reactionMultiplier = Math.min(reactionMultiplier, 1.7);
+  }
+
+  // ============ 5. ФИНАЛЬНАЯ ЗАДЕРЖКА ============
+  let delay = baseDelay * complexity * reactionMultiplier;
+  const maxThinkMs = Math.max(100, Math.floor(botTimeLeft * 150));
+  if (delay > maxThinkMs) delay = maxThinkMs;
+  if (delay < 30) delay = 30;
+
   setTimeout(() => {
     const cur = lobbies.get(lobbyId);
     if (!cur || cur.finished || cur.turn !== botColor) return;
+
     const bot = BOTS.find(b => b.name === cur.botName);
     const level = bot ? bot.level : 2;
-    const mv = pickBotMove(cur.fen, level);
+
+    const mv = pickBotMoveAdaptive(cur.fen, level, cur.time);
     if (!mv) return;
+
     const { from, to } = mv;
-    const state = botParseFen(cur.fen);
-    const legal = botLegalMovesFor(state, from[0], from[1]);
+    const st = botParseFen(cur.fen);
+    const legal = botLegalMovesFor(st, from[0], from[1]);
     if (!legal.some(([r, c]) => r === to[0] && c === to[1])) return;
-    const nextState = botApplyMove(state, from, to);
+
+    // Запоминаем ход для реакции в будущем
+    const captured = st.board[to[0]][to[1]];
+    const nextState = botApplyMove(st, from, to);
+    if (!cur.history) cur.history = [];
+    cur.history.push({
+      from, to,
+      captured: captured || null,
+      byColor: botColor,
+      ts: Date.now()
+    });
+    if (cur.history.length > 10) cur.history.shift();
+
     const now = Date.now();
     const elapsed = Math.floor((now - cur.lastTick) / 1000);
     if (botColor === 'w') cur.timeW = Math.max(0, cur.timeW - elapsed) + cur.inc;
@@ -968,8 +1068,10 @@ function scheduleBotMove(lobbyId) {
     cur.fen = botToFen(nextState);
     cur.turn = nextState.turn;
     cur.drawOffer = null;
+
     io.to(lobbyId).emit('boardUpdate', { fen: cur.fen, turn: cur.turn, san: null });
     io.to(lobbyId).emit('timeUpdate', { timeW: cur.timeW, timeB: cur.timeB });
+
     const sideToMoveWhite = cur.turn === 'w';
     const hasMoves = botAllLegalMoves(botParseFen(cur.fen), sideToMoveWhite).length > 0;
     if (!hasMoves) {
@@ -979,7 +1081,9 @@ function scheduleBotMove(lobbyId) {
   }, delay);
 }
 
-// ======================= SOCKET.IO =======================
+// ============================================================
+//  SOCKET.IO
+// ============================================================
 io.on('connection', (socket) => {
   socket.emit('onlineCount', online.size);
   socket.emit('stats', { online: online.size, games: db.totalGames, activeGames: countActiveLobbies() });
@@ -1162,7 +1266,7 @@ io.on('connection', (socket) => {
       hostColor: null, guestColor: null, time, inc, timeW: time * 60, timeB: time * 60,
       turn: 'w', fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
       started: false, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
-      createdAt: Date.now(), rematch: null, isBot: false
+      createdAt: Date.now(), rematch: null, isBot: false, history: []
     });
     socket.join(id);
     socketToLobby.set(socket.id, id);
@@ -1189,7 +1293,7 @@ io.on('connection', (socket) => {
       turn: 'w', fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
       started: true, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
       createdAt: Date.now(), rematch: null,
-      isBot: true, botName: bot.name, botColor
+      isBot: true, botName: bot.name, botColor, history: []
     });
     socket.join(id);
     socketToLobby.set(socket.id, id);
@@ -1259,6 +1363,37 @@ io.on('connection', (socket) => {
     if (typeof fen !== 'string' || fen.split(' ').length < 6) return;
     const newTurn = fen.split(' ')[1];
     if (newTurn === l.turn) return;
+
+    // Запоминаем информацию о ходе для реакции бота
+    try {
+      const oldState = botParseFen(l.fen);
+      const newState = botParseFen(fen);
+      let fromSq = null, toSq = null, captured = null;
+      for (let r = 0; r < 8 && !fromSq; r++) {
+        for (let c = 0; c < 8; c++) {
+          if (oldState.board[r][c] && !newState.board[r][c]) { fromSq = [r, c]; break; }
+        }
+      }
+      if (fromSq) {
+        const piece = oldState.board[fromSq[0]][fromSq[1]];
+        for (let r = 0; r < 8; r++) {
+          for (let c = 0; c < 8; c++) {
+            const oldP = oldState.board[r][c];
+            const newP = newState.board[r][c];
+            if (newP === piece && oldP !== piece && !(r === fromSq[0] && c === fromSq[1])) {
+              const capturedHere = (oldP && oldP !== piece) ? oldP : null;
+              toSq = [r, c];
+              captured = capturedHere;
+              break;
+            }
+          }
+          if (toSq) break;
+        }
+      }
+      if (!l.history) l.history = [];
+      l.history.push({ from: fromSq, to: toSq, captured, byColor: myColor, ts: Date.now() });
+      if (l.history.length > 10) l.history.shift();
+    } catch (e) { /* игнорируем */ }
 
     const now = Date.now();
     const elapsed = Math.floor((now - l.lastTick) / 1000);
@@ -1394,7 +1529,7 @@ io.on('connection', (socket) => {
         turn: 'w', fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
         started: true, finished: false, lastTick: Date.now(),
         chat: [], drawOffer: null, createdAt: Date.now(),
-        rematch: null, isBot: true, botName: bot.name, botColor: 'b'
+        rematch: null, isBot: true, botName: bot.name, botColor: 'b', history: []
       });
       const hostSocket = io.sockets.sockets.get(l.hostSocket);
       if (hostSocket) {
@@ -1434,7 +1569,7 @@ io.on('connection', (socket) => {
         timeW: l.time * 60, timeB: l.time * 60, turn: 'w',
         fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
         started: true, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
-        createdAt: Date.now(), arenaId: null, arenaName: null, rematch: null, isBot: false
+        createdAt: Date.now(), arenaId: null, arenaName: null, rematch: null, isBot: false, history: []
       };
       lobbies.set(newId, newLobby);
       const hostRating = db.users[l.host] ? db.users[l.host].rating : null;
