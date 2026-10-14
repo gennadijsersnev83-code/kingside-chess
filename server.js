@@ -301,14 +301,6 @@ function broadcastOnline() {
 }
 function broadcastLobbies() { io.emit('lobbiesUpdate'); }
 
-function notifyOpponentStatus(lobbyId, username, isOnline) {
-  const l = lobbies.get(lobbyId);
-  if (!l) return;
-  const target = username === l.host ? l.guestSocket : l.hostSocket;
-  if (!target) return;
-  io.to(target).emit(isOnline ? 'opponentOnline' : 'opponentOffline', { username });
-}
-
 function cleanupStuckPlaying() {
   for (const state of arenas.values()) {
     for (const p of state.participants.values()) {
@@ -535,59 +527,56 @@ function scheduleArena(state) {
   if (endDelay > 0) setTimeout(() => finishArena(state), endDelay);
   else finishArena(state);
 }
+
+// ВАЖНО: бот может одновременно играть в нескольких партиях
+// (в арене играют все боты параллельно, а не по одному)
 function isAvailableForPairing(p) {
   if (!p) return false;
-  if (p.isPlaying) return false;
   if (p.paused) return false;
+  if (p.isBot) return true;  // бот доступен всегда — параллельные партии
   if (!p.socketId) return false;
-  if (p.isBot) return true;
   if (!io.sockets.sockets.has(p.socketId)) return false;
   return true;
 }
+
 function tryPair(state) {
   if (state.finished || state.phase !== 'live') return;
-  const waiting = [];
+  const available = [];
   for (const [username, p] of state.participants.entries()) {
     if (!isAvailableForPairing(p)) continue;
     if (!p.waitingSince) p.waitingSince = Date.now();
-    waiting.push(p);
+    available.push(p);
   }
-  if (waiting.length < 2) { state.pairingNow = waiting.length === 1 ? waiting[0].username : null; return; }
+  if (available.length < 2) { state.pairingNow = available.length === 1 ? available[0].username : null; return; }
   state.pairingNow = null;
-  waiting.sort((a, b) => a.waitingSince - b.waitingSince);
+  available.sort((a, b) => a.waitingSince - b.waitingSince);
   const now = Date.now();
   const used = new Set();
   let pairsCreated = 0;
-  const MAX_PAIRS_PER_TICK = 20;
-  for (let i = 0; i < waiting.length && pairsCreated < MAX_PAIRS_PER_TICK; i++) {
-    const a = waiting[i];
+  const MAX_PAIRS_PER_TICK = 15;
+  for (let i = 0; i < available.length && pairsCreated < MAX_PAIRS_PER_TICK; i++) {
+    const a = available[i];
     if (used.has(a.username)) continue;
     let best = null, bestDiff = Infinity;
-    for (let j = 0; j < waiting.length; j++) {
+    for (let j = 0; j < available.length; j++) {
       if (i === j) continue;
-      const b = waiting[j];
+      const b = available[j];
       if (used.has(b.username)) continue;
       if (a.isBot && b.isBot) {
-        const humanWaiting = waiting.some(p => !p.isBot && !used.has(p.username));
-        if (humanWaiting) continue;
-        const waited = Math.max(now - (a.waitingSince||now), now - (b.waitingSince||now));
-        if (waited < 5000) continue;
+        const humansWaiting = available.some(p => !p.isBot && !used.has(p.username));
+        if (humansWaiting) continue;
       }
       const diff = Math.abs((a.score || 0) - (b.score || 0));
       if (diff < bestDiff) { bestDiff = diff; best = b; }
     }
     if (!best) continue;
-    const aWaited = now - (a.waitingSince || now);
-    const bWaited = now - (best.waitingSince || now);
-    const maxWaited = Math.max(aWaited, bWaited);
-    if (bestDiff <= 1 || maxWaited >= 10000) {
-      createArenaPairing(state, a, best);
-      used.add(a.username); used.add(best.username);
-      a.waitingSince = null; best.waitingSince = null;
-      pairsCreated++;
-    }
+    createArenaPairing(state, a, best);
+    used.add(a.username); used.add(best.username);
+    a.waitingSince = null; best.waitingSince = null;
+    pairsCreated++;
   }
 }
+
 function createArenaPairing(state, a, b) {
   const lobbyId = genId();
   const hostIsWhite = Math.random() < 0.5;
@@ -631,7 +620,7 @@ function createArenaPairing(state, a, b) {
   io.emit('arenaUpdate', { arenaId: state.id });
   broadcastOnline();
 
-  if (isBotGame && lobbyId) setTimeout(() => scheduleBotMove(lobbyId), 500);
+  if (isBotGame && lobbyId) setTimeout(() => scheduleBotMove(lobbyId), 300);
 }
 function calcArenaPoints(p, result) {
   if (result === 'win') { const s = (p.winStreak || 0) + 1; p.winStreak = s; p.drawStreak = 0; return s >= 3 ? 4 : 2; }
@@ -665,7 +654,7 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   whiteP.lobbyId = null; blackP.lobbyId = null;
   if (!whiteP.paused) whiteP.waitingSince = Date.now();
   if (!blackP.paused) blackP.waitingSince = Date.now();
-  setTimeout(() => tryPair(state), 500);
+  setTimeout(() => tryPair(state), 200);
   io.emit('arenaUpdate', { arenaId });
 }
 function finishArena(state) {
@@ -742,7 +731,8 @@ setInterval(() => {
     lobby.lastTick = now;
     if (side === 'w') lobby.timeW = Math.max(0, lobby.timeW - elapsed);
     else              lobby.timeB = Math.max(0, lobby.timeB - elapsed);
-    if (!lobby.isBot || (Math.floor(now / 1000) % 3 === 0)) {
+    // Шлём только для партий с людьми; бот-бот не шлём вообще, чтобы не грузить
+    if (!lobby.isBot) {
       io.to(id).emit('timeUpdate', { timeW: lobby.timeW, timeB: lobby.timeB, serverNow: now });
     }
     if (lobby.timeW <= 0) finishGame(id, 'b', 'Время');
@@ -783,78 +773,18 @@ const BOT_NAMES = new Set(BOTS.map(b => b.name));
 // ============================================================
 const PIECE_VALUES = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
 const PST = {
-  p: [
-    [ 0,  0,  0,  0,  0,  0,  0,  0],
-    [50, 50, 50, 50, 50, 50, 50, 50],
-    [10, 10, 20, 30, 30, 20, 10, 10],
-    [ 5,  5, 10, 25, 25, 10,  5,  5],
-    [ 0,  0,  0, 20, 20,  0,  0,  0],
-    [ 5, -5,-10,  0,  0,-10, -5,  5],
-    [ 5, 10, 10,-20,-20, 10, 10,  5],
-    [ 0,  0,  0,  0,  0,  0,  0,  0]
-  ],
-  n: [
-    [-50,-40,-30,-30,-30,-30,-40,-50],
-    [-40,-20,  0,  0,  0,  0,-20,-40],
-    [-30,  0, 10, 15, 15, 10,  0,-30],
-    [-30,  5, 15, 20, 20, 15,  5,-30],
-    [-30,  0, 15, 20, 20, 15,  0,-30],
-    [-30,  5, 10, 15, 15, 10,  5,-30],
-    [-40,-20,  0,  5,  5,  0,-20,-40],
-    [-50,-40,-30,-30,-30,-30,-40,-50]
-  ],
-  b: [
-    [-20,-10,-10,-10,-10,-10,-10,-20],
-    [-10,  0,  0,  0,  0,  0,  0,-10],
-    [-10,  0,  5, 10, 10,  5,  0,-10],
-    [-10,  5,  5, 10, 10,  5,  5,-10],
-    [-10,  0, 10, 10, 10, 10,  0,-10],
-    [-10, 10, 10, 10, 10, 10, 10,-10],
-    [-10,  5,  0,  0,  0,  0,  5,-10],
-    [-20,-10,-10,-10,-10,-10,-10,-20]
-  ],
-  r: [
-    [ 0,  0,  0,  0,  0,  0,  0,  0],
-    [ 5, 10, 10, 10, 10, 10, 10,  5],
-    [-5,  0,  0,  0,  0,  0,  0, -5],
-    [-5,  0,  0,  0,  0,  0,  0, -5],
-    [-5,  0,  0,  0,  0,  0,  0, -5],
-    [-5,  0,  0,  0,  0,  0,  0, -5],
-    [-5,  0,  0,  0,  0,  0,  0, -5],
-    [ 0,  0,  0,  5,  5,  0,  0,  0]
-  ],
-  q: [
-    [-20,-10,-10, -5, -5,-10,-10,-20],
-    [-10,  0,  0,  0,  0,  0,  0,-10],
-    [-10,  0,  5,  5,  5,  5,  0,-10],
-    [ -5,  0,  5,  5,  5,  5,  0, -5],
-    [  0,  0,  5,  5,  5,  5,  0, -5],
-    [-10,  5,  5,  5,  5,  5,  0,-10],
-    [-10,  0,  5,  0,  0,  0,  0,-10],
-    [-20,-10,-10, -5, -5,-10,-10,-20]
-  ],
-  k: [
-    [-30,-40,-40,-50,-50,-40,-40,-30],
-    [-30,-40,-40,-50,-50,-40,-40,-30],
-    [-30,-40,-40,-50,-50,-40,-40,-30],
-    [-30,-40,-40,-50,-50,-40,-40,-30],
-    [-20,-30,-30,-40,-40,-30,-30,-20],
-    [-10,-20,-20,-20,-20,-20,-20,-10],
-    [ 20, 20,  0,  0,  0,  0, 20, 20],
-    [ 20, 30, 10,  0,  0, 10, 30, 20]
-  ]
+  p: [[0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20,10,10],[5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-5,-10,0,0,-10,-5,5],[5,10,10,-20,-20,10,10,5],[0,0,0,0,0,0,0,0]],
+  n: [[-50,-40,-30,-30,-30,-30,-40,-50],[-40,-20,0,0,0,0,-20,-40],[-30,0,10,15,15,10,0,-30],[-30,5,15,20,20,15,5,-30],[-30,0,15,20,20,15,0,-30],[-30,5,10,15,15,10,5,-30],[-40,-20,0,5,5,0,-20,-40],[-50,-40,-30,-30,-30,-30,-40,-50]],
+  b: [[-20,-10,-10,-10,-10,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,10,10,5,0,-10],[-10,5,5,10,10,5,5,-10],[-10,0,10,10,10,10,0,-10],[-10,10,10,10,10,10,10,-10],[-10,5,0,0,0,0,5,-10],[-20,-10,-10,-10,-10,-10,-10,-20]],
+  r: [[0,0,0,0,0,0,0,0],[5,10,10,10,10,10,10,5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[0,0,0,5,5,0,0,0]],
+  q: [[-20,-10,-10,-5,-5,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,5,5,5,0,-10],[-5,0,5,5,5,5,0,-5],[0,0,5,5,5,5,0,-5],[-10,5,5,5,5,5,0,-10],[-10,0,5,0,0,0,0,-10],[-20,-10,-10,-5,-5,-10,-10,-20]],
+  k: [[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-20,-30,-30,-40,-40,-30,-30,-20],[-10,-20,-20,-20,-20,-20,-20,-10],[20,20,0,0,0,0,20,20],[20,30,10,0,0,10,30,20]]
 };
-
-const TRANSPOSITION_CACHE = new Map();
-const TT_MAX_SIZE = 200000;
-function ttKey(state) {
-  return state.board.map(row => row.map(c => c || '.').join('')).join('/') + '|' + state.turn + '|' + state.castling + '|' + state.ep;
-}
-function ttGet(key) { return TRANSPOSITION_CACHE.get(key); }
-function ttSet(key, depth, score) {
-  if (TRANSPOSITION_CACHE.size > TT_MAX_SIZE) TRANSPOSITION_CACHE.clear();
-  TRANSPOSITION_CACHE.set(key, { depth, score });
-}
+const TT_CACHE = new Map();
+const TT_MAX = 200000;
+function ttKey(state) { return state.board.map(row => row.map(c => c || '.').join('')).join('/') + state.turn + state.castling + state.ep; }
+function ttGet(k) { return TT_CACHE.get(k); }
+function ttSet(k, d, s) { if (TT_CACHE.size > TT_MAX) TT_CACHE.clear(); TT_CACHE.set(k, { depth: d, score: s }); }
 
 function botParseFen(fen) {
   const parts = fen.split(' ');
@@ -868,7 +798,6 @@ function botToFen(state) {
 }
 const botIsWhite = p => !!p && p === p.toUpperCase();
 const botInBoard = (r,c) => r >= 0 && r < 8 && c >= 0 && c < 8;
-
 function botPseudoMoves(state, r, c) {
   const p = state.board[r][c]; if (!p) return [];
   const moves = []; const white = botIsWhite(p); const type = p.toLowerCase();
@@ -938,39 +867,37 @@ function botAllLegalMoves(state, white) {
   }
   return res;
 }
-
-// Оценка позиции
 function botEval(state) {
   let score = 0;
   let whiteBishops = 0, blackBishops = 0;
-  const whitePawnFiles = new Array(8).fill(0);
-  const blackPawnFiles = new Array(8).fill(0);
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     const white = botIsWhite(p); const t = p.toLowerCase();
     let v = PIECE_VALUES[t] || 0;
-    if (t !== 'k') {
-      const table = PST[t];
-      if (table) { const rr = white ? r : 7 - r; v += table[rr][c]; }
-    }
+    if (t !== 'k') { const table = PST[t]; if (table) { const rr = white ? r : 7 - r; v += table[rr][c]; } }
     if (t === 'b') { if (white) whiteBishops++; else blackBishops++; }
-    if (t === 'p') { if (white) whitePawnFiles[c]++; else blackPawnFiles[c]++; }
     score += white ? v : -v;
   }
   if (whiteBishops >= 2) score += 30;
   if (blackBishops >= 2) score -= 30;
-  for (let c = 0; c < 8; c++) {
-    if (whitePawnFiles[c] > 1) score -= 15 * (whitePawnFiles[c] - 1);
-    if (blackPawnFiles[c] > 1) score += 15 * (blackPawnFiles[c] - 1);
+  // Бонус за атаку на короля — важно для мата
+  const wK = botFindKing(state, true), bK = botFindKing(state, false);
+  if (wK) {
+    const attackers = botAllLegalMoves(state, false).filter(([f, t]) => {
+      const target = state.board[t[0]][t[1]];
+      return target === 'K';
+    });
+    if (attackers.length > 0) score -= 500;
   }
-  const wK = botFindKing(state, true);
-  const bK = botFindKing(state, false);
-  if (wK && wK[0] < 6) score -= 20;
-  if (bK && bK[0] > 1) score += 20;
+  if (bK) {
+    const attackers = botAllLegalMoves(state, true).filter(([f, t]) => {
+      const target = state.board[t[0]][t[1]];
+      return target === 'k';
+    });
+    if (attackers.length > 0) score += 500;
+  }
   return score;
 }
-
-// MVV-LVA: сортировка ходов для alpha-beta
 function moveScore(state, from, to) {
   const target = state.board[to[0]][to[1]];
   const piece = state.board[from[0]][from[1]];
@@ -979,8 +906,6 @@ function moveScore(state, from, to) {
   const attackerVal = PIECE_VALUES[piece.toLowerCase()] || 0;
   return victimVal * 10 - attackerVal;
 }
-
-// Quiescence search — ищем взятия на листьях
 function botQuiescence(state, alpha, beta, maximizing, depthLeft) {
   if (depthLeft <= 0) return botEval(state);
   const stand = botEval(state);
@@ -992,8 +917,7 @@ function botQuiescence(state, alpha, beta, maximizing, depthLeft) {
     if (stand < beta) beta = stand;
   }
   const white = state.turn === 'w';
-  const allMoves = botAllLegalMoves(state, white);
-  const captures = allMoves.filter(([from, to]) => state.board[to[0]][to[1]]);
+  const captures = botAllLegalMoves(state, white).filter(([f, t]) => state.board[t[0]][t[1]]);
   captures.sort((a, b) => moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]));
   if (maximizing) {
     for (const [from, to] of captures) {
@@ -1013,13 +937,12 @@ function botQuiescence(state, alpha, beta, maximizing, depthLeft) {
     return beta;
   }
 }
-
 function botMinimax(state, depth, alpha, beta, maximizing) {
   const key = ttKey(state);
   const cached = ttGet(key);
   if (cached && cached.depth >= depth) return cached.score;
 
-  if (depth === 0) return botQuiescence(state, alpha, beta, maximizing, 3);
+  if (depth === 0) return botQuiescence(state, alpha, beta, maximizing, 2);
 
   const white = state.turn === 'w';
   const moves = botAllLegalMoves(state, white);
@@ -1027,8 +950,6 @@ function botMinimax(state, depth, alpha, beta, maximizing) {
     if (botInCheck(state, white)) return white ? -99999 + (10 - depth) : 99999 - (10 - depth);
     return 0;
   }
-
-  // MVV-LVA сортировка
   moves.sort((a, b) => moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]));
 
   let best;
@@ -1062,8 +983,6 @@ function botMinimax(state, depth, alpha, beta, maximizing) {
   ttSet(key, depth, best);
   return best;
 }
-
-// Параметры по рейтингу — глубина и шум
 function getBotParams(rating, baseTimeMin) {
   let depth, noise;
   if (rating < 1100)      { depth = 1; noise = 60; }
@@ -1074,27 +993,20 @@ function getBotParams(rating, baseTimeMin) {
   else if (rating < 2000) { depth = 4; noise = 0; }
   else if (rating < 2200) { depth = 4; noise = 0; }
   else                    { depth = 5; noise = 0; }
-
   if (baseTimeMin <= 1) depth = Math.min(depth, 1);
   else if (baseTimeMin <= 2) depth = Math.min(depth, 2);
   else if (baseTimeMin <= 3) depth = Math.min(depth, 3);
   else if (baseTimeMin <= 5) depth = Math.min(depth, 3);
-
   return { depth, noise };
 }
-
 function pickBotMoveByRating(fen, rating, baseTimeMin) {
   const state = botParseFen(fen);
   const white = state.turn === 'w';
   const moves = botAllLegalMoves(state, white);
   if (!moves.length) return null;
-
   const { depth, noise } = getBotParams(rating, baseTimeMin);
   if (moves.length === 1) return moves[0];
-
-  // MVV-LVA сортировка
   moves.sort((a, b) => moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]));
-
   const scored = moves.map(([from, to]) => {
     const next = botApplyMove(state, from, to);
     let score = botMinimax(next, depth - 1, -Infinity, Infinity, !white);
@@ -1102,14 +1014,11 @@ function pickBotMoveByRating(fen, rating, baseTimeMin) {
     return { from, to, score };
   });
   scored.sort((a, b) => white ? b.score - a.score : a.score - b.score);
-
   if (rating < 1100 && scored.length > 2 && Math.random() < 0.4) return scored[1 + Math.floor(Math.random() * 2)];
   if (rating < 1350 && scored.length > 1 && Math.random() < 0.25) return scored[1];
   if (rating < 1500 && scored.length > 1 && Math.random() < 0.1) return scored[1];
-
   return scored[0];
 }
-
 function evaluateCurrentPosition(fen) {
   const state = botParseFen(fen);
   return botEval(state);
@@ -1121,7 +1030,6 @@ function evaluateCurrentPosition(fen) {
 function scheduleBotMove(lobbyId) {
   const l = lobbies.get(lobbyId);
   if (!l || l.finished || !l.isBot) return;
-
   const currentTurn = l.turn;
   const botColor = (l.botColor === currentTurn) ? l.botColor : (l.botColor2 === currentTurn ? l.botColor2 : null);
   const botName = (botColor === l.botColor) ? l.botName : (botColor === l.botColor2 ? l.botName2 : null);
@@ -1134,60 +1042,45 @@ function scheduleBotMove(lobbyId) {
   const botMoves = botAllLegalMoves(state, botIsWhiteTurn);
 
   let baseDelay;
-  if (baseTime <= 60)       baseDelay = 80;
-  else if (baseTime <= 120) baseDelay = 150;
-  else if (baseTime <= 300) baseDelay = 300;
-  else if (baseTime <= 600) baseDelay = 500;
-  else if (baseTime <= 900) baseDelay = 700;
-  else                      baseDelay = 1200;
+  if (baseTime <= 60)       baseDelay = 60;
+  else if (baseTime <= 120) baseDelay = 100;
+  else if (baseTime <= 300) baseDelay = 200;
+  else if (baseTime <= 600) baseDelay = 350;
+  else if (baseTime <= 900) baseDelay = 500;
+  else                      baseDelay = 800;
 
   let complexity = 1.0;
   if (botMoves.length <= 2)       complexity *= 0.4;
   else if (botMoves.length <= 5)  complexity *= 0.7;
   else if (botMoves.length >= 25) complexity *= 1.4;
   else if (botMoves.length >= 15) complexity *= 1.2;
+  if (botInCheck(state, botIsWhiteTurn)) complexity *= 1.5;
 
-  if (botInCheck(state, botIsWhiteTurn)) complexity *= 1.8;
-
-  let hasCapture = false, hasCheck = false, hasPromotion = false;
-  for (const [from, to] of botMoves) {
-    const target = state.board[to[0]][to[1]];
-    if (target) hasCapture = true;
-    const p = state.board[from[0]][from[1]];
-    if (p && p.toLowerCase() === 'p' && (to[0] === 0 || to[0] === 7)) hasPromotion = true;
-    const next = botApplyMove(state, from, to);
-    if (botInCheck(next, !botIsWhiteTurn)) hasCheck = true;
-  }
-  if (hasCapture)    complexity *= 1.15;
-  if (hasCheck)      complexity *= 1.25;
-  if (hasPromotion)  complexity *= 1.5;
+  let hasCapture = false;
+  for (const [from, to] of botMoves) if (state.board[to[0]][to[1]]) { hasCapture = true; break; }
+  if (hasCapture) complexity *= 1.1;
 
   let reactionMultiplier = 1.0;
   if (l.history && l.history.length > 0) {
     const lastMove = l.history[l.history.length - 1];
     if (lastMove && lastMove.captured && lastMove.byColor !== botColor) {
       const val = PIECE_VALUES[lastMove.captured.toLowerCase()] || 0;
-      if (val >= 900)      reactionMultiplier = 2.5;
-      else if (val >= 500) reactionMultiplier = 2.0;
-      else if (val >= 300) reactionMultiplier = 1.5;
-      else                 reactionMultiplier = 1.2;
+      if (val >= 900)      reactionMultiplier = 2.0;
+      else if (val >= 500) reactionMultiplier = 1.7;
+      else if (val >= 300) reactionMultiplier = 1.3;
+      else                 reactionMultiplier = 1.1;
     } else if (lastMove && lastMove.captured && lastMove.byColor === botColor) {
-      reactionMultiplier = 0.7;
+      reactionMultiplier = 0.8;
     }
   }
 
-  if (botTimeLeft < 10) {
-    baseDelay = 40; complexity = 1.0; reactionMultiplier = 1.0;
-  } else if (botTimeLeft < 30) {
-    baseDelay = Math.min(baseDelay, 120); complexity = Math.min(complexity, 1.2); reactionMultiplier = Math.min(reactionMultiplier, 1.3);
-  } else if (botTimeLeft < 60) {
-    complexity = Math.min(complexity, 1.5); reactionMultiplier = Math.min(reactionMultiplier, 1.7);
-  }
+  if (botTimeLeft < 10) { baseDelay = 30; complexity = 1.0; reactionMultiplier = 1.0; }
+  else if (botTimeLeft < 30) { baseDelay = Math.min(baseDelay, 80); complexity = Math.min(complexity, 1.2); reactionMultiplier = Math.min(reactionMultiplier, 1.3); }
 
   let delay = baseDelay * complexity * reactionMultiplier;
-  const maxThinkMs = Math.max(100, Math.floor(botTimeLeft * 150));
+  const maxThinkMs = Math.max(80, Math.floor(botTimeLeft * 120));
   if (delay > maxThinkMs) delay = maxThinkMs;
-  if (delay < 30) delay = 30;
+  if (delay < 20) delay = 20;
 
   const botUser = db.users[botName];
   const botRating = botUser ? botUser.rating : 1500;
@@ -1195,7 +1088,6 @@ function scheduleBotMove(lobbyId) {
   setTimeout(() => {
     const cur = lobbies.get(lobbyId);
     if (!cur || cur.finished || cur.turn !== botColor) return;
-
     const st = botParseFen(cur.fen);
     const evalScore = botEval(st);
     const botSign = botColor === 'w' ? 1 : -1;
@@ -1219,7 +1111,6 @@ function scheduleBotMove(lobbyId) {
 
     const mv = pickBotMoveByRating(cur.fen, botRating, cur.time);
     if (!mv) return;
-
     const { from, to } = mv;
     const legal = botLegalMovesFor(st, from[0], from[1]);
     if (!legal.some(([r, c]) => r === to[0] && c === to[1])) return;
@@ -1240,7 +1131,9 @@ function scheduleBotMove(lobbyId) {
     cur.drawOffer = null;
 
     io.to(lobbyId).emit('boardUpdate', { fen: cur.fen, turn: cur.turn, san: null });
-    io.to(lobbyId).emit('timeUpdate', { timeW: cur.timeW, timeB: cur.timeB, serverNow: now });
+    // Обновляем таймеры у людей в этой партии
+    const humanSocket = (cur.hostSocket && !cur.isBot) ? io.sockets.sockets.get(cur.hostSocket) : null;
+    if (humanSocket) humanSocket.emit('timeUpdate', { timeW: cur.timeW, timeB: cur.timeB, serverNow: now });
 
     const sideToMoveWhite = cur.turn === 'w';
     const hasMoves = botAllLegalMoves(botParseFen(cur.fen), sideToMoveWhite).length > 0;
@@ -1248,7 +1141,8 @@ function scheduleBotMove(lobbyId) {
       if (botInCheck(botParseFen(cur.fen), sideToMoveWhite)) finishGame(lobbyId, sideToMoveWhite ? 'b' : 'w', 'Мат');
       else finishGame(lobbyId, 'draw', 'Пат');
     } else if (cur.isBot && ((cur.botColor && cur.turn === cur.botColor) || (cur.botColor2 && cur.turn === cur.botColor2))) {
-      scheduleBotMove(lobbyId);
+      // бот-бот: следующий ход
+      setTimeout(() => scheduleBotMove(lobbyId), 100);
     }
   }, delay);
 }
@@ -1290,11 +1184,6 @@ io.on('connection', (socket) => {
     online.set(socket.id, username);
     socket.username = username;
     cb({ ok: true, user: publicUser(username) });
-    for (const [lid, l] of lobbies.entries()) {
-      if (l.finished) continue;
-      if (l.host === username && l.guestSocket) io.to(l.guestSocket).emit('opponentOnline', { username });
-      if (l.guest === username && l.hostSocket) io.to(l.hostSocket).emit('opponentOnline', { username });
-    }
     broadcastOnline();
   });
 
@@ -1335,15 +1224,7 @@ io.on('connection', (socket) => {
     if (typeof cb !== 'function') return;
     cb(BOTS.map(b => {
       const u = db.users[b.name];
-      return {
-        name: b.name, title: b.title, desc: b.desc, level: b.level,
-        rating: u ? u.rating : b.rating,
-        games: u ? u.games : 0,
-        wins: u ? u.wins : 0,
-        losses: u ? u.losses : 0,
-        draws: u ? u.draws : 0,
-        initialRating: b.rating
-      };
+      return { name: b.name, title: b.title, desc: b.desc, level: b.level, rating: u ? u.rating : b.rating, games: u ? u.games : 0, wins: u ? u.wins : 0, losses: u ? u.losses : 0, draws: u ? u.draws : 0, initialRating: b.rating };
     }));
   });
 
@@ -1366,13 +1247,10 @@ io.on('connection', (socket) => {
       state: {
         myColor, opponent: opponentName,
         opponentRating: opponentU ? opponentU.rating : null,
-        opponentIsAdmin: isAdmin(opponentName),
-        opponentIsMod: isMod(opponentName),
+        opponentIsAdmin: isAdmin(opponentName), opponentIsMod: isMod(opponentName),
         opponentOnline: isUserOnline(opponentName) || BOT_NAMES.has(opponentName),
-        time: l.time, inc: l.inc,
-        timeW: l.timeW, timeB: l.timeB, turn: l.turn,
-        fen: l.fen, chat: l.chat,
-        arenaId: l.arenaId, arenaName: l.arenaName,
+        time: l.time, inc: l.inc, timeW: l.timeW, timeB: l.timeB, turn: l.turn,
+        fen: l.fen, chat: l.chat, arenaId: l.arenaId, arenaName: l.arenaName,
         finished: l.finished, isBot: !!l.isBot
       }
     });
@@ -1418,11 +1296,8 @@ io.on('connection', (socket) => {
     inc  = Math.max(0, Math.min(60, +inc || 0));
     let matched = null;
     for (const [, l] of lobbies.entries()) {
-      if (l.finished) continue;
-      if (l.arenaId || l.isBot) continue;
-      if (l.guest) continue;
-      if (l.host === socket.username) continue;
-      if (l.hostSocket === socket.id) continue;
+      if (l.finished || l.arenaId || l.isBot || l.guest) continue;
+      if (l.host === socket.username || l.hostSocket === socket.id) continue;
       if (Number(l.time) !== time || Number(l.inc) !== inc) continue;
       matched = l;
       break;
@@ -1472,27 +1347,20 @@ io.on('connection', (socket) => {
     const botUser = db.users[bot.name];
     const botRating = botUser ? botUser.rating : bot.rating;
     const id = genId();
-    const playerColor = 'w';
-    const botColor = 'b';
     lobbies.set(id, {
-      id, host: socket.username, hostSocket: socket.id,
-      guest: bot.name, guestSocket: null,
-      hostColor: playerColor, guestColor: botColor,
-      time, inc, timeW: time * 60, timeB: time * 60,
+      id, host: socket.username, hostSocket: socket.id, guest: bot.name, guestSocket: null,
+      hostColor: 'w', guestColor: 'b', time, inc, timeW: time * 60, timeB: time * 60,
       turn: 'w', fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
       started: true, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
-      createdAt: Date.now(), rematch: null,
-      isBot: true, botName: bot.name, botColor, history: []
+      createdAt: Date.now(), rematch: null, isBot: true, botName: bot.name, botColor: 'b', history: []
     });
     socket.join(id);
     socketToLobby.set(socket.id, id);
     socket.lobbyId = id;
     io.to(socket.id).emit('gameStart', {
-      color: playerColor, opponent: bot.name, opponentRating: botRating,
-      opponentIsAdmin: false, opponentIsMod: false,
-      opponentOnline: true,
-      time, inc, lobbyId: id,
-      fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+      color: 'w', opponent: bot.name, opponentRating: botRating,
+      opponentIsAdmin: false, opponentIsMod: false, opponentOnline: true,
+      time, inc, lobbyId: id, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
       chat: [], isArena: false, isBot: true, botName: bot.name
     });
     cb({ ok: true, id });
@@ -1557,25 +1425,15 @@ io.on('connection', (socket) => {
       const oldState = botParseFen(l.fen);
       const newState = botParseFen(fen);
       let fromSq = null, toSq = null, captured = null;
-      for (let r = 0; r < 8 && !fromSq; r++) {
-        for (let c = 0; c < 8; c++) {
-          if (oldState.board[r][c] && !newState.board[r][c]) { fromSq = [r, c]; break; }
-        }
-      }
+      for (let r = 0; r < 8 && !fromSq; r++) for (let c = 0; c < 8; c++) if (oldState.board[r][c] && !newState.board[r][c]) { fromSq = [r, c]; break; }
       if (fromSq) {
         const piece = oldState.board[fromSq[0]][fromSq[1]];
-        for (let r = 0; r < 8; r++) {
-          for (let c = 0; c < 8; c++) {
-            const oldP = oldState.board[r][c];
-            const newP = newState.board[r][c];
-            if (newP === piece && oldP !== piece && !(r === fromSq[0] && c === fromSq[1])) {
-              const capturedHere = (oldP && oldP !== piece) ? oldP : null;
-              toSq = [r, c];
-              captured = capturedHere;
-              break;
-            }
+        for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+          const oldP = oldState.board[r][c], newP = newState.board[r][c];
+          if (newP === piece && oldP !== piece && !(r === fromSq[0] && c === fromSq[1])) {
+            toSq = [r, c]; captured = (oldP && oldP !== piece) ? oldP : null;
+            break;
           }
-          if (toSq) break;
         }
       }
       if (!l.history) l.history = [];
@@ -1597,10 +1455,9 @@ io.on('connection', (socket) => {
     socket.to('watch:' + lobbyId).emit('boardUpdate', { fen, turn: newTurn, san: san || null });
     socket.to('watch:' + lobbyId).emit('timeUpdate', { timeW: l.timeW, timeB: l.timeB, serverNow: now });
 
-    const needBotMove = l.isBot && (
-      (l.botColor === l.turn) || (l.botColor2 && l.botColor2 === l.turn)
-    );
-    if (needBotMove) scheduleBotMove(lobbyId);
+    if (l.isBot && ((l.botColor === l.turn) || (l.botColor2 && l.botColor2 === l.turn))) {
+      scheduleBotMove(lobbyId);
+    }
   });
 
   socket.on('resign', ({ lobbyId }) => {
@@ -1628,11 +1485,7 @@ io.on('connection', (socket) => {
     if (typeof text !== 'string') return;
     text = text.trim().slice(0, 300);
     if (!text) return;
-    const msg = {
-      id: 'm' + Date.now() + Math.random().toString(36).slice(2, 6),
-      user: socket.username, userIsAdmin: isAdmin(socket.username), userIsMod: isMod(socket.username),
-      text, ts: Date.now()
-    };
+    const msg = { id: 'm' + Date.now() + Math.random().toString(36).slice(2, 6), user: socket.username, userIsAdmin: isAdmin(socket.username), userIsMod: isMod(socket.username), text, ts: Date.now() };
     l.chat.push(msg);
     if (l.chat.length > 50) l.chat.shift();
     io.to(lobbyId).emit('chatMessage', msg);
@@ -1677,6 +1530,7 @@ io.on('connection', (socket) => {
     cb({ mutedUntil: checkMute(socket.username) });
   });
 
+  // Ничья — бот решает, принимать или нет
   socket.on('drawOffer', ({ lobbyId }) => {
     const l = lobbies.get(lobbyId);
     if (!l || l.finished || !l.started) return;
@@ -1684,19 +1538,20 @@ io.on('connection', (socket) => {
     l.drawOffer = { by: socket.id, at: Date.now() };
     socket.to(lobbyId).emit('drawOffered', { from: socket.username });
     if (l.isBot) {
-      const botColor = (l.botColor === l.hostColor ? l.botColor : l.botColor2);
-      const botName = (l.botColor === l.hostColor ? l.botName : l.botName2);
+      const botColor = l.botColor === l.hostColor ? l.botColor : l.botColor2;
+      const botName = l.botColor === l.hostColor ? l.botName : l.botName2;
       const botUser = db.users[botName];
       const botRating = botUser ? botUser.rating : 1500;
       const evalScore = evaluateCurrentPosition(l.fen);
       const botSign = botColor === 'w' ? 1 : -1;
       const myEval = evalScore * botSign;
+      // Чем сильнее бот — тем избирательнее он соглашается на ничью
       let accept = false;
-      if (botRating < 1100) accept = myEval < 100;
+      if (botRating < 1100)      accept = myEval < 100;
       else if (botRating < 1500) accept = myEval < 30;
-      else if (botRating < 1800) accept = myEval < 10;
-      else accept = myEval < -20;
-
+      else if (botRating < 1800) accept = myEval < 0;
+      else if (botRating < 2000) accept = myEval < -20;
+      else                       accept = myEval < -50; // мастер согласится только если реально хуже
       setTimeout(() => {
         const cur = lobbies.get(lobbyId);
         if (!cur || cur.finished || !cur.drawOffer) return;
@@ -1706,7 +1561,7 @@ io.on('connection', (socket) => {
         } else {
           socket.emit('drawDeclined');
         }
-      }, 500 + Math.random() * 1000);
+      }, 400 + Math.random() * 800);
     }
   });
   socket.on('drawAccept', ({ lobbyId }) => {
@@ -1727,31 +1582,24 @@ io.on('connection', (socket) => {
     const l = lobbies.get(lobbyId);
     if (!l) return cb({ ok: false, msg: 'Партия не найдена' });
     if (!l.finished) return cb({ ok: false, msg: 'Партия ещё не завершена' });
-
     if (l.isBot) {
       const botName = l.botName || l.botName2;
       const bot = BOTS.find(b => b.name === botName);
       if (!bot) return cb({ ok: false, msg: 'Бот не найден' });
       const botUser = db.users[bot.name];
       const botRating = botUser ? botUser.rating : bot.rating;
-
       let agreeChance = 0.9;
       if (botRating >= 1900) agreeChance = 0.35;
       else if (botRating >= 1700) agreeChance = 0.55;
       else if (botRating >= 1400) agreeChance = 0.7;
-
       setTimeout(() => {
-        if (Math.random() > agreeChance) {
-          cb({ ok: true, started: false, declined: true });
-          return;
-        }
+        if (Math.random() > agreeChance) { cb({ ok: true, started: false, declined: true }); return; }
         const newId = genId();
         lobbies.set(newId, {
           id: newId, host: l.host, hostSocket: l.hostSocket,
           guest: bot.name, guestSocket: null,
           hostColor: 'w', guestColor: 'b',
-          time: l.time, inc: l.inc,
-          timeW: l.time * 60, timeB: l.time * 60,
+          time: l.time, inc: l.inc, timeW: l.time * 60, timeB: l.time * 60,
           turn: 'w', fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
           started: true, finished: false, lastTick: Date.now(),
           chat: [], drawOffer: null, createdAt: Date.now(),
@@ -1774,25 +1622,20 @@ io.on('connection', (socket) => {
         lobbies.delete(lobbyId);
         broadcastLobbies();
         cb({ ok: true, started: true, newLobbyId: newId });
-      }, 300 + Math.random() * 1200);
+      }, 300 + Math.random() * 1000);
       return;
     }
-
     if (l.arenaId) return cb({ ok: false, msg: 'Реванш недоступен для арен' });
     if (socket.id !== l.hostSocket && socket.id !== l.guestSocket) return cb({ ok: false, msg: 'Вы не участник' });
-
     if (!l.rematch) l.rematch = {};
     l.rematch[socket.username] = true;
     const otherName = socket.username === l.host ? l.guest : l.host;
     const otherSocket = socket.username === l.host ? l.guestSocket : l.hostSocket;
-
     if (l.rematch[otherName]) {
       const newId = genId();
-      const hostColor = l.guestColor;
-      const guestColor = l.hostColor;
       const newLobby = {
         id: newId, host: l.host, hostSocket: l.hostSocket, guest: l.guest, guestSocket: l.guestSocket,
-        hostColor, guestColor, time: l.time, inc: l.inc,
+        hostColor: l.guestColor, guestColor: l.hostColor, time: l.time, inc: l.inc,
         timeW: l.time * 60, timeB: l.time * 60, turn: 'w',
         fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
         started: true, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
@@ -1805,11 +1648,11 @@ io.on('connection', (socket) => {
       const guestSocket = io.sockets.sockets.get(l.guestSocket);
       if (hostSocket) {
         hostSocket.leave(lobbyId); hostSocket.join(newId); socketToLobby.set(l.hostSocket, newId); hostSocket.lobbyId = newId;
-        hostSocket.emit('gameStart', { color: hostColor, opponent: l.guest, opponentRating: guestRating, opponentIsAdmin: isAdmin(l.guest), opponentIsMod: isMod(l.guest), opponentOnline: isUserOnline(l.guest), time: l.time, inc: l.inc, lobbyId: newId, fen: newLobby.fen, chat: [], isArena: false });
+        hostSocket.emit('gameStart', { color: l.guestColor, opponent: l.guest, opponentRating: guestRating, opponentIsAdmin: isAdmin(l.guest), opponentIsMod: isMod(l.guest), opponentOnline: isUserOnline(l.guest), time: l.time, inc: l.inc, lobbyId: newId, fen: newLobby.fen, chat: [], isArena: false });
       }
       if (guestSocket) {
         guestSocket.leave(lobbyId); guestSocket.join(newId); socketToLobby.set(l.guestSocket, newId); guestSocket.lobbyId = newId;
-        guestSocket.emit('gameStart', { color: guestColor, opponent: l.host, opponentRating: hostRating, opponentIsAdmin: isAdmin(l.host), opponentIsMod: isMod(l.host), opponentOnline: isUserOnline(l.host), time: l.time, inc: l.inc, lobbyId: newId, fen: newLobby.fen, chat: [], isArena: false });
+        guestSocket.emit('gameStart', { color: l.hostColor, opponent: l.host, opponentRating: hostRating, opponentIsAdmin: isAdmin(l.host), opponentIsMod: isMod(l.host), opponentOnline: isUserOnline(l.host), time: l.time, inc: l.inc, lobbyId: newId, fen: newLobby.fen, chat: [], isArena: false });
       }
       lobbies.delete(lobbyId);
       broadcastLobbies();
@@ -1845,9 +1688,7 @@ io.on('connection', (socket) => {
   socket.on('getArenaState', ({ arenaId }, cb) => {
     if (typeof cb !== 'function') return;
     const state = arenas.get(arenaId);
-    if (!state) {
-      return cb({ joined: false, paused: false, participants: [], participantsCount: 0, phase: 'waiting', timeLeftMin: 0, timeLeftMs: 0, top3: null, pairingNow: null, startsAt: 0, endsAt: 0, serverNow: Date.now(), botFriendly: false });
-    }
+    if (!state) return cb({ joined: false, paused: false, participants: [], participantsCount: 0, phase: 'waiting', timeLeftMin: 0, timeLeftMs: 0, top3: null, pairingNow: null, startsAt: 0, endsAt: 0, serverNow: Date.now(), botFriendly: false });
     for (const p of state.participants.values()) {
       if (p.isPlaying) {
         const l = p.lobbyId ? lobbies.get(p.lobbyId) : null;
@@ -1863,10 +1704,15 @@ io.on('connection', (socket) => {
       isBot: !!p.isBot
     })).sort((a, b) => b.score - a.score || b.rating - a.rating);
     const meP = socket.username ? state.participants.get(socket.username) : null;
-    const joined = !!meP;
-    const paused = !!(meP && meP.paused);
-    const timeLeftMs = Math.max(0, state.endsAt - Date.now());
-    cb({ joined, paused, participants, participantsCount: participants.length, phase: state.phase, timeLeftMs, timeLeftMin: Math.round(timeLeftMs / 60000), top3: state.top3, pairingNow: state.pairingNow, startsAt: state.startsAt, endsAt: state.endsAt, serverNow: Date.now(), botFriendly: !!state.botFriendly });
+    cb({
+      joined: !!meP, paused: !!(meP && meP.paused), participants,
+      participantsCount: participants.length, phase: state.phase,
+      timeLeftMs: Math.max(0, state.endsAt - Date.now()),
+      timeLeftMin: Math.round(Math.max(0, state.endsAt - Date.now()) / 60000),
+      top3: state.top3, pairingNow: state.pairingNow,
+      startsAt: state.startsAt, endsAt: state.endsAt, serverNow: Date.now(),
+      botFriendly: !!state.botFriendly
+    });
   });
 
   socket.on('joinArenaRoom', ({ arenaId }, cb) => {
@@ -1911,30 +1757,15 @@ io.on('connection', (socket) => {
           whiteIsAdmin: g.whiteIsAdmin, blackIsAdmin: g.blackIsAdmin,
           whiteIsMod: isMod(g.white), blackIsMod: isMod(g.black),
           whiteRating: g.whiteRating, blackRating: g.blackRating, result: g.result,
-          fen: g.fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-          turn: g.turn || 'w', timeW: 0, timeB: 0, finishedAt: g.finishedAt, live: false
+          fen: g.fen, turn: g.turn || 'w', timeW: 0, timeB: 0, finishedAt: g.finishedAt, live: false
         });
       }
     }
     let topRating = 0;
-    if (state) { for (const p of state.participants.values()) { if (p.rating > topRating) topRating = p.rating; } }
-    live.sort((a, b) => {
-      const aMax = Math.max(a.whiteRating || 0, a.blackRating || 0);
-      const bMax = Math.max(b.whiteRating || 0, b.blackRating || 0);
-      const aTop = aMax === topRating ? 1 : 0, bTop = bMax === topRating ? 1 : 0;
-      if (bTop !== aTop) return bTop - aTop;
-      return bMax - aMax;
-    });
-    done.sort((a, b) => {
-      const aMax = Math.max(a.whiteRating || 0, a.blackRating || 0);
-      const bMax = Math.max(b.whiteRating || 0, b.blackRating || 0);
-      if (bMax !== aMax) return bMax - aMax;
-      return (b.finishedAt || 0) - (a.finishedAt || 0);
-    });
-    let featured = null;
-    if (live.length > 0) featured = live[0];
-    else if (done.length > 0) featured = done[0];
-    cb({ live, done, topRating, featured });
+    if (state) for (const p of state.participants.values()) if (p.rating > topRating) topRating = p.rating;
+    live.sort((a, b) => Math.max(b.whiteRating||0, b.blackRating||0) - Math.max(a.whiteRating||0, a.blackRating||0));
+    done.sort((a, b) => Math.max(b.whiteRating||0, b.blackRating||0) - Math.max(a.whiteRating||0, a.blackRating||0));
+    cb({ live, done, topRating, featured: live[0] || done[0] || null });
   });
 
   socket.on('joinArena', ({ arenaId }, cb) => {
@@ -1981,10 +1812,6 @@ io.on('connection', (socket) => {
     if (state.finished || state.phase === 'finished') return cb({ ok: false, msg: 'Арена завершена' });
     const p = state.participants.get(socket.username);
     if (!p) return cb({ ok: false, msg: 'Вы не участвуете' });
-    const activeLobby = p.lobbyId ? lobbies.get(p.lobbyId) : null;
-    const reallyPlaying = activeLobby && !activeLobby.finished && activeLobby.started;
-    if (reallyPlaying) return cb({ ok: false, msg: 'Нельзя ставить паузу во время партии' });
-    if (p.isPlaying) { p.isPlaying = false; p.lobbyId = null; }
     p.paused = !p.paused;
     if (!p.paused) p.waitingSince = Date.now();
     io.emit('arenaUpdate', { arenaId });
@@ -2003,11 +1830,7 @@ io.on('connection', (socket) => {
     if (typeof text !== 'string') return;
     text = text.trim().slice(0, 300);
     if (!text) return;
-    const msg = {
-      id: 'a' + Date.now() + Math.random().toString(36).slice(2, 6),
-      user: socket.username, userIsAdmin: isAdmin(socket.username), userIsMod: isMod(socket.username),
-      text, ts: Date.now(), arenaId
-    };
+    const msg = { id: 'a' + Date.now() + Math.random().toString(36).slice(2, 6), user: socket.username, userIsAdmin: isAdmin(socket.username), userIsMod: isMod(socket.username), text, ts: Date.now(), arenaId };
     state.chat.push(msg); if (state.chat.length > 300) state.chat.shift();
     io.to('arena:' + arenaId).emit('arenaChatMessage', msg);
   });
@@ -2027,11 +1850,6 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     online.delete(socket.id);
     if (socket.username) {
-      for (const [lid, l] of lobbies.entries()) {
-        if (l.finished) continue;
-        if (l.host === socket.username && l.guestSocket) io.to(l.guestSocket).emit('opponentOffline', { username: socket.username });
-        if (l.guest === socket.username && l.hostSocket) io.to(l.hostSocket).emit('opponentOffline', { username: socket.username });
-      }
       for (const state of arenas.values()) {
         const p = state.participants.get(socket.username);
         if (p && p.socketId === socket.id) p.socketId = null;
@@ -2058,12 +1876,6 @@ io.on('connection', (socket) => {
   catch (err) { console.error('[DB] Не удалось инициализировать базу данных:', err.message || err.code || err); }
 
   getArenaSchedule(48);
-  const diag = getArenaSchedule(3);
-  console.log('[arena] расписание на ближайшие 3 часа (МСК):');
-  for (const a of diag.slice(0, 12)) {
-    const dur = ((a.endsAt - a.startsAt) / 60000).toFixed(0);
-    console.log(`  ${a.name} | ${fmtMskHM(a.startsAt)} → ${fmtMskHM(a.endsAt)} (МСК) | ${dur} мин | ${a.status}${a.botFriendly ? ' [BOT]' : ''}`);
-  }
 
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, '0.0.0.0', () => {
