@@ -479,6 +479,7 @@ function joinBotsToArena(state) {
   state.botsJoined = true;
   for (const bot of BOTS) {
     if (state.participants.has(bot.name)) continue;
+    if (Math.random() < 0.4) continue;
     const botUser = db.users[bot.name];
     state.participants.set(bot.name, {
       username: bot.name,
@@ -489,6 +490,10 @@ function joinBotsToArena(state) {
       lobbyId: null, isPlaying: false, paused: false,
       waitingSince: Date.now(), isBot: true, botLevel: bot.level
     });
+    const beh = botInitBehavior(bot.name);
+    beh.state = 'in_arena';
+    beh.activityId = state.id;
+    beh.lastChange = Date.now();
   }
 }
 function syncArenaPhase(state, now) {
@@ -513,17 +518,22 @@ function scheduleArena(state) {
       const sysMsg = { id: 'sys' + Date.now(), system: true, text: `⚔ Арена "${state.name}" началась!`, ts: Date.now(), arenaId: state.id };
       state.chat.push(sysMsg); if (state.chat.length > 300) state.chat.shift();
       io.emit('arenaChatMessage', sysMsg);
+      if (!state.pairingInterval) state.pairingInterval = setInterval(() => tryPair(state), 3000);
+      tryPair(state);
     }, startDelay);
   } else if (now < state.endsAt && !state.finished) {
     state.phase = 'live';
     if (state.botFriendly) joinBotsToArena(state);
+    if (!state.pairingInterval) state.pairingInterval = setInterval(() => tryPair(state), 3000);
+    tryPair(state);
   }
   if (endDelay > 0) setTimeout(() => finishArena(state), endDelay);
   else finishArena(state);
 }
 
-// Бот может играть несколько партий, но не больше MAX_BOT_GAMES
-const MAX_BOT_GAMES = 3;
+// Бот максимум 1 партия за раз
+const MAX_BOT_GAMES = 1;
+
 function botActiveGamesCount(botName) {
   let n = 0;
   for (const l of lobbies.values()) {
@@ -533,12 +543,14 @@ function botActiveGamesCount(botName) {
   }
   return n;
 }
+function botIsBusy(botName) {
+  return botActiveGamesCount(botName) >= MAX_BOT_GAMES;
+}
 function isAvailableForPairing(p) {
   if (!p) return false;
   if (p.paused) return false;
   if (p.isBot) {
-    // бот доступен, если у него меньше MAX_BOT_GAMES активных партий
-    if (botActiveGamesCount(p.username) >= MAX_BOT_GAMES) return false;
+    if (botIsBusy(p.username)) return false;
     return true;
   }
   if (!p.socketId) return false;
@@ -546,13 +558,200 @@ function isAvailableForPairing(p) {
   return true;
 }
 
-// Жеребьёвка идёт ТОЛЬКО если на странице арены есть зрители
+// ============================================================
+//  ЖИВОЕ ПОВЕДЕНИЕ БОТОВ
+//  Состояния: idle | in_lobby | in_arena | playing
+// ============================================================
+const BOT_BEHAVIOR = new Map();
+
+function botInitBehavior(botName) {
+  if (!BOT_BEHAVIOR.has(botName)) {
+    BOT_BEHAVIOR.set(botName, {
+      state: 'idle',
+      activityId: null,
+      lastChange: Date.now(),
+      nextDecision: Date.now() + 2000 + Math.random() * 5000
+    });
+  }
+  return BOT_BEHAVIOR.get(botName);
+}
+
+function botCloseOwnWaitingLobby(botName) {
+  let closed = false;
+  for (const [id, l] of lobbies.entries()) {
+    if (!l.finished && !l.started && l.host === botName && l.isBot) {
+      lobbies.delete(id);
+      closed = true;
+    }
+  }
+  if (closed) broadcastLobbies();
+  return closed;
+}
+
+function botLeaveArena(botName, arenaId) {
+  const state = arenas.get(arenaId);
+  if (!state) return;
+  const p = state.participants.get(botName);
+  if (p && !p.isPlaying) {
+    state.participants.delete(botName);
+    const sysMsg = { id: 'sys' + Date.now(), system: true, text: `${botName} покинул арену`, ts: Date.now(), arenaId };
+    state.chat.push(sysMsg); if (state.chat.length > 300) state.chat.shift();
+    io.to('arena:' + arenaId).emit('arenaChatMessage', sysMsg);
+    io.emit('arenaUpdate', { arenaId });
+  }
+}
+
+function botJoinArena(botName, arenaId) {
+  const state = arenas.get(arenaId);
+  if (!state || state.finished || state.phase === 'finished') return false;
+  if (state.participants.has(botName)) return false;
+  const botUser = db.users[botName];
+  state.participants.set(botName, {
+    username: botName,
+    rating: botUser ? botUser.rating : 1200,
+    score: 0, wins: 0, draws: 0, losses: 0, winStreak: 0, drawStreak: 0,
+    socketId: 'BOT:' + botName,
+    lobbyId: null, isPlaying: false, paused: false,
+    waitingSince: Date.now(), isBot: true
+  });
+  const sysMsg = { id: 'sys' + Date.now(), system: true, text: `${botName} присоединился к арене`, ts: Date.now(), arenaId };
+  state.chat.push(sysMsg); if (state.chat.length > 300) state.chat.shift();
+  io.to('arena:' + arenaId).emit('arenaChatMessage', sysMsg);
+  io.emit('arenaUpdate', { arenaId });
+  return true;
+}
+
+function botBehaviorTick() {
+  const now = Date.now();
+  for (const bot of BOTS) {
+    const beh = botInitBehavior(bot.name);
+    if (now < beh.nextDecision) continue;
+    beh.nextDecision = now + 2500 + Math.random() * 5000;
+
+    // Играет — ничего не делаем
+    if (botIsBusy(bot.name)) {
+      if (beh.state !== 'playing') {
+        beh.state = 'playing';
+        beh.lastChange = now;
+        botCloseOwnWaitingLobby(bot.name);
+      }
+      continue;
+    }
+
+    // Был playing, но партия закончилась
+    if (beh.state === 'playing') {
+      beh.state = 'idle';
+      beh.activityId = null;
+      beh.lastChange = now;
+    }
+
+    // Сидит в арене
+    if (beh.state === 'in_arena') {
+      const state = arenas.get(beh.activityId);
+      if (!state || state.finished || state.phase === 'finished') {
+        beh.state = 'idle'; beh.activityId = null;
+      } else {
+        const p = state.participants.get(bot.name);
+        if (p && p.isPlaying) {
+          beh.state = 'playing';
+          beh.lastChange = now;
+          continue;
+        }
+        // Иногда ставим/снимаем паузу
+        if (p && Math.random() < 0.05) {
+          p.paused = !p.paused;
+          if (!p.paused) p.waitingSince = Date.now();
+          io.emit('arenaUpdate', { arenaId: beh.activityId });
+        }
+        // Иногда уходим из арены
+        if (Math.random() < 0.06) {
+          botLeaveArena(bot.name, beh.activityId);
+          beh.state = 'idle'; beh.activityId = null;
+          beh.lastChange = now;
+        }
+      }
+      continue;
+    }
+
+    // Сидит в зале ожидания
+    if (beh.state === 'in_lobby') {
+      const l = lobbies.get(beh.activityId);
+      if (!l || l.finished || l.started) {
+        beh.state = 'idle'; beh.activityId = null;
+      } else if (now - beh.lastChange > 40000 && Math.random() < 0.25) {
+        botCloseOwnWaitingLobby(bot.name);
+        beh.state = 'idle'; beh.activityId = null;
+        beh.lastChange = now;
+      }
+      continue;
+    }
+
+    // idle — выбираем занятие
+    const r = Math.random();
+
+    // 40% — пойти в живую/скорую арену с ботами
+    if (r < 0.40) {
+      const candidates = [...arenas.values()].filter(s =>
+        !s.finished && s.botFriendly &&
+        (s.phase === 'live' || s.phase === 'waiting') &&
+        !s.participants.has(bot.name)
+      );
+      if (candidates.length) {
+        candidates.sort((a, b) => {
+          const aLive = a.phase === 'live' ? 0 : 1;
+          const bLive = b.phase === 'live' ? 0 : 1;
+          if (aLive !== bLive) return aLive - bLive;
+          return a.startsAt - b.startsAt;
+        });
+        const chosen = candidates[0];
+        if (botJoinArena(bot.name, chosen.id)) {
+          beh.state = 'in_arena';
+          beh.activityId = chosen.id;
+          beh.lastChange = now;
+          continue;
+        }
+      }
+    }
+
+    // 35% — выставить заявку в зал ожидания
+    if (r < 0.75) {
+      const tc = BOT_WAITING_TIMES[Math.floor(Math.random() * BOT_WAITING_TIMES.length)];
+      const id = genId();
+      lobbies.set(id, {
+        id, host: bot.name, hostSocket: null, guest: null, guestSocket: null,
+        hostColor: null, guestColor: null, time: tc.t, inc: tc.i,
+        timeW: tc.t * 60, timeB: tc.t * 60, turn: 'w',
+        fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+        started: false, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
+        createdAt: Date.now(), rematch: null, isBot: true, botName: bot.name, botColor: 'b', history: []
+      });
+      beh.state = 'in_lobby';
+      beh.activityId = id;
+      beh.lastChange = now;
+      broadcastLobbies();
+      continue;
+    }
+    // остальное — idle
+  }
+}
+setInterval(botBehaviorTick, 4000);
+setTimeout(botBehaviorTick, 3000);
+
+const BOT_WAITING_TIMES = [
+  { t: 1, i: 0 }, { t: 3, i: 0 }, { t: 5, i: 0 }, { t: 10, i: 0 }
+];
+
+// Жеребьёвка: идёт всегда, когда арена live
 function tryPair(state) {
   if (state.finished || state.phase !== 'live') return;
-  if (state.chatViewers.size === 0 && state.participants.size === 0) return;
-  // Не запускаем жеребьёвку, если никто не смотрит страницу арены и нет активных игроков-людей
-  const hasHumanViewers = state.chatViewers.size > 0;
-  if (!hasHumanViewers) return;
+
+  const hasHumans = [...state.participants.values()].some(p => !p.isBot);
+  const hasViewers = state.chatViewers.size > 0;
+
+  // Если только боты и никто не смотрит — собираем реже, чтобы не грузить CPU
+  if (!hasHumans && !hasViewers) {
+    if (Math.random() > 0.35) return;
+  }
 
   const available = [];
   for (const [username, p] of state.participants.entries()) {
@@ -565,7 +764,7 @@ function tryPair(state) {
   available.sort((a, b) => a.waitingSince - b.waitingSince);
   const used = new Set();
   let pairsCreated = 0;
-  const MAX_PAIRS_PER_TICK = 3;
+  const MAX_PAIRS_PER_TICK = 4;
   for (let i = 0; i < available.length && pairsCreated < MAX_PAIRS_PER_TICK; i++) {
     const a = available[i];
     if (used.has(a.username)) continue;
@@ -577,6 +776,8 @@ function tryPair(state) {
       if (a.isBot && b.isBot) {
         const humansWaiting = available.some(p => !p.isBot && !used.has(p.username));
         if (humansWaiting) continue;
+        // бот-бот пара — с шансом, чтобы не спамить
+        if (Math.random() < 0.5) continue;
       }
       const diff = Math.abs((a.score || 0) - (b.score || 0));
       if (diff < bestDiff) { bestDiff = diff; best = b; }
@@ -616,6 +817,10 @@ function createArenaPairing(state, a, b) {
   state.activeLobbies.add(lobbyId);
   a.isPlaying = true; a.lobbyId = lobbyId;
   b.isPlaying = true; b.lobbyId = lobbyId;
+
+  // Обновляем состояния поведения
+  if (aIsBot) { const bh = botInitBehavior(a.username); bh.state = 'playing'; bh.lastChange = Date.now(); }
+  if (bIsBot) { const bh = botInitBehavior(b.username); bh.state = 'playing'; bh.lastChange = Date.now(); }
 
   const aSocket = a.isBot ? null : io.sockets.sockets.get(a.socketId);
   const bSocket = b.isBot ? null : io.sockets.sockets.get(b.socketId);
@@ -666,6 +871,9 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   whiteP.lobbyId = null; blackP.lobbyId = null;
   if (!whiteP.paused) whiteP.waitingSince = Date.now();
   if (!blackP.paused) blackP.waitingSince = Date.now();
+  // Освобождаем поведение ботов
+  if (whiteP.isBot) { const bh = botInitBehavior(whiteName); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
+  if (blackP.isBot) { const bh = botInitBehavior(blackName); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
   setTimeout(() => tryPair(state), 200);
   io.emit('arenaUpdate', { arenaId });
 }
@@ -685,6 +893,15 @@ function finishArena(state) {
   io.emit('arenaChatMessage', sysMsg);
   io.emit('arenaFinished', { arenaId: state.id, arenaName: state.name, top3: state.top3 });
   io.emit('arenaUpdate', { arenaId: state.id });
+  // Освобождаем ботов из этой арены
+  for (const p of state.participants.values()) {
+    if (p.isBot) {
+      const bh = botInitBehavior(p.username);
+      if (bh.state === 'in_arena' && bh.activityId === state.id) {
+        bh.state = 'idle'; bh.activityId = null; bh.lastChange = Date.now();
+      }
+    }
+  }
   state.cleanupTimer = setTimeout(() => {
     if (state.chatViewers.size === 0) arenas.delete(state.id);
     else setTimeout(() => arenas.delete(state.id), 30 * 60 * 1000);
@@ -778,38 +995,6 @@ const BOTS = [
   { name: 'BotMaster', rating: 2000, level: 4, title: 'Мастер',   desc: 'сильный соперник' }
 ];
 const BOT_NAMES = new Set(BOTS.map(b => b.name));
-
-// Боты выставляют заявки в зал ожидания, если свободны
-const BOT_WAITING_TIMES = [
-  { t: 1, i: 0 }, { t: 3, i: 0 }, { t: 5, i: 0 }, { t: 10, i: 0 }
-];
-function botLobbyTick() {
-  for (const bot of BOTS) {
-    const active = botActiveGamesCount(bot.name);
-    if (active >= MAX_BOT_GAMES) continue;
-    // Уже есть ожидающее лобби от этого бота?
-    let hasWaiting = false;
-    for (const l of lobbies.values()) {
-      if (l.finished || l.started) continue;
-      if (l.host === bot.name && l.isBot) { hasWaiting = true; break; }
-    }
-    if (hasWaiting) continue;
-    // Создаём лобби
-    const tc = BOT_WAITING_TIMES[Math.floor(Math.random() * BOT_WAITING_TIMES.length)];
-    const id = genId();
-    lobbies.set(id, {
-      id, host: bot.name, hostSocket: null, guest: null, guestSocket: null,
-      hostColor: null, guestColor: null, time: tc.t, inc: tc.i,
-      timeW: tc.t * 60, timeB: tc.t * 60, turn: 'w',
-      fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-      started: false, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
-      createdAt: Date.now(), rematch: null, isBot: true, botName: bot.name, botColor: 'b', history: []
-    });
-    broadcastLobbies();
-  }
-}
-setInterval(botLobbyTick, 15000);
-setTimeout(botLobbyTick, 5000);
 
 // ============================================================
 //  ШАХМАТНЫЙ ДВИЖОК ДЛЯ БОТА
@@ -1168,7 +1353,8 @@ function scheduleBotMove(lobbyId) {
       if (botInCheck(botParseFen(cur.fen), sideToMoveWhite)) finishGame(lobbyId, sideToMoveWhite ? 'b' : 'w', 'Мат');
       else finishGame(lobbyId, 'draw', 'Пат');
     } else if (cur.isBot && ((cur.botColor && cur.turn === cur.botColor) || (cur.botColor2 && cur.turn === cur.botColor2))) {
-      setTimeout(() => scheduleBotMove(lobbyId), 100);
+      // бот-бот: следующий ход с задержкой, чтобы не грузить CPU
+      setTimeout(() => scheduleBotMove(lobbyId), 250 + Math.random() * 400);
     }
   }, delay);
 }
@@ -1370,6 +1556,7 @@ io.on('connection', (socket) => {
     inc = Math.max(0, Math.min(60, +inc || 0));
     const bot = BOTS.find(b => b.name === botName);
     if (!bot) return cb({ ok: false, msg: 'Бот не найден' });
+    if (botIsBusy(bot.name)) return cb({ ok: false, msg: 'Бот занят другой партией' });
     const botUser = db.users[bot.name];
     const botRating = botUser ? botUser.rating : bot.rating;
     const id = genId();
@@ -1383,6 +1570,10 @@ io.on('connection', (socket) => {
     socket.join(id);
     socketToLobby.set(socket.id, id);
     socket.lobbyId = id;
+    const beh = botInitBehavior(bot.name);
+    beh.state = 'playing';
+    beh.lastChange = Date.now();
+    botCloseOwnWaitingLobby(bot.name);
     io.to(socket.id).emit('gameStart', {
       color: 'w', opponent: bot.name, opponentRating: botRating,
       opponentIsAdmin: false, opponentIsMod: false, opponentOnline: true,
@@ -1429,8 +1620,16 @@ io.on('connection', (socket) => {
     socket.lobbyId = id;
     const hostRating = db.users[l.host] ? db.users[l.host].rating : null;
     const guestRating = db.users[l.guest] ? db.users[l.guest].rating : null;
-    io.to(l.hostSocket).emit('gameStart', { color: l.hostColor, opponent: l.guest, opponentRating: guestRating, opponentIsAdmin: isAdmin(l.guest), opponentIsMod: isMod(l.guest), opponentOnline: true, time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat, isArena: false });
-    io.to(l.guestSocket).emit('gameStart', { color: l.guestColor, opponent: l.host, opponentRating: hostRating, opponentIsAdmin: isAdmin(l.host), opponentIsMod: isMod(l.host), opponentOnline: true, time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat, isArena: false });
+    if (l.isBot) {
+      const beh = botInitBehavior(l.host);
+      beh.state = 'playing';
+      beh.lastChange = Date.now();
+    }
+    io.to(l.hostSocket).emit('gameStart', { color: l.hostColor, opponent: l.guest, opponentRating: guestRating, opponentIsAdmin: isAdmin(l.guest), opponentIsMod: isMod(l.guest), opponentOnline: true, time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat, isArena: false, isBot: !!l.isBot, botName: l.isBot ? l.host : undefined });
+    io.to(l.guestSocket).emit('gameStart', { color: l.guestColor, opponent: l.host, opponentRating: hostRating, opponentIsAdmin: isAdmin(l.host), opponentIsMod: isMod(l.host), opponentOnline: true, time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat, isArena: false, isBot: !!l.isBot, botName: l.isBot ? l.host : undefined });
+    if (l.isBot) {
+      setTimeout(() => scheduleBotMove(l.id), 500);
+    }
     cb({ ok: true, id });
     broadcastLobbies();
     broadcastOnline();
@@ -1609,6 +1808,7 @@ io.on('connection', (socket) => {
       const botName = l.botName || l.botName2;
       const bot = BOTS.find(b => b.name === botName);
       if (!bot) return cb({ ok: false, msg: 'Бот не найден' });
+      if (botIsBusy(bot.name)) return cb({ ok: true, started: false, declined: true });
       const botUser = db.users[bot.name];
       const botRating = botUser ? botUser.rating : bot.rating;
       let agreeChance = 0.9;
@@ -1617,6 +1817,7 @@ io.on('connection', (socket) => {
       else if (botRating >= 1400) agreeChance = 0.7;
       setTimeout(() => {
         if (Math.random() > agreeChance) { cb({ ok: true, started: false, declined: true }); return; }
+        if (botIsBusy(bot.name)) { cb({ ok: true, started: false, declined: true }); return; }
         const newId = genId();
         lobbies.set(newId, {
           id: newId, host: l.host, hostSocket: l.hostSocket,
@@ -1628,6 +1829,9 @@ io.on('connection', (socket) => {
           chat: [], drawOffer: null, createdAt: Date.now(),
           rematch: null, isBot: true, botName: bot.name, botColor: 'b', history: []
         });
+        const beh = botInitBehavior(bot.name);
+        beh.state = 'playing';
+        beh.lastChange = Date.now();
         const hostSocket = io.sockets.sockets.get(l.hostSocket);
         if (hostSocket) {
           hostSocket.leave(lobbyId);
@@ -1745,7 +1949,6 @@ io.on('connection', (socket) => {
     socket.join('arena:' + arenaId);
     state.chatViewers.add(socket.id);
     cb({ ok: true, chat: state.chat || [] });
-    // жеребьёвка запускается только теперь
     tryPair(state);
   });
   socket.on('leaveArenaRoom', ({ arenaId }) => {
