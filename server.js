@@ -306,7 +306,19 @@ function cleanupStuckPlaying() {
     for (const p of state.participants.values()) {
       if (p.isPlaying) {
         const l = p.lobbyId ? lobbies.get(p.lobbyId) : null;
-        if (!l || l.finished) { p.isPlaying = false; p.lobbyId = null; if (!p.paused) p.waitingSince = Date.now(); }
+        if (!l || l.finished) {
+          p.isPlaying = false; p.lobbyId = null;
+          if (!p.paused) p.waitingSince = Date.now();
+          // Сброс состояния бота
+          if (p.isBot) {
+            const beh = botInitBehavior(p.username);
+            if (beh.state === 'playing') {
+              beh.state = 'in_arena';
+              beh.activityId = state.id;
+              beh.lastChange = Date.now();
+            }
+          }
+        }
       }
     }
   }
@@ -479,7 +491,8 @@ function joinBotsToArena(state) {
   state.botsJoined = true;
   for (const bot of BOTS) {
     if (state.participants.has(bot.name)) continue;
-    if (Math.random() < 0.4) continue;
+    // Не все боты сразу — только 2-3 случайных
+    if (Math.random() < 0.5) continue;
     const botUser = db.users[bot.name];
     state.participants.set(bot.name, {
       username: bot.name,
@@ -531,8 +544,10 @@ function scheduleArena(state) {
   else finishArena(state);
 }
 
-// Бот максимум 1 партия за раз
+// Бот максимум 1 партия за раз (глобально)
 const MAX_BOT_GAMES = 1;
+// Максимум одновременных бот-партий в одной арене
+const MAX_BOT_GAMES_PER_ARENA = 2;
 
 function botActiveGamesCount(botName) {
   let n = 0;
@@ -546,11 +561,22 @@ function botActiveGamesCount(botName) {
 function botIsBusy(botName) {
   return botActiveGamesCount(botName) >= MAX_BOT_GAMES;
 }
-function isAvailableForPairing(p) {
+function botGamesInArena(arenaId) {
+  let n = 0;
+  for (const l of lobbies.values()) {
+    if (l.finished) continue;
+    if (!l.isBot) continue;
+    if (l.arenaId === arenaId) n++;
+  }
+  return n;
+}
+function isAvailableForPairing(p, arenaId) {
   if (!p) return false;
   if (p.paused) return false;
   if (p.isBot) {
     if (botIsBusy(p.username)) return false;
+    // Ограничение на количество бот-партий в арене
+    if (arenaId && botGamesInArena(arenaId) >= MAX_BOT_GAMES_PER_ARENA) return false;
     return true;
   }
   if (!p.socketId) return false;
@@ -626,7 +652,7 @@ function botBehaviorTick() {
   for (const bot of BOTS) {
     const beh = botInitBehavior(bot.name);
     if (now < beh.nextDecision) continue;
-    beh.nextDecision = now + 2500 + Math.random() * 5000;
+    beh.nextDecision = now + 3000 + Math.random() * 6000;
 
     // Играет — ничего не делаем
     if (botIsBusy(bot.name)) {
@@ -658,13 +684,13 @@ function botBehaviorTick() {
           continue;
         }
         // Иногда ставим/снимаем паузу
-        if (p && Math.random() < 0.05) {
+        if (p && Math.random() < 0.03) {
           p.paused = !p.paused;
           if (!p.paused) p.waitingSince = Date.now();
           io.emit('arenaUpdate', { arenaId: beh.activityId });
         }
         // Иногда уходим из арены
-        if (Math.random() < 0.06) {
+        if (Math.random() < 0.04) {
           botLeaveArena(bot.name, beh.activityId);
           beh.state = 'idle'; beh.activityId = null;
           beh.lastChange = now;
@@ -715,26 +741,33 @@ function botBehaviorTick() {
 
     // 35% — выставить заявку в зал ожидания
     if (r < 0.75) {
-      const tc = BOT_WAITING_TIMES[Math.floor(Math.random() * BOT_WAITING_TIMES.length)];
-      const id = genId();
-      lobbies.set(id, {
-        id, host: bot.name, hostSocket: null, guest: null, guestSocket: null,
-        hostColor: null, guestColor: null, time: tc.t, inc: tc.i,
-        timeW: tc.t * 60, timeB: tc.t * 60, turn: 'w',
-        fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-        started: false, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
-        createdAt: Date.now(), rematch: null, isBot: true, botName: bot.name, botColor: 'b', history: []
-      });
-      beh.state = 'in_lobby';
-      beh.activityId = id;
-      beh.lastChange = now;
-      broadcastLobbies();
-      continue;
+      // Не более одной заявки от бота одновременно
+      let alreadyHasLobby = false;
+      for (const l of lobbies.values()) {
+        if (!l.finished && !l.started && l.host === bot.name && l.isBot) { alreadyHasLobby = true; break; }
+      }
+      if (!alreadyHasLobby) {
+        const tc = BOT_WAITING_TIMES[Math.floor(Math.random() * BOT_WAITING_TIMES.length)];
+        const id = genId();
+        lobbies.set(id, {
+          id, host: bot.name, hostSocket: null, guest: null, guestSocket: null,
+          hostColor: null, guestColor: null, time: tc.t, inc: tc.i,
+          timeW: tc.t * 60, timeB: tc.t * 60, turn: 'w',
+          fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+          started: false, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
+          createdAt: Date.now(), rematch: null, isBot: true, botName: bot.name, botColor: 'b', history: []
+        });
+        beh.state = 'in_lobby';
+        beh.activityId = id;
+        beh.lastChange = now;
+        broadcastLobbies();
+        continue;
+      }
     }
     // остальное — idle
   }
 }
-setInterval(botBehaviorTick, 4000);
+setInterval(botBehaviorTick, 5000);
 setTimeout(botBehaviorTick, 3000);
 
 const BOT_WAITING_TIMES = [
@@ -750,12 +783,16 @@ function tryPair(state) {
 
   // Если только боты и никто не смотрит — собираем реже, чтобы не грузить CPU
   if (!hasHumans && !hasViewers) {
-    if (Math.random() > 0.35) return;
+    if (Math.random() > 0.25) return;
   }
+
+  // Ограничение на количество одновременных партий в арене
+  const currentActive = state.activeLobbies.size;
+  if (currentActive >= 6) return; // не более 6 партий одновременно в арене
 
   const available = [];
   for (const [username, p] of state.participants.entries()) {
-    if (!isAvailableForPairing(p)) continue;
+    if (!isAvailableForPairing(p, state.id)) continue;
     if (!p.waitingSince) p.waitingSince = Date.now();
     available.push(p);
   }
@@ -764,7 +801,7 @@ function tryPair(state) {
   available.sort((a, b) => a.waitingSince - b.waitingSince);
   const used = new Set();
   let pairsCreated = 0;
-  const MAX_PAIRS_PER_TICK = 4;
+  const MAX_PAIRS_PER_TICK = 2;
   for (let i = 0; i < available.length && pairsCreated < MAX_PAIRS_PER_TICK; i++) {
     const a = available[i];
     if (used.has(a.username)) continue;
@@ -776,8 +813,9 @@ function tryPair(state) {
       if (a.isBot && b.isBot) {
         const humansWaiting = available.some(p => !p.isBot && !used.has(p.username));
         if (humansWaiting) continue;
-        // бот-бот пара — с шансом, чтобы не спамить
-        if (Math.random() < 0.5) continue;
+        // бот-бот пара — только с шансом 30% и если не превышен лимит
+        if (Math.random() < 0.7) continue;
+        if (botGamesInArena(state.id) >= MAX_BOT_GAMES_PER_ARENA) continue;
       }
       const diff = Math.abs((a.score || 0) - (b.score || 0));
       if (diff < bestDiff) { bestDiff = diff; best = b; }
@@ -837,7 +875,10 @@ function createArenaPairing(state, a, b) {
   io.emit('arenaUpdate', { arenaId: state.id });
   broadcastOnline();
 
-  if (isBotGame && lobbyId) setTimeout(() => scheduleBotMove(lobbyId), 300);
+  if (isBotGame && lobbyId) {
+    // Задержка перед первым ходом бота, чтобы не грузить CPU
+    setTimeout(() => scheduleBotMove(lobbyId), 500 + Math.random() * 500);
+  }
 }
 function calcArenaPoints(p, result) {
   if (result === 'win') { const s = (p.winStreak || 0) + 1; p.winStreak = s; p.drawStreak = 0; return s >= 3 ? 4 : 2; }
@@ -874,7 +915,7 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   // Освобождаем поведение ботов
   if (whiteP.isBot) { const bh = botInitBehavior(whiteName); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
   if (blackP.isBot) { const bh = botInitBehavior(blackName); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
-  setTimeout(() => tryPair(state), 200);
+  setTimeout(() => tryPair(state), 300);
   io.emit('arenaUpdate', { arenaId });
 }
 function finishArena(state) {
@@ -893,13 +934,14 @@ function finishArena(state) {
   io.emit('arenaChatMessage', sysMsg);
   io.emit('arenaFinished', { arenaId: state.id, arenaName: state.name, top3: state.top3 });
   io.emit('arenaUpdate', { arenaId: state.id });
-  // Освобождаем ботов из этой арены
-  for (const p of state.participants.values()) {
+  // Освобождаем ботов из этой арены и удаляем их из participants
+  for (const [name, p] of [...state.participants.entries()]) {
     if (p.isBot) {
-      const bh = botInitBehavior(p.username);
+      const bh = botInitBehavior(name);
       if (bh.state === 'in_arena' && bh.activityId === state.id) {
         bh.state = 'idle'; bh.activityId = null; bh.lastChange = Date.now();
       }
+      state.participants.delete(name);
     }
   }
   state.cleanupTimer = setTimeout(() => {
@@ -1254,6 +1296,9 @@ function scheduleBotMove(lobbyId) {
   const botIsWhiteTurn = botColor === 'w';
   const botMoves = botAllLegalMoves(state, botIsWhiteTurn);
 
+  // Определяем, бот-бот ли это партия
+  const isBotVsBot = !!l.botName2;
+
   let baseDelay;
   if (baseTime <= 60)       baseDelay = 60;
   else if (baseTime <= 120) baseDelay = 100;
@@ -1261,6 +1306,11 @@ function scheduleBotMove(lobbyId) {
   else if (baseTime <= 600) baseDelay = 350;
   else if (baseTime <= 900) baseDelay = 500;
   else                      baseDelay = 800;
+
+  // Для бот-бот партий увеличиваем задержку, чтобы не грузить CPU
+  if (isBotVsBot) {
+    baseDelay = Math.max(baseDelay, 300);
+  }
 
   let complexity = 1.0;
   if (botMoves.length <= 2)       complexity *= 0.4;
@@ -1300,7 +1350,13 @@ function scheduleBotMove(lobbyId) {
 
   setTimeout(() => {
     const cur = lobbies.get(lobbyId);
-    if (!cur || cur.finished || cur.turn !== botColor) return;
+    if (!cur || cur.finished) return;
+    if (cur.turn !== botColor) return;
+    // Проверяем, что бот всё ещё в этой партии
+    const stillBot = (cur.botColor === botColor && cur.botName === botName) ||
+                     (cur.botColor2 === botColor && cur.botName2 === botName);
+    if (!stillBot) return;
+
     const st = botParseFen(cur.fen);
     const evalScore = botEval(st);
     const botSign = botColor === 'w' ? 1 : -1;
@@ -1354,7 +1410,8 @@ function scheduleBotMove(lobbyId) {
       else finishGame(lobbyId, 'draw', 'Пат');
     } else if (cur.isBot && ((cur.botColor && cur.turn === cur.botColor) || (cur.botColor2 && cur.turn === cur.botColor2))) {
       // бот-бот: следующий ход с задержкой, чтобы не грузить CPU
-      setTimeout(() => scheduleBotMove(lobbyId), 250 + Math.random() * 400);
+      const nextDelay = isBotVsBot ? (400 + Math.random() * 600) : (250 + Math.random() * 400);
+      setTimeout(() => scheduleBotMove(lobbyId), nextDelay);
     }
   }, delay);
 }
@@ -1919,7 +1976,18 @@ io.on('connection', (socket) => {
     for (const p of state.participants.values()) {
       if (p.isPlaying) {
         const l = p.lobbyId ? lobbies.get(p.lobbyId) : null;
-        if (!l || l.finished) { p.isPlaying = false; p.lobbyId = null; if (!p.paused) p.waitingSince = Date.now(); }
+        if (!l || l.finished) {
+          p.isPlaying = false; p.lobbyId = null;
+          if (!p.paused) p.waitingSince = Date.now();
+          if (p.isBot) {
+            const beh = botInitBehavior(p.username);
+            if (beh.state === 'playing') {
+              beh.state = 'in_arena';
+              beh.activityId = state.id;
+              beh.lastChange = Date.now();
+            }
+          }
+        }
       }
     }
     const participants = [...state.participants.values()].map(p => ({
@@ -2082,6 +2150,21 @@ io.on('connection', (socket) => {
         const p = state.participants.get(socket.username);
         if (p && p.socketId === socket.id) p.socketId = null;
         state.chatViewers.delete(socket.id);
+        // Если бот отключился (не должен, но на всякий)
+        if (p && p.isBot && p.isPlaying) {
+          const l = p.lobbyId ? lobbies.get(p.lobbyId) : null;
+          if (l && !l.finished) {
+            // Завершаем партию
+            const myColor = p.lobbyId === l.id ? (l.hostColor === 'w' ? 'b' : 'w') : null;
+          }
+          p.isPlaying = false; p.lobbyId = null;
+          const beh = botInitBehavior(p.username);
+          if (beh.state === 'playing') {
+            beh.state = 'in_arena';
+            beh.activityId = state.id;
+            beh.lastChange = Date.now();
+          }
+        }
       }
     }
     const lobbyId = socketToLobby.get(socket.id);
