@@ -3,1019 +3,546 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kingside v2</title>
+<title>Kingside</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    font-family: 'Courier New', monospace;
-    background: #0a0a0a;
-    color: #d0d0d0;
+    font-family: monospace;
+    background: #111;
+    color: #ccc;
     min-height: 100vh;
     font-size: 14px;
-    line-height: 1.4;
   }
   header {
     background: #1a1a1a;
-    border-bottom: 2px solid #333;
-    padding: 10px 16px;
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    flex-wrap: wrap;
-  }
-  header h1 {
-    font-size: 18px;
-    color: #d4a017;
-    font-weight: bold;
-    letter-spacing: 1px;
-  }
-  header h1 span { color: #666; font-size: 12px; }
-  header .user {
-    margin-left: auto;
-    color: #888;
-    font-size: 12px;
-  }
-  header .user b { color: #d4a017; }
-  main {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 20px 16px;
-  }
-  .screen { display: none; }
-  .screen.active { display: block; }
-  h2 {
-    color: #d4a017;
-    font-size: 16px;
-    margin-bottom: 16px;
+    padding: 10px 14px;
     border-bottom: 1px solid #333;
-    padding-bottom: 8px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
   }
-  input, button, select {
-    font-family: inherit;
-    font-size: 14px;
-    padding: 8px 12px;
+  header h1 { font-size: 16px; color: #d4a017; }
+  header .u { font-size: 12px; color: #888; }
+  header .u b { color: #d4a017; }
+  main { max-width: 720px; margin: 0 auto; padding: 14px; }
+  .scr { display: none; }
+  .scr.on { display: block; }
+  h2 { font-size: 13px; color: #d4a017; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #333; }
+  h2:not(:first-child) { margin-top: 20px; }
+  input, button {
+    font-family: inherit; font-size: 14px;
+    padding: 8px 10px;
     background: #1a1a1a;
     border: 1px solid #333;
-    color: #d0d0d0;
-    border-radius: 0;
+    color: #ccc;
     outline: none;
   }
   input:focus { border-color: #d4a017; }
-  button {
-    cursor: pointer;
-    background: #222;
-    border: 1px solid #444;
-    transition: 0.1s;
-  }
-  button:hover { background: #333; border-color: #d4a017; }
-  button:active { transform: translateY(1px); }
-  button.primary {
-    background: #d4a017;
-    color: #000;
-    border-color: #d4a017;
-    font-weight: bold;
-  }
-  button.primary:hover { background: #e8b520; }
-  button.danger { background: #8b2020; color: #fff; border-color: #8b2020; }
-  button.danger:hover { background: #a52a2a; }
+  button { cursor: pointer; }
+  button:hover { background: #252525; border-color: #d4a017; }
+  button.p { background: #d4a017; color: #000; border-color: #d4a017; font-weight: bold; }
+  button.p:hover { background: #e8b520; }
+  button.d { background: #6a1a1a; border-color: #6a1a1a; color: #fff; }
+  button.d:hover { background: #8a2020; }
   button:disabled { opacity: 0.5; cursor: not-allowed; }
-  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 8px;
-    margin: 12px 0;
-  }
-  .card {
-    background: #1a1a1a;
-    border: 1px solid #333;
-    padding: 12px;
-    text-align: center;
-    cursor: pointer;
-    transition: 0.1s;
-  }
+  .row { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+  .row > * { flex: 1; min-width: 0; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
+  .card { background: #1a1a1a; border: 1px solid #333; padding: 10px; text-align: center; cursor: pointer; }
   .card:hover { border-color: #d4a017; background: #222; }
-  .card .big { font-size: 20px; color: #d4a017; font-weight: bold; }
-  .card .small { font-size: 11px; color: #888; margin-top: 4px; }
-  #loginScreen { max-width: 360px; margin: 40px auto; }
-  #loginScreen input { width: 100%; margin: 6px 0; }
-  #loginScreen button { width: 100%; margin-top: 10px; padding: 12px; }
-  .msg { color: #d44; font-size: 12px; min-height: 16px; margin-top: 6px; }
+  .card .t { font-size: 18px; color: #d4a017; font-weight: bold; }
+  .card .s { font-size: 11px; color: #888; margin-top: 4px; }
+  #login { max-width: 320px; margin: 40px auto; }
+  #login input { width: 100%; margin: 4px 0; }
+  #login button { width: 100%; margin-top: 8px; padding: 10px; }
+  #loginMsg { color: #d44; font-size: 12px; min-height: 16px; margin-top: 6px; text-align: center; }
+  .lobby { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: #1a1a1a; border: 1px solid #333; margin-bottom: 4px; }
+  .lobby .n { flex: 1; }
+  .lobby .n b { color: #d4a017; }
+  .stats { display: flex; gap: 6px; margin-top: 10px; }
+  .stats > div { flex: 1; background: #1a1a1a; border: 1px solid #333; padding: 10px; text-align: center; }
+  .stats .v { font-size: 20px; color: #d4a017; font-weight: bold; }
+  .stats .l { font-size: 11px; color: #888; }
 
-  /* Доска */
-  #boardWrap {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 8px;
-    max-width: 480px;
-    margin: 0 auto;
-  }
+  /* доска */
+  #boardWrap { max-width: 480px; margin: 0 auto; }
   #board {
     display: grid;
     grid-template-columns: repeat(8, 1fr);
-    grid-template-rows: repeat(8, 1fr);
     aspect-ratio: 1/1;
-    border: 3px solid #000;
-    background: #000;
+    border: 2px solid #000;
     user-select: none;
     -webkit-user-select: none;
   }
   .sq {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: clamp(20px, 6vw, 36px);
-    line-height: 1;
-    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(18px, 6vw, 34px);
+    line-height: 1; cursor: pointer;
     position: relative;
-    overflow: hidden;
   }
-  .sq.light { background: #e8d4a8; }
-  .sq.dark { background: #8b6f47; }
+  .sq.l { background: #e8d4a8; }
+  .sq.d { background: #8b6f47; }
   .sq.sel { box-shadow: inset 0 0 0 4px #d4a017; }
   .sq.last { background: #e8e060 !important; }
-  .sq.hint::after {
-    content: '';
-    position: absolute;
-    width: 30%; height: 30%;
-    border-radius: 50%;
-    background: rgba(0,0,0,0.35);
-  }
-  .sq.hint.capture::after {
-    width: 100%; height: 100%;
-    border-radius: 0;
-    background: transparent;
-    box-shadow: inset 0 0 0 5px rgba(200,0,0,0.6);
-  }
-  .sq.check { background: radial-gradient(circle, #f44 0%, transparent 70%) !important; }
-  .sq.prem-from { box-shadow: inset 0 0 0 4px #4a9ce8; }
-  .sq.prem-to { box-shadow: inset 0 0 0 4px #4a9ce8; }
-  .piece.w { color: #fff; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; }
-  .piece.b { color: #111; text-shadow: -1px -1px 0 #ccc, 1px -1px 0 #ccc, -1px 1px 0 #ccc, 1px 1px 0 #ccc; }
+  .sq.hint::after { content: ''; position: absolute; width: 30%; height: 30%; border-radius: 50%; background: rgba(0,0,0,0.35); }
+  .sq.hint.cap::after { width: 100%; height: 100%; border-radius: 0; background: transparent; box-shadow: inset 0 0 0 5px rgba(200,0,0,0.6); }
+  .sq.chk { background: radial-gradient(circle, #f44, transparent 70%) !important; }
+  .sq.pf { box-shadow: inset 0 0 0 4px #4a9ce8; }
+  .sq.pt { box-shadow: inset 0 0 0 4px #4a9ce8; }
+  .pc.w { color: #fff; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; }
+  .pc.b { color: #111; text-shadow: -1px -1px 0 #bbb, 1px -1px 0 #bbb, -1px 1px 0 #bbb, 1px 1px 0 #bbb; }
 
-  .clock {
-    background: #1a1a1a;
-    border: 1px solid #333;
-    padding: 8px 12px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    font-size: 14px;
-  }
-  .clock .time {
-    font-family: 'Courier New', monospace;
-    font-size: 22px;
-    font-weight: bold;
-    color: #d0d0d0;
-  }
-  .clock.active { background: #1a4a1a; border-color: #3a7a3a; }
-  .clock.low .time { color: #f44; }
+  .clock { display: flex; justify-content: space-between; align-items: center; background: #1a1a1a; border: 1px solid #333; padding: 8px 12px; margin: 6px 0; }
+  .clock.on { background: #1a4a1a; border-color: #3a7a3a; }
+  .clock .tm { font-size: 22px; font-weight: bold; font-family: monospace; }
+  .clock.low .tm { color: #f44; }
 
-  .actions { display: flex; gap: 8px; justify-content: center; margin: 8px 0; }
-  .actions button { padding: 10px 16px; font-size: 16px; }
+  .actions { display: flex; gap: 6px; margin: 6px 0; }
+  .actions button { flex: 1; padding: 10px; }
 
-  #status {
-    text-align: center;
-    padding: 8px;
-    background: #1a1a1a;
-    border-left: 4px solid #d4a017;
-    font-size: 13px;
-    min-height: 34px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  #status.green { background: #1a4a1a; border-left-color: #3a7a3a; }
-  #status.yellow { background: #4a3a1a; border-left-color: #d4a017; }
+  #status { text-align: center; padding: 8px; background: #1a1a1a; border-left: 4px solid #d4a017; min-height: 34px; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+  #status.on { background: #1a4a1a; border-left-color: #3a7a3a; }
+  #status.y { background: #4a3a1a; border-left-color: #d4a017; }
 
-  .lobby-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
-    background: #1a1a1a;
-    border: 1px solid #333;
-    margin-bottom: 4px;
-  }
-  .lobby-row .name { flex: 1; }
-  .lobby-row .name b { color: #d4a017; }
-
-  #chatBox {
-    background: #1a1a1a;
-    border: 1px solid #333;
-    height: 200px;
-    display: flex;
-    flex-direction: column;
-    margin-top: 12px;
-  }
-  #chatMsgs {
-    flex: 1;
-    overflow-y: auto;
-    padding: 8px;
-    font-size: 13px;
-  }
-  #chatMsgs .m { margin-bottom: 4px; word-break: break-word; }
-  #chatMsgs .m .u { color: #d4a017; font-weight: bold; }
+  #chat { margin-top: 10px; background: #1a1a1a; border: 1px solid #333; height: 160px; display: flex; flex-direction: column; }
+  #chatLog { flex: 1; overflow-y: auto; padding: 6px 8px; font-size: 13px; }
+  #chatLog .m { margin-bottom: 3px; word-break: break-word; }
+  #chatLog .m .u { color: #d4a017; font-weight: bold; }
   #chatForm { display: flex; border-top: 1px solid #333; }
   #chatForm input { flex: 1; border: none; background: transparent; }
   #chatForm button { border: none; border-left: 1px solid #333; }
-
-  @media (max-width: 500px) {
-    header h1 { font-size: 15px; }
-    main { padding: 12px 8px; }
-    .card .big { font-size: 16px; }
-    .sq { font-size: 32px; }
-  }
 </style>
 </head>
 <body>
 <header>
-  <h1>♔ KINGSIDE <span>v2</span></h1>
-  <div class="user" id="userInfo"></div>
+  <h1>♔ KINGSIDE</h1>
+  <div class="u" id="uInfo"></div>
 </header>
-
 <main>
-  <!-- ЛОГИН -->
-  <section id="loginScreen" class="screen active">
+
+  <!-- ВХОД -->
+  <section id="login" class="scr on">
     <h2>Вход</h2>
-    <input id="loginName" placeholder="Логин" autocomplete="off">
-    <input id="loginPass" type="password" placeholder="Пароль">
-    <button class="primary" id="loginBtn">Войти</button>
-    <div class="msg" id="loginMsg"></div>
-    <p style="color:#666;font-size:11px;margin-top:12px;text-align:center">
-      Один логин = один аккаунт. Данные сохраняются на сервере.
-    </p>
+    <input id="uName" placeholder="Логин" autocomplete="off">
+    <input id="uPass" type="password" placeholder="Пароль">
+    <button class="p" id="loginBtn">Войти</button>
+    <div id="loginMsg"></div>
   </section>
 
   <!-- ЛОББИ -->
-  <section id="lobbyScreen" class="screen">
-    <h2>Играть</h2>
-    <div style="color:#888;font-size:12px;margin-bottom:8px">Быстрый старт:</div>
-    <div class="grid" id="quickGrid"></div>
+  <section id="lobby" class="scr">
+    <h2>Быстрый старт</h2>
+    <div class="cards" id="quick"></div>
 
-    <h2 style="margin-top:20px">Зал ожидания</h2>
-    <div id="lobbiesList" style="color:#888;font-size:13px">Загрузка...</div>
+    <h2>Зал ожидания</h2>
+    <div id="lobbies">Пусто</div>
 
-    <h2 style="margin-top:20px">С компьютером</h2>
-    <div class="grid" id="botsGrid"></div>
+    <h2>С компьютером</h2>
+    <div class="cards" id="bots"></div>
 
-    <h2 style="margin-top:20px">Статистика</h2>
-    <div class="row">
-      <div class="card" style="flex:1">
-        <div class="big" id="statOnline">0</div>
-        <div class="small">Игроков</div>
-      </div>
-      <div class="card" style="flex:1">
-        <div class="big" id="statGames">0</div>
-        <div class="small">Партий</div>
-      </div>
-      <div class="card" style="flex:1">
-        <div class="big" id="statActive">0</div>
-        <div class="small">Сейчас играют</div>
-      </div>
+    <h2>Статистика</h2>
+    <div class="stats">
+      <div><div class="v" id="sOnline">0</div><div class="l">Игроков</div></div>
+      <div><div class="v" id="sGames">0</div><div class="l">Партий</div></div>
+      <div><div class="v" id="sActive">0</div><div class="l">Играют</div></div>
     </div>
   </section>
 
   <!-- ИГРА -->
-  <section id="gameScreen" class="screen">
-    <h2 id="gameTitle">Партия</h2>
+  <section id="game" class="scr">
+    <h2 id="gTitle">Партия</h2>
     <div id="boardWrap">
-      <div class="clock" id="topClock">
-        <span id="topName">—</span>
-        <span class="time" id="topTime">--:--</span>
-      </div>
+      <div class="clock" id="clockTop"><span id="nameTop">—</span><span class="tm" id="timeTop">--:--</span></div>
       <div id="board"></div>
-      <div class="clock" id="bottomClock">
-        <span id="bottomName">—</span>
-        <span class="time" id="bottomTime">--:--</span>
-      </div>
+      <div class="clock" id="clockBot"><span id="nameBot">—</span><span class="tm" id="timeBot">--:--</span></div>
       <div class="actions">
-        <button id="resignBtn" class="danger">🏳 Сдаться</button>
-        <button id="drawBtn">½ Ничья</button>
-        <button id="flipBtn">⇅ Перевернуть</button>
+        <button id="resignBtn" class="d">Сдаться</button>
+        <button id="drawBtn">Ничья</button>
+        <button id="flipBtn">⇅</button>
+        <button id="backBtn">В лобби</button>
       </div>
-      <div id="status">Ожидание...</div>
-      <div id="chatBox">
-        <div id="chatMsgs"></div>
+      <div id="status">...</div>
+      <div id="chat">
+        <div id="chatLog"></div>
         <form id="chatForm">
           <input id="chatInput" placeholder="Сообщение..." maxlength="200" autocomplete="off">
           <button type="submit">→</button>
         </form>
       </div>
-      <div class="row" style="justify-content:center;margin-top:12px">
-        <button id="backBtn">← В лобби</button>
-      </div>
     </div>
   </section>
 
-  <!-- ПРОФИЛЬ -->
-  <section id="profileScreen" class="screen">
-    <h2>Профиль</h2>
-    <div id="profileContent"></div>
-    <div class="row" style="margin-top:16px">
-      <button id="profileBackBtn">← В лобби</button>
-      <button id="logoutBtn" class="danger">Выйти</button>
-    </div>
-  </section>
 </main>
-
 <script src="/socket.io/socket.io.js"></script>
 <script>
 (function () {
-  'use strict';
+  const s = io();
+  const EMO = { K:'♔', Q:'♕', R:'♖', B:'♗', N:'♘', P:'♙', k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟' };
+  const $ = id => document.getElementById(id);
+  const show = id => { document.querySelectorAll('.scr').forEach(x => x.classList.remove('on')); $(id).classList.add('on'); };
+  const fmt = s => { s = Math.max(0, Math.floor(s)); return String((s/60)|0).padStart(2,'0') + ':' + String(s%60).padStart(2,'0'); };
+  const esc = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
-  const socket = io();
-  const EMOJI = { K:'♔', Q:'♕', R:'♖', B:'♗', N:'♘', P:'♙', k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟' };
+  let me = null, gameId = null, myColor = 'w', fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  let myT = 0, opT = 0, active = false, ended = false;
+  let sel = null, hints = [], lastMove = null, premove = null, flipped = false;
+  let isBot = false, opName = '—';
+  let clockTurn = 'w', clockAt = 0, myAt = 0, opAt = 0, clockOn = false;
 
-  let me = null;
-  let lobbyId = null;
-  let myColor = 'w';
-  let currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-  let myTime = 0, oppTime = 0;
-  let gameActive = false;
-  let gameEnded = false;
-  let selected = null;
-  let legalMoves = [];
-  let lastMove = null;
-  let premove = null;
-  let flipped = false;
-  let dragging = null;
-  let dragStartPos = null;
-  let ghostEl = null;
-  let isBotGame = false;
-  let opponentName = '—';
-  let clockTurn = 'w';
-  let clockSyncedAt = 0;
-  let clockMyAtSync = 0;
-  let clockOppAtSync = 0;
-  let clockRunning = false;
-
-  function $(id) { return document.getElementById(id); }
-  function show(id) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    $(id).classList.add('active');
+  // ---------- FEN ----------
+  function parse(f) {
+    const p = f.split(' ');
+    const b = Array.from({ length: 8 }, () => Array(8).fill(null));
+    p[0].split('/').forEach((row, r) => { let x = 0; for (const ch of row) { if (/\d/.test(ch)) x += +ch; else b[r][x++] = ch; } });
+    return { b, turn: p[1], cast: p[2], ep: p[3] };
   }
-  function fmt(s) {
-    s = Math.max(0, Math.floor(s));
-    return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
-  }
-  function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-  // ============== FEN ==============
-  function parseFen(fen) {
-    const parts = fen.split(' ');
-    const board = Array.from({ length: 8 }, () => Array(8).fill(null));
-    parts[0].split('/').forEach((row, r) => {
-      let f = 0;
-      for (const ch of row) {
-        if (/\d/.test(ch)) f += +ch;
-        else board[r][f++] = ch;
-      }
-    });
-    return { board, turn: parts[1], castling: parts[2], ep: parts[3] };
+  function toFen(st) {
+    const rows = st.b.map(r => { let str = '', e = 0; for (const c of r) { if (c) { if (e) { str += e; e = 0; } str += c; } else e++; } if (e) str += e; return str; }).join('/');
+    return [rows, st.turn, st.cast, st.ep || '-', 0, 1].join(' ');
   }
   const isW = p => !!p && p === p.toUpperCase();
-  const inB = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+  const ok = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
 
-  function pseudoMoves(state, r, c) {
-    const p = state.board[r][c];
-    if (!p) return [];
-    const moves = [];
-    const white = isW(p);
-    const type = p.toLowerCase();
-    const dir = white ? -1 : 1;
-    const add = (rr, cc) => {
-      if (!inB(rr, cc)) return false;
-      const t = state.board[rr][cc];
-      if (t && isW(t) === white) return false;
-      moves.push([rr, cc]);
-      return !t;
-    };
-    if (type === 'p') {
-      const startRow = white ? 6 : 1;
-      const oneR = r + dir;
-      if (inB(oneR, c) && !state.board[oneR][c]) {
-        moves.push([oneR, c]);
-        const twoR = r + 2 * dir;
-        if (r === startRow && inB(twoR, c) && !state.board[twoR][c]) moves.push([twoR, c]);
+  function pseudo(st, r, c) {
+    const p = st.b[r][c]; if (!p) return [];
+    const m = [], white = isW(p), t = p.toLowerCase(), dir = white ? -1 : 1;
+    const add = (rr, cc) => { if (!ok(rr, cc)) return false; const x = st.b[rr][cc]; if (x && isW(x) === white) return false; m.push([rr, cc]); return !x; };
+    if (t === 'p') {
+      const sr = white ? 6 : 1, r1 = r + dir;
+      if (ok(r1, c) && !st.b[r1][c]) { m.push([r1, c]); const r2 = r + 2 * dir; if (r === sr && ok(r2, c) && !st.b[r2][c]) m.push([r2, c]); }
+      for (const dc of [-1, 1]) { const rr = r + dir, cc = c + dc; if (!ok(rr, cc)) continue; const x = st.b[rr][cc]; if (x && isW(x) !== white) m.push([rr, cc]); const epT = String.fromCharCode(97 + cc) + (8 - rr); if (st.ep && st.ep === epT && !x) m.push([rr, cc]); }
+    } else if (t === 'n') { [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([a,b]) => add(r+a, c+b)); }
+    else if (t === 'k') {
+      [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([a,b]) => add(r+a, c+b));
+      if (white && r === 7 && c === 4) {
+        if (st.cast.includes('K') && !st.b[7][5] && !st.b[7][6] && st.b[7][7] === 'R') m.push([7, 6]);
+        if (st.cast.includes('Q') && !st.b[7][3] && !st.b[7][2] && !st.b[7][1] && st.b[7][0] === 'R') m.push([7, 2]);
       }
-      for (const dc of [-1, 1]) {
-        const rr = r + dir, cc = c + dc;
-        if (!inB(rr, cc)) continue;
-        const t = state.board[rr][cc];
-        if (t && isW(t) !== white) moves.push([rr, cc]);
-        const epT = String.fromCharCode(97 + cc) + (8 - rr);
-        if (state.ep && state.ep === epT && !t) moves.push([rr, cc]);
+      if (!white && r === 0 && c === 4) {
+        if (st.cast.includes('k') && !st.b[0][5] && !st.b[0][6] && st.b[0][7] === 'r') m.push([0, 6]);
+        if (st.cast.includes('q') && !st.b[0][3] && !st.b[0][2] && !st.b[0][1] && st.b[0][0] === 'r') m.push([0, 2]);
       }
-    } else if (type === 'n') {
-      [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc]) => add(r+dr, c+dc));
-    } else if (type === 'k') {
-      [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc]) => add(r+dr, c+dc));
-      if (white && r === 7 && c === 4 && !attacked(state, 7, 4, false)) {
-        if (state.castling.includes('K') && !state.board[7][5] && !state.board[7][6] && state.board[7][7] === 'R'
-          && !attacked(state, 7, 5, false) && !attacked(state, 7, 6, false)) moves.push([7, 6]);
-        if (state.castling.includes('Q') && !state.board[7][3] && !state.board[7][2] && !state.board[7][1] && state.board[7][0] === 'R'
-          && !attacked(state, 7, 3, false) && !attacked(state, 7, 2, false)) moves.push([7, 2]);
-      }
-      if (!white && r === 0 && c === 4 && !attacked(state, 0, 4, true)) {
-        if (state.castling.includes('k') && !state.board[0][5] && !state.board[0][6] && state.board[0][7] === 'r'
-          && !attacked(state, 0, 5, true) && !attacked(state, 0, 6, true)) moves.push([0, 6]);
-        if (state.castling.includes('q') && !state.board[0][3] && !state.board[0][2] && !state.board[0][1] && state.board[0][0] === 'r'
-          && !attacked(state, 0, 3, true) && !attacked(state, 0, 2, true)) moves.push([0, 2]);
-      }
-    } else {
-      const dirs = [];
-      if (type === 'r' || type === 'q') dirs.push([-1,0],[1,0],[0,-1],[0,1]);
-      if (type === 'b' || type === 'q') dirs.push([-1,-1],[-1,1],[1,-1],[1,1]);
-      for (const [dr, dc] of dirs) {
-        let rr = r + dr, cc = c + dc;
-        while (add(rr, cc)) { rr += dr; cc += dc; }
-      }
-    }
-    return moves;
+    } else { const dirs = []; if (t === 'r' || t === 'q') dirs.push([-1,0],[1,0],[0,-1],[0,1]); if (t === 'b' || t === 'q') dirs.push([-1,-1],[-1,1],[1,-1],[1,1]); for (const [a,b] of dirs) { let rr = r + a, cc = c + b; while (add(rr, cc)) { rr += a; cc += b; } } }
+    return m;
   }
-  function findKing(state, white) {
-    const k = white ? 'K' : 'k';
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (state.board[r][c] === k) return [r, c];
-    return null;
-  }
-  function attacked(state, r, c, byWhite) {
+  function findK(st, white) { const k = white ? 'K' : 'k'; for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (st.b[r][c] === k) return [r, c]; return null; }
+  function atk(st, r, c, byW) {
     for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
-      const p = state.board[rr][cc];
-      if (!p || isW(p) !== byWhite) continue;
+      const p = st.b[rr][cc]; if (!p || isW(p) !== byW) continue;
       const t = p.toLowerCase();
-      if (t === 'p') {
-        const dir = byWhite ? -1 : 1;
-        if (rr + dir === r && (cc - 1 === c || cc + 1 === c)) return true;
-        continue;
-      }
-      if (t === 'k') {
-        if (Math.abs(rr - r) <= 1 && Math.abs(cc - c) <= 1 && (rr !== r || cc !== c)) return true;
-        continue;
-      }
-      if (pseudoMoves(state, rr, cc).some(([mr, mc]) => mr === r && mc === c)) return true;
+      if (t === 'p') { const d = byW ? -1 : 1; if (rr + d === r && (cc - 1 === c || cc + 1 === c)) return true; continue; }
+      if (t === 'k') { if (Math.abs(rr - r) <= 1 && Math.abs(cc - c) <= 1 && (rr !== r || cc !== c)) return true; continue; }
+      if (pseudo(st, rr, cc).some(([a,b]) => a === r && b === c)) return true;
     }
     return false;
   }
-  function inCheck(state, white) {
-    const k = findKing(state, white);
-    if (!k) return false;
-    return attacked(state, k[0], k[1], !white);
+  function chk(st, white) { const k = findK(st, white); return k ? atk(st, k[0], k[1], !white) : false; }
+  function apply(st, from, to) {
+    const c = { b: st.b.map(r => r.slice()), turn: st.turn, cast: st.cast, ep: st.ep };
+    const [fr, fc] = from, [tr, tc] = to, p = c.b[fr][fc], white = isW(p), t = p.toLowerCase();
+    if (t === 'p' && c.ep) { const tgt = String.fromCharCode(97 + tc) + (8 - tr); if (c.ep === tgt && !c.b[tr][tc]) c.b[fr][tc] = null; }
+    c.b[tr][tc] = p; c.b[fr][fc] = null;
+    if (t === 'p' && (tr === 0 || tr === 7)) c.b[tr][tc] = white ? 'Q' : 'q';
+    if (t === 'k' && Math.abs(tc - fc) === 2) { if (tc > fc) { c.b[fr][5] = c.b[fr][7]; c.b[fr][7] = null; } else { c.b[fr][3] = c.b[fr][0]; c.b[fr][0] = null; } }
+    let cast = c.cast;
+    if (t === 'k') cast = cast.replace(white ? /[KQ]/g : /[kq]/g, '');
+    if (t === 'r') { if (fr === 7 && fc === 0) cast = cast.replace('Q', ''); if (fr === 7 && fc === 7) cast = cast.replace('K', ''); if (fr === 0 && fc === 0) cast = cast.replace('q', ''); if (fr === 0 && fc === 7) cast = cast.replace('k', ''); }
+    c.cast = cast || '-';
+    c.ep = (t === 'p' && Math.abs(tr - fr) === 2) ? String.fromCharCode(97 + fc) + (8 - (fr + (tr - fr) / 2)) : '-';
+    c.turn = white ? 'b' : 'w';
+    return c;
   }
-  function applyMove(state, from, to) {
-    const copy = {
-      board: state.board.map(row => row.slice()),
-      turn: state.turn, castling: state.castling, ep: state.ep
-    };
-    const [fr, fc] = from, [tr, tc] = to;
-    const p = copy.board[fr][fc];
-    const white = isW(p);
-    const type = p.toLowerCase();
-    if (type === 'p' && copy.ep) {
-      const target = String.fromCharCode(97 + tc) + (8 - tr);
-      if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null;
-    }
-    copy.board[tr][tc] = p;
-    copy.board[fr][fc] = null;
-    if (type === 'p' && (tr === 0 || tr === 7)) copy.board[tr][tc] = white ? 'Q' : 'q';
-    if (type === 'k' && Math.abs(tc - fc) === 2) {
-      const row = fr;
-      if (tc > fc) { copy.board[row][5] = copy.board[row][7]; copy.board[row][7] = null; }
-      else { copy.board[row][3] = copy.board[row][0]; copy.board[row][0] = null; }
-    }
-    let cast = copy.castling;
-    if (type === 'k') cast = cast.replace(white ? /[KQ]/g : /[kq]/g, '');
-    if (type === 'r') {
-      if (fr === 7 && fc === 0) cast = cast.replace('Q', '');
-      if (fr === 7 && fc === 7) cast = cast.replace('K', '');
-      if (fr === 0 && fc === 0) cast = cast.replace('q', '');
-      if (fr === 0 && fc === 7) cast = cast.replace('k', '');
-    }
-    if (!cast) cast = '-';
-    let ep = '-';
-    if (type === 'p' && Math.abs(tr - fr) === 2) {
-      ep = String.fromCharCode(97 + fc) + (8 - (fr + (tr - fr) / 2));
-    }
-    copy.castling = cast;
-    copy.ep = ep;
-    copy.turn = white ? 'b' : 'w';
-    return copy;
-  }
-  function legalMovesFor(state, r, c) {
-    const p = state.board[r][c];
-    if (!p) return [];
-    const white = isW(p);
-    return pseudoMoves(state, r, c).filter(([rr, cc]) => !inCheck(applyMove(state, [r, c], [rr, cc]), white));
-  }
-  function toFen(s) {
-    const rows = s.board.map(r => {
-      let str = '', e = 0;
-      for (const c of r) { if (c) { if (e) { str += e; e = 0; } str += c; } else e++; }
-      if (e) str += e;
-      return str;
-    }).join('/');
-    return [rows, s.turn, s.castling, s.ep || '-', 0, 1].join(' ');
-  }
-  function toSAN(state, from, to) {
-    const [fr, fc] = from, [tr, tc] = to;
-    const p = state.board[fr][fc];
-    if (!p) return '';
-    const t = p.toLowerCase();
-    const isCap = !!state.board[tr][tc] || (t === 'p' && fc !== tc);
-    const dest = String.fromCharCode(97 + tc) + (8 - tr);
-    if (t === 'k' && Math.abs(tc - fc) === 2) return tc > fc ? 'O-O' : 'O-O-O';
-    let san = '';
-    if (t === 'p') {
-      if (isCap) san += String.fromCharCode(97 + fc) + 'x';
-      san += dest;
-    } else {
-      san += t === 'n' ? 'N' : t.toUpperCase();
-      if (isCap) san += 'x';
-      san += dest;
-    }
-    const next = applyMove(state, from, to);
-    const nextWhite = next.turn === 'w';
-    if (inCheck(next, nextWhite)) san += '+';
-    return san;
-  }
+  function legal(st, r, c) { const p = st.b[r][c]; if (!p) return []; const w = isW(p); return pseudo(st, r, c).filter(([a,b]) => !chk(apply(st, [r,c], [a,b]), w)); }
 
-  // ============== РЕНДЕР ДОСКИ ==============
-  function renderBoard() {
-    const state = parseFen(currentFen);
-    const boardEl = $('board');
-    boardEl.innerHTML = '';
-    const flip = (myColor === 'b') !== flipped;
-    const interactive = gameActive && !gameEnded;
-
+  // ---------- ДОСКА ----------
+  function render() {
+    const st = parse(fen);
+    const el = $('board');
+    el.innerHTML = '';
+    const fl = (myColor === 'b') !== flipped;
+    const turnW = st.turn === 'w';
+    const checked = chk(st, turnW);
+    const king = checked ? findK(st, turnW) : null;
     for (let dr = 0; dr < 8; dr++) {
       for (let dc = 0; dc < 8; dc++) {
-        const r = flip ? 7 - dr : dr;
-        const c = flip ? 7 - dc : dc;
-        const sq = document.createElement('div');
-        sq.className = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
-        sq.dataset.r = r;
-        sq.dataset.c = c;
-        if (lastMove && (lastMove.from[0] === r && lastMove.from[1] === c || lastMove.to[0] === r && lastMove.to[1] === c)) {
-          sq.classList.add('last');
-        }
-        const turnWhite = state.turn === 'w';
-        if (inCheck(state, turnWhite)) {
-          const k = findKing(state, turnWhite);
-          if (k && k[0] === r && k[1] === c) sq.classList.add('check');
-        }
-        if (selected && selected[0] === r && selected[1] === c) sq.classList.add('sel');
-        if (interactive && legalMoves.some(([mr, mc]) => mr === r && mc === c)) {
-          sq.classList.add('hint');
-          if (state.board[r][c]) sq.classList.add('capture');
+        const r = fl ? 7 - dr : dr;
+        const c = fl ? 7 - dc : dc;
+        const d = document.createElement('div');
+        d.className = 'sq ' + ((r + c) % 2 ? 'd' : 'l');
+        d.dataset.r = r; d.dataset.c = c;
+        if (lastMove && ((lastMove.from[0] === r && lastMove.from[1] === c) || (lastMove.to[0] === r && lastMove.to[1] === c))) d.classList.add('last');
+        if (king && king[0] === r && king[1] === c) d.classList.add('chk');
+        if (sel && sel[0] === r && sel[1] === c) d.classList.add('sel');
+        if (active && !ended && hints.some(([a,b]) => a === r && b === c)) {
+          d.classList.add('hint');
+          if (st.b[r][c]) d.classList.add('cap');
         }
         if (premove) {
-          if (premove.from[0] === r && premove.from[1] === c) sq.classList.add('prem-from');
-          if (premove.to[0] === r && premove.to[1] === c) sq.classList.add('prem-to');
+          if (premove.from[0] === r && premove.from[1] === c) d.classList.add('pf');
+          if (premove.to[0] === r && premove.to[1] === c) d.classList.add('pt');
         }
-        const p = state.board[r][c];
+        const p = st.b[r][c];
         if (p) {
-          const piece = document.createElement('span');
-          piece.className = 'piece ' + (isW(p) ? 'w' : 'b');
-          piece.textContent = EMOJI[p];
-          if (dragging && dragging.from[0] === r && dragging.from[1] === c && dragging.active) piece.style.opacity = '0.3';
-          sq.appendChild(piece);
+          const s = document.createElement('span');
+          s.className = 'pc ' + (isW(p) ? 'w' : 'b');
+          s.textContent = EMO[p];
+          d.appendChild(s);
         }
-        boardEl.appendChild(sq);
+        el.appendChild(d);
       }
     }
-    updateClocksActive(state.turn);
+    clockTurn = st.turn;
+    updateClocks();
   }
 
-  function updateClocksActive(turn) {
-    clockTurn = turn;
-    if (gameActive && !gameEnded) {
-      clockSyncedAt = performance.now();
-      clockMyAtSync = myTime;
-      clockOppAtSync = oppTime;
-      if (!clockRunning) startClock();
+  function updateClocks() {
+    if (active && !ended) {
+      clockAt = performance.now();
+      myAt = myT; opAt = opT;
+      if (!clockOn) { clockOn = true; loop(); }
     }
-    $('topClock').classList.toggle('active', gameActive && !gameEnded && turn !== myColor);
-    $('bottomClock').classList.toggle('active', gameActive && !gameEnded && turn === myColor);
+    $('clockTop').classList.toggle('on', active && !ended && clockTurn !== myColor);
+    $('clockBot').classList.toggle('on', active && !ended && clockTurn === myColor);
     const st = $('status');
-    if (gameEnded) { st.className = 'yellow'; return; }
-    if (gameActive) {
-      st.className = 'green';
-      const who = turn === 'w' ? 'Белые' : 'Чёрные';
-      const isMe = turn === myColor;
-      st.textContent = who + ' — ' + (isMe ? 'ваш ход' : 'ход соперника') + (premove ? ' · премьюв' : '');
+    if (ended) return;
+    if (active) {
+      st.className = 'on';
+      const who = clockTurn === 'w' ? 'Белые' : 'Чёрные';
+      st.textContent = who + ' — ' + (clockTurn === myColor ? 'ваш ход' : 'ход соперника') + (premove ? ' · премьюв' : '');
     }
   }
-
-  function startClock() {
-    if (clockRunning) return;
-    clockRunning = true;
-    function tick() {
-      if (!gameActive || gameEnded) { clockRunning = false; return; }
-      const elapsed = (performance.now() - clockSyncedAt) / 1000;
-      let m = clockMyAtSync, o = clockOppAtSync;
-      if (clockTurn === myColor) m = Math.max(0, m - elapsed);
-      else o = Math.max(0, o - elapsed);
-      $('topTime').textContent = fmt(o);
-      $('bottomTime').textContent = fmt(m);
-      $('topClock').classList.toggle('low', o <= 20);
-      $('bottomClock').classList.toggle('low', m <= 20);
-      requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
+  function loop() {
+    if (!active || ended) { clockOn = false; return; }
+    const el = (performance.now() - clockAt) / 1000;
+    let m = myAt, o = opAt;
+    if (clockTurn === myColor) m = Math.max(0, m - el); else o = Math.max(0, o - el);
+    $('timeTop').textContent = fmt(o);
+    $('timeBot').textContent = fmt(m);
+    $('clockTop').classList.toggle('low', o <= 20);
+    $('clockBot').classList.toggle('low', m <= 20);
+    requestAnimationFrame(loop);
   }
 
-  // ============== КЛИКИ И ПЕРЕТАСКИВАНИЕ ==============
-  function onClickSquare(r, c) {
-    if (!gameActive || gameEnded) return;
-    const state = parseFen(currentFen);
-    const myTurn = state.turn === myColor;
+  // ---------- КЛИК ----------
+  $('board').addEventListener('click', (e) => {
+    const d = e.target.closest('.sq');
+    if (!d) return;
+    if (!active || ended) return;
+    const r = +d.dataset.r, c = +d.dataset.c;
+    const st = parse(fen);
+    const myTurn = st.turn === myColor;
 
     if (!myTurn) {
-      // Премьюв
-      if (premove && premove.to[0] === r && premove.to[1] === c) { premove = null; renderBoard(); return; }
-      const p = state.board[r][c];
+      // премьюв
+      if (premove && premove.to[0] === r && premove.to[1] === c) { premove = null; render(); return; }
+      const p = st.b[r][c];
       const mine = p && isW(p) === (myColor === 'w');
-      if (selected) {
-        if (selected[0] === r && selected[1] === c) { selected = null; legalMoves = []; renderBoard(); return; }
-        premove = { from: selected, to: [r, c] };
-        selected = null; legalMoves = []; renderBoard();
-        return;
+      if (sel) {
+        if (sel[0] === r && sel[1] === c) { sel = null; hints = []; render(); return; }
+        premove = { from: sel, to: [r, c] };
+        sel = null; hints = []; render(); return;
       }
-      if (mine) {
-        selected = [r, c];
-        legalMoves = legalMovesFor(state, r, c);
-        renderBoard();
-      }
+      if (mine) { sel = [r, c]; hints = legal(st, r, c); render(); }
       return;
     }
 
-    // Наш ход
+    // наш ход
     if (premove) premove = null;
-    if (selected) {
-      if (selected[0] === r && selected[1] === c) { selected = null; legalMoves = []; renderBoard(); return; }
-      if (legalMoves.some(([mr, mc]) => mr === r && mc === c)) {
-        const from = selected;
-        selected = null; legalMoves = [];
+    if (sel) {
+      if (sel[0] === r && sel[1] === c) { sel = null; hints = []; render(); return; }
+      if (hints.some(([a,b]) => a === r && b === c)) {
+        const from = sel; sel = null; hints = [];
         doMove(from, [r, c]);
         return;
       }
     }
-    const p = state.board[r][c];
-    if (p && isW(p) === (myColor === 'w')) {
-      selected = [r, c];
-      legalMoves = legalMovesFor(state, r, c);
-    } else {
-      selected = null; legalMoves = [];
-    }
-    renderBoard();
-  }
+    const p = st.b[r][c];
+    if (p && isW(p) === (myColor === 'w')) { sel = [r, c]; hints = legal(st, r, c); }
+    else { sel = null; hints = []; }
+    render();
+  });
 
   function doMove(from, to) {
-    const state = parseFen(currentFen);
-    if (state.turn !== myColor) return;
-    if (!legalMovesFor(state, from[0], from[1]).some(([r, c]) => r === to[0] && c === to[1])) return;
-    const san = toSAN(state, from, to);
-    const next = applyMove(state, from, to);
-    currentFen = toFen(next);
+    const st = parse(fen);
+    if (st.turn !== myColor) return;
+    if (!legal(st, from[0], from[1]).some(([a,b]) => a === to[0] && b === to[1])) return;
+    const next = apply(st, from, to);
+    fen = toFen(next);
     lastMove = { from, to };
     premove = null;
-    socket.emit('move', { lobbyId, fen: currentFen, san });
-    renderBoard();
+    s.emit('move', { gameId, fen });
+    render();
   }
 
-  // Клик
-  $('board').addEventListener('click', (e) => {
-    if (dragStartPos && (Math.abs(e.clientX - dragStartPos.x) > 6 || Math.abs(e.clientY - dragStartPos.y) > 6)) {
-      dragStartPos = null; return;
-    }
-    dragStartPos = null;
-    const sq = e.target.closest('.sq');
-    if (!sq) return;
-    onClickSquare(+sq.dataset.r, +sq.dataset.c);
-  });
-
-  // Drag
-  $('board').addEventListener('mousedown', (e) => {
-    if (e.button !== 0) return;
-    const sq = e.target.closest('.sq');
-    if (!sq) return;
-    const r = +sq.dataset.r, c = +sq.dataset.c;
-    const state = parseFen(currentFen);
-    const p = state.board[r][c];
-    if (!p) return;
-    const myTurn = state.turn === myColor;
-    const mine = isW(p) === (myColor === 'w');
-    if (myTurn && mine) {
-      const leg = legalMovesFor(state, r, c);
-      if (!leg.length) return;
-      selected = [r, c]; legalMoves = leg;
-      dragging = { from: [r, c], active: false };
-      dragStartPos = { x: e.clientX, y: e.clientY };
-      renderBoard();
-      startGhost(p, e.clientX, e.clientY);
-      e.preventDefault();
-    } else if (!myTurn && mine) {
-      selected = [r, c];
-      legalMoves = legalMovesFor(state, r, c);
-      dragging = { from: [r, c], active: false, prem: true };
-      dragStartPos = { x: e.clientX, y: e.clientY };
-      renderBoard();
-      startGhost(p, e.clientX, e.clientY);
-      e.preventDefault();
-    }
-  });
-  function startGhost(p, x, y) {
-    if (ghostEl) ghostEl.remove();
-    ghostEl = document.createElement('div');
-    ghostEl.style.cssText = 'position:fixed;pointer-events:none;z-index:9999;font-size:44px;transform:translate(-50%,-50%);';
-    ghostEl.className = 'piece ' + (isW(p) ? 'w' : 'b');
-    ghostEl.textContent = EMOJI[p];
-    ghostEl.style.left = x + 'px';
-    ghostEl.style.top = y + 'px';
-    ghostEl.style.display = 'none';
-    document.body.appendChild(ghostEl);
-  }
-  document.addEventListener('mousemove', (e) => {
-    if (!dragging) return;
-    if (!dragging.active) {
-      if (Math.abs(e.clientX - dragStartPos.x) < 5 && Math.abs(e.clientY - dragStartPos.y) < 5) return;
-      dragging.active = true;
-      renderBoard();
-    }
-    if (ghostEl) {
-      ghostEl.style.display = '';
-      ghostEl.style.left = e.clientX + 'px';
-      ghostEl.style.top = e.clientY + 'px';
-    }
-  });
-  document.addEventListener('mouseup', (e) => {
-    if (!dragging) { dragStartPos = null; return; }
-    if (ghostEl) { ghostEl.remove(); ghostEl = null; }
-    if (!dragging.active) { dragging = null; return; }
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    const sq = el ? el.closest('.sq') : null;
-    const wasPrem = !!dragging.prem;
-    const from = dragging.from;
-    dragging = null; dragStartPos = null;
-    if (!sq) { selected = null; legalMoves = []; renderBoard(); return; }
-    const to = [+sq.dataset.r, +sq.dataset.c];
-    if (to[0] === from[0] && to[1] === from[1]) { selected = from; renderBoard(); return; }
-    if (wasPrem) {
-      premove = { from, to };
-      selected = null; legalMoves = [];
-      renderBoard();
-      return;
-    }
-    doMove(from, to);
-  });
-
-  // Премьюв при наступлении нашего хода
-  function tryApplyPremove() {
+  function tryPre() {
     if (!premove) return;
-    const state = parseFen(currentFen);
-    if (state.turn !== myColor) return;
-    const p = state.board[premove.from[0]][premove.from[1]];
-    if (!p || isW(p) !== (myColor === 'w')) { premove = null; renderBoard(); return; }
-    const leg = legalMovesFor(state, premove.from[0], premove.from[1]);
-    if (!leg.some(([r, c]) => r === premove.to[0] && c === premove.to[1])) {
-      premove = null; renderBoard(); return;
-    }
-    const mv = premove;
-    premove = null;
-    setTimeout(() => doMove(mv.from, mv.to), 50);
+    const st = parse(fen);
+    if (st.turn !== myColor) return;
+    const p = st.b[premove.from[0]][premove.from[1]];
+    if (!p || isW(p) !== (myColor === 'w')) { premove = null; render(); return; }
+    if (!legal(st, premove.from[0], premove.from[1]).some(([a,b]) => a === premove.to[0] && b === premove.to[1])) { premove = null; render(); return; }
+    const mv = premove; premove = null;
+    setTimeout(() => doMove(mv.from, mv.to), 30);
   }
 
-  // ============== ЛОББИ ==============
-  function renderQuickGrid() {
-    const times = [
-      { t: 1, i: 0, name: 'Пуля 1+0' },
-      { t: 3, i: 0, name: 'Блиц 3+0' },
-      { t: 3, i: 2, name: 'Блиц 3+2' },
-      { t: 5, i: 0, name: 'Блиц 5+0' },
-      { t: 10, i: 0, name: 'Рапид 10+0' },
-      { t: 15, i: 10, name: 'Рапид 15+10' },
-      { t: 30, i: 0, name: 'Классика' }
-    ];
-    $('quickGrid').innerHTML = times.map(x => `
-      <div class="card" data-t="${x.t}" data-i="${x.i}">
-        <div class="big">${x.t}+${x.i}</div>
-        <div class="small">${x.name}</div>
+  // ---------- СОБЫТИЯ ----------
+  s.on('lobbies', list => {
+    if (!list.length) { $('lobbies').innerHTML = '<div style="color:#666">Пусто</div>'; return; }
+    $('lobbies').innerHTML = list.map(l => `
+      <div class="lobby">
+        <div class="n">${l.isBot ? '🤖' : '👤'} <b>${esc(l.host)}</b> · ${l.time}+${l.inc}</div>
+        ${l.host !== (me && me.username) ? `<button class="p" data-j="${l.id}">Играть</button>` : '<span style="color:#666;font-size:12px">ваше</span>'}
       </div>
     `).join('');
-    $('quickGrid').querySelectorAll('.card').forEach(c => {
-      c.onclick = () => {
-        socket.emit('createLobby', { time: +c.dataset.t, inc: +c.dataset.i }, (res) => {
-          if (!res || !res.ok) { alert(res && res.msg || 'Ошибка'); return; }
-          if (res.matched) return;
-          lobbyId = res.id;
-          setupWaitingGame(+c.dataset.t, +c.dataset.i);
-        });
-      };
+    $('lobbies').querySelectorAll('[data-j]').forEach(b => {
+      b.onclick = () => s.emit('join', { id: b.dataset.j }, r => { if (!r || !r.ok) alert(r && r.msg || 'Ошибка'); });
     });
-  }
+  });
+  s.on('stats', st => { $('sOnline').textContent = st.online; $('sGames').textContent = st.games; $('sActive').textContent = st.active; });
 
-  function setupWaitingGame(time, inc) {
-    myColor = 'w';
-    currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-    myTime = time * 60; oppTime = time * 60;
-    gameActive = false; gameEnded = false;
-    selected = null; legalMoves = []; lastMove = null; premove = null;
-    opponentName = 'Ожидание...'; isBotGame = false;
-    $('topName').textContent = 'Ожидание...';
-    $('bottomName').textContent = me.username + ' (' + me.rating + ')';
-    $('topTime').textContent = fmt(oppTime);
-    $('bottomTime').textContent = fmt(myTime);
-    $('status').className = '';
-    $('status').textContent = 'Ожидание соперника...';
-    show('gameScreen');
-    renderBoard();
-  }
+  s.on('start', ({ color, opponent, oppRating, time, inc, fen: f, gameId: id, isBot: ib }) => {
+    gameId = id; myColor = color; opName = opponent; isBot = !!ib;
+    fen = f; myT = time * 60; opT = time * 60;
+    active = true; ended = false; sel = null; hints = []; lastMove = null; premove = null;
+    $('nameTop').textContent = opponent + (oppRating ? ' (' + oppRating + ')' : '');
+    $('nameBot').textContent = me.username + ' (' + me.rating + ')';
+    $('timeTop').textContent = fmt(opT);
+    $('timeBot').textContent = fmt(myT);
+    $('chatLog').innerHTML = '';
+    $('status').className = 'on';
+    $('status').textContent = 'Вы — ' + (myColor === 'w' ? 'белые' : 'чёрные');
+    show('game');
+    render();
+  });
+  s.on('board', ({ fen: f }) => {
+    if (!active || ended) return;
+    fen = f; sel = null; hints = [];
+    render();
+    tryPre();
+  });
+  s.on('times', ({ tW, tB }) => {
+    clockAt = performance.now();
+    myAt = myColor === 'w' ? tW : tB;
+    opAt = myColor === 'w' ? tB : tW;
+    myT = myAt; opT = opAt;
+    $('timeTop').textContent = fmt(opT);
+    $('timeBot').textContent = fmt(myT);
+    if (!clockOn) { clockOn = true; loop(); }
+  });
+  s.on('end', ({ result, reason }) => {
+    if (ended) return;
+    ended = true; active = false;
+    let t;
+    if (result === 'draw') t = 'Ничья';
+    else if (result === myColor) t = '🏆 Победа!';
+    else t = '💀 Поражение';
+    $('status').className = 'y';
+    $('status').textContent = t + ' — ' + reason;
+    render();
+  });
+  s.on('drawOffer', () => {
+    if (confirm('Соперник предлагает ничью. Принять?')) s.emit('drawYes', { gameId });
+    else s.emit('drawNo', { gameId });
+  });
+  s.on('drawNo', () => {
+    $('status').className = 'y';
+    $('status').textContent = 'Ничья отклонена';
+  });
 
-  function renderLobbies(list) {
-    if (!list || !list.length) {
-      $('lobbiesList').innerHTML = '<div style="color:#666">Пусто</div>';
-      return;
-    }
-    $('lobbiesList').innerHTML = list.map(l => `
-      <div class="lobby-row">
-        <div class="name">${l.isBot ? '🤖' : '👤'} <b>${esc(l.host)}</b> · ${l.time}+${l.inc}</div>
-        ${l.status === 'waiting' && l.host !== (me && me.username)
-          ? `<button class="primary" data-join="${l.id}">Играть</button>`
-          : `<span style="color:#666;font-size:12px">${l.status === 'playing' ? 'идёт' : 'ваше'}</span>`}
-      </div>
-    `).join('');
-    $('lobbiesList').querySelectorAll('[data-join]').forEach(b => {
-      b.onclick = () => socket.emit('joinLobby', { id: b.dataset.join }, (res) => {
-        if (!res || !res.ok) { alert(res && res.msg || 'Ошибка'); return; }
+  // ---------- ЛОГИН ----------
+  $('loginBtn').onclick = () => {
+    const u = $('uName').value.trim();
+    const p = $('uPass').value;
+    if (!u || !p) { $('loginMsg').textContent = 'Заполни поля'; return; }
+    s.emit('register', { username: u, password: p }, r => {
+      if (!r || !r.ok) { $('loginMsg').textContent = r && r.msg || 'Ошибка'; return; }
+      me = r.user;
+      try { localStorage.setItem('kingside_lite', JSON.stringify({ username: u, password: p })); } catch (e) {}
+      enter();
+    });
+  };
+  $('uPass').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginBtn').click(); });
+
+  function enter() {
+    $('uInfo').innerHTML = '👤 <b>' + esc(me.username) + '</b> · ' + me.rating;
+    renderQuick();
+    s.emit('getBots', list => {
+      $('bots').innerHTML = list.map(b => `
+        <div class="card" data-b="${b.name}"><div class="t">🤖</div><div class="s"><b>${b.title}</b><br>${b.rating}</div></div>
+      `).join('');
+      $('bots').querySelectorAll('[data-b]').forEach(c => {
+        c.onclick = () => {
+          const time = +prompt('Минуты (1-30):', '5') || 5;
+          const inc = +prompt('Инкремент (0-30):', '0') || 0;
+          s.emit('playBot', { time, inc, bot: c.dataset.b }, r => { if (!r || !r.ok) alert(r && r.msg || 'Ошибка'); });
+        };
       });
     });
+    s.emit('getLobbies', list => s.emit('getLobbies', () => {}));
+    show('lobby');
   }
 
-  function renderBots(list) {
-    $('botsGrid').innerHTML = list.map(b => `
-      <div class="card" data-bot="${b.name}">
-        <div class="big">🤖</div>
-        <div class="small"><b>${b.title}</b><br>${b.rating}</div>
-      </div>
-    `).join('');
-    $('botsGrid').querySelectorAll('[data-bot]').forEach(c => {
+  function renderQuick() {
+    const t = [
+      { t: 1, i: 0 }, { t: 3, i: 0 }, { t: 3, i: 2 },
+      { t: 5, i: 0 }, { t: 10, i: 0 }, { t: 15, i: 10 }
+    ];
+    $('quick').innerHTML = t.map(x => `<div class="card" data-t="${x.t}" data-i="${x.i}"><div class="t">${x.t}+${x.i}</div><div class="s">Играть</div></div>`).join('');
+    $('quick').querySelectorAll('.card').forEach(c => {
       c.onclick = () => {
-        const time = +prompt('Минуты (1-60):', '5') || 5;
-        const inc = +prompt('Инкремент (0-60):', '0') || 0;
-        socket.emit('playWithBot', { time, inc, botName: c.dataset.bot }, (res) => {
-          if (!res || !res.ok) alert(res && res.msg || 'Ошибка');
+        s.emit('create', { time: +c.dataset.t, inc: +c.dataset.i }, r => {
+          if (!r || !r.ok) { alert(r && r.msg || 'Ошибка'); return; }
+          if (r.matched) return;
+          gameId = r.id;
+          myColor = 'w'; fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+          myT = +c.dataset.t * 60; opT = myT;
+          active = false; ended = false;
+          $('nameTop').textContent = 'Ожидание...';
+          $('nameBot').textContent = me.username + ' (' + me.rating + ')';
+          $('timeTop').textContent = fmt(opT);
+          $('timeBot').textContent = fmt(myT);
+          $('status').className = '';
+          $('status').textContent = 'Ожидание соперника...';
+          show('game');
+          render();
         });
       };
     });
   }
 
-  // ============== СОБЫТИЯ SOCKET ==============
-  socket.on('lobbies', (list) => renderLobbies(list));
-  socket.on('stats', (s) => {
-    $('statOnline').textContent = s.online;
-    $('statGames').textContent = s.games;
-    $('statActive').textContent = s.active;
-  });
-
-  socket.on('gameStart', ({ color, opponent, opponentRating, time, inc, lobbyId: id, fen, isBot }) => {
-    lobbyId = id;
-    myColor = color;
-    opponentName = opponent;
-    isBotGame = !!isBot;
-    currentFen = fen;
-    myTime = time * 60;
-    oppTime = time * 60;
-    gameActive = true; gameEnded = false;
-    selected = null; legalMoves = []; lastMove = null; premove = null;
-    $('topName').textContent = opponent + (opponentRating ? ' (' + opponentRating + ')' : '');
-    $('bottomName').textContent = me.username + ' (' + me.rating + ')';
-    $('topTime').textContent = fmt(oppTime);
-    $('bottomTime').textContent = fmt(myTime);
-    $('chatMsgs').innerHTML = '';
-    show('gameScreen');
-    renderBoard();
-    $('status').className = 'green';
-    $('status').textContent = 'Вы — ' + (myColor === 'w' ? 'белые' : 'чёрные');
-  });
-
-  socket.on('boardUpdate', ({ fen, san }) => {
-    if (!gameActive || gameEnded) return;
-    currentFen = fen;
-    selected = null; legalMoves = [];
-    renderBoard();
-    tryApplyPremove();
-  });
-
-  socket.on('timeUpdate', ({ timeW, timeB }) => {
-    clockSyncedAt = performance.now();
-    clockMyAtSync = myColor === 'w' ? timeW : timeB;
-    clockOppAtSync = myColor === 'w' ? timeB : timeW;
-    myTime = clockMyAtSync;
-    oppTime = clockOppAtSync;
-    $('topTime').textContent = fmt(oppTime);
-    $('bottomTime').textContent = fmt(myTime);
-    if (!clockRunning) startClock();
-  });
-
-  socket.on('gameEnded', ({ result, reason }) => {
-    if (gameEnded) return;
-    gameEnded = true; gameActive = false;
-    let text;
-    if (result === 'draw') text = 'Ничья';
-    else if (result === myColor) text = '🏆 Победа!';
-    else text = '💀 Поражение';
-    $('status').className = 'yellow';
-    $('status').textContent = text + ' — ' + reason;
-    renderBoard();
-  });
-
-  socket.on('drawOffered', () => {
-    if (confirm('Соперник предлагает ничью. Принять?')) {
-      socket.emit('drawAccept', { lobbyId });
-    } else {
-      socket.emit('drawDecline', { lobbyId });
-    }
-  });
-  socket.on('drawDeclined', () => {
-    $('status').className = 'yellow';
-    $('status').textContent = 'Соперник отклонил ничью';
-  });
-
-  // ============== UI СОБЫТИЯ ==============
-  $('loginBtn').onclick = () => {
-    const username = $('loginName').value.trim();
-    const password = $('loginPass').value;
-    if (!username || !password) { $('loginMsg').textContent = 'Заполните поля'; return; }
-    socket.emit('register', { username, password }, (res) => {
-      if (!res || !res.ok) { $('loginMsg').textContent = res && res.msg || 'Ошибка'; return; }
-      me = res.user;
-      try { localStorage.setItem('kingside_v2', JSON.stringify({ username, password })); } catch (e) {}
-      enterLobby();
-    });
-  };
-  $('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginBtn').click(); });
-
-  function enterLobby() {
-    $('userInfo').innerHTML = '👤 <b>' + esc(me.username) + '</b> · ' + me.rating;
-    renderQuickGrid();
-    socket.emit('getBots', (list) => renderBots(list));
-    socket.emit('getLobbies', (list) => renderLobbies(list));
-    show('lobbyScreen');
-  }
-
-  $('resignBtn').onclick = () => {
-    if (!gameActive || gameEnded) return;
-    if (confirm('Сдаться?')) socket.emit('resign', { lobbyId });
-  };
-  $('drawBtn').onclick = () => {
-    if (!gameActive || gameEnded) return;
-    socket.emit('drawOffer', { lobbyId });
-    $('status').className = 'yellow';
-    $('status').textContent = 'Ничья предложена';
-  };
-  $('flipBtn').onclick = () => { flipped = !flipped; renderBoard(); };
+  // ---------- КНОПКИ ----------
+  $('resignBtn').onclick = () => { if (active && !ended && confirm('Сдаться?')) s.emit('resign', { gameId }); };
+  $('drawBtn').onclick = () => { if (active && !ended) { s.emit('drawOffer', { gameId }); $('status').className = 'y'; $('status').textContent = 'Ничья предложена'; } };
+  $('flipBtn').onclick = () => { flipped = !flipped; render(); };
   $('backBtn').onclick = () => {
-    if (gameActive && !gameEnded && !confirm('Выйти из партии?')) return;
-    if (gameActive && !gameEnded) socket.emit('resign', { lobbyId });
-    gameActive = false; gameEnded = false; lobbyId = null;
-    show('lobbyScreen');
-    socket.emit('getLobbies', (list) => renderLobbies(list));
+    if (active && !ended && !confirm('Выйти?')) return;
+    if (active && !ended) s.emit('resign', { gameId });
+    active = false; ended = false; gameId = null;
+    show('lobby');
   };
-  $('profileBackBtn').onclick = () => show('lobbyScreen');
-  $('logoutBtn').onclick = () => {
-    try { localStorage.removeItem('kingside_v2'); } catch (e) {}
-    location.reload();
-  };
-
-  $('chatForm').onsubmit = (e) => {
+  $('chatForm').onsubmit = e => {
     e.preventDefault();
-    const text = $('chatInput').value.trim();
-    if (!text || !lobbyId) return;
-    // Просто показываем локально (упрощённо)
-    addChatMsg(me.username, text);
+    const t = $('chatInput').value.trim();
+    if (!t) return;
+    addMsg(me.username, t);
     $('chatInput').value = '';
   };
-  function addChatMsg(user, text) {
-    const div = document.createElement('div');
-    div.className = 'm';
-    div.innerHTML = '<span class="u">' + esc(user) + ':</span> ' + esc(text);
-    $('chatMsgs').appendChild(div);
-    $('chatMsgs').scrollTop = $('chatMsgs').scrollHeight;
+  function addMsg(u, t) {
+    const d = document.createElement('div');
+    d.className = 'm';
+    d.innerHTML = '<span class="u">' + esc(u) + ':</span> ' + esc(t);
+    $('chatLog').appendChild(d);
+    $('chatLog').scrollTop = $('chatLog').scrollHeight;
   }
 
-  // Авто-вход
-  (function autoLogin() {
+  // ---------- АВТО-ВХОД ----------
+  (function auto() {
     try {
-      const saved = JSON.parse(localStorage.getItem('kingside_v2') || 'null');
+      const saved = JSON.parse(localStorage.getItem('kingside_lite') || 'null');
       if (saved && saved.username && saved.password) {
-        $('loginName').value = saved.username;
-        socket.emit('register', { username: saved.username, password: saved.password }, (res) => {
-          if (res && res.ok) {
-            me = res.user;
-            enterLobby();
-          }
+        $('uName').value = saved.username;
+        s.emit('register', { username: saved.username, password: saved.password }, r => {
+          if (r && r.ok) { me = r.user; enter(); }
         });
       }
     } catch (e) {}
