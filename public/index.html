@@ -945,9 +945,15 @@
   let watchingGame = null;
   let dragging = null;
   let dragStartPos = null;
-  let premove = null;           // { from, to, san }
-  let pendingPremove = null;    // отложенный премьюв для отправки
+  let premove = null;
   let rematchRequested = false;
+
+  // Локальный тикер часов — устраняет лаги
+  let clockLoopRunning = false;
+  let clockSyncedAt = 0;
+  let clockMyAtSync = 0;
+  let clockOppAtSync = 0;
+  let clockTurn = 'w';
 
   const EMOJI = { 'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙','k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟' };
 
@@ -1106,6 +1112,13 @@
   function updateTurnIndicator(state) {
     if (!state) state = parseFen(currentFen);
     const isMy = state.turn === myColor;
+    clockTurn = state.turn;
+    if (gameActive && !gameEnded) {
+      clockSyncedAt = performance.now();
+      clockMyAtSync = myTime;
+      clockOppAtSync = oppTime;
+      if (!clockLoopRunning) startClockLoop();
+    }
     document.getElementById('topStrip').classList.toggle('active', gameActive && !gameEnded && state.turn !== myColor);
     document.getElementById('bottomStrip').classList.toggle('active', gameActive && !gameEnded && state.turn === myColor);
     document.getElementById('topClock').classList.toggle('active', gameActive && !gameEnded && state.turn !== myColor);
@@ -1208,6 +1221,36 @@
     const mv = premove;
     premove = null;
     setTimeout(() => { applyUserMove(mv.from, mv.to, false); }, 50);
+  }
+
+  function startClockLoop() {
+    if (clockLoopRunning) return;
+    clockLoopRunning = true;
+    function tick() {
+      if (!gameActive || gameEnded) { clockLoopRunning = false; return; }
+      const elapsed = (performance.now() - clockSyncedAt) / 1000;
+      let m = clockMyAtSync, o = clockOppAtSync;
+      if (clockTurn === myColor) m = Math.max(0, m - elapsed);
+      else o = Math.max(0, o - elapsed);
+      myTime = m; oppTime = o;
+      const tt = document.getElementById('topTime');
+      const bt = document.getElementById('bottomTime');
+      if (tt) tt.textContent = formatTime(oppTime);
+      if (bt) bt.textContent = formatTime(myTime);
+      document.getElementById('topClock').classList.toggle('low', oppTime <= 20);
+      document.getElementById('bottomClock').classList.toggle('low', myTime <= 20);
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+  function updateTimersFromServer(timeW, timeB, serverNow, turn) {
+    clockSyncedAt = performance.now();
+    clockMyAtSync = myColor === 'w' ? timeW : timeB;
+    clockOppAtSync = myColor === 'w' ? timeB : timeW;
+    if (turn) clockTurn = turn;
+    myTime = clockMyAtSync;
+    oppTime = clockOppAtSync;
+    if (!clockLoopRunning) startClockLoop();
   }
 
   function show(screen) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); const el = document.getElementById(screen); if (el) el.classList.add('active'); }
@@ -1420,6 +1463,11 @@
     if (rematchRequested) { alert('Реванш уже предложен'); return; }
     socket.emit('rematchRequest', { lobbyId }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
+      if (res.declined) {
+        document.getElementById('statusBar').className = 'statusYellow';
+        document.getElementById('statusBar').textContent = 'Бот отклонил реванш';
+        return;
+      }
       if (res.started) {}
       else { rematchRequested = true; const btn = document.getElementById('grRematchBtn'); btn.disabled = true; btn.textContent = 'ОЖИДАНИЕ...'; }
     });
@@ -1438,7 +1486,7 @@
   }
   function resign() { if (!gameActive || gameEnded) return; if (!confirm('Точно сдаться?')) return; socket.emit('resign', { lobbyId }); endGame(myColor === 'w' ? 'b' : 'w', 'Сдача', true, currentGameIsArena); }
   window.resign = resign;
-  function offerDraw() { if (!gameActive || gameEnded) return; if (isBotGame) { alert('Бот не принимает ничью'); return; } if (pendingDrawOffer) { alert('Ничья уже предложена'); return; } socket.emit('drawOffer', { lobbyId }); pendingDrawOffer = true; document.getElementById('statusBar').className = 'statusYellow'; document.getElementById('statusBar').textContent = 'Ничья предложена. Ожидание соперника...'; }
+  function offerDraw() { if (!gameActive || gameEnded) return; if (pendingDrawOffer) { alert('Ничья уже предложена'); return; } socket.emit('drawOffer', { lobbyId }); pendingDrawOffer = true; document.getElementById('statusBar').className = 'statusYellow'; document.getElementById('statusBar').textContent = 'Ничья предложена. Ожидание соперника...'; }
   window.offerDraw = offerDraw;
   function flipBoard() { boardFlipped = !boardFlipped; lastBoardHash = ''; renderBoard(); }
   window.flipBoard = flipBoard;
@@ -2088,7 +2136,11 @@
     if (san) playMoveSound(san);
     checkGameEnd(state); tryApplyPremove();
   });
-  socket.on('timeUpdate', ({ timeW, timeB }) => { if (!gameActive) return; myTime = myColor === 'w' ? timeW : timeB; oppTime = myColor === 'w' ? timeB : timeW; updateTimers(); });
+  socket.on('timeUpdate', ({ timeW, timeB, serverNow }) => {
+    if (!gameActive || gameEnded) return;
+    const state = parseFen(currentFen);
+    updateTimersFromServer(timeW, timeB, serverNow, state.turn);
+  });
   socket.on('gameEnded', ({ result, reason, isArena, arenaId, isBot }) => {
     if (gameEnded) return;
     let winner = null; if (result === 'w') winner = 'w'; else if (result === 'b') winner = 'b';
@@ -2142,12 +2194,19 @@
   }, 5000);
   document.getElementById('password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
 
-  const BOT_LEVELS = [
-    { level: 1, name: 'BotEasy',   title: 'Лёгкий',  rating: 1000 },
-    { level: 2, name: 'BotMedium', title: 'Средний', rating: 1300 },
-    { level: 3, name: 'BotHard',   title: 'Сложный', rating: 1600 },
-    { level: 4, name: 'BotMaster', title: 'Мастер',  rating: 2000, isMaster: true }
-  ];
+  let BOT_LEVELS = [];
+  socket.on('connect', () => {
+    socket.emit('getBots', (list) => {
+      if (!Array.isArray(list)) return;
+      BOT_LEVELS = list.map(b => ({
+        level: b.level, name: b.name, title: b.title, desc: b.desc || '',
+        rating: b.rating, initialRating: b.initialRating,
+        games: b.games || 0, wins: b.wins || 0, losses: b.losses || 0, draws: b.draws || 0,
+        isMaster: b.level === 4
+      }));
+    });
+  });
+
   const BOT_TIMES = [
     { t: 1,  i: 0,  label: '1+0' },
     { t: 3,  i: 0,  label: '3+0' },
@@ -2157,11 +2216,22 @@
     { t: 30, i: 0,  label: '30+0' }
   ];
   let botDialogState = { level: 2, time: 5, inc: 0 };
+
   function openBotDialog() {
     const dlg = document.getElementById('botDialog');
     if (!dlg) return;
-    renderBotDialogContents();
-    dlg.classList.add('show');
+    socket.emit('getBots', (list) => {
+      if (Array.isArray(list)) {
+        BOT_LEVELS = list.map(b => ({
+          level: b.level, name: b.name, title: b.title, desc: b.desc || '',
+          rating: b.rating, initialRating: b.initialRating,
+          games: b.games || 0, wins: b.wins || 0, losses: b.losses || 0, draws: b.draws || 0,
+          isMaster: b.level === 4
+        }));
+      }
+      renderBotDialogContents();
+      dlg.classList.add('show');
+    });
   }
   window.openBotDialog = openBotDialog;
   function closeBotDialog() { const dlg = document.getElementById('botDialog'); if (dlg) dlg.classList.remove('show'); }
@@ -2170,11 +2240,32 @@
     const levelsEl = document.getElementById('botLevels');
     const timesEl = document.getElementById('botTimes');
     if (!levelsEl || !timesEl) return;
+    if (!BOT_LEVELS.length) {
+      socket.emit('getBots', (list) => {
+        if (Array.isArray(list)) {
+          BOT_LEVELS = list.map(b => ({
+            level: b.level, name: b.name, title: b.title, desc: b.desc || '',
+            rating: b.rating, initialRating: b.initialRating,
+            games: b.games || 0, wins: b.wins || 0, losses: b.losses || 0, draws: b.draws || 0,
+            isMaster: b.level === 4
+          }));
+          renderBotDialogContents();
+        }
+      });
+      return;
+    }
     levelsEl.innerHTML = BOT_LEVELS.map(l => {
       const active = botDialogState.level === l.level;
       const cls = active ? 'active' : '';
       const extra = l.isMaster ? 'masterBtn' : '';
-      return `<button data-level="${l.level}" class="${cls} ${extra}"><div class="btitle">${l.title}</div><div class="brating">${l.rating}</div></button>`;
+      const delta = l.rating - l.initialRating;
+      const deltaStr = (delta !== 0 && l.games > 0)
+        ? ` <span style="font-size:10px;color:${delta > 0 ? '#6ee787' : '#ff7b7b'}">(${delta > 0 ? '+' : ''}${delta})</span>`
+        : '';
+      return `<button data-level="${l.level}" class="${cls} ${extra}">
+        <div class="btitle">${l.title}${deltaStr}</div>
+        <div class="brating">${l.rating}${l.games ? ` · ${l.games} партий` : ''}</div>
+      </button>`;
     }).join('');
     timesEl.innerHTML = BOT_TIMES.map(t => {
       const active = botDialogState.time === t.t && botDialogState.inc === t.i;
