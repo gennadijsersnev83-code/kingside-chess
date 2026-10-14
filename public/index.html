@@ -1,4 +1,3 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -155,7 +154,7 @@
   .arenaBlock .tinfo { font-size:10px; opacity:.9; line-height:1.1; display:flex; justify-content:space-between; gap:6px; white-space:nowrap; overflow:hidden; }
   .arenaBlock.past { opacity:.35; cursor:pointer; filter:saturate(.5); }
   .arenaBlock.past:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.4); filter:saturate(.5) brightness(1.08); }
-  .arenaBlock.live .tname::before { content:'● '; animation:pulse 1.5s infinite; }
+  .arenaBlock.live .tname::before { content:'⚡ '; animation:pulse 1.5s infinite; }
   .arenaBlock.live { box-shadow:0 0 0 2px rgba(255,255,255,.3), 0 0 12px rgba(255,200,80,.35); }
   .arenaBlock.joined { outline:2px solid #fff; outline-offset:-2px; }
   .arenaBlock.botFriendly { box-shadow:0 0 0 2px rgba(160,140,255,.5); }
@@ -857,13 +856,11 @@
   let premove = null;
   let rematchRequested = false;
 
-  // Оптимизированный тикер часов
   let clockLoopRunning = false;
   let clockSyncedAt = 0;
   let clockMyAtSync = 0;
   let clockOppAtSync = 0;
   let clockTurn = 'w';
-  let clockHandle = null;
 
   const EMOJI = { 'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙','k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟' };
 
@@ -989,7 +986,7 @@
     const hash = fenToShow + '|' + (selected ? selected.join(',') : '') + '|' + viewIndex + '|' +
       (lastMove ? lastMove.from.join(',') + lastMove.to.join(',') : '') + '|' + myColor + '|' + boardFlipped +
       '|' + legalMoves.map(m => m.join(',')).join(';') + '|' +
-      (premove ? premove.from.join(',') + '>' + premove.to.join(',') : '');
+      (premove ? premove.from.join(',') + '>' + premove.to.join(',') : '') + '|' + (dragging ? 'drag' : '');
     if (hash === lastBoardHash) return;
     lastBoardHash = hash;
     const state = parseFen(fenToShow);
@@ -997,9 +994,6 @@
     boardEl.innerHTML = '';
     const flip = (myColor === 'b') !== boardFlipped;
     const interactive = gameActive && !gameEnded && viewIndex === -1;
-    const turnWhite = state.turn === 'w';
-    const inCheckNow = inCheck(state, turnWhite);
-    const kingPos = inCheckNow ? findKing(state, turnWhite) : null;
     for (let dr = 0; dr < 8; dr++) {
       for (let dc = 0; dc < 8; dc++) {
         const r = flip ? 7 - dr : dr;
@@ -1008,12 +1002,13 @@
         sq.className = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
         sq.dataset.r = r; sq.dataset.c = c;
         if (lastMove && viewIndex === -1) { if ((lastMove.from[0] === r && lastMove.from[1] === c) || (lastMove.to[0] === r && lastMove.to[1] === c)) sq.classList.add('lastmove'); }
-        if (kingPos && kingPos[0] === r && kingPos[1] === c) sq.classList.add('check');
+        const isWhiteTurn = state.turn === 'w';
+        if (inCheck(state, isWhiteTurn)) { const k = findKing(state, isWhiteTurn); if (k && k[0] === r && k[1] === c) sq.classList.add('check'); }
         if (selected && selected[0] === r && selected[1] === c) sq.classList.add('sel');
         if (interactive) { const isLegal = legalMoves.some(([mr, mc]) => mr === r && mc === c); if (isLegal) { sq.classList.add('hint'); if (state.board[r][c]) sq.classList.add('capture'); } }
         if (premove) { if (premove.to[0] === r && premove.to[1] === c) sq.classList.add('premove-target'); if (premove.from[0] === r && premove.from[1] === c) sq.classList.add('premove-from'); }
         const p = state.board[r][c];
-        if (p) { const piece = document.createElement('span'); piece.className = 'piece ' + (isWhitePiece(p) ? 'w' : 'b'); piece.textContent = EMOJI[p]; sq.appendChild(piece); }
+        if (p) { const piece = document.createElement('span'); piece.className = 'piece ' + (isWhitePiece(p) ? 'w' : 'b'); piece.textContent = EMOJI[p]; if (dragging && dragging.from[0] === r && dragging.from[1] === c) piece.classList.add('dragging'); sq.appendChild(piece); }
         if (dr === 7) { const e = document.createElement('span'); e.className='coord-f'; e.textContent = String.fromCharCode(97 + c); sq.appendChild(e); }
         if (dc === 0) { const e = document.createElement('span'); e.className='coord-r'; e.textContent = 8 - r; sq.appendChild(e); }
         boardEl.appendChild(sq);
@@ -1037,7 +1032,7 @@
     document.getElementById('bottomClock').classList.toggle('active', gameActive && !gameEnded && state.turn === myColor);
     const bar = document.getElementById('statusBar');
     if (gameEnded) { bar.className = 'statusYellow'; bar.textContent = 'Партия завершена'; }
-    else if (gameActive) { const who = state.turn === 'w' ? 'Белые' : 'Чёрные'; bar.className = 'statusGreen'; let txt = `${who} — ${isMy ? 'ваш ход' : 'ход соперника'}`; if (premove) txt += ' · премьюв'; bar.textContent = txt; }
+    else if (gameActive) { const who = state.turn === 'w' ? 'Белые' : 'Чёрные'; bar.className = 'statusGreen'; let txt = `${who} — ${isMy ? 'ваш ход' : 'ход соперника'}`; if (premove) txt += ' · премьов'; bar.textContent = txt; }
   }
   function boardSquareFromEvent(ev) { const el = document.elementFromPoint(ev.clientX, ev.clientY); if (!el) return null; const sq = el.closest ? el.closest('.sq') : null; if (!sq || sq.dataset.r == null) return null; return [ +sq.dataset.r, +sq.dataset.c ]; }
   function applyUserMove(from, to, isPremove) {
@@ -1138,24 +1133,22 @@
   function startClockLoop() {
     if (clockLoopRunning) return;
     clockLoopRunning = true;
-    const tt = document.getElementById('topTime');
-    const bt = document.getElementById('bottomTime');
-    const tc = document.getElementById('topClock');
-    const bc = document.getElementById('bottomClock');
     function tick() {
-      if (!gameActive || gameEnded) { clockLoopRunning = false; clockHandle = null; return; }
+      if (!gameActive || gameEnded) { clockLoopRunning = false; return; }
       const elapsed = (performance.now() - clockSyncedAt) / 1000;
       let m = clockMyAtSync, o = clockOppAtSync;
       if (clockTurn === myColor) m = Math.max(0, m - elapsed);
       else o = Math.max(0, o - elapsed);
       myTime = m; oppTime = o;
+      const tt = document.getElementById('topTime');
+      const bt = document.getElementById('bottomTime');
       if (tt) tt.textContent = formatTime(oppTime);
       if (bt) bt.textContent = formatTime(myTime);
-      if (tc) tc.classList.toggle('low', oppTime <= 20);
-      if (bc) bc.classList.toggle('low', myTime <= 20);
-      clockHandle = setTimeout(tick, 200);
+      document.getElementById('topClock').classList.toggle('low', oppTime <= 20);
+      document.getElementById('bottomClock').classList.toggle('low', myTime <= 20);
+      requestAnimationFrame(tick);
     }
-    tick();
+    requestAnimationFrame(tick);
   }
   function updateTimersFromServer(timeW, timeB, serverNow, turn) {
     clockSyncedAt = performance.now();
@@ -1280,7 +1273,7 @@
           row.innerHTML = `<div class="icon">⚔</div><div class="name">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod)}</div><div class="time">${l.time}+${l.inc}</div><div class="mode" style="color:var(--green-2);font-weight:600;">партия началась</div><div class="action"></div>`;
         } else {
           row.style.cursor = isMine ? 'pointer' : 'default';
-          row.innerHTML = `<div class="icon">♟</div><div class="name">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod)}${isMine ? '<span class="mineTag">(ваш вызов)</span>' : ''}</div><div class="time">${l.time}+${l.inc}</div><div class="mode">ожидание</div><div class="action"></div>`;
+          row.innerHTML = `<div class="icon">${l.isBot ? '🤖' : '♟'}</div><div class="name">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod, l.isBot)}${isMine ? '<span class="mineTag">(ваш вызов)</span>' : ''}</div><div class="time">${l.time}+${l.inc}</div><div class="mode">ожидание</div><div class="action"></div>`;
           if (!isMine) {
             const btn = document.createElement('button'); btn.className = 'primary'; btn.textContent = 'Играть';
             btn.onclick = (e) => { e.stopPropagation(); socket.emit('joinLobby', { id: l.id }, (r) => { if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; } lobbyId = r.id || l.id; }); };
@@ -1447,7 +1440,7 @@
     menu.className = 'modMenu';
     menu.style.left = Math.min(window.innerWidth - 210, Math.max(8, rect.left - 60)) + 'px';
     menu.style.top = Math.min(window.innerHeight - 320, rect.bottom + 4) + 'px';
-    menu.innerHTML = `<div class="lbl">Сообщение</div><button data-act="del">🗑 Удалить сообщение</button><div class="sep"></div><div class="lbl">Игрок: ${escapeHtml(username)}</div><button data-act="mute" data-min="5">🔇 Мут 5 минут</button><button data-act="mute" data-min="30">🔇 Мут 30 минут</button><button data-act="mute" data-min="60">🔇 Мут 1 час</button><button data-act="mute" data-min="1440">🔇 Мут 1 сутки</button><button data-act="unmute">🔊 Снять мут</button>`;
+    menu.innerHTML = `<div class="lbl">Сообщение</div><button data-act="del">🗑 – Удалить сообщение</button><div class="sep"></div><div class="lbl">Игрок: ${escapeHtml(username)}</div><button data-act="mute" data-min="5">🔇 – Мут 5 минут</button><button data-act="mute" data-min="30">🔇 – Мут 30 минут</button><button data-act="mute" data-min="60">🔇 – Мут 1 час</button><button data-act="mute" data-min="1440">🔇 – Мут 1 сутки</button><button data-act="unmute">🔊 – Снять мут</button>`;
     document.body.appendChild(menu); modMenuEl = menu;
     menu.addEventListener('click', (e) => {
       const act = e.target.dataset.act;
@@ -1505,7 +1498,7 @@
       squares += `<div class="${cls}">${inner}${coords}</div>`;
     }
     box.innerHTML = `
-      <div class="wbHeader"><div><div class="wbTitle">Партия ${g.isArena ? 'турнира' : ''}</div><div class="wbSub">${g.timeControl}+${g.increment}${g.arenaName ? ' · '+escapeHtml(g.arenaName) : ''}</div></div><button class="secondary" onclick="stopWatching()">✕ Выйти</button></div>
+      <div class="wbHeader"><div><div class="wbTitle">Партия ${g.isArena ? 'турнира' : ''}</div><div class="wbSub">${g.timeControl}+${g.increment}${g.arenaName ? ' · '+escapeHtml(g.arenaName) : ''}</div></div><button class="secondary" onclick="stopWatching()">✕ – Выйти</button></div>
       <div class="wbPlayers">
         <div class="wbPlayer ${blackActive?'active':''}"><span><span class="name">⚫ ${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}</span><span class="time">${formatTime(g.timeB)}</span></div>
         <div class="wbPlayer ${whiteActive?'active':''}"><span><span class="name">⚪ ${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}</span><span class="time">${formatTime(g.timeW)}</span></div>
@@ -1530,12 +1523,12 @@
     const onlinePrefix = onlineDotHtml(user.online);
     document.getElementById('pName').innerHTML = onlinePrefix + nickHtml(user.username, user.isAdmin, user.isMod, user.isBot);
     const badges = [];
-    if (user.isBot) badges.push('<span class="botBadge">🤖 Бот</span>');
-    if (user.role === 'admin') badges.push('<span class="roleBadge admin">👑 Админ</span>');
-    if (user.role === 'moderator') badges.push('<span class="roleBadge mod">🛡 Модератор</span>');
-    if (user.isDev) badges.push('<span class="roleBadge dev">⚙ Разраб</span>');
-    if (user.mutedUntil && user.mutedUntil > Date.now()) { const mins = Math.ceil((user.mutedUntil - Date.now())/60000); badges.push(`<span class="muteBadge">🔇 Мут ${mins} мин</span>`); }
-    if (user.online) badges.push('<span class="roleBadge" style="color:var(--green-2)">● В сети</span>');
+    if (user.isBot) badges.push('<span class="botBadge">🤖 – Бот</span>');
+    if (user.role === 'admin') badges.push('<span class="roleBadge admin">👑 – Админ</span>');
+    if (user.role === 'moderator') badges.push('<span class="roleBadge mod">🛡 – Модератор</span>');
+    if (user.isDev) badges.push('<span class="roleBadge dev">⚙ – Разраб</span>');
+    if (user.mutedUntil && user.mutedUntil > Date.now()) { const mins = Math.ceil((user.mutedUntil - Date.now())/60000); badges.push(`<span class="muteBadge">🔇 – Мут ${mins} мин</span>`); }
+    if (user.online) badges.push('<span class="roleBadge" style="color:var(--green-2)">● – В сети</span>');
     document.getElementById('pRoleBadges').innerHTML = badges.join(' ');
     const date = new Date(user.createdAt);
     document.getElementById('pSub').textContent = `На сайте с ${date.toLocaleDateString('ru-RU')} · ${user.games} партий`;
@@ -1819,13 +1812,13 @@
     const wrap = document.getElementById('arenaJoinBtnWrap');
     if (state.phase === 'finished') { wrap.innerHTML = `<button class="secondary" disabled style="width:180px;">ЗАТЕРШЕНА</button>`; return; }
     if (state.phase === 'waiting') { if (state.joined) wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="leaveCurrentArena()">ОТМЕНИТЬ</button>`; else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="joinCurrentArena()">УЧАСТВОВАТЬ</button>`; return; }
-    if (state.joined) { if (state.paused) wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="pauseCurrentArena()">▶ ИГРАТЬ</button>`; else wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="pauseCurrentArena()">⏸ ПАУЗА</button>`; } else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="joinCurrentArena()">УЧАСТВОВАТЬ</button>`;
+    if (state.joined) { if (state.paused) wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="pauseCurrentArena()">▶ – ИГРАТЬ</button>`; else wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="pauseCurrentArena()">⏸ – ПАУЗА</button>`; } else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="joinCurrentArena()">УЧАСТВОВАТЬ</button>`;
   }
   function renderArenaPairingBox(state) {
     const box = document.getElementById('arenaPairingBox'); if (!box) return;
     if (state.phase !== 'live') { box.style.display = 'none'; return; }
     if (!state.joined) { box.style.display = 'flex'; box.classList.remove('searching'); box.innerHTML = `<span>Нажмите «УЧАСТВОВАТЬ» для жеребьёвки.</span>`; return; }
-    if (state.paused) { box.style.display = 'flex'; box.classList.remove('searching'); box.innerHTML = `<span>⏸ Вы на паузе.</span>`; return; }
+    if (state.paused) { box.style.display = 'flex'; box.classList.remove('searching'); box.innerHTML = `<span>⏸ – Вы на паузе.</span>`; return; }
     if (state.pairingNow) { box.style.display = 'flex'; box.classList.add('searching'); box.innerHTML = `<div class="spinner"></div><span>Идёт жеребьёвка: <b>${escapeHtml(state.pairingNow)}</b></span>`; return; }
     box.style.display = 'flex'; box.classList.add('searching');
     box.innerHTML = `<div class="spinner"></div><span>Ожидайте, идёт жеребьёвка…</span>`;
@@ -1882,7 +1875,7 @@
     const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
     const wR = g.whiteRating ? `<span class="prat">${g.whiteRating}</span>` : '';
     const bR = g.blackRating ? `<span class="prat">${g.blackRating}</span>` : '';
-    return `<div class="arenaTopGamePlayers"><span class="playerRow">⚫ <span class="name">${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span><span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${formatTime(g.timeB)}</span></div><div class="arenaTopGameBoard">${squares}</div><div class="arenaTopGamePlayers"><span class="playerRow">⚪ <span class="name">${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${formatTime(g.timeW)}</span></div><div class="arenaTopGameLink">▶ Смотреть партию</div>`;
+    return `<div class="arenaTopGamePlayers"><span class="playerRow">⚫ <span class="name">${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span><span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${formatTime(g.timeB)}</span></div><div class="arenaTopGameBoard">${squares}</div><div class="arenaTopGamePlayers"><span class="playerRow">⚪ <span class="name">${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${formatTime(g.timeW)}</span></div><div class="arenaTopGameLink">▶ – Смотреть партию</div>`;
   }
   function showArenaWinnerBanner(top3) {
     const banner = document.getElementById('arenaWinnerBanner'), podium = document.getElementById('awbPodium');
