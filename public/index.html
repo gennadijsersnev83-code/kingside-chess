@@ -2,1234 +2,1784 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>lichess.org · бесплатные шахматы онлайн</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>KingSide — Шахматы онлайн</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23161512'/%3E%3Ctext x='50%25' y='56%25' font-size='46' text-anchor='middle' dominant-baseline='middle' fill='%23bf811d' font-family='serif'%3E%E2%99%94%3C/text%3E%3C/svg%3E">
 <style>
-  /* ============ ОБЩЕЕ ============ */
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  * { box-sizing: border-box; }
   :root {
-    --bg: #161512;
-    --bg-header: #262421;
-    --bg-panel: #262421;
-    --bg-hover: #302e2c;
-    --bg-active: #3d3a37;
-    --border: #3d3a37;
-    --text: #bfbdb6;
-    --text-bright: #e8e6e3;
-    --muted: #7d7a72;
-    --accent: #bf811d;
-    --accent-2: #d99c33;
-    --link: #bf811d;
-    --green: #629924;
-    --red: #a53030;
-    --light-sq: #f0d9b5;
-    --dark-sq: #b58863;
-    --yellow: #cdd26a;
+    --bg:#161512; --bg-2:#1f1e1b; --panel:#262522; --panel-2:#2d2c29;
+    --panel-hover:#34322e; --border:#3a3833;
+    --text:#bfbdb6; --text-bright:#e8e6e3; --muted:#7d7a72;
+    --accent:#bf811d; --accent-2:#d99c33;
+    --green:#629924; --green-2:#7dbe30; --red:#a53030;
+    --light-sq:#e8d9b8; --dark-sq:#8b6f47; --yellow-sq:#f7ec74;
+    --gold:#ffd54f;
   }
-  html, body { height: 100%; }
+  html,body { height:100%; margin:0; }
   body {
-    font-family: "Noto Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.4;
-    min-height: 100vh;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:var(--bg); color:var(--text); min-height:100vh;
+    overflow-x:hidden; font-size:14px;
   }
-  a { color: var(--link); text-decoration: none; }
-  a:hover { color: var(--accent-2); }
-  button { font-family: inherit; cursor: pointer; }
-  input { font-family: inherit; }
+  header.topbar {
+    background:#262421; display:flex; align-items:center;
+    padding:0 12px; height:50px; border-bottom:1px solid #1a1918;
+    position:sticky; top:0; z-index:50; gap:4px;
+  }
+  header.topbar .logo {
+    font-weight:700; font-size:19px; color:#e8e6e3;
+    padding-right:14px; cursor:pointer; white-space:nowrap;
+    display:flex; align-items:center; gap:6px;
+  }
+  header.topbar .logo .mark { color:var(--accent); font-size:22px; }
+  header.topbar nav {
+    display:flex; gap:2px; flex:1; min-width:0;
+    overflow-x:auto; scrollbar-width:none;
+  }
+  header.topbar nav::-webkit-scrollbar { display:none; }
+  header.topbar nav a {
+    color:#bfbdb6; text-decoration:none;
+    padding:14px 12px; font-size:13px; font-weight:600;
+    text-transform:uppercase; letter-spacing:.4px;
+    border-bottom:2px solid transparent;
+    white-space:nowrap; cursor:pointer;
+  }
+  header.topbar nav a:hover { color:#fff; background:#2f2d29; }
+  header.topbar nav a.active { color:var(--accent); border-bottom-color:var(--accent); }
+  header.topbar .right { display:flex; align-items:center; gap:6px; }
+  header.topbar .userBtn {
+    background:transparent; border:none; color:#e8e6e3;
+    padding:6px 8px; border-radius:4px; cursor:pointer;
+    font-size:13px; display:flex; align-items:center;
+    gap:6px; min-height:32px; white-space:nowrap;
+  }
+  header.topbar .userBtn:hover { background:#34322e; }
+  header.topbar .userBtn .avatar {
+    width:22px; height:22px; border-radius:50%;
+    background:var(--accent); color:#161512;
+    display:flex; align-items:center; justify-content:center;
+    font-size:12px; font-weight:700;
+  }
+  .crown { color:var(--gold); margin-right:2px; }
+  .onlineDot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#629924; margin-right:5px; vertical-align:middle; }
+  .offlineDot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#555; margin-right:5px; vertical-align:middle; }
+  .backToGameBtn {
+    background:var(--green); border:none; color:#fff;
+    padding:6px 12px; border-radius:4px; cursor:pointer;
+    font-size:12px; font-weight:700;
+    display:none; align-items:center; gap:6px;
+  }
+  .backToGameBtn.show { display:flex; }
+  main { max-width:1240px; margin:0 auto; padding:20px 16px; }
+  .screen { display:none; }
+  .screen.active { display:block; }
+  input,button,select {
+    padding:9px 12px; border-radius:4px;
+    border:1px solid var(--border);
+    background:var(--panel-2); color:var(--text-bright);
+    font-size:14px; font-family:inherit; outline:none; transition:.15s;
+  }
+  input:focus,select:focus { border-color:var(--accent); }
+  button { cursor:pointer; min-height:36px; }
+  button:hover { background:var(--panel-hover); }
+  button.primary { background:var(--green); border:none; color:#fff; font-weight:700; }
+  button.primary:hover { background:var(--green-2); }
+  button.danger { background:var(--red); border:none; color:#fff; }
+  button.secondary { background:var(--panel-2); border:1px solid var(--border); }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:12px 0; }
 
-  /* ============ ШАПКА ============ */
-  header {
-    background: var(--bg-header);
-    border-bottom: 1px solid var(--border);
-    height: 50px;
-    display: flex; align-items: center;
-    padding: 0 12px;
-    position: sticky; top: 0; z-index: 100;
-  }
-  header .logo {
-    font-size: 24px; font-weight: bold; color: var(--text-bright);
-    letter-spacing: -.5px; margin-right: 16px;
-  }
-  header .logo .org { color: var(--muted); font-weight: normal; }
-  header nav {
-    display: flex; align-items: center; height: 100%;
-    flex: 1;
-  }
-  header nav a {
-    color: var(--text); text-decoration: none;
-    padding: 0 12px; height: 100%;
-    display: flex; align-items: center;
-    font-size: 12px; font-weight: 500;
-    text-transform: uppercase; letter-spacing: .5px;
-    border-bottom: 2px solid transparent;
-  }
-  header nav a:hover { color: var(--text-bright); background: var(--bg-hover); }
-  header nav a.donate { color: var(--accent); }
-  header nav a.donate:hover { color: var(--accent-2); }
-  header .right {
-    display: flex; align-items: center; gap: 4px;
-  }
-  header .right .iconBtn {
-    background: transparent; border: none; color: var(--text);
-    width: 36px; height: 36px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 16px; cursor: pointer;
-  }
-  header .right .iconBtn:hover { background: var(--bg-hover); color: var(--text-bright); }
-  header .right .userBtn {
-    background: transparent; border: none; color: var(--text-bright);
-    padding: 4px 8px; border-radius: 4px; display: flex; align-items: center; gap: 6px;
-    font-size: 14px;
-  }
-  header .right .userBtn:hover { background: var(--bg-hover); }
-  header .right .userBtn .avatar {
-    width: 24px; height: 24px; border-radius: 50%;
-    background: var(--accent); color: #161512;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 12px; font-weight: bold;
-  }
+  #loginScreen { max-width:420px; margin:60px auto; }
+  #loginScreen h2 { color:var(--text-bright); font-weight:400; font-size:22px; margin:0 0 20px; text-align:center; }
+  #loginMsg { color:#e58a8a; min-height:20px; text-align:center; font-size:13px; }
+  .hint-text { color:var(--muted); font-size:12px; text-align:center; }
 
-  /* ============ ОСНОВНАЯ СЕТКА ============ */
-  main {
-    max-width: 1180px; margin: 0 auto;
-    padding: 16px;
-    display: grid;
-    grid-template-columns: 280px 1fr 280px;
-    gap: 20px;
-    align-items: start;
+  .homeWrap { display:grid; grid-template-columns:300px 1fr 300px; gap:20px; max-width:1200px; margin:0 auto; align-items:start; }
+  @media (max-width:1050px) { .homeWrap { grid-template-columns:1fr; } }
+  .homeLeft,.homeRight { display:flex; flex-direction:column; gap:14px; }
+  .sideTitle { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; margin-bottom:8px; }
+  .panel { background:var(--panel); border:1px solid var(--border); border-radius:5px; overflow:hidden; }
+  .panel .ph { background:var(--panel-2); padding:10px 14px; border-bottom:1px solid var(--border); font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
+  .panel .pb { padding:12px 14px; }
+  .topArenaCard { background:var(--panel); border:1px solid var(--border); border-left:4px solid var(--accent); border-radius:4px; padding:10px 12px; cursor:pointer; transition:.15s; min-height:54px; margin-bottom:6px; }
+  .topArenaCard:hover { background:var(--panel-hover); }
+  .topArenaCard .taName { color:var(--text-bright); font-weight:600; font-size:13px; margin-bottom:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .topArenaCard .taInfo { display:flex; justify-content:space-between; font-size:12px; color:var(--muted); }
+  .topArenaCard.live { border-left-color:var(--green-2); }
+  .topArenaCard.live .taInfo b { color:var(--green-2); }
+  .lobbyActions { display:flex; flex-direction:column; gap:8px; }
+  .lobbyActionBtn {
+    display:flex; align-items:center; gap:10px;
+    background:var(--panel); border:1px solid var(--border);
+    border-radius:4px; padding:12px 14px;
+    color:var(--text-bright); cursor:pointer;
+    text-align:left; font-size:13px; font-weight:600;
+    transition:.15s; min-height:52px;
   }
-  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+  .lobbyActionBtn:hover { background:var(--panel-hover); border-color:var(--accent); }
+  .lobbyActionBtn .laIcon { font-size:20px; flex-shrink:0; }
+  .lobbyActionBtn .laTitle { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lobbyActionBtn.botBtn { background:linear-gradient(180deg,#3a2f6e,#25204a); border-color:#6f5fbf; }
+  .lobbyActionBtn.challengeBtn { background:linear-gradient(180deg,#3a2f1c,#26200f); border-color:var(--accent); }
+  .statsBox { background:var(--panel); border:1px solid var(--border); border-radius:4px; padding:12px 14px; }
+  .statsBox .statRow { display:flex; justify-content:space-between; align-items:baseline; padding:6px 0; border-bottom:1px solid rgba(58,56,51,.4); min-height:30px; }
+  .statsBox .statRow:last-child { border-bottom:none; }
+  .statsBox .statRow .lbl { color:var(--muted); font-size:12px; }
+  .statsBox .statRow .val { color:var(--accent); font-weight:700; font-size:16px; }
+  .statsBox .statRow.live .val { color:var(--green-2); }
 
-  /* ============ ЛЕВАЯ КОЛОНКА ============ */
-  .leftCol { display: flex; flex-direction: column; gap: 16px; }
+  .lobbyCenter { background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+  .lobbyCenter .tabs { display:flex; background:var(--panel-2); border-bottom:1px solid var(--border); }
+  .lobbyCenter .tabs button {
+    flex:1; background:transparent; border:none; border-radius:0;
+    color:var(--muted); padding:14px 12px; font-weight:600;
+    text-transform:uppercase; font-size:12px; letter-spacing:.5px;
+    border-bottom:2px solid transparent; cursor:pointer;
+  }
+  .lobbyCenter .tabs button.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .lobbyContent { padding:16px; min-height:400px; }
 
-  .arenaCard {
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-left: 4px solid var(--accent);
-    border-radius: 4px;
-    padding: 12px 14px;
-    cursor: pointer;
+  .quickGrid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+  @media (max-width:560px) { .quickGrid { grid-template-columns:repeat(2,1fr); } }
+  .quickBtn {
+    background:var(--panel-2); border:1px solid var(--border);
+    border-radius:4px; padding:18px 8px; color:var(--text-bright);
+    cursor:pointer; transition:.15s; text-align:center;
+    display:flex; flex-direction:column; align-items:center;
+    justify-content:center; gap:6px; height:92px;
   }
-  .arenaCard:hover { background: var(--bg-hover); }
-  .arenaCard .acHead { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
-  .arenaCard .acIcon { font-size: 20px; color: var(--accent); }
-  .arenaCard .acName { color: var(--text-bright); font-weight: 600; font-size: 14px; }
-  .arenaCard .acSub { color: var(--muted); font-size: 12px; margin-left: 28px; }
+  .quickBtn:hover { background:var(--panel-hover); border-color:var(--accent); transform:translateY(-1px); }
+  .quickBtn .qb-time { font-size:26px; font-weight:300; }
+  .quickBtn .qb-name { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
+  .quickBtn.custom .qb-time { font-size:20px; color:var(--accent); }
 
-  .events { display: flex; flex-direction: column; gap: 12px; }
-  .event {
-    display: flex; gap: 10px; align-items: flex-start;
-    font-size: 13px; color: var(--text);
-    line-height: 1.35;
+  .lobbyList { display:flex; flex-direction:column; gap:6px; }
+  .lobbyRow {
+    display:grid; grid-template-columns:28px 1fr 80px 90px 90px;
+    gap:10px; padding:10px 14px; align-items:center;
+    background:var(--panel-2); border-radius:4px;
+    border:1px solid var(--border); font-size:13px;
+    transition:.15s; min-height:48px;
   }
-  .event .evAv {
-    width: 32px; height: 32px; border-radius: 4px;
-    background: var(--bg-panel); border: 1px solid var(--border);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 16px; color: var(--accent); flex-shrink: 0;
-  }
-  .event .evText { flex: 1; }
-  .event .evText b { color: var(--text-bright); font-weight: 600; }
-  .event .evText .evTime { color: var(--muted); font-size: 12px; }
-  .event .evText a { color: var(--accent); }
-  .events .moreLink {
-    color: var(--accent); font-size: 13px; text-align: right;
-    cursor: pointer; margin-top: 4px;
-  }
+  .lobbyRow.mine { border-color:var(--accent); background:rgba(191,129,29,.08); }
+  .lobbyRow .icon { font-size:18px; text-align:center; }
+  .lobbyRow .name { color:var(--text-bright); font-weight:500; }
+  .lobbyRow .name .mineTag { color:var(--accent); font-size:11px; margin-left:6px; }
+  .lobbyRow .time { font-family:monospace; text-align:center; color:var(--text-bright); }
+  .lobbyRow .mode { font-size:12px; color:var(--muted); text-align:center; }
+  .lobbyRow .action { text-align:right; }
+  .lobbyRow .action button { padding:6px 14px; font-size:13px; min-width:80px; }
+  .arenaEmpty { padding:40px 20px; text-align:center; color:var(--muted); font-size:13px; }
 
-  /* ============ ЦЕНТР ============ */
-  .centerCol { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+  .watchWrap { display:grid; grid-template-columns:320px 1fr; gap:16px; max-width:1100px; margin:0 auto; align-items:start; }
+  @media (max-width:900px) { .watchWrap { grid-template-columns:1fr; } }
+  .watchList { background:var(--panel); border:1px solid var(--border); border-radius:4px; overflow:hidden; }
+  .watchListHeader { padding:12px 14px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; display:flex; justify-content:space-between; align-items:center; }
+  .watchListBody { padding:8px; max-height:600px; overflow-y:auto; }
+  .watchRow { background:var(--panel-2); border-radius:4px; padding:10px 12px; margin-bottom:6px; cursor:pointer; border-left:3px solid var(--accent); transition:.15s; }
+  .watchRow:hover { background:var(--panel-hover); transform:translateX(2px); }
+  .watchRow.isArena { border-left-color:var(--green-2); }
+  .watchRow .wrPlayers { display:flex; justify-content:space-between; font-size:13px; color:var(--text-bright); font-weight:500; margin-bottom:4px; }
+  .watchRow .wrPlayers .prat { color:var(--muted); font-weight:400; font-size:11px; margin-left:6px; }
+  .watchRow .wrMeta { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); }
+  .watchBoard { background:var(--panel); border:1px solid var(--border); border-radius:4px; padding:16px; min-height:500px; }
+  .watchBoard .wbHeader { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid var(--border); }
+  .watchBoard .wbPlayers { display:flex; flex-direction:column; gap:6px; margin-bottom:12px; }
+  .watchBoard .wbPlayer { display:flex; justify-content:space-between; align-items:center; padding:6px 10px; border-radius:3px; background:var(--panel-2); font-size:13px; }
+  .watchBoard .wbPlayer.active { border:1px solid var(--green); }
+  .watchBoard .wbPlayer .name { color:var(--text-bright); font-weight:600; }
+  .watchBoard .wbPlayer .time { font-family:monospace; font-size:18px; font-weight:700; }
+  .watchBoard .wbBoardWrap { width:100%; aspect-ratio:1/1; max-width:480px; margin:0 auto 12px; }
+  .watchBoard .wbBoard { display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); width:100%; height:100%; border:3px solid #0a0a0a; border-radius:3px; overflow:hidden; }
+  .watchBoard .wbEmpty { padding:80px 20px; text-align:center; color:var(--muted); font-size:14px; }
 
-  .tabs {
-    display: flex;
-    background: var(--bg-panel);
-    border-bottom: 1px solid var(--border);
+  .arenasHeader { display:flex; justify-content:space-between; align-items:center; margin:0 0 16px 0; gap:12px; flex-wrap:wrap; }
+  .arenasHeader h1 { font-weight:300; font-size:32px; color:var(--text-bright); margin:0; }
+  .arenasGridWrap { background:var(--panel); border:1px solid var(--border); border-radius:4px; overflow:hidden; }
+  .arenasEmpty { padding:60px 20px; text-align:center; color:var(--muted); font-size:14px; }
+  .arenasScroller { overflow-x:auto; overflow-y:hidden; position:relative; }
+  .timeRow { display:flex; border-bottom:1px solid var(--border); background:var(--panel-2); position:sticky; top:0; z-index:2; height:32px; }
+  .timeCell { color:var(--muted); font-size:11px; flex-shrink:0; border-right:1px solid rgba(58,56,51,.5); display:flex; align-items:center; padding-left:6px; }
+  .timeCell.now { color:var(--accent); font-weight:700; background:rgba(191,129,29,.08); }
+  .arenaRowGrid { position:relative; height:52px; border-bottom:1px solid rgba(58,56,51,.35); }
+  .arenaBlock {
+    position:absolute; top:4px; bottom:4px; border-radius:5px;
+    padding:4px 8px; color:#fff; cursor:pointer;
+    display:flex; flex-direction:column; justify-content:center;
+    gap:1px; transition:.15s; overflow:hidden;
   }
-  .tabs button {
-    flex: 1; background: transparent; border: none;
-    color: var(--muted); padding: 14px 12px;
-    font-size: 14px; font-weight: 500;
-    border-bottom: 2px solid transparent;
-    transition: .1s;
-  }
-  .tabs button:hover { color: var(--text-bright); }
-  .tabs button.on { color: var(--text-bright); border-bottom-color: var(--accent); }
-  .tabs button.on.accent { color: var(--accent); }
+  .arenaBlock:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.4); filter:brightness(1.08); z-index:4; }
+  .arenaBlock .tname { font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .arenaBlock .tinfo { font-size:10px; opacity:.9; display:flex; justify-content:space-between; gap:6px; white-space:nowrap; overflow:hidden; }
+  .arenaBlock.past { opacity:.35; filter:saturate(.5); }
+  .arenaBlock.live { box-shadow:0 0 0 2px rgba(255,255,255,.3); }
+  .arenaBlock.joined { outline:2px solid #fff; outline-offset:-2px; }
+  .arenaBlock.bullet { background:linear-gradient(180deg,#c94a3a,#a53030); }
+  .arenaBlock.blitz  { background:linear-gradient(180deg,#7db63a,#5a8a22); }
+  .arenaBlock.rapid  { background:linear-gradient(180deg,#4a9ce8,#2f77b8); }
+  .arenaBlock.classical { background:linear-gradient(180deg,#6f5fbf,#4a3d8f); }
+  .nowLine { position:absolute; top:0; bottom:0; width:2px; background:#e5484d; z-index:3; pointer-events:none; }
 
-  .tabContent { padding: 0; }
+  .arenaStatusRow { display:flex; align-items:center; gap:16px; padding:10px 14px; background:var(--panel-2); border-radius:4px; border-left:4px solid var(--accent); }
+  .arenaStatusRow.live { border-left-color:var(--green-2); background:rgba(98,153,36,.08); }
+  .arenaStatusLabel { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
+  .arenaStatusTime { font-family:monospace; font-size:26px; font-weight:700; color:var(--accent-2); }
+  .arenaStatusRow.live .arenaStatusTime { color:var(--green-2); }
+  .arenaInfoCard { background:var(--panel); border:1px solid var(--border); border-radius:4px; padding:16px; border-left:4px solid var(--accent); }
+  .aInfoTitle { font-size:16px; font-weight:700; color:var(--text-bright); margin-bottom:4px; }
+  .aInfoTime { color:var(--accent); font-size:13px; font-weight:600; margin-bottom:10px; }
+  .aInfoDesc { color:var(--muted); font-size:12px; line-height:1.4; }
+  .aInfoRules { background:var(--panel-2); border-radius:4px; padding:10px; font-size:12px; margin-top:10px; }
+  .aInfoRulesLabel { color:var(--muted); margin-bottom:4px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; font-size:10px; }
+  .aInfoRulesText { color:var(--green-2); font-weight:600; }
+  .arenaChatBox { background:var(--panel); border:1px solid var(--border); border-radius:4px; display:flex; flex-direction:column; height:320px; margin-top:12px; overflow:hidden; }
+  .arenaChatHeader { padding:10px 12px; border-bottom:1px solid var(--border); font-size:13px; font-weight:600; color:var(--text-bright); }
+  .arenaChatMessages { flex:1; overflow-y:auto; padding:8px 12px; font-size:13px; display:flex; flex-direction:column; gap:4px; }
+  .arenaChatMessages .msg { color:var(--text-bright); line-height:1.35; }
+  .arenaChatMessages .msg .u { color:var(--accent); font-weight:600; }
+  .arenaChatMessages .sys { color:var(--muted); font-size:12px; font-style:italic; }
+  .arenaChatForm { display:flex; border-top:1px solid var(--border); }
+  .arenaChatForm input { flex:1; border:none; border-radius:0; background:transparent; padding:10px 12px; font-size:13px; }
+  .arenaChatForm button { border-radius:0; padding:0 16px; border:none; background:transparent; color:var(--muted); }
 
-  /* Быстрый старт */
-  .quickGrid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1px;
-    background: var(--border);
-  }
-  .quickCard {
-    background: var(--bg-panel);
-    padding: 18px 8px;
-    text-align: center;
-    cursor: pointer;
-    transition: .1s;
-  }
-  .quickCard:hover { background: var(--bg-hover); }
-  .quickCard .qcTime { font-size: 26px; color: var(--text-bright); font-weight: 300; letter-spacing: 1px; }
-  .quickCard .qcName { font-size: 12px; color: var(--muted); margin-top: 4px; }
-  .quickCard.quick .qcTime { color: var(--text-bright); }
+  .arenaPage { display:grid; grid-template-columns:280px 1fr 300px; gap:16px; align-items:start; max-width:1140px; margin:0 auto; }
+  @media (max-width:940px) { .arenaPage { grid-template-columns:1fr; } }
+  .arenaLeft, .arenaCenter, .arenaRight { display:flex; flex-direction:column; gap:12px; min-width:0; }
+  .arenaTopBar { display:flex; align-items:center; gap:12px; padding:2px 0; }
+  .arenaTrophy { font-size:36px; }
+  .arenaPageName { margin:0; font-size:22px; font-weight:600; color:var(--accent-2); }
+  .arenaPageSub { color:var(--muted); font-size:12px; margin-top:2px; }
+  .arenaParticipantsHeader { display:flex; gap:10px; align-items:center; }
+  .arenaSearch { flex:1; }
+  .arenaSearch input { width:100%; padding:6px 12px; font-size:13px; height:32px; }
+  .arenaJoinBtn { height:40px; padding:0 12px; font-weight:700; }
+  .arenaParticipantsTable { background:var(--panel); border:1px solid var(--border); border-radius:4px; overflow:hidden; height:340px; display:flex; flex-direction:column; }
+  .arenaTableHeader { display:grid; grid-template-columns:36px 1fr 60px 90px 60px; gap:8px; padding:0 12px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; height:32px; align-items:center; }
+  .arenaTableBody { flex:1; overflow-y:auto; }
+  .arenaTableRow { display:grid; grid-template-columns:36px 1fr 60px 90px 60px; gap:8px; padding:0 12px; align-items:center; font-size:13px; border-bottom:1px solid rgba(58,56,51,.35); height:40px; }
+  .arenaTableRow.me { background:rgba(191,129,29,.12); border-left:3px solid var(--accent); padding-left:9px; }
+  .arenaTableRow.paused { opacity:.55; }
+  .arenaTableRow .place { color:var(--muted); font-weight:700; font-size:14px; }
+  .arenaTableRow .place.top1 { color:#ffd54f; }
+  .arenaTableRow .place.top2 { color:#d0d0d0; }
+  .arenaTableRow .place.top3 { color:#d4904a; }
+  .arenaTableRow .pname { color:var(--text-bright); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .arenaTableRow .pname .prat { color:var(--muted); font-weight:400; font-size:11px; }
+  .arenaTableRow .score { color:var(--accent); font-weight:700; text-align:center; font-size:15px; }
+  .arenaTableRow .wdl { color:var(--muted); text-align:center; font-size:12px; }
+  .arenaTableRow .games { color:var(--muted); text-align:center; font-size:12px; }
+  .arenaWinnerBanner { background:linear-gradient(160deg,#2a2520,#1a1815); border:1px solid var(--accent); border-radius:8px; padding:14px; text-align:center; }
+  .awbTitle { font-size:18px; color:var(--accent-2); font-weight:700; margin-bottom:10px; }
+  .awbPodium { display:flex; justify-content:center; align-items:flex-end; gap:8px; }
+  .awbItem { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:10px 12px; min-width:90px; }
+  .awbItem.gold { border-color:var(--accent); background:linear-gradient(180deg,#3d331c,#2a2517); transform:translateY(-6px); }
+  .awbItem.silver { border-color:#888; }
+  .awbItem.bronze { border-color:#a06a3a; }
+  .awbItem .place { font-size:20px; font-weight:700; }
+  .awbItem .n { color:var(--text-bright); font-weight:600; font-size:13px; }
+  .awbItem .s { color:var(--accent); font-weight:700; font-size:16px; }
+  .arenaRightCol { background:var(--panel); border:1px solid var(--border); border-radius:4px; overflow:hidden; display:flex; flex-direction:column; }
+  .arenaGamesHeader { padding:8px 12px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
+  .arenaTopGame { padding:8px; display:flex; flex-direction:column; gap:6px; }
+  .arenaTopGameEmpty { padding:30px 10px; text-align:center; color:var(--muted); font-size:12px; }
+  .arenaTopGamePlayers { display:flex; justify-content:space-between; font-size:12px; color:var(--text-bright); }
+  .arenaTopGameBoard { display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); aspect-ratio:1/1; width:100%; border:2px solid #0a0a0a; overflow:hidden; }
+  .arenaTopGameBoard .sq { display:flex; align-items:center; justify-content:center; }
+  .arenaTopGameBoard .sq.light { background:var(--light-sq); }
+  .arenaTopGameBoard .sq.dark { background:var(--dark-sq); }
+  .arenaTopGameBoard .sq .piece { font-size:18px; line-height:1; }
+  .arenaGamesList { flex:1; padding:6px; display:flex; flex-direction:column; gap:4px; overflow-y:auto; max-height:400px; }
+  .arenaGameCard { background:var(--panel-2); border-radius:4px; padding:6px 8px; font-size:11px; border-left:3px solid var(--accent); }
+  .arenaGameCard .row1 { display:flex; justify-content:space-between; color:var(--text-bright); font-weight:600; }
+  .arenaGameCard .row1 .res { font-weight:700; margin-left:6px; }
+  .arenaGameCard .row1 .res.w { color:#6ee787; }
+  .arenaGameCard .row1 .res.d { color:var(--accent); }
 
-  /* Зал ожидания — таблица как на скрине */
-  .lobbyTable {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 14px;
-  }
-  .lobbyTable thead th {
-    background: var(--bg-panel);
-    color: var(--muted);
-    font-size: 11px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: .5px;
-    padding: 10px 16px;
-    text-align: left;
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    user-select: none;
-  }
-  .lobbyTable thead th:hover { color: var(--text-bright); }
-  .lobbyTable thead th.num { text-align: right; }
-  .lobbyTable thead th.act { width: 40px; text-align: center; }
-  .lobbyTable tbody tr {
-    border-bottom: 1px solid rgba(61,58,55,.5);
-    transition: .1s;
-  }
-  .lobbyTable tbody tr:hover { background: var(--bg-hover); }
-  .lobbyTable tbody tr.dim { opacity: .5; }
-  .lobbyTable tbody tr.dim td { color: var(--muted); }
-  .lobbyTable td {
-    padding: 10px 16px;
-    color: var(--text-bright);
-    font-size: 14px;
-    white-space: nowrap;
-  }
-  .lobbyTable td.name { display: flex; align-items: center; gap: 8px; }
-  .lobbyTable td.name .bullet {
-    display: inline-block; width: 8px; height: 8px;
-    background: var(--green); border-radius: 50%;
-    margin-right: 2px;
-  }
-  .lobbyTable td.rating { color: var(--text-bright); }
-  .lobbyTable td.time { color: var(--text-bright); font-family: monospace; font-size: 15px; }
-  .lobbyTable td.mode { color: var(--muted); }
-  .lobbyTable td.mode .modeIcon { margin-right: 6px; }
-  .lobbyTable td.play { text-align: right; padding-right: 16px; }
-  .lobbyTable .playBtn {
-    background: transparent; border: none;
-    color: var(--accent); font-size: 18px; cursor: pointer;
-    width: 32px; height: 32px; border-radius: 4px;
-    display: inline-flex; align-items: center; justify-content: center;
-  }
-  .lobbyTable .playBtn:hover { background: var(--bg-active); }
+  .gameWrap { display:grid; grid-template-columns:280px 480px 280px; gap:16px; align-items:start; justify-content:center; margin:0 auto; }
+  @media (max-width:1120px) { .gameWrap { grid-template-columns:240px minmax(0,1fr) 260px; } }
+  @media (max-width:940px)  { .gameWrap { grid-template-columns:1fr; max-width:520px; } .col-chat { order:3; } .col-info { order:2; } .col-board { order:1; } }
+  #boardWrap { position:relative; width:480px; max-width:100%; aspect-ratio:1/1; }
+  #board { display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); width:100%; height:100%; border:3px solid #0a0a0a; border-radius:4px; box-shadow:0 8px 30px rgba(0,0,0,.5); user-select:none; overflow:hidden; touch-action:manipulation; }
+  .sq { display:flex; align-items:center; justify-content:center; position:relative; cursor:pointer; line-height:1; overflow:hidden; }
+  .sq.light { background:var(--light-sq); }
+  .sq.dark { background:var(--dark-sq); }
+  .sq.lastmove { background:var(--yellow-sq) !important; }
+  .sq.sel::after { content:''; position:absolute; inset:0; box-shadow:inset 0 0 0 4px #ffd54f; pointer-events:none; }
+  .sq.hint::before { content:''; position:absolute; width:30%; height:30%; border-radius:50%; background:rgba(40,40,40,.35); pointer-events:none; z-index:2; }
+  .sq.hint.capture::before { width:100%; height:100%; border-radius:0; background:transparent; box-shadow:inset 0 0 0 5px rgba(224,82,82,.75); }
+  .sq.check { background:radial-gradient(circle at center,rgba(255,60,60,.85) 0%,rgba(255,60,60,.5) 50%,transparent 70%) !important; }
+  .sq .coord-f,.sq .coord-r { position:absolute; font-size:10px; font-weight:700; pointer-events:none; }
+  .sq.light .coord-f,.sq.light .coord-r { color:rgba(0,0,0,.5); }
+  .sq.dark .coord-f,.sq.dark .coord-r { color:rgba(255,255,255,.6); }
+  .sq .coord-f { bottom:2px; right:3px; }
+  .sq .coord-r { top:2px; left:3px; }
+  .piece { pointer-events:none; display:flex; align-items:center; justify-content:center; width:100%; height:100%; font-size:clamp(20px, 5.5vw, 44px); line-height:1; }
+  .piece.w { color:#fff; text-shadow:-1px -1px 0 #1a1a1a,1px -1px 0 #1a1a1a,-1px 1px 0 #1a1a1a,1px 1px 0 #1a1a1a; }
+  .piece.b { color:#1e1e1e; text-shadow:-1px -1px 0 #ddd,1px -1px 0 #ddd,-1px 1px 0 #ddd,1px 1px 0 #ddd; }
 
-  .lobbyEmpty {
-    padding: 40px 20px; text-align: center;
-    color: var(--muted); font-size: 13px;
-  }
+  .col-info { display:flex; flex-direction:column; gap:6px; min-width:0; }
+  .clockBox { background:var(--panel); border:1px solid var(--border); border-radius:4px; padding:6px 12px; display:flex; justify-content:space-between; align-items:center; min-height:44px; }
+  .clockBox.active { background:var(--green); color:#0b0b0b; border-color:var(--green-2); }
+  .clockBox.low { color:#ff8080; }
+  .clockBox.active.low { color:#3a0d0d; background:#e57070; border-color:#ff8080; }
+  .clockBox .clockTime { font-family:monospace; font-size:28px; font-weight:700; }
+  .playerStrip { background:var(--panel); border:1px solid var(--border); border-radius:4px; padding:6px 12px; display:flex; align-items:center; justify-content:space-between; gap:10px; min-height:36px; }
+  .playerStrip.active { border-color:var(--green); }
+  .playerStrip .side { display:flex; align-items:center; gap:8px; }
+  .playerStrip .dot { width:12px; height:12px; border-radius:50%; border:1px solid #111; }
+  .playerStrip .dot.w { background:#f0f0f0; }
+  .playerStrip .dot.b { background:#333; }
+  .playerStrip .nm { color:var(--text-bright); font-weight:600; cursor:pointer; }
+  .playerStrip .rt { color:var(--text-bright); font-size:15px; font-weight:500; }
+  .movesPanel { background:var(--panel); border:1px solid var(--border); border-radius:4px; display:flex; flex-direction:column; height:200px; overflow:hidden; }
+  .movesToolbar { background:var(--panel-2); display:flex; border-bottom:1px solid var(--border); }
+  .movesToolbar button { flex:1; background:transparent; border:none; border-radius:0; padding:6px 0; font-size:16px; color:var(--text); border-right:1px solid var(--border); }
+  .movesToolbar button:last-child { border-right:none; }
+  .movesList { flex:1; overflow-y:auto; font-family:monospace; font-size:14px; padding:2px 0; }
+  .movesList .mvRow { display:grid; grid-template-columns:32px 1fr 1fr; padding:3px 10px; align-items:center; }
+  .movesList .mvRow:nth-child(odd) { background:rgba(255,255,255,.03); }
+  .movesList .num { color:var(--muted); font-size:12px; }
+  .movesList .mv { color:var(--text-bright); padding:2px 6px; border-radius:3px; cursor:pointer; }
+  .movesList .mv.current { background:rgba(75,141,255,.45); font-weight:600; }
+  .bigActionsRow { display:flex; justify-content:space-around; padding:4px 0; }
+  .bigActionsRow button { background:transparent; border:none; color:var(--muted); font-size:22px; padding:6px 14px; min-height:44px; min-width:44px; }
+  .bigActionsRow button:hover { color:var(--text-bright); }
+  .bigActionsRow button.danger:hover { color:#ff8080; }
+  .statusGreen { background:var(--green); color:#0b0b0b; text-align:center; font-weight:600; padding:6px 10px; border-radius:4px; font-size:13px; }
+  .statusYellow { background:var(--panel); border-left:3px solid var(--accent); color:var(--text); padding:8px 12px; border-radius:4px; font-size:13px; }
+  .gameResultCompact { display:none; flex-direction:column; background:var(--panel); border:1px solid var(--border); border-radius:4px; padding:10px; text-align:center; gap:8px; }
+  .gameResultCompact.show { display:flex; }
+  .gameResultCompact .grTitle { font-size:15px; font-weight:700; color:var(--text-bright); }
+  .gameResultCompact .grTitle.win { color:var(--green-2); }
+  .gameResultCompact .grTitle.lose { color:#ff7b7b; }
+  .gameResultCompact .grSub { font-size:12px; color:var(--muted); font-style:italic; }
+  .gameResultCompact .grBtn { display:block; width:100%; padding:9px 8px; border-radius:4px; font-weight:700; font-size:12px; letter-spacing:.5px; text-transform:uppercase; border:none; cursor:pointer; }
+  .gameResultCompact .grBtn.rematch { background:var(--green); color:#fff; }
+  .gameResultCompact .grBtn.findOpp { background:var(--panel-2); color:var(--text-bright); border:1px solid var(--border); }
 
-  /* Игра по переписке — заглушка */
-  .correspondence {
-    padding: 40px 20px; text-align: center; color: var(--muted);
-  }
-  .correspondence .big { font-size: 48px; margin-bottom: 12px; }
+  .col-chat { display:flex; flex-direction:column; gap:8px; }
+  #chatBox { background:var(--panel); border:1px solid var(--border); border-radius:4px; display:flex; flex-direction:column; height:420px; overflow:hidden; }
+  #chatTabs { display:flex; border-bottom:1px solid var(--border); }
+  #chatTabs .tabBtn { flex:1; background:transparent; border:none; border-radius:0; padding:10px; font-size:13px; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent; }
+  #chatTabs .tabBtn.active { color:var(--text-bright); border-bottom-color:var(--accent); background:var(--panel-2); }
+  #chatMessages { flex:1; overflow-y:auto; padding:8px 12px; font-size:13px; display:flex; flex-direction:column; gap:4px; }
+  #chatMessages .msg { color:var(--text-bright); line-height:1.35; }
+  #chatMessages .msg .u { color:var(--accent); font-weight:600; }
+  #chatForm { display:flex; border-top:1px solid var(--border); }
+  #chatForm input { flex:1; border:none; border-radius:0; background:transparent; padding:10px 12px; font-size:13px; }
+  #chatForm button { border-radius:0; padding:0 16px; border:none; background:transparent; color:var(--muted); }
 
-  /* ============ ПРАВАЯ КОЛОНКА ============ */
-  .rightCol { display: flex; flex-direction: column; gap: 10px; }
+  .profilePage { max-width:900px; margin:0 auto; }
+  .profileHead { display:flex; align-items:center; gap:20px; padding:20px; background:var(--panel); border:1px solid var(--border); border-radius:8px; margin-bottom:16px; }
+  .profileAvatar { width:72px; height:72px; border-radius:50%; background:var(--accent); color:#161512; display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:700; }
+  .profileHead .nameBlock h2 { margin:0 0 4px; color:var(--text-bright); display:flex; gap:8px; align-items:center; }
+  .profileHead .nameBlock .sub { color:var(--muted); font-size:13px; }
+  .catRatingsGrid { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:12px 0; }
+  .catCard { background:var(--panel-2); border:1px solid var(--border); border-radius:6px; padding:10px 12px; text-align:center; }
+  .catCard .catName { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:4px; }
+  .catCard .catIcon { font-size:20px; margin-bottom:2px; }
+  .catCard .catRating { font-size:22px; font-weight:700; color:var(--text-bright); }
+  .catCard.classical { border-top:3px solid #6f5fbf; }
+  .catCard.rapid     { border-top:3px solid #4a9ce8; }
+  .catCard.blitz     { border-top:3px solid #7db63a; }
+  .catCard.bullet    { border-top:3px solid #c94a3a; }
+  .statsGrid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:16px 0; }
+  .statBox { background:var(--panel-2); border-radius:6px; padding:12px; text-align:center; }
+  .statBox .v { font-size:22px; font-weight:700; color:var(--accent); }
+  .statBox .l { font-size:11px; color:var(--muted); margin-top:4px; text-transform:uppercase; letter-spacing:.5px; }
+  .gamesList { margin-top:8px; }
+  .gameRow { display:grid; grid-template-columns:50px 1fr 100px 110px; gap:8px; padding:8px 10px; border-radius:6px; background:var(--panel-2); margin-bottom:4px; font-size:13px; align-items:center; }
+  .gameRow .res { font-weight:700; text-align:center; }
+  .gameRow .res.w { color:#6ee787; }
+  .gameRow .res.l { color:#ff6b6b; }
+  .gameRow .res.d { color:var(--accent); }
+  .gameRow .delta.up { color:#6ee787; }
+  .gameRow .delta.down { color:#ff6b6b; }
+  .gameRow .date { color:var(--muted); font-size:12px; text-align:right; }
 
-  .actionBtn {
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 14px 16px;
-    display: flex; align-items: center; gap: 12px;
-    color: var(--text-bright);
-    font-size: 14px; font-weight: 500;
-    cursor: pointer;
-    transition: .1s;
-    width: 100%;
-    text-align: left;
-  }
-  .actionBtn:hover { background: var(--bg-hover); border-color: var(--muted); }
-  .actionBtn .abIcon {
-    font-size: 22px; color: var(--muted);
-    width: 28px; text-align: center; flex-shrink: 0;
-  }
-
-  /* Нижняя строка статистики */
-  .statsBar {
-    display: flex; flex-direction: column;
-    gap: 2px;
-    padding: 12px 4px;
-    font-size: 13px;
-    color: var(--muted);
-    text-align: right;
-  }
-  .statsBar b { color: var(--text-bright); font-weight: 600; }
-
-  /* ============ МОДАЛЬНЫЕ ОКНА ============ */
-  .modal {
-    display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,.75);
-    align-items: center; justify-content: center;
-    z-index: 200; padding: 20px;
-  }
-  .modal.on { display: flex; }
-  .modalBox {
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 24px;
-    max-width: 480px; width: 100%;
-    max-height: 90vh; overflow-y: auto;
-  }
-  .modalBox h3 {
-    color: var(--text-bright);
-    font-size: 18px; font-weight: 600;
-    margin-bottom: 16px;
-  }
-  .modalBox .fieldLabel {
-    color: var(--muted); font-size: 12px;
-    text-transform: uppercase; letter-spacing: .5px;
-    font-weight: 700;
-    margin-bottom: 8px; margin-top: 16px;
-  }
-  .modalBox .fieldLabel:first-of-type { margin-top: 0; }
-  .modalBox input[type="text"], .modalBox input[type="password"], .modalBox input[type="number"] {
-    width: 100%;
-    background: var(--bg); border: 1px solid var(--border);
-    color: var(--text-bright);
-    padding: 10px 12px; border-radius: 3px;
-    font-size: 14px; outline: none;
-  }
-  .modalBox input:focus { border-color: var(--accent); }
-
-  .timeGrid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
-  }
-  .timeGrid button {
-    background: var(--bg); border: 1px solid var(--border);
-    color: var(--text-bright); padding: 10px 4px;
-    border-radius: 3px; font-size: 14px;
-    transition: .1s;
-  }
-  .timeGrid button:hover { background: var(--bg-hover); }
-  .timeGrid button.on { background: var(--accent); color: #161512; border-color: var(--accent); font-weight: bold; }
-
-  .botGrid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 6px;
-  }
-  .botGrid button {
-    background: var(--bg); border: 1px solid var(--border);
-    color: var(--text-bright); padding: 12px 8px;
-    border-radius: 3px; font-size: 13px;
-    transition: .1s;
-  }
-  .botGrid button:hover { background: var(--bg-hover); }
-  .botGrid button.on { background: var(--accent); color: #161512; border-color: var(--accent); font-weight: bold; }
-
-  .colorPick { display: flex; gap: 6px; }
-  .colorPick button {
-    flex: 1;
-    background: var(--bg); border: 1px solid var(--border);
-    color: var(--text-bright); padding: 10px;
-    border-radius: 3px; font-size: 20px;
-  }
-  .colorPick button.on { border-color: var(--accent); background: rgba(191,129,29,.15); }
-
-  .modalActions {
-    display: flex; gap: 10px; margin-top: 20px;
-  }
-  .modalActions button {
-    flex: 1; padding: 12px;
-    border-radius: 3px; font-size: 14px;
-    border: 1px solid var(--border);
-    background: var(--bg); color: var(--text-bright);
-  }
-  .modalActions button:hover { background: var(--bg-hover); }
-  .modalActions button.go {
-    background: var(--green); border-color: var(--green);
-    color: #fff; font-weight: bold;
-  }
-  .modalActions button.go:hover { background: #7dbe30; }
-
-  /* ============ ЭКРАН ИГРЫ ============ */
-  .gameLayout {
-    display: grid;
-    grid-template-columns: 1fr 300px;
-    gap: 20px;
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 16px;
-  }
-  @media (max-width: 900px) { .gameLayout { grid-template-columns: 1fr; } }
-  .gameBoardArea { max-width: 560px; margin: 0 auto; width: 100%; }
-  .playerRow {
-    display: flex; align-items: center; gap: 10px;
-    padding: 8px 12px;
-    background: var(--bg-panel);
-    border: 1px solid var(--border);
-    border-radius: 3px;
-    margin: 4px 0;
-  }
-  .playerRow.on { border-color: var(--green); background: rgba(98,153,36,.12); }
-  .playerRow .prName { color: var(--text-bright); font-weight: 600; flex: 1; }
-  .playerRow .prRating { color: var(--muted); font-size: 13px; }
-  .playerRow .prTime {
-    font-family: monospace; font-size: 22px; font-weight: bold;
-    color: var(--text-bright); font-variant-numeric: tabular-nums;
-  }
-  .playerRow.low .prTime { color: #f44; }
-
-  #board {
-    display: grid;
-    grid-template-columns: repeat(8, 1fr);
-    aspect-ratio: 1/1;
-    border: 2px solid #0a0a0a;
-    user-select: none; -webkit-user-select: none;
-    margin: 4px 0;
-  }
-  .sq { display: flex; align-items: center; justify-content: center; font-size: clamp(20px, 6vw, 42px); line-height: 1; cursor: pointer; position: relative; }
-  .sq.l { background: var(--light-sq); }
-  .sq.d { background: var(--dark-sq); }
-  .sq.sel::after { content: ''; position: absolute; inset: 0; box-shadow: inset 0 0 0 4px var(--accent); }
-  .sq.last { background: var(--yellow) !important; }
-  .sq.hint::before { content: ''; position: absolute; width: 30%; height: 30%; border-radius: 50%; background: rgba(0,0,0,.3); }
-  .sq.hint.cap::before { width: 100%; height: 100%; border-radius: 0; background: transparent; box-shadow: inset 0 0 0 5px rgba(200,0,0,.6); }
-  .sq.chk { background: radial-gradient(circle, #f44, transparent 70%) !important; }
-  .sq.pf, .sq.pt { box-shadow: inset 0 0 0 4px #4a9ce8; }
-  .pc.w { color: #fff; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; }
-  .pc.b { color: #111; text-shadow: -1px -1px 0 #ddd, 1px -1px 0 #ddd, -1px 1px 0 #ddd, 1px 1px 0 #ddd; }
-
-  .gameActions {
-    display: flex; gap: 6px; margin-top: 8px;
-  }
-  .gameActions button {
-    flex: 1;
-    background: var(--bg-panel); border: 1px solid var(--border);
-    color: var(--text-bright); padding: 10px;
-    border-radius: 3px; font-size: 13px;
-  }
-  .gameActions button:hover { background: var(--bg-hover); }
-  .gameActions button.d { background: var(--red); border-color: var(--red); color: #fff; }
-
-  .gameStatus {
-    margin-top: 8px;
-    background: var(--bg-panel); border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
-    border-radius: 3px; padding: 10px 14px;
-    color: var(--text); font-size: 14px;
-    text-align: center;
-  }
-  .gameStatus.on { border-left-color: var(--green); }
-
-  .chatBox {
-    background: var(--bg-panel); border: 1px solid var(--border);
-    border-radius: 3px;
-    display: flex; flex-direction: column;
-    height: 400px;
-    margin-top: 12px;
-  }
-  .chatBox .chatHead {
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--border);
-    color: var(--text-bright); font-weight: 600; font-size: 14px;
-  }
-  .chatLog { flex: 1; overflow-y: auto; padding: 10px 14px; font-size: 13px; }
-  .chatLog .m { margin-bottom: 4px; word-break: break-word; }
-  .chatLog .m .u { color: var(--accent); font-weight: 600; }
-  .chatForm { display: flex; border-top: 1px solid var(--border); }
-  .chatForm input {
-    flex: 1; border: none; background: transparent;
-    color: var(--text-bright); padding: 10px 12px;
-    font-size: 13px; outline: none;
-  }
-  .chatForm button {
-    border: none; background: transparent;
-    color: var(--muted); padding: 0 16px;
-    font-size: 16px;
-  }
-  .chatForm button:hover { color: var(--text-bright); }
-
-  /* ============ ЭКРАН ЛОГИНА ============ */
-  .loginWrap {
-    max-width: 400px; margin: 80px auto;
-    background: var(--bg-panel); border: 1px solid var(--border);
-    border-radius: 4px; padding: 30px;
-  }
-  .loginWrap h2 { color: var(--text-bright); font-weight: 400; margin-bottom: 20px; text-align: center; }
-  .loginWrap input {
-    width: 100%; margin: 6px 0;
-    background: var(--bg); border: 1px solid var(--border);
-    color: var(--text-bright); padding: 10px 12px;
-    border-radius: 3px; font-size: 14px; outline: none;
-  }
-  .loginWrap input:focus { border-color: var(--accent); }
-  .loginWrap button {
-    width: 100%; margin-top: 12px; padding: 12px;
-    background: var(--green); border: 1px solid var(--green);
-    color: #fff; font-weight: bold; font-size: 14px;
-    border-radius: 3px;
-  }
-  .loginWrap button:hover { background: #7dbe30; }
-  .loginWrap .msg { color: #c84040; font-size: 13px; min-height: 18px; margin-top: 10px; text-align: center; }
-
-  /* ============ ПРОФИЛЬ ============ */
-  .profileWrap {
-    max-width: 700px; margin: 20px auto;
-    background: var(--bg-panel); border: 1px solid var(--border);
-    border-radius: 4px; padding: 24px;
-  }
-  .profileWrap h2 { color: var(--text-bright); font-weight: 400; margin-bottom: 16px; }
-  .profileGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 16px; }
-  .profileGrid .cell { background: var(--bg); border: 1px solid var(--border); padding: 14px; text-align: center; border-radius: 3px; }
-  .profileGrid .cell .v { font-size: 22px; color: var(--accent); font-weight: bold; }
-  .profileGrid .cell .l { font-size: 11px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: .5px; }
-
-  .scr { display: none; }
-  .scr.on { display: block; }
-
-  /* ============ МОБИЛА ============ */
-  @media (max-width: 700px) {
-    header { padding: 0 6px; height: 44px; }
-    header .logo { font-size: 18px; margin-right: 8px; }
-    header nav a { padding: 0 6px; font-size: 11px; }
-    header .right .iconBtn { width: 30px; height: 30px; font-size: 14px; }
-    main { padding: 10px 8px; gap: 12px; }
-    .quickGrid { grid-template-columns: repeat(2, 1fr); }
-    .lobbyTable thead th, .lobbyTable td { padding: 8px 8px; font-size: 12px; }
-    .gameLayout { padding: 8px; }
-  }
+  .botModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); align-items:center; justify-content:center; z-index:200; padding:20px; }
+  .botModal.show { display:flex; }
+  .botModalBox { background:#262522; border:1px solid #3a3833; border-radius:10px; padding:22px; max-width:460px; width:100%; max-height:90vh; overflow-y:auto; }
+  .botModalBox h3 { margin:0 0 14px; font-weight:600; }
+  .botModalLabel { font-size:12px; color:var(--muted); margin-bottom:10px; text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
+  .botLevelsGrid { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:16px; }
+  .botLevelsGrid button { padding:12px 10px; border-radius:6px; border:1px solid #3a3833; background:#2d2c29; color:#e8e6e3; cursor:pointer; font-weight:600; }
+  .botLevelsGrid button.active { border-color:var(--accent); background:rgba(191,129,29,.15); }
+  .botLevelsGrid button .btitle { font-size:13px; }
+  .botLevelsGrid button .brating { font-size:11px; color:var(--muted); margin-top:2px; }
+  .botTimesGrid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:18px; }
+  .botTimesGrid button { padding:8px 4px; border-radius:6px; border:1px solid #3a3833; background:#2d2c29; color:#e8e6e3; cursor:pointer; font-weight:600; font-size:13px; }
+  .botTimesGrid button.active { border-color:var(--accent); background:rgba(191,129,29,.15); }
+  .botModalActions { display:flex; gap:10px; }
+  .botModalActions .cancelBtn { flex:1; padding:10px; background:#2d2c29; border:1px solid #3a3833; color:#bfbdb6; border-radius:4px; cursor:pointer; }
+  .botModalActions .startBtn { flex:2; padding:10px; background:var(--green); border:none; color:#fff; font-weight:700; border-radius:4px; cursor:pointer; }
 </style>
 </head>
 <body>
 
-<!-- ============ ШАПКА ============ -->
-<header>
-  <div class="logo" onclick="nav('home')">lichess<span class="org">.org</span></div>
-  <nav>
-    <a data-nav="home" onclick="nav('home')">Игра</a>
-    <a href="javascript:void(0)">Задачи</a>
-    <a href="javascript:void(0)">Обучение</a>
-    <a href="javascript:void(0)">Просмотр</a>
-    <a href="javascript:void(0)">Сообщество</a>
-    <a href="javascript:void(0)">Инструменты</a>
-    <a class="donate" href="javascript:void(0)">🎗 Поддержать проект</a>
+<header class="topbar">
+  <div class="logo" onclick="navTo('lobby')"><span class="mark">♔</span> KingSide</div>
+  <nav id="mainNav">
+    <a data-nav="lobby" onclick="navTo('lobby')">Игра</a>
+    <a data-nav="watch" onclick="navTo('watch')">Смотреть</a>
+    <a data-nav="arenas" onclick="navTo('arenas')">Арены</a>
+    <a data-nav="community" onclick="navTo('community')">Сообщество</a>
   </nav>
   <div class="right">
-    <button class="iconBtn" title="Поиск">🔍</button>
-    <button class="iconBtn" title="Игроки">👥</button>
-    <button class="iconBtn" title="Друзья">⚔</button>
-    <button class="iconBtn" title="Уведомления">🔔</button>
-    <button class="userBtn" id="userBtn" style="display:none" onclick="nav('profile')">
-      <span id="userName">—</span>
+    <button class="backToGameBtn" id="backToGameBtn" onclick="returnToGame()">⚔ Вернуться к партии</button>
+    <button class="userBtn" id="userBtn" onclick="navTo('profile')" style="display:none">
       <span class="avatar" id="userAvatar">?</span>
+      <span id="userName">—</span>
     </button>
+    <button class="userBtn" onclick="logout()" id="logoutBtn" style="display:none">Выйти</button>
   </div>
 </header>
 
-<!-- ============ ВХОД ============ -->
-<section id="loginScreen" class="scr on">
-  <div class="loginWrap">
-    <h2>Вход</h2>
-    <input id="uName" placeholder="Логин" autocomplete="off">
-    <input id="uPass" type="password" placeholder="Пароль">
-    <button id="loginBtn">Войти</button>
-    <div class="msg" id="loginMsg"></div>
-    <p style="color:#666;font-size:12px;margin-top:16px;text-align:center">
-      Один логин = один аккаунт. Данные сохраняются.
-    </p>
-  </div>
-</section>
+<main>
+  <section id="loginScreen" class="screen active">
+    <h2>KingSide — вход</h2>
+    <div class="row">
+      <input id="username" placeholder="Логин" autocomplete="off">
+      <input id="password" type="password" placeholder="Пароль" autocomplete="off">
+    </div>
+    <div class="row" style="justify-content:center">
+      <button class="primary" onclick="doLogin()" style="padding:10px 40px">Войти</button>
+    </div>
+    <p id="loginMsg"></p>
+    <p class="hint-text">Одинаковый логин — тот же аккаунт. Данные сохраняются.</p>
+  </section>
 
-<!-- ============ ГЛАВНАЯ ============ -->
-<section id="homeScreen" class="scr">
-  <main>
-    <!-- ЛЕВАЯ КОЛОНКА -->
-    <aside class="leftCol">
-      <div class="arenaCard" onclick="alert('Арены в разработке')">
-        <div class="acHead">
-          <span class="acIcon">🏆</span>
-          <span class="acName">Ежечасный блиц</span>
+  <section id="lobbyScreen" class="screen">
+    <div class="homeWrap">
+      <aside class="homeLeft">
+        <div class="sideTitle">🔥 Идут сейчас</div>
+        <div id="topArenasBox"><div class="arenaEmpty" style="padding:20px 0">Загрузка...</div></div>
+      </aside>
+      <div class="lobbyCenter">
+        <div class="tabs">
+          <button class="active" data-tab="create" onclick="switchLobbyTab('create')">Быстрый старт</button>
+          <button data-tab="waiting" onclick="switchLobbyTab('waiting')">Зал ожидания</button>
         </div>
-        <div class="acSub">26 игроков · Идёт прямо сейчас</div>
+        <div class="lobbyContent" id="lobbyTabContent"></div>
       </div>
-      <div class="events" id="eventsBox">
-        <div style="color:var(--muted);font-size:12px;padding:8px 0">Загрузка событий...</div>
-      </div>
-    </aside>
+      <aside class="homeRight">
+        <div class="sideTitle">Действия</div>
+        <div class="lobbyActions">
+          <button class="lobbyActionBtn challengeBtn" onclick="switchLobbyTab('create')">
+            <span class="laIcon">⚔</span>
+            <span class="laTitle">Создать запрос на игру</span>
+          </button>
+          <button class="lobbyActionBtn botBtn" onclick="openBotDialog()">
+            <span class="laIcon">🤖</span>
+            <span class="laTitle">Сыграть с компьютером</span>
+          </button>
+        </div>
+        <div class="sideTitle" style="margin-top:16px">📊 Статистика</div>
+        <div class="statsBox">
+          <div class="statRow"><span class="lbl">Игроков онлайн</span><span class="val" id="statOnline">0</span></div>
+          <div class="statRow"><span class="lbl">Партий сыграно</span><span class="val" id="statGames">0</span></div>
+          <div class="statRow live"><span class="lbl">Играют сейчас</span><span class="val" id="statActive">0</span></div>
+        </div>
+      </aside>
+    </div>
+  </section>
 
-    <!-- ЦЕНТР -->
-    <div class="centerCol">
-      <div class="tabs">
-        <button class="on" data-tab="quick" onclick="setTab('quick')">Быстрый старт</button>
-        <button data-tab="lobby" onclick="setTab('lobby')">Зал ожидания</button>
-        <button data-tab="corr" onclick="setTab('corr')">Игра по переписке</button>
+  <section id="watchScreen" class="screen">
+    <div class="watchWrap">
+      <div class="watchList">
+        <div class="watchListHeader">
+          <span>👁 Текущие партии</span>
+          <button class="secondary" style="padding:4px 10px;font-size:12px;min-width:auto;" onclick="refreshWatchList(true)">↻</button>
+        </div>
+        <div class="watchListBody" id="watchListBody">
+          <div class="arenaEmpty" style="padding:20px 10px;">Пока никто не играет</div>
+        </div>
       </div>
-      <div class="tabContent" id="tabContent"></div>
-    </div>
-
-    <!-- ПРАВАЯ КОЛОНКА -->
-    <aside class="rightCol">
-      <button class="actionBtn" onclick="openModal('create')">
-        <span class="abIcon">👥</span>
-        <span>Создать запрос на игру</span>
-      </button>
-      <button class="actionBtn" onclick="openModal('friend')">
-        <span class="abIcon">👤</span>
-        <span>Бросить вызов другу</span>
-      </button>
-      <button class="actionBtn" onclick="openModal('bot')">
-        <span class="abIcon">🤖</span>
-        <span>Сыграть с компьютером</span>
-      </button>
-      <div class="statsBar">
-        <div><b id="sOnline">0</b> игроков</div>
-        <div><b id="sGames">0</b> партий</div>
-      </div>
-    </aside>
-  </main>
-</section>
-
-<!-- ============ ЭКРАН ИГРЫ ============ -->
-<section id="gameScreen" class="scr">
-  <div class="gameLayout">
-    <div class="gameBoardArea">
-      <div class="playerRow" id="pTop">
-        <span class="prName" id="nameTop">—</span>
-        <span class="prRating" id="ratingTop"></span>
-        <span class="prTime" id="timeTop">--:--</span>
-      </div>
-      <div id="board"></div>
-      <div class="playerRow" id="pBot">
-        <span class="prName" id="nameBot">—</span>
-        <span class="prRating" id="ratingBot"></span>
-        <span class="prTime" id="timeBot">--:--</span>
-      </div>
-      <div class="gameActions">
-        <button class="d" onclick="resign()">Сдаться</button>
-        <button onclick="drawOffer()">½ Ничья</button>
-        <button onclick="flipBoard()">⇅ Повернуть</button>
-        <button onclick="backToLobby()">← В лобби</button>
-      </div>
-      <div class="gameStatus" id="gameStatus">Ожидание соперника...</div>
-    </div>
-    <div>
-      <div class="chatBox">
-        <div class="chatHead">💬 Чат партии</div>
-        <div class="chatLog" id="chatLog"></div>
-        <form class="chatForm" onsubmit="sendChat(event)">
-          <input id="chatInput" placeholder="Написать сообщение..." maxlength="200" autocomplete="off">
-          <button type="submit">→</button>
-        </form>
+      <div class="watchBoard" id="watchBoardBox">
+        <div class="wbEmpty">Выбери партию слева, чтобы посмотреть её в реальном времени</div>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- ============ ПРОФИЛЬ ============ -->
-<section id="profileScreen" class="scr">
-  <div class="profileWrap">
-    <h2>Профиль</h2>
-    <div id="profileContent"></div>
-    <div style="margin-top:20px;display:flex;gap:10px">
-      <button style="flex:1;padding:10px;background:var(--bg);border:1px solid var(--border);color:var(--text-bright);border-radius:3px;cursor:pointer" onclick="nav('home')">← На главную</button>
-      <button style="flex:1;padding:10px;background:var(--red);border:1px solid var(--red);color:#fff;border-radius:3px;cursor:pointer" onclick="logout()">Выйти</button>
+  <section id="arenasScreen" class="screen">
+    <div style="max-width:1100px; margin:0 auto;">
+      <div class="arenasHeader">
+        <h1>Турниры</h1>
+        <button class="primary" onclick="refreshArenas(true)">↻ Обновить</button>
+      </div>
+      <div class="arenasGridWrap" id="arenasGridWrap">
+        <div class="arenasEmpty">Загрузка расписания...</div>
+      </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<!-- ============ МОДАЛЬНОЕ: Создать запрос ============ -->
-<div class="modal" id="modalCreate">
-  <div class="modalBox">
-    <h3>Создать запрос на игру</h3>
-    <div class="fieldLabel">Контроль времени</div>
-    <div class="timeGrid" id="timeGrid"></div>
-    <div class="fieldLabel">Тип игры</div>
-    <div style="display:flex;gap:6px">
-      <button id="ratedBtn" class="on" style="flex:1;padding:10px;background:var(--bg);border:1px solid var(--border);color:var(--text-bright);border-radius:3px">Рейтинговая</button>
-      <button id="casualBtn" style="flex:1;padding:10px;background:var(--bg);border:1px solid var(--border);color:var(--text-bright);border-radius:3px">Товарищеская</button>
+  <section id="arenaPageScreen" class="screen">
+    <div class="arenaPage">
+      <aside class="arenaLeft">
+        <div class="arenaInfoCard">
+          <div class="aInfoTitle" id="aInfoTitle">—</div>
+          <div class="aInfoTime" id="aInfoTime">—</div>
+          <div class="aInfoDesc" id="aInfoDesc">—</div>
+          <div class="aInfoRules">
+            <div class="aInfoRulesLabel">Очки:</div>
+            <div class="aInfoRulesText">победа 2 · серия 3+ = 4 · ничья 1 · серия ничьих 2+ = 2</div>
+          </div>
+        </div>
+        <div class="arenaChatBox">
+          <div class="arenaChatHeader">💬 Чат арены</div>
+          <div class="arenaChatMessages" id="arenaChatMessages"></div>
+          <form class="arenaChatForm" onsubmit="sendArenaChat(event)">
+            <input id="arenaChatInput" placeholder="Написать..." maxlength="300" autocomplete="off">
+            <button type="submit">→</button>
+          </form>
+        </div>
+      </aside>
+      <main class="arenaCenter">
+        <div class="arenaTopBar">
+          <div class="arenaTrophy">🏆</div>
+          <div>
+            <h2 class="arenaPageName" id="arenaPageName">—</h2>
+            <div class="arenaPageSub" id="arenaPageSub">—</div>
+          </div>
+        </div>
+        <div class="arenaStatusRow" id="arenaStatusRow">
+          <span class="arenaStatusLabel" id="arenaStatusLabel">До начала:</span>
+          <span class="arenaStatusTime" id="arenaStatusTime">--:--</span>
+        </div>
+        <div class="arenaParticipantsHeader">
+          <div class="arenaSearch"><input id="arenaSearchInput" placeholder="🔍 Поиск игрока" oninput="filterArenaParticipants()"></div>
+          <div id="arenaJoinBtnWrap"><button class="primary arenaJoinBtn" onclick="joinCurrentArena()">УЧАСТВОВАТЬ</button></div>
+        </div>
+        <div class="arenaParticipantsTable">
+          <div class="arenaTableHeader"><span>#</span><span>Игрок</span><span>Очки</span><span>В / Н / П</span><span>Партий</span></div>
+          <div class="arenaTableBody" id="arenaTableBody"><div class="arenasEmpty">Загрузка...</div></div>
+        </div>
+        <div class="arenaWinnerBanner" id="arenaWinnerBanner" style="display:none;">
+          <div class="awbTitle">🏆 Арена завершена!</div>
+          <div class="awbPodium" id="awbPodium"></div>
+        </div>
+      </main>
+      <aside class="arenaRight">
+        <div class="arenaRightCol">
+          <div class="arenaGamesHeader">🎯 ПАРТИЯ ЛИДЕРОВ</div>
+          <div class="arenaTopGame" id="arenaTopGame">
+            <div class="arenaTopGameEmpty">Сейчас никто не играет</div>
+          </div>
+          <div class="arenaGamesHeader" style="border-top:1px solid var(--border);">🏆 ПРОШЛЫЕ ПАРТИИ ЛИДЕРОВ</div>
+          <div class="arenaGamesList" id="arenaGamesList">
+            <div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>
+          </div>
+        </div>
+      </aside>
     </div>
-    <div class="modalActions">
-      <button onclick="closeModal()">Отмена</button>
-      <button class="go" onclick="createLobby()">Создать</button>
-    </div>
-  </div>
-</div>
+  </section>
 
-<!-- ============ МОДАЛЬНОЕ: Вызов другу ============ -->
-<div class="modal" id="modalFriend">
-  <div class="modalBox">
-    <h3>Бросить вызов другу</h3>
-    <div class="fieldLabel">Имя друга</div>
-    <input type="text" id="friendName" placeholder="Логин">
-    <div class="fieldLabel">Контроль времени</div>
-    <div class="timeGrid" id="friendTimeGrid"></div>
-    <div class="modalActions">
-      <button onclick="closeModal()">Отмена</button>
-      <button class="go" onclick="alert('Функция в разработке')">Отправить</button>
+  <section id="profileScreen" class="screen">
+    <div class="profilePage">
+      <div class="profileHead">
+        <div class="profileAvatar" id="pAvatarBig">?</div>
+        <div class="nameBlock">
+          <h2><span id="pName">—</span><span id="pRoleBadges"></span></h2>
+          <div class="sub" id="pSub">—</div>
+        </div>
+        <div style="margin-left:auto;">
+          <button class="secondary" onclick="navTo('lobby')">← На главную</button>
+        </div>
+      </div>
+      <div class="catRatingsGrid" id="catRatingsGrid"></div>
+      <div class="statsGrid">
+        <div class="statBox"><div class="v" id="pRating">—</div><div class="l">Рейтинг</div></div>
+        <div class="statBox"><div class="v" id="pGames">—</div><div class="l">Партий</div></div>
+        <div class="statBox"><div class="v" id="pWins">—</div><div class="l">Побед</div></div>
+        <div class="statBox"><div class="v" id="pWinrate">—</div><div class="l">Winrate</div></div>
+      </div>
+      <h3 style="margin:16px 0 8px; color:var(--text-bright); font-weight:500">Последние партии</h3>
+      <div class="gamesList" id="gamesList"></div>
     </div>
-  </div>
-</div>
+  </section>
 
-<!-- ============ МОДАЛЬНОЕ: С ботом ============ -->
-<div class="modal" id="modalBot">
-  <div class="modalBox">
-    <h3>Сыграть с компьютером</h3>
-    <div class="fieldLabel">Уровень</div>
-    <div class="botGrid" id="botGrid"></div>
-    <div class="fieldLabel">Контроль времени</div>
-    <div class="timeGrid" id="botTimeGrid"></div>
-    <div class="fieldLabel">Ваш цвет</div>
-    <div class="colorPick">
-      <button data-c="w" class="on">⚪ Белые</button>
-      <button data-c="b">⚫ Чёрные</button>
-      <button data-c="r">🎲 Случайно</button>
+  <section id="communityScreen" class="screen">
+    <div class="arenasEmpty" style="padding:80px 20px">
+      <div style="font-size:48px;margin-bottom:16px">💬</div>
+      <h2 style="color:var(--text-bright);font-weight:400">Сообщество</h2>
+      <p>Раздел в разработке</p>
     </div>
-    <div class="modalActions">
-      <button onclick="closeModal()">Отмена</button>
-      <button class="go" onclick="startBot()">Начать игру</button>
+  </section>
+
+  <section id="gameScreen" class="screen">
+    <div class="gameWrap">
+      <div class="col-chat">
+        <div id="chatBox">
+          <div id="chatTabs"><button class="tabBtn active">Чат</button></div>
+          <div id="chatMessages"></div>
+          <form id="chatForm" onsubmit="sendChat(event)">
+            <input id="chatInput" placeholder="Сообщение..." maxlength="300" autocomplete="off">
+            <button type="submit">→</button>
+          </form>
+        </div>
+      </div>
+      <div class="col-board"><div id="boardWrap"><div id="board"></div></div></div>
+      <div class="col-info">
+        <div class="clockBox" id="topClock"><div class="clockTime" id="topTime">--:--</div></div>
+        <div class="playerStrip" id="topStrip">
+          <div class="side"><span class="dot" id="topDot"></span><span class="nm" id="topName">—</span></div>
+          <span class="rt" id="topRating"></span>
+        </div>
+        <div class="movesPanel">
+          <div class="movesToolbar">
+            <button onclick="gotoMove('first')">⏮</button>
+            <button onclick="gotoMove('prev')">◀</button>
+            <button onclick="gotoMove('next')">▶</button>
+            <button onclick="gotoMove('last')">⏭</button>
+          </div>
+          <div class="movesList" id="movesList"></div>
+        </div>
+        <div class="bigActionsRow">
+          <button class="danger" onclick="resign()">🏳</button>
+          <button onclick="offerDraw()">½</button>
+          <button onclick="flipBoard()">⇅</button>
+        </div>
+        <div class="gameResultCompact" id="gameResultCompact">
+          <div class="grTitle" id="grTitleCompact">—</div>
+          <div class="grSub" id="grSubCompact">—</div>
+          <button class="grBtn rematch" id="grRematchBtn" onclick="requestRematch()">РЕВАНШ</button>
+          <button class="grBtn findOpp" id="grFindBtn" onclick="findNewOpponent()">НАЙТИ ДРУГОГО</button>
+        </div>
+        <div class="playerStrip" id="bottomStrip">
+          <div class="side"><span class="dot" id="bottomDot"></span><span class="nm" id="bottomName">—</span></div>
+          <span class="rt" id="bottomRating"></span>
+        </div>
+        <div id="statusBar" class="statusGreen">Ожидание...</div>
+        <div class="clockBox" id="bottomClock"><div class="clockTime" id="bottomTime">--:--</div></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="botDialog" class="botModal">
+  <div class="botModalBox">
+    <h3>🤖 Игра с компьютером</h3>
+    <div class="botModalLabel">Уровень</div>
+    <div id="botLevels" class="botLevelsGrid"></div>
+    <div class="botModalLabel">Контроль времени</div>
+    <div id="botTimes" class="botTimesGrid"></div>
+    <div class="botModalActions">
+      <button class="cancelBtn" onclick="closeBotDialog()">Отмена</button>
+      <button class="startBtn" onclick="startBotGame()">Начать</button>
     </div>
   </div>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-(function () {
+(function() {
   'use strict';
-  const socket = io();
-  const EMO = { K:'♔', Q:'♕', R:'♖', B:'♗', N:'♘', P:'♙', k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟' };
-  const $ = id => document.getElementById(id);
-  const esc = t => String(t).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const fmtTime = s => { s = Math.max(0, Math.floor(s)); return String((s/60)|0).padStart(2,'0') + ':' + String(s%60).padStart(2,'0'); };
+
+  const socket = io({ transports: ['websocket', 'polling'] });
 
   let me = null;
-  let currentTab = 'quick';
-  let selectedTime = { t: 3, i: 2 };
-  let selectedBotTime = { t: 5, i: 0 };
-  let selectedBotName = null;
-  let selectedBotColor = 'w';
-  let lobbyRated = true;
+  let myColor = 'w';
+  let myTime = 0, oppTime = 0, inc = 0;
+  let gameActive = false;
+  let lobbyId = null;
+  let opponentName = '—';
+  let opponentRating = null;
+  let opponentOnline = true;
+  let opponentIsBot = false;
+  let isBotGame = false;
+  let currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  let selected = null;
+  let legalMoves = [];
+  let currentLobbyTab = 'create';
+  let arenasCache = [];
+  let arenaStatesCache = {};
+  let currentArenaId = null;
+  let currentArenaState = null;
+  let gameEnded = false;
+  let moveHistory = [];
+  let moveFens = [];
+  let viewIndex = -1;
+  let lastMove = null;
+  let boardFlipped = false;
+  let pendingDrawOffer = false;
+  let watchingGameId = null;
+  let watchingGame = null;
+  let arenaServerOffsetMs = 0;
+  let arenaPhase = 'waiting';
+  let arenaStartsAt = 0, arenaEndsAt = 0;
+  let arenaPageHandle = null;
+  let arenaStatusHandle = null;
+  let arenaGamesHandle = null;
+  let arenasRefreshHandle = null;
+  let lastArenasHash = '';
+  let lastArenaStateHash = '';
+  let lastArenaGamesHash = '';
+  let lastTopArenasHash = '';
+  let lastWatchHash = '';
+  let lastBoardHash = '';
+  let lastWatchBoardHash = '';
+  let clockLoopRunning = false;
+  let clockSyncedAt = 0;
+  let clockMyAtSync = 0;
+  let clockOppAtSync = 0;
+  let clockTurn = 'w';
+  let rematchRequested = false;
 
-  // ============ ИГРА ============
-  let gameId = null, myColor = 'w', fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-  let myT = 0, opT = 0, active = false, ended = false;
-  let sel = null, hints = [], lastMove = null, premove = null, flipped = false;
-  let clockTurn = 'w', clockAt = 0, myAt = 0, opAt = 0, clockOn = false;
+  const EMOJI = { 'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙','k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟' };
 
-  // ============ FEN ============
-  function parse(f) {
-    const p = f.split(' ');
-    const b = Array.from({ length: 8 }, () => Array(8).fill(null));
-    p[0].split('/').forEach((row, r) => { let x = 0; for (const ch of row) { if (/\d/.test(ch)) x += +ch; else b[r][x++] = ch; } });
-    return { b, turn: p[1], cast: p[2], ep: p[3] };
+  function escapeHtml(s) { return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); }
+  function nickHtml(username, isAdminFlag, isModFlag, isBotFlag) {
+    if (!username) return '';
+    const admin = (typeof isAdminFlag === 'boolean') ? isAdminFlag : (username === 'PeshkaSasha');
+    const mod = (typeof isModFlag === 'boolean') ? isModFlag : false;
+    const bot = !!isBotFlag;
+    const crown = admin ? '<span class="crown">👑</span>' : '';
+    const botTag = bot ? '<span class="botBadge" style="margin-right:4px">🤖</span>' : '';
+    return botTag + crown + escapeHtml(username);
   }
-  function toFen(s) {
-    const rows = s.b.map(r => { let str = '', e = 0; for (const c of r) { if (c) { if (e) { str += e; e = 0; } str += c; } else e++; } if (e) str += e; return str; }).join('/');
-    return [rows, s.turn, s.cast, s.ep || '-', 0, 1].join(' ');
+  function onlineDotHtml(online) {
+    return online ? '<span class="onlineDot"></span>' : '<span class="offlineDot"></span>';
   }
-  const isW = p => !!p && p === p.toUpperCase();
-  const ok = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
 
-  function pseudo(s, r, c) {
-    const p = s.b[r][c]; if (!p) return [];
-    const m = [], white = isW(p), t = p.toLowerCase(), dir = white ? -1 : 1;
-    const add = (rr, cc) => { if (!ok(rr, cc)) return false; const x = s.b[rr][cc]; if (x && isW(x) === white) return false; m.push([rr, cc]); return !x; };
-    if (t === 'p') {
-      const sr = white ? 6 : 1, r1 = r + dir;
-      if (ok(r1, c) && !s.b[r1][c]) { m.push([r1, c]); const r2 = r + 2 * dir; if (r === sr && ok(r2, c) && !s.b[r2][c]) m.push([r2, c]); }
-      for (const dc of [-1, 1]) { const rr = r + dir, cc = c + dc; if (!ok(rr, cc)) continue; const x = s.b[rr][cc]; if (x && isW(x) !== white) m.push([rr, cc]); const epT = String.fromCharCode(97 + cc) + (8 - rr); if (s.ep && s.ep === epT && !x) m.push([rr, cc]); }
-    } else if (t === 'n') { [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([a,b]) => add(r+a, c+b)); }
-    else if (t === 'k') {
-      [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([a,b]) => add(r+a, c+b));
-      if (white && r === 7 && c === 4) {
-        if (s.cast.includes('K') && !s.b[7][5] && !s.b[7][6] && s.b[7][7] === 'R') m.push([7, 6]);
-        if (s.cast.includes('Q') && !s.b[7][3] && !s.b[7][2] && !s.b[7][1] && s.b[7][0] === 'R') m.push([7, 2]);
+  function parseFen(fen) {
+    const parts = fen.split(' ');
+    const board = Array.from({length:8}, () => Array(8).fill(null));
+    parts[0].split('/').forEach((row, r) => { let f = 0; for (const ch of row) { if (/\d/.test(ch)) f += +ch; else board[r][f++] = ch; } });
+    return { board, turn: parts[1], castling: parts[2], ep: parts[3], half: +parts[4] || 0, full: +parts[5] || 1 };
+  }
+  function toFen(state) {
+    const rows = state.board.map(r => { let s = '', e = 0; for (const c of r) { if (c) { if (e) { s += e; e = 0; } s += c; } else e++; } if (e) s += e; return s; }).join('/');
+    return [rows, state.turn, state.castling, state.ep, state.half, state.full].join(' ');
+  }
+  const isWhitePiece = p => !!p && p === p.toUpperCase();
+  const inBoard = (r,c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+  function pseudoMoves(state, r, c) {
+    const p = state.board[r][c]; if (!p) return [];
+    const moves = []; const white = isWhitePiece(p); const type = p.toLowerCase();
+    const dir = white ? -1 : 1;
+    const add = (rr, cc) => { if (!inBoard(rr, cc)) return false; const t = state.board[rr][cc]; if (t && isWhitePiece(t) === white) return false; moves.push([rr, cc]); return !t; };
+    if (type === 'p') {
+      const startRow = white ? 6 : 1, oneR = r + dir;
+      if (inBoard(oneR, c) && !state.board[oneR][c]) { moves.push([oneR, c]); const twoR = r + 2 * dir; if (r === startRow && inBoard(twoR, c) && !state.board[twoR][c]) moves.push([twoR, c]); }
+      for (const dc of [-1, 1]) { const rr = r + dir, cc = c + dc; if (!inBoard(rr, cc)) continue; const t = state.board[rr][cc]; if (t && isWhitePiece(t) !== white) moves.push([rr, cc]); const epT = String.fromCharCode(97 + cc) + (8 - rr); if (state.ep && state.ep === epT && !t) moves.push([rr, cc]); }
+    } else if (type === 'n') { [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc]) => add(r+dr, c+dc)); }
+    else if (type === 'k') {
+      [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc]) => add(r+dr, c+dc));
+      if (white && r === 7 && c === 4 && !isAttacked(state, 7, 4, false)) {
+        if (state.castling.includes('K') && !state.board[7][5] && !state.board[7][6] && state.board[7][7] === 'R') moves.push([7, 6]);
+        if (state.castling.includes('Q') && !state.board[7][3] && !state.board[7][2] && !state.board[7][1] && state.board[7][0] === 'R') moves.push([7, 2]);
       }
-      if (!white && r === 0 && c === 4) {
-        if (s.cast.includes('k') && !s.b[0][5] && !s.b[0][6] && s.b[0][7] === 'r') m.push([0, 6]);
-        if (s.cast.includes('q') && !s.b[0][3] && !s.b[0][2] && !s.b[0][1] && s.b[0][0] === 'r') m.push([0, 2]);
+      if (!white && r === 0 && c === 4 && !isAttacked(state, 0, 4, true)) {
+        if (state.castling.includes('k') && !state.board[0][5] && !state.board[0][6] && state.board[0][7] === 'r') moves.push([0, 6]);
+        if (state.castling.includes('q') && !state.board[0][3] && !state.board[0][2] && !state.board[0][1] && state.board[0][0] === 'r') moves.push([0, 2]);
       }
     } else {
       const dirs = [];
-      if (t === 'r' || t === 'q') dirs.push([-1,0],[1,0],[0,-1],[0,1]);
-      if (t === 'b' || t === 'q') dirs.push([-1,-1],[-1,1],[1,-1],[1,1]);
-      for (const [a,b] of dirs) { let rr = r + a, cc = c + b; while (add(rr, cc)) { rr += a; cc += b; } }
+      if (type === 'r' || type === 'q') dirs.push([-1,0],[1,0],[0,-1],[0,1]);
+      if (type === 'b' || type === 'q') dirs.push([-1,-1],[-1,1],[1,-1],[1,1]);
+      for (const [dr, dc] of dirs) { let rr = r + dr, cc = c + dc; while (add(rr, cc)) { rr += dr; cc += dc; } }
     }
-    return m;
+    return moves;
   }
-  function findK(s, white) { const k = white ? 'K' : 'k'; for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (s.b[r][c] === k) return [r, c]; return null; }
-  function atk(s, r, c, byW) {
+  function findKing(state, white) { const k = white ? 'K' : 'k'; for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (state.board[r][c] === k) return [r, c]; return null; }
+  function isAttacked(state, r, c, byWhite) {
     for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
-      const p = s.b[rr][cc]; if (!p || isW(p) !== byW) continue;
+      const p = state.board[rr][cc]; if (!p || isWhitePiece(p) !== byWhite) continue;
       const t = p.toLowerCase();
-      if (t === 'p') { const d = byW ? -1 : 1; if (rr + d === r && (cc - 1 === c || cc + 1 === c)) return true; continue; }
+      if (t === 'p') { const dir = byWhite ? -1 : 1; if (rr + dir === r && (cc - 1 === c || cc + 1 === c)) return true; continue; }
       if (t === 'k') { if (Math.abs(rr - r) <= 1 && Math.abs(cc - c) <= 1 && (rr !== r || cc !== c)) return true; continue; }
-      if (pseudo(s, rr, cc).some(([a,b]) => a === r && b === c)) return true;
+      if (pseudoMoves(state, rr, cc).some(([mr, mc]) => mr === r && mc === c)) return true;
     }
     return false;
   }
-  function chk(s, white) { const k = findK(s, white); return k ? atk(s, k[0], k[1], !white) : false; }
-  function apply(s, from, to) {
-    const c = { b: s.b.map(r => r.slice()), turn: s.turn, cast: s.cast, ep: s.ep };
-    const [fr, fc] = from, [tr, tc] = to, p = c.b[fr][fc], white = isW(p), t = p.toLowerCase();
-    if (t === 'p' && c.ep) { const tgt = String.fromCharCode(97 + tc) + (8 - tr); if (c.ep === tgt && !c.b[tr][tc]) c.b[fr][tc] = null; }
-    c.b[tr][tc] = p; c.b[fr][fc] = null;
-    if (t === 'p' && (tr === 0 || tr === 7)) c.b[tr][tc] = white ? 'Q' : 'q';
-    if (t === 'k' && Math.abs(tc - fc) === 2) { if (tc > fc) { c.b[fr][5] = c.b[fr][7]; c.b[fr][7] = null; } else { c.b[fr][3] = c.b[fr][0]; c.b[fr][0] = null; } }
-    let cast = c.cast;
-    if (t === 'k') cast = cast.replace(white ? /[KQ]/g : /[kq]/g, '');
-    if (t === 'r') { if (fr === 7 && fc === 0) cast = cast.replace('Q', ''); if (fr === 7 && fc === 7) cast = cast.replace('K', ''); if (fr === 0 && fc === 0) cast = cast.replace('q', ''); if (fr === 0 && fc === 7) cast = cast.replace('k', ''); }
-    c.cast = cast || '-';
-    c.ep = (t === 'p' && Math.abs(tr - fr) === 2) ? String.fromCharCode(97 + fc) + (8 - (fr + (tr - fr) / 2)) : '-';
-    c.turn = white ? 'b' : 'w';
-    return c;
+  function inCheck(state, white) { const k = findKing(state, white); if (!k) return false; return isAttacked(state, k[0], k[1], !white); }
+  function applyMoveToCopy(state, from, to) {
+    const copy = { board: state.board.map(row => row.slice()), turn: state.turn, castling: state.castling, ep: state.ep, half: state.half, full: state.full };
+    const [fr, fc] = from, [tr, tc] = to;
+    const p = copy.board[fr][fc]; const white = isWhitePiece(p); const type = p.toLowerCase();
+    if (type === 'p' && copy.ep) { const target = String.fromCharCode(97 + tc) + (8 - tr); if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null; }
+    copy.board[tr][tc] = p; copy.board[fr][fc] = null;
+    if (type === 'p' && (tr === 0 || tr === 7)) copy.board[tr][tc] = white ? 'Q' : 'q';
+    if (type === 'k' && Math.abs(tc - fc) === 2) { const row = fr; if (tc > fc) { copy.board[row][5] = copy.board[row][7]; copy.board[row][7] = null; } else { copy.board[row][3] = copy.board[row][0]; copy.board[row][0] = null; } }
+    let cast = copy.castling;
+    if (type === 'k') cast = cast.replace(white ? /[KQ]/g : /[kq]/g, '');
+    if (type === 'r') { if (fr === 7 && fc === 0) cast = cast.replace('Q', ''); if (fr === 7 && fc === 7) cast = cast.replace('K', ''); if (fr === 0 && fc === 0) cast = cast.replace('q', ''); if (fr === 0 && fc === 7) cast = cast.replace('k', ''); }
+    if (!cast) cast = '-';
+    let ep = '-'; if (type === 'p' && Math.abs(tr - fr) === 2) ep = String.fromCharCode(97 + fc) + (8 - (fr + (tr - fr) / 2));
+    copy.castling = cast; copy.ep = ep; copy.turn = white ? 'b' : 'w'; copy.full += 1;
+    return copy;
   }
-  function legal(s, r, c) { const p = s.b[r][c]; if (!p) return []; const w = isW(p); return pseudo(s, r, c).filter(([a,b]) => !chk(apply(s, [r,c], [a,b]), w)); }
+  function legalMovesFor(state, r, c) {
+    const p = state.board[r][c]; if (!p) return [];
+    const white = isWhitePiece(p);
+    return pseudoMoves(state, r, c).filter(([rr, cc]) => !inCheck(applyMoveToCopy(state, [r, c], [rr, cc]), white));
+  }
+  function hasAnyLegalMove(state, white) {
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) { const p = state.board[r][c]; if (p && isWhitePiece(p) === white && legalMovesFor(state, r, c).length) return true; }
+    return false;
+  }
 
-  // ============ ДОСКА ============
-  function render() {
-    const st = parse(fen);
-    const el = $('board'); el.innerHTML = '';
-    const fl = (myColor === 'b') !== flipped;
-    const turnW = st.turn === 'w';
-    const king = chk(st, turnW) ? findK(st, turnW) : null;
+  function renderBoard() {
+    const fenToShow = (viewIndex >= 0 && viewIndex < moveFens.length) ? moveFens[viewIndex] : currentFen;
+    const hash = fenToShow + '|' + (selected ? selected.join(',') : '') + '|' + viewIndex + '|' +
+      (lastMove ? lastMove.from.join(',') + lastMove.to.join(',') : '') + '|' + myColor + '|' + boardFlipped +
+      '|' + legalMoves.map(m => m.join(',')).join(';');
+    if (hash === lastBoardHash) return;
+    lastBoardHash = hash;
+    const state = parseFen(fenToShow);
+    const boardEl = document.getElementById('board');
+    boardEl.innerHTML = '';
+    const flip = (myColor === 'b') !== boardFlipped;
+    const interactive = gameActive && !gameEnded && viewIndex === -1;
     for (let dr = 0; dr < 8; dr++) {
       for (let dc = 0; dc < 8; dc++) {
-        const r = fl ? 7 - dr : dr, c = fl ? 7 - dc : dc;
-        const d = document.createElement('div');
-        d.className = 'sq ' + ((r + c) % 2 ? 'd' : 'l');
-        d.dataset.r = r; d.dataset.c = c;
-        if (lastMove && ((lastMove.from[0] === r && lastMove.from[1] === c) || (lastMove.to[0] === r && lastMove.to[1] === c))) d.classList.add('last');
-        if (king && king[0] === r && king[1] === c) d.classList.add('chk');
-        if (sel && sel[0] === r && sel[1] === c) d.classList.add('sel');
-        if (active && !ended && hints.some(([a,b]) => a === r && b === c)) { d.classList.add('hint'); if (st.b[r][c]) d.classList.add('cap'); }
-        if (premove) { if (premove.from[0] === r && premove.from[1] === c) d.classList.add('pf'); if (premove.to[0] === r && premove.to[1] === c) d.classList.add('pt'); }
-        const p = st.b[r][c];
-        if (p) { const sp = document.createElement('span'); sp.className = 'pc ' + (isW(p) ? 'w' : 'b'); sp.textContent = EMO[p]; d.appendChild(sp); }
-        el.appendChild(d);
+        const r = flip ? 7 - dr : dr;
+        const c = flip ? 7 - dc : dc;
+        const sq = document.createElement('div');
+        sq.className = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
+        sq.dataset.r = r; sq.dataset.c = c;
+        if (lastMove && viewIndex === -1) { if ((lastMove.from[0] === r && lastMove.from[1] === c) || (lastMove.to[0] === r && lastMove.to[1] === c)) sq.classList.add('lastmove'); }
+        const isWhiteTurn = state.turn === 'w';
+        if (inCheck(state, isWhiteTurn)) { const k = findKing(state, isWhiteTurn); if (k && k[0] === r && k[1] === c) sq.classList.add('check'); }
+        if (selected && selected[0] === r && selected[1] === c) sq.classList.add('sel');
+        if (interactive && legalMoves.some(([mr, mc]) => mr === r && mc === c)) {
+          sq.classList.add('hint');
+          if (state.board[r][c]) sq.classList.add('capture');
+        }
+        const p = state.board[r][c];
+        if (p) { const piece = document.createElement('span'); piece.className = 'piece ' + (isWhitePiece(p) ? 'w' : 'b'); piece.textContent = EMOJI[p]; sq.appendChild(piece); }
+        if (dr === 7) { const e = document.createElement('span'); e.className='coord-f'; e.textContent = String.fromCharCode(97 + c); sq.appendChild(e); }
+        if (dc === 0) { const e = document.createElement('span'); e.className='coord-r'; e.textContent = 8 - r; sq.appendChild(e); }
+        boardEl.appendChild(sq);
       }
     }
-    clockTurn = st.turn;
-    updateClockUI();
+    updateTurnIndicator(state);
   }
-  function updateClockUI() {
-    if (active && !ended) { clockAt = performance.now(); myAt = myT; opAt = opT; if (!clockOn) { clockOn = true; loop(); } }
-    $('pTop').classList.toggle('on', active && !ended && clockTurn !== myColor);
-    $('pBot').classList.toggle('on', active && !ended && clockTurn === myColor);
-    const st = $('gameStatus');
-    if (ended) return;
-    if (active) {
-      st.className = 'gameStatus on';
-      const w = clockTurn === 'w' ? 'Ход белых' : 'Ход чёрных';
-      st.textContent = w + ' — ' + (clockTurn === myColor ? 'ваш ход' : 'ход соперника') + (premove ? ' · премьюв' : '');
+  function updateTurnIndicator(state) {
+    if (!state) state = parseFen(currentFen);
+    clockTurn = state.turn;
+    if (gameActive && !gameEnded) {
+      clockSyncedAt = performance.now();
+      clockMyAtSync = myTime;
+      clockOppAtSync = oppTime;
+      if (!clockLoopRunning) startClockLoop();
+    }
+    document.getElementById('topStrip').classList.toggle('active', gameActive && !gameEnded && state.turn !== myColor);
+    document.getElementById('bottomStrip').classList.toggle('active', gameActive && !gameEnded && state.turn === myColor);
+    document.getElementById('topClock').classList.toggle('active', gameActive && !gameEnded && state.turn !== myColor);
+    document.getElementById('bottomClock').classList.toggle('active', gameActive && !gameEnded && state.turn === myColor);
+    const bar = document.getElementById('statusBar');
+    if (gameEnded) { bar.className = 'statusYellow'; bar.textContent = 'Партия завершена'; }
+    else if (gameActive) { const who = state.turn === 'w' ? 'Белые' : 'Чёрные'; bar.className = 'statusGreen'; bar.textContent = `${who} — ${state.turn === myColor ? 'ваш ход' : 'ход соперника'}`; }
+  }
+
+  function onSquareClick(r, c) {
+    if (!gameActive || gameEnded || viewIndex !== -1) return;
+    const state = parseFen(currentFen);
+    if (state.turn !== myColor) return;
+    if (selected) {
+      const isLegal = legalMoves.some(([mr, mc]) => mr === r && mc === c);
+      if (isLegal) { applyUserMove(selected, [r, c]); selected = null; legalMoves = []; return; }
+    }
+    const p = state.board[r][c];
+    if (p && isWhitePiece(p) === (myColor === 'w')) { selected = [r, c]; legalMoves = legalMovesFor(state, r, c); }
+    else { selected = null; legalMoves = []; }
+    lastBoardHash = ''; renderBoard();
+  }
+  document.getElementById('board').addEventListener('click', (ev) => {
+    const sq = ev.target.closest('.sq'); if (!sq || sq.dataset.r == null) return;
+    onSquareClick(+sq.dataset.r, +sq.dataset.c);
+  });
+  function applyUserMove(from, to) {
+    const state = parseFen(currentFen);
+    const legal = legalMovesFor(state, from[0], from[1]);
+    if (!legal.some(([r, c]) => r === to[0] && c === to[1])) return false;
+    const nextState = applyMoveToCopy(state, from, to);
+    const newFen = toFen(nextState);
+    currentFen = newFen; lastMove = { from, to };
+    moveHistory.push(''); moveFens.push(newFen);
+    renderMoves(); lastBoardHash = ''; renderBoard();
+    socket.emit('move', { lobbyId, fen: newFen, turn: nextState.turn });
+    checkGameEnd(nextState);
+    return true;
+  }
+  function renderMoves() {
+    const el = document.getElementById('movesList');
+    el.innerHTML = '';
+    for (let i = 0; i < moveFens.length; i += 2) {
+      const row = document.createElement('div'); row.className = 'mvRow';
+      const num = (i / 2) + 1;
+      const activeW = viewIndex === i, activeB = viewIndex === i + 1;
+      row.innerHTML = `<span class="num">${num}.</span><span class="mv ${activeW?'current':''}" onclick="jumpToMove(${i})">${moveHistory[i]||''}</span><span class="mv ${activeB?'current':''}" onclick="jumpToMove(${i+1})">${moveHistory[i+1]||''}</span>`;
+      el.appendChild(row);
+    }
+    el.scrollTop = el.scrollHeight;
+  }
+  function jumpToMove(idx) { if (idx < 0 || idx >= moveFens.length) return; viewIndex = idx; lastBoardHash = ''; renderBoard(); renderMoves(); }
+  window.jumpToMove = jumpToMove;
+  function gotoMove(where) {
+    if (!moveFens.length) return;
+    if (where === 'first') viewIndex = 0;
+    else if (where === 'last') viewIndex = -1;
+    else if (where === 'prev') viewIndex = viewIndex === -1 ? moveFens.length - 2 : Math.max(0, viewIndex - 1);
+    else if (where === 'next') { if (viewIndex === -1) return; viewIndex++; if (viewIndex >= moveFens.length - 1) viewIndex = -1; }
+    lastBoardHash = ''; renderBoard(); renderMoves();
+  }
+  window.gotoMove = gotoMove;
+  function checkGameEnd(state) {
+    const sideToMoveWhite = state.turn === 'w';
+    if (!hasAnyLegalMove(state, sideToMoveWhite)) {
+      if (inCheck(state, sideToMoveWhite)) endGame(sideToMoveWhite ? 'b' : 'w', 'Мат', true, false);
+      else endGame(null, 'Пат', true, false);
     }
   }
-  function loop() {
-    if (!active || ended) { clockOn = false; return; }
-    const el = (performance.now() - clockAt) / 1000;
-    let m = myAt, o = opAt;
-    if (clockTurn === myColor) m = Math.max(0, m - el); else o = Math.max(0, o - el);
-    $('timeTop').textContent = fmtTime(o);
-    $('timeBot').textContent = fmtTime(m);
-    $('pTop').classList.toggle('low', o <= 20);
-    $('pBot').classList.toggle('low', m <= 20);
-    requestAnimationFrame(loop);
+
+  function startClockLoop() {
+    if (clockLoopRunning) return;
+    clockLoopRunning = true;
+    function tick() {
+      if (!gameActive || gameEnded) { clockLoopRunning = false; return; }
+      const elapsed = (performance.now() - clockSyncedAt) / 1000;
+      let m = clockMyAtSync, o = clockOppAtSync;
+      if (clockTurn === myColor) m = Math.max(0, m - elapsed);
+      else o = Math.max(0, o - elapsed);
+      myTime = m; oppTime = o;
+      document.getElementById('topTime').textContent = formatTime(oppTime);
+      document.getElementById('bottomTime').textContent = formatTime(myTime);
+      document.getElementById('topClock').classList.toggle('low', oppTime <= 20);
+      document.getElementById('bottomClock').classList.toggle('low', myTime <= 20);
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+  function updateTimersFromServer(timeW, timeB, turn) {
+    clockSyncedAt = performance.now();
+    clockMyAtSync = myColor === 'w' ? timeW : timeB;
+    clockOppAtSync = myColor === 'w' ? timeB : timeW;
+    if (turn) clockTurn = turn;
+    myTime = clockMyAtSync; oppTime = clockOppAtSync;
+    if (!clockLoopRunning) startClockLoop();
   }
 
-  // ============ КЛИК ============
-  $('board').addEventListener('click', e => {
-    const d = e.target.closest('.sq'); if (!d) return;
-    if (!active || ended) return;
-    const r = +d.dataset.r, c = +d.dataset.c;
-    const st = parse(fen);
-    const myTurn = st.turn === myColor;
+  function show(screen) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); const el = document.getElementById(screen); if (el) el.classList.add('active'); }
+  function navTo(name) {
+    if (!me && name !== 'login') { show('loginScreen'); return; }
+    const map = { 'lobby':'lobbyScreen','watch':'watchScreen','arenas':'arenasScreen','arenaPage':'arenaPageScreen','profile':'profileScreen','community':'communityScreen','game':'gameScreen','login':'loginScreen' };
+    const sid = map[name]; if (!sid) return;
+    if (name !== 'arenaPage' && currentArenaId) {
+      socket.emit('leaveArenaRoom', { arenaId: currentArenaId });
+      if (arenaPageHandle) { clearInterval(arenaPageHandle); arenaPageHandle = null; }
+      if (arenaStatusHandle) { clearInterval(arenaStatusHandle); arenaStatusHandle = null; }
+      if (arenaGamesHandle) { clearInterval(arenaGamesHandle); arenaGamesHandle = null; }
+    }
+    show(sid);
+    document.querySelectorAll('#mainNav a').forEach(a => a.classList.toggle('active', a.dataset.nav === name));
+    if (name === 'lobby') { refreshLobbies(); refreshTopArenas(); refreshStats(); }
+    if (name === 'watch') refreshWatchList(true);
+    if (name === 'arenas') refreshArenas(true);
+    if (name === 'profile' && me) openProfileView(me.username);
+  }
+  window.navTo = navTo;
 
-    if (!myTurn) {
-      if (premove && premove.to[0] === r && premove.to[1] === c) { premove = null; render(); return; }
-      const p = st.b[r][c];
-      const mine = p && isW(p) === (myColor === 'w');
-      if (sel) {
-        if (sel[0] === r && sel[1] === c) { sel = null; hints = []; render(); return; }
-        premove = { from: sel, to: [r, c] };
-        sel = null; hints = []; render(); return;
-      }
-      if (mine) { sel = [r, c]; hints = legal(st, r, c); render(); }
+  function doLogin() {
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    if (!username || !password) { document.getElementById('loginMsg').textContent = 'Введите логин и пароль'; return; }
+    socket.emit('register', { username, password }, (res) => {
+      if (!res || !res.ok) { document.getElementById('loginMsg').textContent = (res && res.msg) || 'Ошибка'; return; }
+      me = res.user;
+      try { localStorage.setItem('kingside_login', JSON.stringify({ username, password })); } catch (e) {}
+      updateTopbarUser();
+      navTo('lobby');
+      refreshLobbies(); refreshTopArenas(); refreshStats();
+    });
+  }
+  window.doLogin = doLogin;
+  function updateTopbarUser() {
+    if (!me) return;
+    document.getElementById('userBtn').style.display = 'flex';
+    document.getElementById('logoutBtn').style.display = 'block';
+    document.getElementById('userName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod, me.isBot) + ' (' + me.rating + ')';
+    document.getElementById('userAvatar').textContent = me.username.charAt(0).toUpperCase();
+  }
+  function logout() { try { localStorage.removeItem('kingside_login'); } catch (e) {} location.reload(); }
+  window.logout = logout;
+
+  function switchLobbyTab(tab) {
+    currentLobbyTab = tab;
+    document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    renderLobbyTab();
+  }
+  window.switchLobbyTab = switchLobbyTab;
+
+  function refreshTopArenas() {
+    socket.emit('getTopArenas', (list) => {
+      const box = document.getElementById('topArenasBox'); if (!box) return;
+      const hash = JSON.stringify(list); if (hash === lastTopArenasHash) return;
+      lastTopArenasHash = hash;
+      if (!list || !list.length) { box.innerHTML = '<div class="arenaEmpty" style="padding:20px 0">Сейчас активных арен нет</div>'; return; }
+      box.innerHTML = list.map(a => {
+        const cls = 'topArenaCard' + (a.phase === 'live' ? ' live' : '');
+        const phaseText = a.phase === 'live' ? 'идёт сейчас' : 'ждёт старта';
+        const botTag = a.botFriendly ? ' 🤖' : '';
+        return `<div class="${cls}" onclick="openArenaPage('${a.id}')"><div class="taName">${escapeHtml(a.name)}${botTag}</div><div class="taInfo"><span>${a.timeControl}+${a.increment}</span><span><b>${a.participantsCount}</b> 👥 · ${phaseText}</span></div></div>`;
+      }).join('');
+    });
+  }
+  window.refreshTopArenas = refreshTopArenas;
+
+  function refreshStats() {
+    socket.emit('getStats', (s) => {
+      if (!s) return;
+      const e1 = document.getElementById('statOnline'), e2 = document.getElementById('statGames'), e3 = document.getElementById('statActive');
+      if (e1) e1.textContent = s.online;
+      if (e2) e2.textContent = s.games;
+      if (e3) e3.textContent = s.activeGames || 0;
+    });
+  }
+  window.refreshStats = refreshStats;
+
+  function renderLobbyTab() {
+    const el = document.getElementById('lobbyTabContent');
+    if (currentLobbyTab === 'create') {
+      el.innerHTML = `
+        <div class="quickGrid">
+          ${[{t:1,i:0,name:'Пуля'},{t:2,i:1,name:'Пуля'},{t:3,i:0,name:'Блиц'},{t:3,i:2,name:'Блиц'},{t:5,i:0,name:'Блиц'},{t:5,i:3,name:'Блиц'},{t:10,i:0,name:'Рапид'},{t:10,i:5,name:'Рапид'},{t:15,i:10,name:'Рапид'},{t:30,i:0,name:'Классика'},{t:30,i:20,name:'Классика'}].map(({t,i,name}) => `<button class="quickBtn" onclick="quickStart(${t},${i},'rated')"><div class="qb-time">${t}+${i}</div><div class="qb-name">${name}</div></button>`).join('')}
+          <button class="quickBtn custom" onclick="showCustomGame()"><div class="qb-time">Своя</div><div class="qb-name">игра</div></button>
+        </div>
+        <div id="customGamePanel" style="display:none; margin-top:14px; padding:14px; background:var(--panel-2); border-radius:6px;">
+          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <label style="color:var(--muted);font-size:13px;">Минуты:</label>
+            <input id="customMin" type="number" value="5" min="1" max="60" style="width:70px;">
+            <label style="color:var(--muted);font-size:13px;">Инкремент:</label>
+            <input id="customInc" type="number" value="0" min="0" max="60" style="width:70px;">
+            <label style="color:var(--muted);font-size:13px;">Режим:</label>
+            <select id="customMode" style="padding:6px;">
+              <option value="rated">Рейтинговая</option>
+              <option value="casual">Товарищеская</option>
+            </select>
+            <button class="primary" onclick="createCustomLobby()" style="padding:8px 18px;">Создать</button>
+          </div>
+        </div>`;
       return;
     }
-    if (premove) premove = null;
-    if (sel) {
-      if (sel[0] === r && sel[1] === c) { sel = null; hints = []; render(); return; }
-      if (hints.some(([a,b]) => a === r && b === c)) { const from = sel; sel = null; hints = []; doMove(from, [r, c]); return; }
-    }
-    const p = st.b[r][c];
-    if (p && isW(p) === (myColor === 'w')) { sel = [r, c]; hints = legal(st, r, c); }
-    else { sel = null; hints = []; }
-    render();
-  });
-  function doMove(from, to) {
-    const st = parse(fen);
-    if (st.turn !== myColor) return;
-    if (!legal(st, from[0], from[1]).some(([a,b]) => a === to[0] && b === to[1])) return;
-    const next = apply(st, from, to);
-    fen = toFen(next); lastMove = { from, to }; premove = null;
-    socket.emit('move', { gameId, fen });
-    render();
-  }
-  function tryPre() {
-    if (!premove) return;
-    const st = parse(fen);
-    if (st.turn !== myColor) return;
-    const p = st.b[premove.from[0]][premove.from[1]];
-    if (!p || isW(p) !== (myColor === 'w')) { premove = null; render(); return; }
-    if (!legal(st, premove.from[0], premove.from[1]).some(([a,b]) => a === premove.to[0] && b === premove.to[1])) { premove = null; render(); return; }
-    const mv = premove; premove = null;
-    setTimeout(() => doMove(mv.from, mv.to), 30);
-  }
-
-  // ============ НАВИГАЦИЯ ============
-  window.nav = function (name) {
-    if (!me && name !== 'login') { show('loginScreen'); return; }
-    document.querySelectorAll('.scr').forEach(s => s.classList.remove('on'));
-    const map = { home: 'homeScreen', game: 'gameScreen', profile: 'profileScreen', login: 'loginScreen' };
-    if (map[name]) $(map[name]).classList.add('on');
-    document.querySelectorAll('header nav a').forEach(a => a.classList.toggle('on', a.dataset.nav === name));
-    if (name === 'home') { renderTab(); socket.emit('getStats', s => { $('sOnline').textContent = s.online; $('sGames').textContent = s.games; }); }
-    if (name === 'profile') loadProfile();
-  };
-  function show(id) {
-    document.querySelectorAll('.scr').forEach(s => s.classList.remove('on'));
-    $(id).classList.add('on');
-  }
-
-  // ============ ТАБЫ ============
-  window.setTab = function (t) {
-    currentTab = t;
-    document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
-    renderTab();
-  };
-  function renderTab() {
-    if (currentTab === 'quick') renderQuick();
-    else if (currentTab === 'lobby') renderLobby();
-    else renderCorr();
-  }
-  function renderQuick() {
-    const times = [
-      { t: 1, i: 0, name: 'Пуля' },
-      { t: 2, i: 1, name: 'Пуля' },
-      { t: 3, i: 0, name: 'Блиц' },
-      { t: 3, i: 2, name: 'Блиц' },
-      { t: 5, i: 0, name: 'Блиц' },
-      { t: 5, i: 3, name: 'Блиц' },
-      { t: 10, i: 0, name: 'Рапид' },
-      { t: 10, i: 5, name: 'Рапид' },
-      { t: 15, i: 10, name: 'Рапид' },
-      { t: 30, i: 0, name: 'Классика' },
-      { t: 30, i: 20, name: 'Классика' },
-      { t: 60, i: 0, name: 'Классика' }
-    ];
-    $('tabContent').innerHTML = `<div class="quickGrid">${times.map(x =>
-      `<div class="quickCard quick" data-t="${x.t}" data-i="${x.i}">
-        <div class="qcTime">${x.t}+${x.i}</div>
-        <div class="qcName">${x.name}</div>
-      </div>`).join('')}</div>`;
-    $('tabContent').querySelectorAll('.quickCard').forEach(c => {
-      c.onclick = () => {
-        const time = +c.dataset.t, inc = +c.dataset.i;
-        socket.emit('create', { time, inc, rated: true }, r => {
-          if (!r || !r.ok) { alert(r && r.msg || 'Ошибка'); return; }
-          if (r.matched) return;
-          gameId = r.id; myColor = 'w';
-          fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-          myT = time * 60; opT = myT;
-          active = false; ended = false;
-          $('nameTop').textContent = 'Ожидание соперника...';
-          $('ratingTop').textContent = '';
-          $('nameBot').textContent = me.username;
-          $('ratingBot').textContent = '(' + me.rating + ')';
-          $('timeTop').textContent = fmtTime(opT);
-          $('timeBot').textContent = fmtTime(myT);
-          $('gameStatus').className = 'gameStatus';
-          $('gameStatus').textContent = 'Ожидание соперника...';
-          nav('game');
-          render();
-        });
-      };
-    });
-  }
-  function renderLobby() {
-    socket.emit('getLobbies', list => {
-      if (!list || !list.length) {
-        $('tabContent').innerHTML = '<div class="lobbyEmpty">Зал ожидания пуст. Создайте запрос на игру справа.</div>';
-        return;
+    socket.emit('getLobbies', (list) => {
+      el.innerHTML = '';
+      const rows = (list || []).filter(l => l.status === 'waiting');
+      if (!rows.length) { el.innerHTML = '<div class="arenaEmpty">Нет активных вызовов.</div>'; return; }
+      const wrap = document.createElement('div'); wrap.className = 'lobbyList';
+      for (const l of rows) {
+        const isMine = me && l.host === me.username;
+        const row = document.createElement('div');
+        row.className = 'lobbyRow' + (isMine ? ' mine' : '');
+        const modeText = l.mode === 'casual' ? 'Товарищеская' : 'Рейтинговая';
+        row.innerHTML = `<div class="icon">${l.isBot ? '🤖' : '♟'}</div><div class="name">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod, l.isBot)}${isMine ? '<span class="mineTag">(ваш вызов)</span>' : ''}</div><div class="time">${l.time}+${l.inc}</div><div class="mode">${modeText}</div><div class="action"></div>`;
+        if (!isMine) {
+          const btn = document.createElement('button'); btn.className = 'primary'; btn.textContent = 'Играть';
+          btn.onclick = (e) => { e.stopPropagation(); socket.emit('joinLobby', { id: l.id }, (r) => { if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; } lobbyId = r.id || l.id; }); };
+          row.querySelector('.action').appendChild(btn);
+        } else {
+          row.style.cursor = 'pointer';
+          row.onclick = () => { socket.emit('cancelLobby', { id: l.id }, () => refreshLobbies()); };
+        }
+        wrap.appendChild(row);
       }
-      list.sort((a, b) => (b.hostRating || 0) - (a.hostRating || 0));
-      const isMine = h => me && h === me.username;
-      $('tabContent').innerHTML = `<table class="lobbyTable">
-        <thead>
-          <tr>
-            <th>Игрок</th>
-            <th class="num">Рейтинг</th>
-            <th class="num">Время</th>
-            <th>Режим</th>
-            <th class="act"></th>
-          </tr>
-        </thead>
-        <tbody>
-          ${list.map(l => {
-            const mine = isMine(l.host);
-            const modeIcon = l.rated ? '👑' : '🤝';
-            const modeText = l.rated ? 'Рейтинговая' : 'Товарищеская';
-            const bullet = l.time < 3 ? '<span class="bullet" style="background:#a53030"></span>' : l.time < 10 ? '<span class="bullet" style="background:#629924"></span>' : '<span class="bullet" style="background:#4a9ce8"></span>';
-            return `<tr class="${mine ? 'dim' : ''}">
-              <td class="name">${bullet}<span style="color:${mine ? 'var(--muted)' : 'var(--text-bright)'}">${esc(l.host)}</span></td>
-              <td class="rating">${l.hostRating}</td>
-              <td class="time">${l.time}+${l.inc}</td>
-              <td class="mode"><span class="modeIcon">${modeIcon}</span>${modeText}</td>
-              <td class="play">${mine
-                ? '<span style="color:var(--muted);font-size:12px">ваше</span>'
-                : `<button class="playBtn" data-join="${l.id}" title="Играть">▶</button>`}</td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>`;
-      $('tabContent').querySelectorAll('[data-join]').forEach(b => {
-        b.onclick = () => socket.emit('join', { id: b.dataset.join }, r => { if (!r || !r.ok) alert(r && r.msg || 'Ошибка'); });
-      });
+      el.appendChild(wrap);
     });
   }
-  function renderCorr() {
-    $('tabContent').innerHTML = '<div class="correspondence"><div class="big">✉</div><p>Игра по переписке в разработке</p></div>';
-  }
-
-  // ============ МОДАЛЬНЫЕ ОКНА ============
-  window.openModal = function (which) {
-    document.querySelectorAll('.modal').forEach(m => m.classList.remove('on'));
-    if (which === 'create') { renderTimeGrid('timeGrid', selectedTime, (t, i) => { selectedTime = { t, i }; }); $('modalCreate').classList.add('on'); }
-    if (which === 'friend') { renderTimeGrid('friendTimeGrid', selectedTime, (t, i) => { selectedTime = { t, i }; }); $('modalFriend').classList.add('on'); }
-    if (which === 'bot') {
-      socket.emit('getBots', list => {
-        $('botGrid').innerHTML = list.map(b =>
-          `<button data-bot="${b.name}" class="${selectedBotName === b.name ? 'on' : ''}">${b.title}<br><span style="color:var(--muted);font-size:11px">${b.rating}</span></button>`
-        ).join('');
-        $('botGrid').querySelectorAll('button').forEach(btn => {
-          btn.onclick = () => {
-            selectedBotName = btn.dataset.bot;
-            $('botGrid').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.bot === selectedBotName));
-          };
-        });
-      });
-      renderTimeGrid('botTimeGrid', selectedBotTime, (t, i) => { selectedBotTime = { t, i }; });
-      $('modalBot').classList.add('on');
-    }
-  };
-  window.closeModal = function () { document.querySelectorAll('.modal').forEach(m => m.classList.remove('on')); };
-  function renderTimeGrid(id, cur, onChange) {
-    const times = [{t:1,i:0},{t:2,i:1},{t:3,i:0},{t:3,i:2},{t:5,i:0},{t:5,i:3},{t:10,i:0},{t:10,i:5},{t:15,i:10},{t:30,i:0},{t:30,i:20},{t:60,i:0}];
-    $(id).innerHTML = times.map(x => `<button data-t="${x.t}" data-i="${x.i}" class="${cur.t === x.t && cur.i === x.i ? 'on' : ''}">${x.t}+${x.i}</button>`).join('');
-    $(id).querySelectorAll('button').forEach(b => {
-      b.onclick = () => {
-        onChange(+b.dataset.t, +b.dataset.i);
-        $(id).querySelectorAll('button').forEach(x => x.classList.toggle('on', x.dataset.t === b.dataset.t && x.dataset.i === b.dataset.i));
-      };
+  function refreshLobbies() { if (document.getElementById('lobbyScreen').classList.contains('active')) renderLobbyTab(); }
+  function quickStart(time, inc, mode) {
+    socket.emit('createLobby', { time, inc, mode }, (res) => {
+      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
+      if (res.matched) { lobbyId = res.id; return; }
+      lobbyId = res.id; myColor = 'w';
+      currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+      moveHistory = []; moveFens = []; viewIndex = -1; lastMove = null;
+      gameActive = false; gameEnded = false;
+      lastBoardHash = ''; rematchRequested = false; isBotGame = false;
+      resetGameUI(); hideGameResultBar();
+      navTo('game'); renderBoard(); renderMoves();
+      document.getElementById('statusBar').className = 'statusGreen';
+      document.getElementById('statusBar').textContent = 'Ожидание соперника...';
     });
   }
-  window.createLobby = function () {
-    socket.emit('create', { time: selectedTime.t, inc: selectedTime.i, rated: lobbyRated }, r => {
-      if (!r || !r.ok) { alert(r && r.msg || 'Ошибка'); return; }
-      closeModal();
-      if (r.matched) return;
-      gameId = r.id; myColor = 'w';
-      fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-      myT = selectedTime.t * 60; opT = myT;
-      active = false; ended = false;
-      $('nameTop').textContent = 'Ожидание соперника...';
-      $('nameBot').textContent = me.username;
-      $('ratingBot').textContent = '(' + me.rating + ')';
-      $('timeTop').textContent = fmtTime(opT);
-      $('timeBot').textContent = fmtTime(myT);
-      $('gameStatus').className = 'gameStatus';
-      $('gameStatus').textContent = 'Ожидание соперника...';
-      nav('game');
-      render();
+  window.quickStart = quickStart;
+  function showCustomGame() { const p = document.getElementById('customGamePanel'); if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none'; }
+  window.showCustomGame = showCustomGame;
+  function createCustomLobby() {
+    const min = +document.getElementById('customMin').value || 5;
+    const inc = +document.getElementById('customInc').value || 0;
+    const mode = document.getElementById('customMode').value || 'rated';
+    quickStart(min, inc, mode);
+  }
+  window.createCustomLobby = createCustomLobby;
+  function resetGameUI() {
+    document.getElementById('topName').textContent = '—';
+    document.getElementById('topRating').textContent = '';
+    document.getElementById('topDot').className = 'dot';
+    document.getElementById('topTime').textContent = '--:--';
+    document.getElementById('bottomName').innerHTML = me ? nickHtml(me.username, me.isAdmin, me.isMod, me.isBot) : '—';
+    document.getElementById('bottomRating').textContent = me ? me.rating : '';
+    document.getElementById('bottomDot').className = 'dot';
+    document.getElementById('bottomTime').textContent = '--:--';
+  }
+  function cleanupGame() {
+    gameActive = false; selected = null; legalMoves = []; lobbyId = null;
+    moveHistory = []; moveFens = []; viewIndex = -1; lastMove = null;
+    gameEnded = false; rematchRequested = false; isBotGame = false;
+    document.getElementById('chatMessages').innerHTML = '';
+    updateBackToGameBtn();
+  }
+  function hideGameResultBar() { document.getElementById('gameResultCompact').classList.remove('show'); }
+  function showGameResultBar(winner, reason) {
+    const bar = document.getElementById('gameResultCompact');
+    const title = document.getElementById('grTitleCompact');
+    const sub = document.getElementById('grSubCompact');
+    let text, cls;
+    if (!winner) { text = '½ – Ничья'; cls = ''; }
+    else if (winner === myColor) { text = '1-0 – Победа'; cls = 'win'; }
+    else { text = '0-1 – Поражение'; cls = 'lose'; }
+    title.textContent = text; title.className = 'grTitle ' + cls;
+    sub.textContent = reason || '';
+    bar.classList.add('show');
+  }
+  function requestRematch() {
+    if (!lobbyId) return;
+    if (rematchRequested) { alert('Реванш уже предложен'); return; }
+    socket.emit('rematchRequest', { lobbyId }, (res) => {
+      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
+      if (res.started) return;
+      rematchRequested = true;
+      const btn = document.getElementById('grRematchBtn');
+      btn.disabled = true; btn.textContent = 'ОЖИДАНИЕ...';
     });
-  };
-  window.startBot = function () {
-    if (!selectedBotName) { alert('Выберите уровень'); return; }
-    socket.emit('playBot', { time: selectedBotTime.t, inc: selectedBotTime.i, bot: selectedBotName, color: selectedBotColor }, r => {
-      if (!r || !r.ok) { alert(r && r.msg || 'Ошибка'); return; }
-      closeModal();
-    });
-  };
-  window.resign = function () { if (active && !ended && confirm('Сдаться?')) socket.emit('resign', { gameId }); };
-  window.drawOffer = function () { if (active && !ended) { socket.emit('drawOffer', { gameId }); $('gameStatus').className = 'gameStatus'; $('gameStatus').textContent = 'Ничья предложена'; } };
-  window.flipBoard = function () { flipped = !flipped; render(); };
-  window.backToLobby = function () {
-    if (active && !ended && !confirm('Выйти из партии?')) return;
-    if (active && !ended) socket.emit('resign', { gameId });
-    active = false; ended = false; gameId = null;
-    nav('home');
-  };
-  window.sendChat = function (e) {
+  }
+  window.requestRematch = requestRematch;
+  function findNewOpponent() { hideGameResultBar(); cleanupGame(); navTo('lobby'); switchLobbyTab('create'); }
+  window.findNewOpponent = findNewOpponent;
+  function endGame(winner, reason, fromServer) {
+    if (gameEnded) return;
+    gameEnded = true; gameActive = false; rematchRequested = false;
+    showGameResultBar(winner, reason);
+    if (!fromServer) socket.emit('gameOver', { lobbyId, result: winner || 'draw' });
+    refreshStats();
+  }
+  function resign() { if (!gameActive || gameEnded) return; if (!confirm('Точно сдаться?')) return; socket.emit('resign', { lobbyId }); endGame(myColor === 'w' ? 'b' : 'w', 'Сдача', true); }
+  window.resign = resign;
+  function offerDraw() {
+    if (!gameActive || gameEnded) return;
+    if (pendingDrawOffer) { alert('Ничья уже предложена'); return; }
+    socket.emit('drawOffer', { lobbyId });
+    pendingDrawOffer = true;
+    document.getElementById('statusBar').className = 'statusYellow';
+    document.getElementById('statusBar').textContent = 'Ничья предложена...';
+  }
+  window.offerDraw = offerDraw;
+  function flipBoard() { boardFlipped = !boardFlipped; lastBoardHash = ''; renderBoard(); }
+  window.flipBoard = flipBoard;
+  function showDrawOfferDialog(from) {
+    if (!confirm(`${from} предлагает ничью. Принять?`)) { socket.emit('drawDecline', { lobbyId }); return; }
+    socket.emit('drawAccept', { lobbyId });
+  }
+  function showRematchOfferDialog(from) {
+    if (!confirm(`${from} предлагает реванш. Принять?`)) { socket.emit('rematchDecline', { lobbyId }); return; }
+    socket.emit('rematchRequest', { lobbyId }, () => {});
+  }
+  function renderChatMsg(msg) {
+    const box = document.getElementById('chatMessages');
+    const div = document.createElement('div');
+    div.className = 'msg';
+    const time = new Date(msg.ts).toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
+    div.innerHTML = `<span class="u">${nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${escapeHtml(msg.text)} <span style="color:var(--muted);font-size:11px">${time}</span>`;
+    box.appendChild(div);
+    while (box.children.length > 50) box.removeChild(box.firstChild);
+    box.scrollTop = box.scrollHeight;
+  }
+  function sendChat(e) {
     e.preventDefault();
-    const t = $('chatInput').value.trim(); if (!t || !gameId) return;
-    socket.emit('chat', { gameId, text: t });
-    $('chatInput').value = '';
-  };
-  window.logout = function () { try { localStorage.removeItem('lichess_clone'); } catch (e) {} location.reload(); };
+    const input = document.getElementById('chatInput');
+    const text = input.value.trim();
+    if (!text || !lobbyId) return;
+    socket.emit('chatMessage', { lobbyId, text });
+    input.value = '';
+  }
+  window.sendChat = sendChat;
 
-  // ============ СОБЫТИЯ SOCKET ============
-  socket.on('stats', s => { if ($('sOnline')) $('sOnline').textContent = s.online; if ($('sGames')) $('sGames').textContent = s.games; });
-  socket.on('events', list => {
-    if (!list.length) { $('eventsBox').innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0">Пока нет событий</div>'; return; }
-    $('eventsBox').innerHTML = list.slice(0, 6).map(e => `
-      <div class="event">
-        <div class="evAv">♟</div>
-        <div class="evText">${esc(e.text)} <span class="evTime">${timeAgo(e.ts)}</span></div>
+  function refreshWatchList(force) {
+    socket.emit('getLiveGames', (list) => {
+      const box = document.getElementById('watchListBody'); if (!box) return;
+      const hash = JSON.stringify(list); if (hash === lastWatchHash && !force) return;
+      lastWatchHash = hash;
+      if (!list || !list.length) { box.innerHTML = '<div class="arenaEmpty" style="padding:20px 10px;">Пока никто не играет</div>'; return; }
+      box.innerHTML = list.map(g => {
+        const cls = 'watchRow' + (g.isArena ? ' isArena' : '');
+        const arenaTag = g.isArena ? ` · ${escapeHtml(g.arenaName || 'турнир')}` : '';
+        return `<div class="${cls}" onclick="watchGame('${g.id}')">
+          <div class="wrPlayers"><span>⚪ ${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${g.whiteRating ? ' <span class="prat">('+g.whiteRating+')</span>' : ''}</span><span>${formatTime(g.timeW)}</span></div>
+          <div class="wrPlayers"><span>⚫ ${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${g.blackRating ? ' <span class="prat">('+g.blackRating+')</span>' : ''}</span><span>${formatTime(g.timeB)}</span></div>
+          <div class="wrMeta"><span>${g.timeControl}+${g.increment}${arenaTag}</span><span>ход: <b>${g.turn === 'w' ? 'белые' : 'чёрные'}</b></span></div>
+        </div>`;
+      }).join('');
+    });
+  }
+  window.refreshWatchList = refreshWatchList;
+  function watchGame(id) {
+    if (watchingGameId === id) return;
+    if (watchingGameId) socket.emit('unwatchGame', { id: watchingGameId });
+    watchingGameId = id; watchingGame = null; lastWatchBoardHash = '';
+    socket.emit('watchGame', { id }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось'); watchingGameId = null; return; } watchingGame = res.game; renderWatchBoard(); });
+  }
+  window.watchGame = watchGame;
+  function renderWatchBoard() {
+    const box = document.getElementById('watchBoardBox'); if (!box) return;
+    if (!watchingGame) { box.innerHTML = '<div class="wbEmpty">Выбери партию слева</div>'; return; }
+    const g = watchingGame;
+    const state = parseFen(g.fen);
+    const flip = g.white === (me && me.username) ? false : true;
+    const hash = g.id + '|' + g.fen + '|' + g.timeW + '|' + g.timeB + '|' + g.turn + '|' + flip;
+    if (hash === lastWatchBoardHash) return;
+    lastWatchBoardHash = hash;
+    let squares = '';
+    for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) {
+      const r = flip ? 7 - dr : dr, c = flip ? 7 - dc : dc;
+      const cls = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
+      const p = state.board[r][c];
+      let inner = '';
+      if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW?'w':'b'}">${EMOJI[p]}</span>`; }
+      squares += `<div class="${cls}">${inner}</div>`;
+    }
+    box.innerHTML = `
+      <div class="wbHeader"><div><div class="wbTitle">Партия ${g.isArena ? 'турнира' : ''}</div><div class="wbSub" style="color:var(--muted);font-size:12px;">${g.timeControl}+${g.increment}${g.arenaName ? ' · '+escapeHtml(g.arenaName) : ''}</div></div><button class="secondary" onclick="stopWatching()">✕</button></div>
+      <div class="wbPlayers">
+        <div class="wbPlayer ${g.turn==='b'?'active':''}"><span><span class="name">⚫ ${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span></span><span class="time">${formatTime(g.timeB)}</span></div>
+        <div class="wbPlayer ${g.turn==='w'?'active':''}"><span><span class="name">⚪ ${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span></span><span class="time">${formatTime(g.timeW)}</span></div>
       </div>
-    `).join('') + '<div class="moreLink">Ещё »</div>';
-  });
-  function timeAgo(ts) {
-    const d = Math.floor((Date.now() - ts) / 1000);
-    if (d < 60) return 'только что';
-    if (d < 3600) return Math.floor(d / 60) + ' мин назад';
-    if (d < 86400) return Math.floor(d / 3600) + ' ч назад';
-    return Math.floor(d / 86400) + ' дн назад';
+      <div class="wbBoardWrap"><div class="wbBoard">${squares}</div></div>`;
   }
-  socket.on('lobbies', () => { if (currentTab === 'lobby' && $('homeScreen').classList.contains('on')) renderLobby(); });
+  function stopWatching() { if (watchingGameId) socket.emit('unwatchGame', { id: watchingGameId }); watchingGameId = null; watchingGame = null; lastWatchBoardHash = ''; renderWatchBoard(); }
+  window.stopWatching = stopWatching;
 
-  socket.on('start', ({ color, opponent, oppRating, time, inc, fen: f, gameId: id, isBot }) => {
-    gameId = id; myColor = color;
-    fen = f; myT = time * 60; opT = time * 60;
-    active = true; ended = false; sel = null; hints = []; lastMove = null; premove = null;
-    $('nameTop').textContent = opponent;
-    $('ratingTop').textContent = oppRating ? '(' + oppRating + ')' : '';
-    $('nameBot').textContent = me.username;
-    $('ratingBot').textContent = '(' + me.rating + ')';
-    $('timeTop').textContent = fmtTime(opT);
-    $('timeBot').textContent = fmtTime(myT);
-    $('chatLog').innerHTML = '';
-    $('gameStatus').className = 'gameStatus on';
-    $('gameStatus').textContent = 'Вы играете ' + (myColor === 'w' ? 'белыми' : 'чёрными');
-    nav('game');
-    render();
-  });
-  socket.on('board', ({ fen: f }) => {
-    if (!active || ended) return;
-    fen = f; sel = null; hints = [];
-    render();
-    tryPre();
-  });
-  socket.on('times', ({ tW, tB }) => {
-    clockAt = performance.now();
-    myAt = myColor === 'w' ? tW : tB; opAt = myColor === 'w' ? tB : tW;
-    myT = myAt; opT = opAt;
-    $('timeTop').textContent = fmtTime(opT);
-    $('timeBot').textContent = fmtTime(myT);
-    if (!clockOn) { clockOn = true; loop(); }
-  });
-  socket.on('end', ({ result, reason }) => {
-    if (ended) return;
-    ended = true; active = false;
-    let t;
-    if (result === 'draw') t = '½ Ничья';
-    else if (result === myColor) t = '🏆 Победа!';
-    else t = '💀 Поражение';
-    $('gameStatus').className = 'gameStatus';
-    $('gameStatus').textContent = t + ' — ' + reason;
-    render();
-  });
-  socket.on('drawOffer', () => {
-    if (confirm('Соперник предлагает ничью. Принять?')) socket.emit('drawYes', { gameId });
-    else socket.emit('drawNo', { gameId });
-  });
-  socket.on('drawNo', () => { $('gameStatus').className = 'gameStatus'; $('gameStatus').textContent = 'Ничья отклонена'; });
-  socket.on('chat', ({ user, text }) => {
-    const d = document.createElement('div'); d.className = 'm';
-    d.innerHTML = '<span class="u">' + esc(user) + ':</span> ' + esc(text);
-    $('chatLog').appendChild(d);
-    $('chatLog').scrollTop = $('chatLog').scrollHeight;
-  });
-
-  // ============ ПРОФИЛЬ ============
-  function loadProfile() {
-    socket.emit('getProfile', { username: me.username }, r => {
-      if (!r || !r.ok) return;
-      const u = r.user;
-      $('profileContent').innerHTML = `
-        <div style="font-size:24px;color:var(--text-bright);margin-bottom:4px">${esc(u.username)} ${u.isAdmin ? '👑' : ''}</div>
-        <div style="color:var(--muted)">Рейтинг: <b style="color:var(--accent)">${u.rating}</b></div>
-        <div class="profileGrid">
-          <div class="cell"><div class="v">${u.games}</div><div class="l">Партий</div></div>
-          <div class="cell"><div class="v">${u.wins}</div><div class="l">Побед</div></div>
-          <div class="cell"><div class="v">${u.losses}</div><div class="l">Поражений</div></div>
-          <div class="cell"><div class="v">${u.draws}</div><div class="l">Ничьих</div></div>
-        </div>
-      `;
+  function openProfileView(username) {
+    show('profileScreen');
+    document.querySelectorAll('#mainNav a').forEach(a => a.classList.remove('active'));
+    socket.emit('getProfile', { username }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } renderProfilePage(res.user, res.games); });
+  }
+  window.openProfileView = openProfileView;
+  function renderProfilePage(user, games) {
+    const avatarEl = document.getElementById('pAvatarBig');
+    avatarEl.textContent = user.username.charAt(0).toUpperCase();
+    document.getElementById('pName').innerHTML = (user.isAdmin ? '<span class="crown">👑</span>' : '') + escapeHtml(user.username);
+    const badges = [];
+    if (user.isBot) badges.push('<span style="color:#c9bfff">🤖 Бот</span>');
+    if (user.online) badges.push('<span style="color:var(--green-2)">● В сети</span>');
+    document.getElementById('pRoleBadges').innerHTML = badges.join(' · ');
+    const date = new Date(user.createdAt);
+    document.getElementById('pSub').textContent = `На сайте с ${date.toLocaleDateString('ru-RU')} · ${user.games} партий`;
+    document.getElementById('pRating').textContent = user.rating;
+    document.getElementById('pGames').textContent = user.games;
+    document.getElementById('pWins').textContent = user.wins;
+    document.getElementById('pWinrate').textContent = (user.games ? Math.round((user.wins/user.games)*100) : 0) + '%';
+    const catEl = document.getElementById('catRatingsGrid');
+    if (user.categories) {
+      const cats = [{ key:'classical', name:'Классика', icon:'🐢' },{ key:'rapid', name:'Рапид', icon:'⏱' },{ key:'blitz', name:'Блиц', icon:'⚡' },{ key:'bullet', name:'Пуля', icon:'🔫' }];
+      catEl.innerHTML = cats.map(c => { const r = user.categories[c.key] || { rating:user.rating, games:0 }; return `<div class="catCard ${c.key}"><div class="catIcon">${c.icon}</div><div class="catName">${c.name}</div><div class="catRating">${r.rating}</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">${r.games||0} партий</div></div>`; }).join('');
+    } else catEl.innerHTML = '';
+    renderGamesList(games, user.username);
+  }
+  function renderGamesList(games, username) {
+    const el = document.getElementById('gamesList');
+    if (!games || !games.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px">Партий пока нет</div>'; return; }
+    el.innerHTML = '';
+    games.forEach(g => {
+      const iAmWhite = g.white === username;
+      const myBefore = iAmWhite ? g.whiteBefore : g.blackBefore;
+      const myAfter = iAmWhite ? g.whiteAfter : g.blackAfter;
+      const delta = myAfter - myBefore;
+      const opp = iAmWhite ? g.black : g.white;
+      let resChar, resClass;
+      if (g.result === 'draw') { resChar = 'Н'; resClass = 'd'; }
+      else if ((g.result === 'w' && iAmWhite) || (g.result === 'b' && !iAmWhite)) { resChar = 'П'; resClass = 'w'; }
+      else { resChar = 'Пр'; resClass = 'l'; }
+      const date = new Date(g.finishedAt);
+      const dateStr = date.toLocaleDateString('ru-RU') + ' ' + date.toLocaleTimeString('ru-RU', { hour:'2-digit', minute:'2-digit' });
+      const deltaStr = delta > 0 ? '+'+delta : (delta < 0 ? ''+delta : '0');
+      const deltaClass = delta > 0 ? 'up' : (delta < 0 ? 'down' : '');
+      const row = document.createElement('div');
+      row.className = 'gameRow';
+      row.innerHTML = `<span class="res ${resClass}">${resChar}</span><span>${iAmWhite?'⚪':'⚫'} против <b>${escapeHtml(opp)}</b></span><span class="delta ${deltaClass}">${deltaStr} (${myAfter})</span><span class="date">${dateStr}</span>`;
+      el.appendChild(row);
     });
   }
 
-  // ============ ЛОГИН ============
-  $('loginBtn').onclick = () => {
-    const u = $('uName').value.trim(), p = $('uPass').value;
-    if (!u || !p) { $('loginMsg').textContent = 'Заполни поля'; return; }
-    socket.emit('register', { username: u, password: p }, r => {
-      if (!r || !r.ok) { $('loginMsg').textContent = r && r.msg || 'Ошибка'; return; }
-      me = r.user;
-      try { localStorage.setItem('lichess_clone', JSON.stringify({ username: u, password: p })); } catch (e) {}
-      $('userBtn').style.display = 'flex';
-      $('userName').textContent = me.username;
-      $('userAvatar').textContent = me.username.charAt(0).toUpperCase();
-      nav('home');
+  function refreshArenas(force) {
+    if (!force && !document.getElementById('arenasScreen').classList.contains('active')) return;
+    socket.emit('getArenas', (res) => {
+      const list = (res && res.list) || [];
+      const serverNow = (res && res.serverNow) || Date.now();
+      arenaServerOffsetMs = serverNow - Date.now();
+      arenasCache = list;
+      socket.emit('getMyArenaStates', (r2) => {
+        arenaStatesCache = (r2 && r2.states) || {};
+        const hash = JSON.stringify(arenasCache) + '|' + JSON.stringify(arenaStatesCache);
+        if (hash === lastArenasHash && !force) return;
+        lastArenasHash = hash; renderArenasGrid();
+      });
     });
-  };
-  $('uPass').addEventListener('keydown', e => { if (e.key === 'Enter') $('loginBtn').click(); });
+    if (arenasRefreshHandle) clearInterval(arenasRefreshHandle);
+    arenasRefreshHandle = setInterval(() => {
+      if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas(false);
+    }, 30000);
+  }
+  window.refreshArenas = refreshArenas;
 
-  // Рейтинг/товарищеская
-  $('ratedBtn').onclick = () => { lobbyRated = true; $('ratedBtn').classList.add('on'); $('casualBtn').classList.remove('on'); };
-  $('casualBtn').onclick = () => { lobbyRated = false; $('casualBtn').classList.add('on'); $('ratedBtn').classList.remove('on'); };
-  // Цвет для бота
-  document.querySelectorAll('.colorPick button').forEach(b => {
-    b.onclick = () => {
-      selectedBotColor = b.dataset.c;
-      document.querySelectorAll('.colorPick button').forEach(x => x.classList.toggle('on', x.dataset.c === selectedBotColor));
-    };
-  });
+  function formatMMSS(ms) { const t = Math.max(0, Math.floor(ms/1000)); return String(Math.floor(t/60)).padStart(2,'0') + ':' + String(t%60).padStart(2,'0'); }
+  function formatTime(s) { s = Math.max(0, Math.floor(s)); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; }
+  function fmtMskHM(ts) { return new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ts)); }
 
-  // ============ АВТО-ВХОД ============
-  (function auto() {
-    try {
-      const s = JSON.parse(localStorage.getItem('lichess_clone') || 'null');
-      if (s && s.username && s.password) {
-        $('uName').value = s.username;
-        socket.emit('register', { username: s.username, password: s.password }, r => {
-          if (r && r.ok) {
-            me = r.user;
-            $('userBtn').style.display = 'flex';
-            $('userName').textContent = me.username;
-            $('userAvatar').textContent = me.username.charAt(0).toUpperCase();
-            nav('home');
-          }
-        });
+  function renderArenasGrid() {
+    const wrap = document.getElementById('arenasGridWrap'); if (!wrap) return;
+    if (!arenasCache || !arenasCache.length) { wrap.innerHTML = '<div class="arenasEmpty">Нет доступных арен</div>'; return; }
+    const localNow = Date.now();
+    const toClient = (ts) => ts - arenaServerOffsetMs;
+    const SLOT_PX = 90;
+    const SLOT_MS = 10 * 60 * 1000;
+    const COLS = 72;
+    const startMs = Math.floor(localNow / SLOT_MS) * SLOT_MS;
+    const endMs = startMs + COLS * SLOT_MS;
+    const toPx = (ts) => ((ts - startMs) / SLOT_MS) * SLOT_PX;
+    const visible = arenasCache
+      .map(a => ({ ...a, clientStartsAt: toClient(a.startsAt), clientEndsAt: toClient(a.endsAt) }))
+      .filter(a => a.clientEndsAt > startMs && a.clientStartsAt < endMs)
+      .sort((a, b) => a.clientStartsAt - b.clientStartsAt);
+    const rows = [];
+    for (const arena of visible) {
+      let placed = false;
+      for (const row of rows) { const last = row[row.length - 1]; if (last.clientEndsAt <= arena.clientStartsAt) { row.push(arena); placed = true; break; } }
+      if (!placed) rows.push([arena]);
+    }
+    const rowWidth = COLS * SLOT_PX;
+    let html = '<div class="arenasScroller"><div class="timeRow" style="width:' + rowWidth + 'px;">';
+    for (let i = 0; i < COLS; i++) {
+      const t = startMs + i * SLOT_MS;
+      const isNow = t <= localNow && localNow < t + SLOT_MS;
+      html += '<div class="timeCell' + (isNow ? ' now' : '') + '" style="width:' + SLOT_PX + 'px;min-width:' + SLOT_PX + 'px;">' + fmtMskHM(t) + '</div>';
+    }
+    html += '</div>';
+    for (const row of rows) {
+      html += '<div class="arenaRowGrid" style="width:' + rowWidth + 'px;">';
+      for (const arena of row) {
+        const left = toPx(arena.clientStartsAt);
+        const width = toPx(arena.clientEndsAt) - left;
+        const isPast = arena.clientEndsAt < localNow;
+        const isLive = arena.status === 'live';
+        const colorClass = arena.color || 'blitz';
+        const myState = arenaStatesCache[arena.id];
+        const joined = myState && myState.joined;
+        const cls = 'arenaBlock ' + colorClass + (isPast && !isLive ? ' past' : '') + (isLive ? ' live' : '') + (joined ? ' joined' : '');
+        const tinfo = arena.timeControl + '+' + arena.increment;
+        const participantsCount = (myState && myState.participantsCount) || 0;
+        const botMark = arena.botFriendly ? '🤖 ' : '';
+        html += '<div class="' + cls + '" style="left:' + left.toFixed(2) + 'px; width:' + width.toFixed(2) + 'px;" onclick="openArenaPage(\'' + arena.id + '\')" title="' + escapeHtml(botMark + arena.name) + ' · ' + tinfo + ' · ' + fmtMskHM(arena.clientStartsAt) + '–' + fmtMskHM(arena.clientEndsAt) + ' МСК">'
+              + '<div class="tname">' + botMark + escapeHtml(arena.name) + '</div>'
+              + '<div class="tinfo"><span>' + tinfo + '</span><span>👥 ' + participantsCount + '</span></div>'
+              + '</div>';
       }
-    } catch (e) {}
-  })();
+      html += '</div>';
+    }
+    const nowLeft = toPx(localNow);
+    html += '<div class="nowLine" style="left:' + nowLeft.toFixed(2) + 'px;"></div></div>';
+    wrap.innerHTML = html;
+    const scroller = wrap.querySelector('.arenasScroller');
+    if (scroller) scroller.scrollLeft = Math.max(0, nowLeft - scroller.clientWidth / 4);
+  }
 
-  // Обновление зала ожидания каждые 5 сек
-  setInterval(() => { if (currentTab === 'lobby' && $('homeScreen').classList.contains('on')) renderLobby(); }, 5000);
+  function openArenaPage(arenaId) {
+    if (currentArenaId && currentArenaId !== arenaId) socket.emit('leaveArenaRoom', { arenaId: currentArenaId });
+    currentArenaId = arenaId;
+    show('arenaPageScreen');
+    document.querySelectorAll('#mainNav a').forEach(a => a.classList.remove('active'));
+    document.getElementById('arenaChatMessages').innerHTML = '';
+    lastArenaStateHash = ''; lastArenaGamesHash = '';
+    socket.emit('joinArenaRoom', { arenaId }, (res) => {
+      if (res && res.ok && Array.isArray(res.chat)) {
+        const box = document.getElementById('arenaChatMessages'); box.innerHTML = '';
+        res.chat.forEach(renderArenaChatMsg);
+      }
+    });
+    loadArenaPage();
+    if (arenaPageHandle) clearInterval(arenaPageHandle);
+    arenaPageHandle = setInterval(() => { if (document.getElementById('arenaPageScreen').classList.contains('active')) loadArenaPage(); }, 5000);
+    if (arenaStatusHandle) clearInterval(arenaStatusHandle);
+    arenaStatusHandle = setInterval(tickArenaStatus, 1000);
+    if (arenaGamesHandle) clearInterval(arenaGamesHandle);
+    arenaGamesHandle = setInterval(() => { if (document.getElementById('arenaPageScreen').classList.contains('active')) renderArenaGamesList(); }, 3000);
+  }
+  window.openArenaPage = openArenaPage;
+
+  function loadArenaPage() {
+    if (!currentArenaId) return;
+    const arena = arenasCache.find(a => a.id === currentArenaId);
+    if (!arena) return;
+    socket.emit('getArenaState', { arenaId: currentArenaId }, (state) => {
+      currentArenaState = state;
+      if (state.serverNow) arenaServerOffsetMs = state.serverNow - Date.now();
+      arenaStartsAt = state.startsAt || arena.startsAt;
+      arenaEndsAt = state.endsAt || arena.endsAt;
+      arenaPhase = state.phase;
+      renderArenaPage(arena, state);
+      updateArenaJoinButton(state);
+      const stateHash = JSON.stringify(state.participants) + '|' + state.phase;
+      if (stateHash !== lastArenaStateHash) { lastArenaStateHash = stateHash; renderArenaParticipants(arena, state); }
+      tickArenaStatus();
+    });
+  }
+  function tickArenaStatus() {
+    if (!currentArenaId) return;
+    const row = document.getElementById('arenaStatusRow');
+    const lbl = document.getElementById('arenaStatusLabel');
+    const time = document.getElementById('arenaStatusTime');
+    if (!row || !lbl || !time) return;
+    const serverNow = Date.now() + arenaServerOffsetMs;
+    row.classList.remove('live');
+    if (arenaPhase === 'finished') { lbl.textContent = 'Завершена:'; time.textContent = '00:00'; return; }
+    if (arenaPhase === 'waiting') { lbl.textContent = 'До начала:'; time.textContent = formatMMSS(Math.max(0, arenaStartsAt - serverNow)); return; }
+    if (arenaPhase === 'live') { row.classList.add('live'); lbl.textContent = 'До конца:'; time.textContent = formatMMSS(Math.max(0, arenaEndsAt - serverNow)); }
+  }
+  function renderArenaPage(arena, state) {
+    document.getElementById('arenaPageName').textContent = arena.name;
+    const phaseText = { waiting:'Начало в '+fmtMskHM(arena.startsAt)+' МСК', live:'Идёт сейчас', finished:'Завершена' }[state.phase] || '';
+    document.getElementById('arenaPageSub').textContent = `${arena.timeControl}+${arena.increment} · ${phaseText}`;
+    document.getElementById('aInfoTitle').textContent = arena.name;
+    document.getElementById('aInfoTime').textContent = fmtMskHM(arena.startsAt) + ' – ' + fmtMskHM(arena.endsAt) + ' МСК';
+    document.getElementById('aInfoDesc').textContent = arena.description;
+    if (state.top3 && state.top3.length) showArenaWinnerBanner(state.top3);
+    else document.getElementById('arenaWinnerBanner').style.display = 'none';
+  }
+  function updateArenaJoinButton(state) {
+    const wrap = document.getElementById('arenaJoinBtnWrap');
+    if (state.phase === 'finished') { wrap.innerHTML = '<button class="secondary" disabled>ЗАВЕРШЕНА</button>'; return; }
+    if (state.phase === 'waiting') {
+      if (state.joined) wrap.innerHTML = '<button class="secondary arenaJoinBtn" onclick="leaveCurrentArena()">ОТМЕНИТЬ</button>';
+      else wrap.innerHTML = '<button class="primary arenaJoinBtn" onclick="joinCurrentArena()">УЧАСТВОВАТЬ</button>';
+      return;
+    }
+    if (state.joined) {
+      if (state.paused) wrap.innerHTML = '<button class="primary arenaJoinBtn" onclick="pauseCurrentArena()">▶ ИГРАТЬ</button>';
+      else wrap.innerHTML = '<button class="secondary arenaJoinBtn" onclick="pauseCurrentArena()">⏸ ПАУЗА</button>';
+    } else wrap.innerHTML = '<button class="primary arenaJoinBtn" onclick="joinCurrentArena()">УЧАСТВОВАТЬ</button>';
+  }
+  function renderArenaParticipants(arena, state) {
+    const body = document.getElementById('arenaTableBody');
+    const list = state.participants || [];
+    if (!list.length) { body.innerHTML = '<div class="arenasEmpty" style="padding:20px;">Пока никто не зарегистрировался</div>'; return; }
+    const search = (document.getElementById('arenaSearchInput').value || '').trim().toLowerCase();
+    const filtered = search ? list.filter(p => p.username.toLowerCase().includes(search)) : list;
+    body.innerHTML = filtered.map((p) => {
+      const place = list.indexOf(p) + 1;
+      const placeCls = place === 1 ? 'top1' : place === 2 ? 'top2' : place === 3 ? 'top3' : '';
+      const isMe = me && p.username === me.username;
+      const totalGames = (p.wins || 0) + (p.draws || 0) + (p.losses || 0);
+      const pauseTag = p.paused ? '<span style="color:var(--accent)">⏸</span>' : '';
+      let streakTag = '';
+      if (p.winStreak >= 3) streakTag = `<span style="color:#ff9c3a;font-size:11px;margin-left:2px;">🔥${p.winStreak}</span>`;
+      else if (p.drawStreak >= 2) streakTag = `<span style="color:#ff9c3a;font-size:11px;margin-left:2px;">½${p.drawStreak}</span>`;
+      return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''}"><span class="place ${placeCls}">${place}</span><span class="pname">${nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}${pauseTag} <span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
+    }).join('');
+  }
+  function filterArenaParticipants() { if (currentArenaState && currentArenaId) { const arena = arenasCache.find(a => a.id === currentArenaId); if (arena) renderArenaParticipants(arena, currentArenaState); } }
+  window.filterArenaParticipants = filterArenaParticipants;
+
+  function renderArenaGamesList() {
+    const topEl = document.getElementById('arenaTopGame'), listEl = document.getElementById('arenaGamesList');
+    if (!topEl || !listEl) return;
+    socket.emit('getArenaGames', { arenaId: currentArenaId }, (res) => {
+      if (!res || typeof res !== 'object') return;
+      const live = res.live || [], done = res.done || [];
+      const hash = JSON.stringify({ live: live.map(g => [g.lobbyId, g.fen, g.timeW, g.timeB]) });
+      if (hash === lastArenaGamesHash) return;
+      lastArenaGamesHash = hash;
+      if (live.length) { const g = live[0]; topEl.innerHTML = renderArenaTopGame(g); }
+      else { topEl.innerHTML = '<div class="arenaTopGameEmpty">Сейчас никто не играет</div>'; }
+      if (!done.length) { listEl.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>'; return; }
+      listEl.innerHTML = done.slice(0, 50).map(g => {
+        const resChar = g.result === 'w' ? '1-0' : (g.result === 'b' ? '0-1' : '½-½');
+        const resCls = g.result === 'draw' ? 'd' : 'w';
+        const dateStr = fmtMskHM(g.finishedAt);
+        return `<div class="arenaGameCard"><div class="row1"><span>⚪ ${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span><span class="res ${resCls}">${resChar}</span></div><div class="row1"><span>⚫ ${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span></div><div class="row1" style="font-size:10px;color:var(--muted);font-weight:400;">${dateStr}</div></div>`;
+      }).join('');
+    });
+  }
+  function renderArenaTopGame(g) {
+    const state = parseFen(g.fen);
+    let squares = '';
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const cls = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
+      const p = state.board[r][c];
+      let inner = '';
+      if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW ? 'w' : 'b'}">${EMOJI[p]}</span>`; }
+      squares += `<div class="${cls}">${inner}</div>`;
+    }
+    return `<div class="arenaTopGamePlayers"><span>⚫ ${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span><span style="font-family:monospace">${formatTime(g.timeB)}</span></div><div class="arenaTopGameBoard">${squares}</div><div class="arenaTopGamePlayers"><span>⚪ ${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span><span style="font-family:monospace">${formatTime(g.timeW)}</span></div><div style="text-align:center;font-size:11px;color:var(--accent);cursor:pointer;padding:3px" onclick="watchGame('${g.lobbyId}')">▶ Смотреть партию</div>`;
+  }
+  function showArenaWinnerBanner(top3) {
+    const banner = document.getElementById('arenaWinnerBanner'), podium = document.getElementById('awbPodium');
+    const medals = ['gold','silver','bronze'], places = ['🥇','🥈','🥉'];
+    podium.innerHTML = top3.map((p, i) => `<div class="awbItem ${medals[i]}"><div class="place">${places[i]}</div><div class="n">${escapeHtml(p.username)}</div><div class="s">${p.score}</div></div>`).join('');
+    banner.style.display = 'block';
+  }
+  function joinCurrentArena() {
+    if (!currentArenaId) return;
+    socket.emit('joinArena', { arenaId: currentArenaId }, (res) => {
+      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
+      lastArenaStateHash = ''; lastArenaGamesHash = '';
+      loadArenaPage(); refreshArenas(true); renderArenaGamesList();
+    });
+  }
+  window.joinCurrentArena = joinCurrentArena;
+  function pauseCurrentArena() {
+    if (!currentArenaId) return;
+    socket.emit('pauseArena', { arenaId: currentArenaId }, (res) => {
+      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
+      lastArenaStateHash = ''; loadArenaPage(); refreshArenas(true);
+    });
+  }
+  window.pauseCurrentArena = pauseCurrentArena;
+  function leaveCurrentArena() {
+    if (!currentArenaId) return;
+    if (!confirm('Отменить участие?')) return;
+    socket.emit('leaveArena', { arenaId: currentArenaId }, (res) => {
+      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
+      lastArenaStateHash = ''; loadArenaPage(); refreshArenas(true);
+    });
+  }
+  window.leaveCurrentArena = leaveCurrentArena;
+  function sendArenaChat(e) {
+    e.preventDefault();
+    const input = document.getElementById('arenaChatInput');
+    const text = input.value.trim();
+    if (!text || !currentArenaId) return;
+    socket.emit('arenaChat', { arenaId: currentArenaId, text });
+    input.value = '';
+  }
+  window.sendArenaChat = sendArenaChat;
+  function renderArenaChatMsg(msg) {
+    const box = document.getElementById('arenaChatMessages');
+    const div = document.createElement('div');
+    if (msg.system) { div.className = 'msg sys'; div.textContent = msg.text; }
+    else {
+      div.className = 'msg';
+      const time = fmtMskHM(msg.ts);
+      div.innerHTML = `<span class="u">${nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${escapeHtml(msg.text)} <span style="color:var(--muted);font-size:11px">${time}</span>`;
+    }
+    box.appendChild(div);
+    while (box.children.length > 200) box.removeChild(box.firstChild);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function updateBackToGameBtn() {
+    const btn = document.getElementById('backToGameBtn');
+    if (!btn) return;
+    if (gameActive && !gameEnded && lobbyId) btn.classList.add('show');
+    else btn.classList.remove('show');
+  }
+  function returnToGame() {
+    if (!lobbyId) return;
+    if (gameActive && !gameEnded) { navTo('game'); renderBoard(); renderMoves(); return; }
+    socket.emit('getGameState', { lobbyId }, (res) => {
+      if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось'); return; }
+      const s = res.state;
+      myColor = s.myColor;
+      opponentName = s.opponent; opponentRating = s.opponentRating;
+      opponentOnline = !!s.opponentOnline;
+      opponentIsBot = !!s.isBot;
+      inc = s.inc;
+      myTime = myColor === 'w' ? s.timeW : s.timeB;
+      oppTime = myColor === 'w' ? s.timeB : s.timeW;
+      currentFen = s.fen;
+      moveHistory = []; moveFens = []; viewIndex = -1; lastMove = null;
+      gameEnded = !!s.finished; gameActive = !s.finished;
+      lastBoardHash = '';
+      document.getElementById('bottomName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod, me.isBot);
+      document.getElementById('bottomRating').textContent = me.rating;
+      document.getElementById('bottomDot').className = 'dot ' + (myColor === 'w' ? 'w' : 'b');
+      document.getElementById('topName').innerHTML = onlineDotHtml(opponentOnline) + nickHtml(opponentName, false, false, opponentIsBot);
+      document.getElementById('topRating').textContent = opponentRating || '';
+      document.getElementById('topDot').className = 'dot ' + (myColor === 'w' ? 'b' : 'w');
+      document.getElementById('topTime').textContent = formatTime(oppTime);
+      document.getElementById('bottomTime').textContent = formatTime(myTime);
+      document.getElementById('chatMessages').innerHTML = '';
+      if (Array.isArray(s.chat)) s.chat.forEach(renderChatMsg);
+      navTo('game'); renderBoard(); renderMoves();
+      updateTurnIndicator();
+      updateBackToGameBtn();
+    });
+  }
+  window.returnToGame = returnToGame;
+
+  socket.on('stats', (s) => {
+    if (!s) return;
+    const e1 = document.getElementById('statOnline'), e2 = document.getElementById('statGames'), e3 = document.getElementById('statActive');
+    if (e1) e1.textContent = s.online;
+    if (e2) e2.textContent = s.games;
+    if (e3) e3.textContent = s.activeGames || 0;
+  });
+  socket.on('lobbiesUpdate', () => { if (document.getElementById('lobbyScreen').classList.contains('active')) refreshLobbies(); });
+
+  socket.on('gameStart', ({ color, opponent, opponentRating: oppRating, time, inc: gameInc, lobbyId: id, fen, chat, arenaId, arenaName, opponentIsAdmin: oppIsAdmin, opponentIsBot: oppIsBot, isBot: isBotFlag }) => {
+    if (id) lobbyId = id;
+    myColor = color || 'w'; inc = gameInc || 0;
+    opponentName = opponent || 'Соперник'; opponentRating = oppRating || null;
+    opponentOnline = true;
+    opponentIsBot = !!oppIsBot || !!isBotFlag;
+    isBotGame = !!isBotFlag || opponentIsBot;
+    myTime = time * 60; oppTime = time * 60;
+    currentFen = fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    selected = null; legalMoves = []; moveHistory = []; moveFens = [];
+    viewIndex = -1; lastMove = null;
+    gameActive = true; gameEnded = false; boardFlipped = false; pendingDrawOffer = false;
+    lastBoardHash = ''; rematchRequested = false;
+    document.getElementById('bottomName').innerHTML = nickHtml(me.username, me.isAdmin, me.isMod, me.isBot);
+    document.getElementById('bottomRating').textContent = me.rating;
+    document.getElementById('bottomDot').className = 'dot ' + (myColor === 'w' ? 'w' : 'b');
+    document.getElementById('bottomTime').textContent = formatTime(time * 60);
+    document.getElementById('topName').innerHTML = onlineDotHtml(true) + nickHtml(opponentName, oppIsAdmin, false, opponentIsBot);
+    document.getElementById('topRating').textContent = opponentRating || '';
+    document.getElementById('topDot').className = 'dot ' + (myColor === 'w' ? 'b' : 'w');
+    document.getElementById('topTime').textContent = formatTime(time * 60);
+    document.getElementById('statusBar').className = 'statusGreen';
+    document.getElementById('statusBar').textContent = `Игра началась. Вы — ${myColor === 'w' ? 'белые' : 'чёрные'}`;
+    document.getElementById('chatMessages').innerHTML = '';
+    if (Array.isArray(chat)) chat.forEach(renderChatMsg);
+    hideGameResultBar();
+    navTo('game'); renderBoard(); renderMoves();
+    updateBackToGameBtn();
+  });
+
+  socket.on('boardUpdate', ({ fen, san }) => {
+    if (!gameActive || gameEnded) return;
+    currentFen = fen; selected = null; legalMoves = []; viewIndex = -1;
+    moveHistory.push(san || ''); moveFens.push(fen);
+    renderMoves(); lastBoardHash = ''; renderBoard();
+    const state = parseFen(currentFen);
+    checkGameEnd(state);
+  });
+  socket.on('timeUpdate', ({ timeW, timeB }) => {
+    if (!gameActive || gameEnded) return;
+    const state = parseFen(currentFen);
+    updateTimersFromServer(timeW, timeB, state.turn);
+  });
+  socket.on('gameEnded', ({ result, reason, isArena, isBot }) => {
+    if (gameEnded) return;
+    let winner = null;
+    if (result === 'w') winner = 'w';
+    else if (result === 'b') winner = 'b';
+    endGame(winner, reason, true);
+  });
+  socket.on('drawOffered', ({ from }) => showDrawOfferDialog(from || 'Соперник'));
+  socket.on('drawDeclined', () => {
+    pendingDrawOffer = false;
+    document.getElementById('statusBar').className = 'statusYellow';
+    document.getElementById('statusBar').textContent = 'Соперник отклонил ничью';
+  });
+  socket.on('rematchOffered', ({ from }) => showRematchOfferDialog(from || 'Соперник'));
+  socket.on('rematchDeclined', () => {
+    rematchRequested = false;
+    const btn = document.getElementById('grRematchBtn');
+    if (btn) { btn.disabled = false; btn.textContent = 'РЕВАНШ'; }
+    document.getElementById('statusBar').className = 'statusYellow';
+    document.getElementById('statusBar').textContent = 'Соперник отклонил реванш';
+  });
+  socket.on('opponentOnline', () => { opponentOnline = true; });
+  socket.on('opponentOffline', () => { opponentOnline = false; });
+  socket.on('chatMessage', (msg) => renderChatMsg(msg));
+  socket.on('chatError', ({ msg }) => alert(msg));
+  socket.on('opponentLeft', () => { if (!gameActive) return; alert('Соперник отключился'); updateBackToGameBtn(); });
+  socket.on('arenaChatMessage', (msg) => { if (currentArenaId && msg.arenaId === currentArenaId) renderArenaChatMsg(msg); });
+  socket.on('arenaUpdate', ({ arenaId }) => {
+    if (currentArenaId === arenaId) { lastArenaStateHash = ''; lastArenaGamesHash = ''; if (document.getElementById('arenaPageScreen').classList.contains('active')) { loadArenaPage(); renderArenaGamesList(); } }
+    if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas(false);
+    if (document.getElementById('lobbyScreen').classList.contains('active')) refreshTopArenas();
+  });
+  socket.on('arenaStarted', ({ arenaId }) => {
+    if (currentArenaId === arenaId) { lastArenaStateHash = ''; lastArenaGamesHash = ''; if (document.getElementById('arenaPageScreen').classList.contains('active')) loadArenaPage(); }
+    if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas(false);
+  });
+  socket.on('arenaFinished', ({ arenaId, top3 }) => {
+    if (currentArenaId === arenaId) { lastArenaStateHash = ''; if (document.getElementById('arenaPageScreen').classList.contains('active')) loadArenaPage(); if (top3 && top3.length) showArenaWinnerBanner(top3); }
+    if (document.getElementById('arenasScreen').classList.contains('active')) refreshArenas(false);
+  });
+
+  setInterval(() => {
+    if (document.hidden) return;
+    if (document.getElementById('lobbyScreen').classList.contains('active')) { refreshTopArenas(); refreshStats(); }
+    if (document.getElementById('watchScreen').classList.contains('active')) { refreshWatchList(false); if (watchingGameId) socket.emit('watchGame', { id: watchingGameId }, (res) => { if (res && res.ok) { watchingGame = res.game; renderWatchBoard(); } }); }
+    updateBackToGameBtn();
+  }, 5000);
+
+  document.getElementById('password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+
+  // ======================= БОТЫ UI =======================
+  let BOT_LEVELS = [];
+  const BOT_TIMES = [
+    { t: 1, i: 0, label: '1+0' },
+    { t: 3, i: 0, label: '3+0' },
+    { t: 5, i: 0, label: '5+0' },
+    { t: 10, i: 0, label: '10+0' },
+    { t: 15, i: 10, label: '15+10' },
+    { t: 30, i: 0, label: '30+0' }
+  ];
+  let botDialogState = { level: 2, time: 5, inc: 0 };
+  function openBotDialog() {
+    socket.emit('getBots', (list) => {
+      if (Array.isArray(list)) BOT_LEVELS = list.map(b => ({ level: b.level, name: b.name, title: b.title, rating: b.rating }));
+      renderBotDialogContents();
+      document.getElementById('botDialog').classList.add('show');
+    });
+  }
+  window.openBotDialog = openBotDialog;
+  function closeBotDialog() { document.getElementById('botDialog').classList.remove('show'); }
+  window.closeBotDialog = closeBotDialog;
+  function renderBotDialogContents() {
+    const levelsEl = document.getElementById('botLevels');
+    const timesEl = document.getElementById('botTimes');
+    if (!BOT_LEVELS.length) return;
+    levelsEl.innerHTML = BOT_LEVELS.map(l => {
+      const active = botDialogState.level === l.level;
+      return `<button data-level="${l.level}" class="${active ? 'active' : ''}"><div class="btitle">${l.title}</div><div class="brating">${l.rating}</div></button>`;
+    }).join('');
+    timesEl.innerHTML = BOT_TIMES.map(t => {
+      const active = botDialogState.time === t.t && botDialogState.inc === t.i;
+      return `<button data-t="${t.t}" data-i="${t.i}" class="${active ? 'active' : ''}">${t.label}</button>`;
+    }).join('');
+    levelsEl.querySelectorAll('button').forEach(b => b.onclick = () => { botDialogState.level = +b.dataset.level; renderBotDialogContents(); });
+    timesEl.querySelectorAll('button').forEach(b => b.onclick = () => { botDialogState.time = +b.dataset.t; botDialogState.inc = +b.dataset.i; renderBotDialogContents(); });
+  }
+  function startBotGame() {
+    const bot = BOT_LEVELS.find(b => b.level === botDialogState.level);
+    if (!bot) return;
+    socket.emit('playWithBot', { time: botDialogState.time, inc: botDialogState.inc, botName: bot.name }, (res) => {
+      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
+      closeBotDialog();
+    });
+  }
+  window.startBotGame = startBotGame;
+  document.getElementById('botDialog').addEventListener('click', (e) => { if (e.target === document.getElementById('botDialog')) closeBotDialog(); });
+
+  // ======================= АВТОЛОГИН =======================
+  (function tryAutoLogin() {
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem('kingside_login') || 'null'); } catch (e) {}
+    if (!saved || !saved.username || !saved.password) return;
+    document.getElementById('username').value = saved.username;
+    socket.emit('register', { username: saved.username, password: saved.password }, (res) => {
+      if (!res || !res.ok) { try { localStorage.removeItem('kingside_login'); } catch (e) {} return; }
+      me = res.user;
+      updateTopbarUser();
+      navTo('lobby');
+      refreshLobbies(); refreshTopArenas(); refreshStats();
+    });
+  })();
 })();
 </script>
 </body>
