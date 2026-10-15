@@ -401,8 +401,6 @@ function socketsOfUser(username) {
 }
 
 // ======================= ХРАНИЛИЩА =======================
-// `lobbies` — только ожидающие партии (запросы на игру).
-// `games`   — активные партии; завершённые удаляются через 2 секунды.
 const online = new Map();
 const lobbies = new Map();
 const games = new Map();
@@ -451,6 +449,13 @@ function broadcastWatchers(lobbyId) {
   if (!g) return;
   const count = watchersCountOf(g);
   io.emit('watchersUpdate', { lobbyId, count });
+}
+
+// Ключевая функция: рассылает событие и игрокам (в комнату gameId),
+// и зрителям (в комнату watch:${gameId}). Так ходы ботов долетают до зрителей.
+function emitToGameAndWatchers(gameId, event, payload) {
+  io.to(gameId).emit(event, payload);
+  io.to('watch:' + gameId).emit(event, payload);
 }
 
 function cleanupStuckPlaying() {
@@ -595,7 +600,7 @@ async function finishGame(gameId, result, reason) {
   try { await saveGame(gameRecord); } catch (e) { console.error('[DB] saveGame fail:', e.message); }
 
   const isArena = !!g.arenaId;
-  io.to(gameId).emit('gameEnded', {
+  emitToGameAndWatchers(gameId, 'gameEnded', {
     result, reason,
     whiteDelta: whiteAfter - whiteBefore,
     blackDelta: blackAfter - blackBefore,
@@ -609,12 +614,12 @@ async function finishGame(gameId, result, reason) {
     catch (e) { console.error('[arena] handleArenaGameEnd ошибка:', e.message); }
   }
 
-  // Партия завершена — удаляем её через 2 секунды, чтобы клиент успел
-  // получить gameEnded и показать результат.
+  // Партия завершена — удаляем через 2 секунды, чтобы клиент успел получить gameEnded.
   setTimeout(() => {
     const cur = games.get(gameId);
     if (cur) {
       io.to(gameId).socketsLeave(gameId);
+      io.to('watch:' + gameId).socketsLeave('watch:' + gameId);
       games.delete(gameId);
       broadcastLobbies();
     }
@@ -1296,7 +1301,7 @@ setInterval(() => {
     if (!game.isBot) {
       if (!game._lastTimeEmit || now - game._lastTimeEmit > 2000) {
         game._lastTimeEmit = now;
-        io.to(id).emit('timeUpdate', { timeW: game.timeW, timeB: game.timeB, serverNow: now });
+        emitToGameAndWatchers(id, 'timeUpdate', { timeW: game.timeW, timeB: game.timeB, serverNow: now });
       }
     }
     if (game.timeW <= 0) finishGame(id, 'b', 'Время');
@@ -1489,7 +1494,7 @@ function scheduleBotMove(gameId) {
       cur.fen = botToFen(nextState);
       cur.turn = nextState.turn;
       cur.drawOffer = null;
-      io.to(gameId).emit('boardUpdate', { fen: cur.fen, turn: cur.turn, san: null });
+      emitToGameAndWatchers(gameId, 'boardUpdate', { fen: cur.fen, turn: cur.turn, san: null });
       const humanSocket = (cur.hostSocket && !cur.isBot) ? io.sockets.sockets.get(cur.hostSocket) : null;
       if (humanSocket) humanSocket.emit('timeUpdate', { timeW: cur.timeW, timeB: cur.timeB, serverNow: now });
       const sideToMoveWhite = cur.turn === 'w';
@@ -1566,7 +1571,6 @@ function scheduleBotMove(gameId) {
     const botSign = botColor === 'w' ? 1 : -1;
     const myEval = evalScore * botSign;
 
-    // Боты почти не сдаются — только в безнадёжном эндшпиле.
     let resignThreshold;
     if (botName === WATCHER_NAME) resignThreshold = -3000;
     else if (botRating < 1100)      resignThreshold = -2500;
@@ -1625,7 +1629,6 @@ function scheduleBotMove(gameId) {
       }
     }
 
-    // Боты почти не предлагают ничью — только после 60 ходов в реально равной позиции.
     if (
       Math.abs(myEval) < 15 &&
       st.full > 60 &&
@@ -1713,7 +1716,7 @@ function scheduleBotMove(gameId) {
     cur2.drawOffer = null;
     cur2.botDrawOffered = false;
 
-    io.to(gameId).emit('boardUpdate', { fen: cur2.fen, turn: cur2.turn, san: null });
+    emitToGameAndWatchers(gameId, 'boardUpdate', { fen: cur2.fen, turn: cur2.turn, san: null });
     const humanSocket = (cur2.hostSocket && !cur2.isBot) ? io.sockets.sockets.get(cur2.hostSocket) : null;
     if (humanSocket) humanSocket.emit('timeUpdate', { timeW: cur2.timeW, timeB: cur2.timeB, serverNow: now });
 
@@ -2117,10 +2120,9 @@ io.on('connection', (socket) => {
     g.turn = newTurn;
     g.drawOffer = null;
 
-    io.to(lobbyId).emit('boardUpdate', { fen, turn: newTurn, san: san || null });
-    io.to(lobbyId).emit('timeUpdate', { timeW: g.timeW, timeB: g.timeB, serverNow: now });
-    socket.to('watch:' + lobbyId).emit('boardUpdate', { fen, turn: newTurn, san: san || null });
-    socket.to('watch:' + lobbyId).emit('timeUpdate', { timeW: g.timeW, timeB: g.timeB, serverNow: now });
+    // Рассылаем и игрокам, и зрителям через общую функцию.
+    emitToGameAndWatchers(lobbyId, 'boardUpdate', { fen, turn: newTurn, san: san || null });
+    emitToGameAndWatchers(lobbyId, 'timeUpdate', { timeW: g.timeW, timeB: g.timeB, serverNow: now });
 
     try {
       const beh = botInitBehavior(WATCHER_NAME);
@@ -2173,7 +2175,7 @@ io.on('connection', (socket) => {
     const msg = { id: 'm' + Date.now() + Math.random().toString(36).slice(2, 6), user: socket.username, userIsAdmin: isAdmin(socket.username), userIsMod: isMod(socket.username), text, ts: Date.now() };
     g.chat.push(msg);
     if (g.chat.length > 50) g.chat.shift();
-    io.to(lobbyId).emit('chatMessage', msg);
+    emitToGameAndWatchers(lobbyId, 'chatMessage', msg);
   });
 
   socket.on('modDeleteMessage', ({ lobbyId, msgId }, cb) => {
@@ -2184,7 +2186,7 @@ io.on('connection', (socket) => {
     const idx = g.chat.findIndex(m => m.id === msgId);
     if (idx < 0) return cb({ ok: false, msg: 'Сообщение не найдено' });
     g.chat.splice(idx, 1);
-    io.to(lobbyId).emit('chatMessageDeleted', { msgId, scope: 'game', lobbyId });
+    emitToGameAndWatchers(lobbyId, 'chatMessageDeleted', { msgId, scope: 'game', lobbyId });
     cb({ ok: true });
   });
 
