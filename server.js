@@ -1139,6 +1139,14 @@ function createArenaPairing(state, a, b) {
   if (aIsBot) { const bh = botInitBehavior(a.username); bh.state = 'playing'; bh.lastChange = Date.now(); }
   if (bIsBot) { const bh = botInitBehavior(b.username); bh.state = 'playing'; bh.lastChange = Date.now(); }
 
+  // Если среди игроков есть Watcher — начинаем эпизод обучения.
+  if (a.username === WATCHER_NAME || b.username === WATCHER_NAME) {
+    try {
+      const watcherColor = a.username === WATCHER_NAME ? hostColor : guestColor;
+      watcherLearning.startEpisode(watcherColor, { time, inc });
+    } catch (e) { console.error('[Watcher] startEpisode ошибка:', e.message); }
+  }
+
   const aSocket = a.isBot ? null : io.sockets.sockets.get(a.socketId);
   const bSocket = b.isBot ? null : io.sockets.sockets.get(b.socketId);
   const aUser = db.users[a.username];
@@ -1312,7 +1320,6 @@ function clearMute(username) {
 
 // ============================================================
 //  ПРОСТОЙ ШАХМАТНЫЙ ДВИЖОК (только для серверной логики)
-//  Тяжёлая оценка — в bot-worker.js (worker_threads).
 // ============================================================
 const PIECE_VALUES = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
 
@@ -1399,7 +1406,6 @@ function botAllLegalMoves(state, white) {
 }
 
 // Простая оценка (как в исходной версии): материал + пара слонов.
-// Никаких PST, мобильности, lookahead — это всё в bot-worker.js.
 function botEval(state) {
   let score = 0;
   let whiteBishops = 0, blackBishops = 0;
@@ -1456,8 +1462,8 @@ function scheduleBotMove(lobbyId) {
       if (!stillBot) return;
       const st = botParseFen(cur.fen);
       const mv = botMoves[0];
-      const from = Array.isArray(mv.from) ? mv.from : mv[0];
-      const to = Array.isArray(mv.to) ? mv.to : mv[1];
+      const from = mv[0];
+      const to = mv[1];
       if (!from || !to) return;
       const captured = st.board[to[0]][to[1]];
       const prevFen = cur.fen;
@@ -1468,7 +1474,7 @@ function scheduleBotMove(lobbyId) {
 
       if (botName === WATCHER_NAME) {
         try {
-          watcherLearning.recordTransition(prevFen, botToFen(nextState), botColor, { time: cur.time, inc: cur.inc }, captured || null);
+          watcherLearning.recordTransition(prevFen, botToFen(nextState), from, to, botColor, { time: cur.time, inc: cur.inc }, captured || null);
         } catch (e) { console.error('[Watcher] Ошибка обучения:', e.message); }
       }
 
@@ -1615,7 +1621,7 @@ function scheduleBotMove(lobbyId) {
     let mv;
     if (botName === WATCHER_NAME) {
       // Watcher думает сам, вся логика — в watcher-learning.js.
-      // Передаём только FEN, цвет и список легальных ходов.
+      // Передаём FEN, цвет, tc и список легальных ходов ([[fromR,fromC],[toR,toC]]).
       mv = watcherLearning.pickMove(cur.fen, botColor, { time: cur.time, inc: cur.inc }, botMoves);
     } else {
       try { mv = await botPool.getMove(cur.fen, botRating, cur.time); }
@@ -1623,8 +1629,12 @@ function scheduleBotMove(lobbyId) {
     }
     if (!mv) return;
 
-    const from = Array.isArray(mv.from) ? mv.from : (Array.isArray(mv[0]) ? mv[0] : null);
-    const to = Array.isArray(mv.to) ? mv.to : (Array.isArray(mv[1]) ? mv[1] : null);
+    let from, to;
+    if (Array.isArray(mv.from) && Array.isArray(mv.to)) { from = mv.from; to = mv.to; }
+    else if (Array.isArray(mv) && Array.isArray(mv[0]) && Array.isArray(mv[1])) { from = mv[0]; to = mv[1]; }
+    else if (mv.from && mv.to) { from = mv.from; to = mv.to; }
+    else { console.error('[Bot] Некорректный ход:', botName, JSON.stringify(mv)); return; }
+
     if (!from || !to || from.length !== 2 || to.length !== 2) {
       console.error('[Bot] Некорректный ход:', botName, JSON.stringify(mv));
       return;
@@ -1651,7 +1661,7 @@ function scheduleBotMove(lobbyId) {
 
     if (botName === WATCHER_NAME) {
       try {
-        watcherLearning.recordTransition(prevFen, botToFen(nextState), botColor, { time: cur2.time, inc: cur2.inc }, captured || null);
+        watcherLearning.recordTransition(prevFen, botToFen(nextState), from, to, botColor, { time: cur2.time, inc: cur2.inc }, captured || null);
       } catch (e) { console.error('[Watcher] Ошибка обучения:', e.message); }
     }
 
@@ -1978,6 +1988,15 @@ io.on('connection', (socket) => {
     io.to(l.hostSocket).emit('gameStart', { color: l.hostColor, opponent: l.guest, opponentRating: guestRating, opponentIsAdmin: isAdmin(l.guest), opponentIsMod: isMod(l.guest), opponentOnline: true, time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat, isArena: false, isBot: !!l.isBot && !hostIsWatcher && !guestIsWatcher, botName: l.isBot && !guestIsWatcher ? l.host : undefined });
     io.to(l.guestSocket).emit('gameStart', { color: l.guestColor, opponent: l.host, opponentRating: hostRating, opponentIsAdmin: isAdmin(l.host), opponentIsMod: isMod(l.host), opponentOnline: true, time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat, isArena: false, isBot: !!l.isBot && !hostIsWatcher && !guestIsWatcher, botName: l.isBot && !hostIsWatcher ? l.host : undefined });
     if (l.isBot) setTimeout(() => scheduleBotMove(l.id), l.isWatcher ? 1500 : 500);
+
+    // Если Watcher играет в лобби — стартуем эпизод.
+    if (l.host === WATCHER_NAME || l.guest === WATCHER_NAME) {
+      try {
+        const watcherColor = l.host === WATCHER_NAME ? l.hostColor : l.guestColor;
+        watcherLearning.startEpisode(watcherColor, { time: l.time, inc: l.inc });
+      } catch (e) { console.error('[Watcher] startEpisode ошибка:', e.message); }
+    }
+
     cb({ ok: true, id });
     broadcastLobbies();
     broadcastOnline();
