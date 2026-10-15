@@ -1,10 +1,6 @@
 // bot-worker.js
-// Изолированный воркер для тяжёлых вычислений хода бота (minimax).
-// Запускается в отдельном потоке, не блокирует event loop основного сервера.
-
 const { parentPort } = require('worker_threads');
 
-// ======================= ДВИЖОК (копия из server.js) =======================
 const PIECE_VALUES = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
 const PST = {
   p: [[0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20,10,10],[5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-5,-10,0,0,-10,-5,5],[5,10,10,-20,-20,10,10,5],[0,0,0,0,0,0,0,0]],
@@ -14,7 +10,6 @@ const PST = {
   q: [[-20,-10,-10,-5,-5,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,5,5,5,0,-10],[-5,0,5,5,5,5,0,-5],[0,0,5,5,5,5,0,-5],[-10,5,5,5,5,5,0,-10],[-10,0,5,0,0,0,0,-10],[-20,-10,-10,-5,-5,-10,-10,-20]],
   k: [[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-20,-30,-30,-40,-40,-30,-30,-20],[-10,-20,-20,-20,-20,-20,-20,-10],[20,20,0,0,0,0,20,20],[20,30,10,0,0,10,30,20]]
 };
-
 const TT_CACHE = new Map();
 const TT_MAX = 200000;
 function ttKey(state) { return state.board.map(row => row.map(c => c || '.').join('')).join('/') + state.turn + state.castling + state.ep; }
@@ -70,7 +65,6 @@ function botIsAttacked(state, r, c, byWhite) {
   return false;
 }
 function botInCheck(state, white) { const k = botFindKing(state, white); if (!k) return false; return botIsAttacked(state, k[0], k[1], !white); }
-
 function botApplyMove(state, from, to) {
   const copy = { board: state.board.map(row => row.slice()), turn: state.turn, castling: state.castling, ep: state.ep, half: state.half, full: state.full };
   const [fr, fc] = from, [tr, tc] = to;
@@ -100,14 +94,12 @@ function botAllLegalMoves(state, white) {
   }
   return res;
 }
-
 function botEval(state) {
   let score = 0;
   let whiteBishops = 0, blackBishops = 0;
   let whiteMaterial = 0, blackMaterial = 0;
   const whitePawnsByFile = [0,0,0,0,0,0,0,0];
   const blackPawnsByFile = [0,0,0,0,0,0,0,0];
-
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     const white = botIsWhite(p); const t = p.toLowerCase();
@@ -139,7 +131,6 @@ function botEval(state) {
   const whiteMoves = botAllLegalMoves(state, true).length;
   const blackMoves = botAllLegalMoves(state, false).length;
   score += (whiteMoves - blackMoves) * 2;
-
   const wK = botFindKing(state, true);
   const bK = botFindKing(state, false);
   if (wK) {
@@ -164,7 +155,6 @@ function botEval(state) {
   }
   return score;
 }
-
 function moveScore(state, from, to) {
   const target = state.board[to[0]][to[1]];
   const piece = state.board[from[0]][from[1]];
@@ -173,7 +163,6 @@ function moveScore(state, from, to) {
   const attackerVal = PIECE_VALUES[piece.toLowerCase()] || 0;
   return victimVal * 10 - attackerVal;
 }
-
 function botQuiescence(state, alpha, beta, maximizing, depthLeft) {
   if (depthLeft <= 0) return botEval(state);
   const stand = botEval(state);
@@ -200,7 +189,6 @@ function botQuiescence(state, alpha, beta, maximizing, depthLeft) {
     return beta;
   }
 }
-
 function botMinimax(state, depth, alpha, beta, maximizing) {
   const key = ttKey(state);
   const cached = ttGet(key);
@@ -244,7 +232,6 @@ function botMinimax(state, depth, alpha, beta, maximizing) {
   ttSet(key, depth, best);
   return best;
 }
-
 function getBotParams(rating, baseTimeMin) {
   let depth, noise;
   if (rating < 1100)      { depth = 1; noise = 60; }
@@ -263,7 +250,6 @@ function getBotParams(rating, baseTimeMin) {
   else if (baseTimeMin <= 15) depth = Math.min(depth, 5);
   return { depth, noise };
 }
-
 function pickBotMoveByRating(fen, rating, baseTimeMin) {
   const state = botParseFen(fen);
   const white = state.turn === 'w';
@@ -272,7 +258,6 @@ function pickBotMoveByRating(fen, rating, baseTimeMin) {
   const { depth, noise } = getBotParams(rating, baseTimeMin);
   if (moves.length === 1) return moves[0];
   moves.sort((a, b) => moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]));
-
   const scored = moves.map(([from, to]) => {
     const next = botApplyMove(state, from, to);
     let score = botMinimax(next, depth - 1, -Infinity, Infinity, !white);
@@ -286,7 +271,6 @@ function pickBotMoveByRating(fen, rating, baseTimeMin) {
   return scored[0];
 }
 
-// ======================= ОБРАБОТКА ЗАДАЧ =======================
 parentPort.on('message', (msg) => {
   const { id, fen, rating, timeMin } = msg;
   try {
