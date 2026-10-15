@@ -417,6 +417,14 @@ function broadcastOnline() {
 }
 function broadcastLobbies() { io.emit('lobbiesUpdate'); }
 
+function watchersCountOf(l) { return l && l.watchers ? l.watchers.size : 0; }
+function broadcastWatchers(lobbyId) {
+  const l = lobbies.get(lobbyId);
+  if (!l) return;
+  const count = watchersCountOf(l);
+  io.emit('watchersUpdate', { lobbyId, count });
+}
+
 function cleanupStuckPlaying() {
   for (const state of arenas.values()) {
     for (const p of state.participants.values()) {
@@ -425,7 +433,8 @@ function cleanupStuckPlaying() {
         if (!l || l.finished) {
           p.isPlaying = false; p.lobbyId = null;
           if (!p.paused) p.waitingSince = Date.now();
-          if (p.isBot) {
+          // Watcher НЕ переводим обратно в арену
+          if (p.isBot && p.username !== WATCHER_NAME) {
             const beh = botInitBehavior(p.username);
             if (beh.state === 'playing') {
               beh.state = 'in_arena'; beh.activityId = state.id; beh.lastChange = Date.now();
@@ -455,7 +464,7 @@ function buildGamesList() {
       timeW: l.timeW, timeB: l.timeB, turn: l.turn,
       timeControl: l.time, increment: l.inc,
       isArena: !!l.arenaId, arenaName: l.arenaName || null, fen: l.fen,
-      watchersCount: l.watchers ? l.watchers.size : 0
+      watchersCount: watchersCountOf(l)
     });
   }
   list.sort((a, b) => (b.isArena ? 1 : 0) - (a.isArena ? 1 : 0));
@@ -555,32 +564,32 @@ async function finishGame(lobbyId, result, reason) {
     isBot: isBotGame
   };
 
-  // Watcher обучается независимо от того, с кем играет
+  // Обучение Watcher: закрываем эпизод
   if (whiteIsWatcher || blackIsWatcher) {
     try {
-      watcherLearning.incrementGames();
+      const watcherColor = whiteIsWatcher ? 'w' : 'b';
+      watcherLearning.finishEpisode(result, watcherColor);
       watcherLearning.saveQTable();
-    } catch (e) { console.error('[Watcher] Ошибка инкремента:', e.message); }
+    } catch (e) { console.error('[Watcher] Ошибка завершения эпизода:', e.message); }
+
+    // Сбрасываем поведение Watcher, чтобы он не остался в 'playing' после удаления лобби
+    try {
+      const beh = botInitBehavior(WATCHER_NAME);
+      if (beh.state === 'playing') { beh.state = 'idle'; beh.activityId = null; beh.lastChange = Date.now(); }
+    } catch (e) { /* ignore */ }
   }
 
   const isWatcherVsBot = (whiteIsWatcher && blackUser.isBot) ||
                          (blackIsWatcher && whiteUser.isBot);
 
   if (isWatcherVsBot) {
-    // Партии Watcher против ботов:
-    //  - статистика Watcher обновляется (games/wins/losses)
-    //  - рейтинг Watcher фиксируется на 1200
-    //  - статистика бота-соперника НЕ трогается (он «спарринг-партнёр»)
-    //  - в таблицу games НЕ пишем, чтобы не засорять историю
     const watcherName = whiteIsWatcher ? whiteName : blackName;
     const botName = whiteIsWatcher ? blackName : whiteName;
     const botUser = db.users[botName];
     const wUser = db.users[watcherName];
     if (botUser && botUser.categories) {
-      // откатываем изменения рейтинга/статистики бота
       const botCat = botUser.categories[cat];
       if (botCat) {
-        // эти поля мы уже увеличили выше — компенсируем
         if (whiteIsWatcher) { botCat.losses = Math.max(0, botCat.losses - 1); botCat.games = Math.max(0, botCat.games - 1); }
         else                { botCat.wins   = Math.max(0, botCat.wins   - 1); botCat.games = Math.max(0, botCat.games   - 1); }
       }
@@ -592,9 +601,7 @@ async function finishGame(lobbyId, result, reason) {
       if (wUser.categories && wUser.categories[cat]) wUser.categories[cat].rating = 1200;
       try { await saveUser(watcherName); } catch (e) { console.error('[DB] saveUser watcher fail:', e.message); }
     }
-    // Партию в games не пишем (раскомментируйте saveGame, если хотите их видеть в истории)
-    // try { await saveGame(gameRecord); } catch (e) { console.error('[DB] saveGame (watcher vs bot) fail:', e.message); }
-    console.log(`[Watcher] Партия vs бот: статистика Watcher обновлена (рейтинг зафиксирован 1200)`);
+    console.log(`[Watcher] Партия vs бот: статистика Watcher обновлена`);
   } else {
     try { await saveUser(whiteName); } catch (e) { console.error('[DB] saveUser white fail:', e.message); }
     try { await saveUser(blackName); } catch (e) { console.error('[DB] saveUser black fail:', e.message); }
@@ -739,7 +746,17 @@ function botActiveGamesCount(botName) {
   }
   return n;
 }
-function botIsBusy(botName) { return botActiveGamesCount(botName) >= MAX_BOT_GAMES; }
+function botIsBusy(botName) {
+  if (botName === WATCHER_NAME) {
+    // Watcher занят, если у него есть активная партия или ожидающий вызов
+    for (const l of lobbies.values()) {
+      if (l.finished) continue;
+      if (l.host === WATCHER_NAME || l.guest === WATCHER_NAME) return true;
+    }
+    return false;
+  }
+  return botActiveGamesCount(botName) >= MAX_BOT_GAMES;
+}
 function botGamesInArena(arenaId) {
   let n = 0;
   for (const l of lobbies.values()) {
@@ -751,6 +768,7 @@ function botGamesInArena(arenaId) {
 }
 function isAvailableForPairing(p, arenaId) {
   if (!p) return false;
+  if (p.username === WATCHER_NAME) return true; // Watcher может ждать в арене
   if (p.paused) return false;
   if (p.isBot) {
     if (botIsBusy(p.username)) return false;
@@ -917,12 +935,13 @@ setInterval(botBehaviorTick, 5000);
 setTimeout(botBehaviorTick, 3000);
 
 // ============================================================
-//  WATCHER TICK
+//  WATCHER TICK — выставляет вызовы и заходит в арены
 // ============================================================
 function watcherTick() {
   const now = Date.now();
   const beh = botInitBehavior(WATCHER_NAME);
 
+  // Наблюдение за чужими партиями
   if (Math.random() < 0.4 || !beh.watchingLobbyId) {
     const liveGames = [];
     for (const [id, l] of lobbies.entries()) {
@@ -939,6 +958,38 @@ function watcherTick() {
 
   if (botIsBusy(WATCHER_NAME)) return;
 
+  // Watcher пытается зайти в дружественные к ботам арены
+  if (beh.state !== 'in_arena' && Math.random() < 0.5) {
+    const candidates = [...arenas.values()].filter(s =>
+      !s.finished && s.botFriendly && (s.phase === 'live' || s.phase === 'waiting') && !s.participants.has(WATCHER_NAME)
+    );
+    if (candidates.length) {
+      candidates.sort((a, b) => {
+        const aLive = a.phase === 'live' ? 0 : 1, bLive = b.phase === 'live' ? 0 : 1;
+        if (aLive !== bLive) return aLive - bLive;
+        return a.startsAt - b.startsAt;
+      });
+      const chosen = candidates[0];
+      const wu = db.users[WATCHER_NAME];
+      chosen.participants.set(WATCHER_NAME, {
+        username: WATCHER_NAME,
+        rating: wu ? wu.rating : 1200,
+        score: 0, wins: 0, draws: 0, losses: 0, winStreak: 0, drawStreak: 0,
+        socketId: 'BOT:' + WATCHER_NAME,
+        lobbyId: null, isPlaying: false, paused: false,
+        waitingSince: Date.now(), isBot: true
+      });
+      beh.state = 'in_arena'; beh.activityId = chosen.id; beh.lastChange = now;
+      const sysMsg = { id: 'sys' + Date.now(), system: true, text: `${WATCHER_NAME} присоединился к арене`, ts: Date.now(), arenaId: chosen.id };
+      chosen.chat.push(sysMsg); if (chosen.chat.length > 300) chosen.chat.shift();
+      io.to('arena:' + chosen.id).emit('arenaChatMessage', sysMsg);
+      io.emit('arenaUpdate', { arenaId: chosen.id });
+      console.log(`[Watcher] Вошёл в арену ${chosen.name}`);
+      return;
+    }
+  }
+
+  // Иногда Watcher выставляет вызов в обычных лобби
   if (Math.random() < 0.30 && !beh.pendingLobbyId) {
     let existing = null;
     for (const [id, l] of lobbies.entries()) {
@@ -1000,6 +1051,10 @@ function tryPair(state) {
   const used = new Set();
   let pairsCreated = 0;
   const MAX_PAIRS_PER_TICK = 2;
+
+  // Считаем сколько Watcher'ов в available (должен быть максимум один)
+  const watcherCount = available.filter(p => p.username === WATCHER_NAME).length;
+
   for (let i = 0; i < available.length && pairsCreated < MAX_PAIRS_PER_TICK; i++) {
     const a = available[i];
     if (used.has(a.username)) continue;
@@ -1008,10 +1063,19 @@ function tryPair(state) {
       if (i === j) continue;
       const b = available[j];
       if (used.has(b.username)) continue;
+
+      // ЗАПРЕТ: Watcher vs Watcher
+      if (a.username === WATCHER_NAME && b.username === WATCHER_NAME) continue;
+
       if (a.isBot && b.isBot) {
         const humansWaiting = available.some(p => !p.isBot && !used.has(p.username));
         if (humansWaiting) continue;
-        if (Math.random() < 0.7) continue;
+        // Запрещаем пары «два бота», если один из них Watcher
+        if (a.username === WATCHER_NAME || b.username === WATCHER_NAME) {
+          // разрешено: Watcher vs обычный бот
+        } else {
+          if (Math.random() < 0.7) continue;
+        }
         if (botGamesInArena(state.id) >= MAX_BOT_GAMES_PER_ARENA) continue;
       }
       const diff = Math.abs((a.score || 0) - (b.score || 0));
@@ -1026,6 +1090,7 @@ function tryPair(state) {
 }
 
 function createArenaPairing(state, a, b) {
+  if (a.username === WATCHER_NAME && b.username === WATCHER_NAME) return;
   const lobbyId = genId();
   const hostIsWhite = Math.random() < 0.5;
   const hostColor = hostIsWhite ? 'w' : 'b';
@@ -1105,8 +1170,10 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   whiteP.lobbyId = null; blackP.lobbyId = null;
   if (!whiteP.paused) whiteP.waitingSince = Date.now();
   if (!blackP.paused) blackP.waitingSince = Date.now();
-  if (whiteP.isBot) { const bh = botInitBehavior(whiteName); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
-  if (blackP.isBot) { const bh = botInitBehavior(blackName); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
+  if (whiteP.isBot && whiteName !== WATCHER_NAME) { const bh = botInitBehavior(whiteName); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
+  else if (whiteName === WATCHER_NAME) { const bh = botInitBehavior(WATCHER_NAME); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
+  if (blackP.isBot && blackName !== WATCHER_NAME) { const bh = botInitBehavior(blackName); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
+  else if (blackName === WATCHER_NAME) { const bh = botInitBehavior(WATCHER_NAME); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
   setTimeout(() => tryPair(state), 300);
   io.to('arena:' + arenaId).emit('arenaUpdate', { arenaId });
 }
@@ -1365,7 +1432,9 @@ function scheduleBotMove(lobbyId) {
       if (!stillBot) return;
       const st = botParseFen(cur.fen);
       const mv = botMoves[0];
-      const { from, to } = mv;
+      const from = Array.isArray(mv.from) ? mv.from : mv[0];
+      const to = Array.isArray(mv.to) ? mv.to : mv[1];
+      if (!from || !to) return;
       const captured = st.board[to[0]][to[1]];
       const prevFen = cur.fen;
       const nextState = botApplyMove(st, from, to);
@@ -1375,12 +1444,15 @@ function scheduleBotMove(lobbyId) {
 
       if (botName === WATCHER_NAME) {
         try {
+          if (!watcherLearning.getStats().episodeActive) {
+            watcherLearning.startEpisode(botColor, { time: cur.time, inc: cur.inc });
+          }
           const stateBefore = watcherLearning.encodeState(prevFen, botColor, { time: cur.time, inc: cur.inc });
           const actionStr = watcherLearning.encodeAction(from, to);
           const stateAfter = watcherLearning.encodeState(botToFen(nextState), botColor, { time: cur.time, inc: cur.inc });
           const evalAfter = botEval(nextState);
-          const reward = (botColor === 'w' ? evalAfter : -evalAfter) / 100;
-          watcherLearning.updateQ(stateBefore, actionStr, reward, stateAfter, evalAfter);
+          const reward = (botColor === 'w' ? evalAfter : -evalAfter) / 1000;
+          watcherLearning.recordTransition(stateBefore, actionStr, reward, stateAfter, evalAfter);
         } catch (e) { console.error('[Watcher] Ошибка обучения:', e.message); }
       }
 
@@ -1476,7 +1548,7 @@ function scheduleBotMove(lobbyId) {
     else if (botRating < 1600)      resignThreshold = -1200;
     else if (botRating < 1850)      resignThreshold = -1500;
     else if (botRating < 2000)      resignThreshold = -1800;
-    else                       resignThreshold = -2200;
+    else                            resignThreshold = -2200;
     const minMovesBeforeResign = botName === WATCHER_NAME ? 20 : (botRating < 1500 ? 15 : 25);
     const myMaterial = botEvalMaterial(st, botColor === 'w');
     const oppMaterial = botEvalMaterial(st, botColor !== 'w');
@@ -1540,6 +1612,14 @@ function scheduleBotMove(lobbyId) {
     }
     if (!mv) return;
 
+    // Безопасное извлечение from/to
+    const from = Array.isArray(mv.from) ? mv.from : (Array.isArray(mv[0]) ? mv[0] : null);
+    const to = Array.isArray(mv.to) ? mv.to : (Array.isArray(mv[1]) ? mv[1] : null);
+    if (!from || !to || from.length !== 2 || to.length !== 2) {
+      console.error('[Bot] Некорректный ход:', botName, JSON.stringify(mv));
+      return;
+    }
+
     const cur2 = lobbies.get(lobbyId);
     if (!cur2 || cur2.finished) return;
     if (cur2.turn !== botColor) return;
@@ -1549,7 +1629,6 @@ function scheduleBotMove(lobbyId) {
     if (cur2.fen !== cur.fen) return;
 
     const st2 = botParseFen(cur2.fen);
-    const { from, to } = mv;
     const legal = botLegalMovesFor(st2, from[0], from[1]);
     if (!legal.some(([r, c]) => r === to[0] && c === to[1])) return;
 
@@ -1562,12 +1641,15 @@ function scheduleBotMove(lobbyId) {
 
     if (botName === WATCHER_NAME) {
       try {
+        if (!watcherLearning.getStats().episodeActive) {
+          watcherLearning.startEpisode(botColor, { time: cur2.time, inc: cur2.inc });
+        }
         const stateBefore = watcherLearning.encodeState(prevFen, botColor, { time: cur2.time, inc: cur2.inc });
         const actionStr = watcherLearning.encodeAction(from, to);
         const stateAfter = watcherLearning.encodeState(botToFen(nextState), botColor, { time: cur2.time, inc: cur2.inc });
         const evalAfter = botEval(nextState);
-        const reward = (botColor === 'w' ? evalAfter : -evalAfter) / 100;
-        watcherLearning.updateQ(stateBefore, actionStr, reward, stateAfter, evalAfter);
+        const reward = (botColor === 'w' ? evalAfter : -evalAfter) / 1000;
+        watcherLearning.recordTransition(stateBefore, actionStr, reward, stateAfter, evalAfter);
       } catch (e) { console.error('[Watcher] Ошибка обучения:', e.message); }
     }
 
@@ -1701,7 +1783,8 @@ io.on('connection', (socket) => {
         opponentOnline: isUserOnline(opponentName) || ALL_BOT_NAMES.has(opponentName),
         time: l.time, inc: l.inc, timeW: l.timeW, timeB: l.timeB, turn: l.turn,
         fen: l.fen, chat: l.chat, arenaId: l.arenaId, arenaName: l.arenaName,
-        finished: l.finished, isBot: !!l.isBot && l.host !== WATCHER_NAME && l.guest !== WATCHER_NAME
+        finished: l.finished, isBot: !!l.isBot && l.host !== WATCHER_NAME && l.guest !== WATCHER_NAME,
+        watchersCount: watchersCountOf(l)
       }
     });
   });
@@ -1713,6 +1796,7 @@ io.on('connection', (socket) => {
     if (!l.watchers) l.watchers = new Set();
     l.watchers.add(socket.id);
     io.emit('lobbiesUpdate');
+    broadcastWatchers(id);
     const whiteName = l.hostColor === 'w' ? l.host : l.guest;
     const blackName = l.hostColor === 'b' ? l.host : l.guest;
     if (typeof cb === 'function') cb({
@@ -1726,7 +1810,7 @@ io.on('connection', (socket) => {
         timeW: l.timeW, timeB: l.timeB, turn: l.turn,
         timeControl: l.time, increment: l.inc, fen: l.fen,
         isArena: !!l.arenaId, arenaName: l.arenaName || null,
-        watchersCount: l.watchers ? l.watchers.size : 0
+        watchersCount: watchersCountOf(l)
       }
     });
   });
@@ -1734,7 +1818,7 @@ io.on('connection', (socket) => {
   socket.on('unwatchGame', ({ id }) => {
     socket.leave('watch:' + id);
     const l = lobbies.get(id);
-    if (l && l.watchers) { l.watchers.delete(socket.id); io.emit('lobbiesUpdate'); }
+    if (l && l.watchers) { l.watchers.delete(socket.id); io.emit('lobbiesUpdate'); broadcastWatchers(id); }
   });
 
   socket.on('getLobbies', (cb) => {
@@ -1853,6 +1937,8 @@ io.on('connection', (socket) => {
     if (l.finished) return cb({ ok: false, msg: 'Партия завершена' });
     if (l.guest) return cb({ ok: false, msg: 'Лобби занято' });
     if (l.host === socket.username) return cb({ ok: false, msg: 'Это ваше лобби' });
+    // Нельзя сесть за Watcher-вызов, если ты сам Watcher
+    if (socket.username === WATCHER_NAME && l.host === WATCHER_NAME) return cb({ ok: false, msg: 'Занято' });
     l.guest = socket.username;
     l.guestSocket = socket.id;
     let hostIsWhite;
@@ -1935,19 +2021,18 @@ io.on('connection', (socket) => {
 
     try {
       const beh = botInitBehavior(WATCHER_NAME);
-      if (beh.watchingLobbyId === lobbyId && l.host !== WATCHER_NAME && l.guest !== WATCHER_NAME) {
-        const nextState = botParseFen(fen);
-        const evalAfter = botEval(nextState);
+      const isWatcherGame = (l.host === WATCHER_NAME || l.guest === WATCHER_NAME);
+      const isWatching = beh.watchingLobbyId === lobbyId;
+      if (fromSq && toSq) {
         const moverColor = newTurn === 'w' ? 'b' : 'w';
-        if (fromSq && toSq) {
-          watcherLearning.learnFromObservedMove(
-            prevFenForWatcher,
-            { from: fromSq, to: toSq },
-            fen,
-            moverColor,
-            { time: l.time, inc: l.inc },
-            evalAfter
-          );
+        const evalAfter = botEval(botParseFen(fen));
+        if (isWatcherGame) {
+          const watcherColor = l.host === WATCHER_NAME ? l.hostColor : l.guestColor;
+          if (moverColor !== watcherColor) {
+            watcherLearning.learnFromObservedMove(prevFenForWatcher, { from: fromSq, to: toSq }, fen, moverColor, { time: l.time, inc: l.inc }, evalAfter);
+          }
+        } else if (isWatching) {
+          watcherLearning.learnFromObservedMove(prevFenForWatcher, { from: fromSq, to: toSq }, fen, moverColor, { time: l.time, inc: l.inc }, evalAfter);
         }
       }
     } catch (e) { /* ignore */ }
@@ -2195,7 +2280,7 @@ io.on('connection', (socket) => {
         if (!l || l.finished) {
           p.isPlaying = false; p.lobbyId = null;
           if (!p.paused) p.waitingSince = Date.now();
-          if (p.isBot) {
+          if (p.isBot && p.username !== WATCHER_NAME) {
             const beh = botInitBehavior(p.username);
             if (beh.state === 'playing') { beh.state = 'in_arena'; beh.activityId = state.id; beh.lastChange = Date.now(); }
           }
@@ -2255,7 +2340,7 @@ io.on('connection', (socket) => {
           whiteRating: wU ? wU.rating : null, blackRating: bU ? bU.rating : null,
           timeW: l.timeW, timeB: l.timeB, turn: l.turn, fen: l.fen,
           moveCount: l.fen ? (+l.fen.split(' ')[5] || 1) : 1, live: true,
-          watchersCount: l.watchers ? l.watchers.size : 0
+          watchersCount: watchersCountOf(l)
         });
       }
     }
@@ -2372,13 +2457,17 @@ io.on('connection', (socket) => {
         state.chatViewers.delete(socket.id);
         if (p && p.isBot && p.isPlaying) {
           p.isPlaying = false; p.lobbyId = null;
-          const beh = botInitBehavior(p.username);
-          if (beh.state === 'playing') { beh.state = 'in_arena'; beh.activityId = state.id; beh.lastChange = Date.now(); }
+          if (p.username !== WATCHER_NAME) {
+            const beh = botInitBehavior(p.username);
+            if (beh.state === 'playing') { beh.state = 'in_arena'; beh.activityId = state.id; beh.lastChange = Date.now(); }
+          }
         }
       }
     }
     for (const l of lobbies.values()) {
-      if (l.watchers) l.watchers.delete(socket.id);
+      if (l.watchers) {
+        if (l.watchers.delete(socket.id)) broadcastWatchers(l.id);
+      }
     }
     const lid = socketToLobby.get(socket.id);
     socketToLobby.delete(socket.id);
@@ -2411,7 +2500,7 @@ io.on('connection', (socket) => {
     console.log(`  Порт: ${PORT}`);
     console.log(`  CPU ядер доступно: ${require('os').cpus().length}`);
     console.log('  Боты работают в отдельных потоках (worker_threads)');
-    console.log('  Watcher: обучаемый бот-наблюдатель');
+    console.log('  Watcher: обучаемый бот-наблюдатель (Double Q + Replay)');
     console.log('==================================================');
   });
 })();
