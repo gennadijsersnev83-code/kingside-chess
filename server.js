@@ -412,7 +412,6 @@ function onlinePlayersList() {
   for (const username of online.values()) {
     if (db.users[username]) byName.set(username, { ...publicUser(username), online: true });
   }
-  // Bots are online services; Watcher is a real bot-player too and must be counted.
   for (const bot of BOTS) {
     if (db.users[bot.name]) byName.set(bot.name, { ...publicUser(bot.name), online: true, isBot: true });
   }
@@ -429,8 +428,6 @@ function broadcastLobbies() { io.emit('lobbiesUpdate'); }
 
 function watchersCountOf(l) {
   if (!l || !l.watchers) return 0;
-  // Count unique connected accounts, not socket IDs: multiple tabs/reconnects
-  // from the same account should not inflate the audience counter.
   const names = new Set();
   for (const socketId of [...l.watchers]) {
     const viewerSocket = io.sockets.sockets.get(socketId);
@@ -549,9 +546,6 @@ async function finishGame(lobbyId, result, reason) {
   const whiteIsWatcher = whiteName === WATCHER_NAME;
   const blackIsWatcher = blackName === WATCHER_NAME;
 
-  // Watcher uses the same Glicko-2 rating update as other players.
-  // Do not pin its rating to 1200: 1200 is only the starting rating.
-
   wc.rating = whiteAfter; wc.rd = whiteRes.rd; wc.vol = whiteRes.vol;
   if (result === 'w') wc.wins++; else if (result === 'b') wc.losses++; else wc.draws++;
   wc.games++;
@@ -591,8 +585,6 @@ async function finishGame(lobbyId, result, reason) {
     } catch (e) { /* ignore */ }
   }
 
-  // Every completed game updates both players' ratings/statistics and is saved,
-  // including Watcher training games against bots.
   try { await saveUser(whiteName); } catch (e) { console.error('[DB] saveUser white fail:', e.message); }
   try { await saveUser(blackName); } catch (e) { console.error('[DB] saveUser black fail:', e.message); }
   try { await saveGame(gameRecord); } catch (e) { console.error('[DB] saveGame fail:', e.message); }
@@ -632,7 +624,9 @@ const ARENA_TEMPLATES = [
   { id: 'rapid-2h', name: 'Двухчасовая рапид-арена', description: '10+0 · рейтинговая', timeControl: 10, increment: 0, durationMin: 117, repeat: 'every2h', color: 'rapid', botFriendly: false },
   { id: 'classical-4h', name: 'Классическая арена', description: '30+0 · классика', timeControl: 30, increment: 0, durationMin: 237, repeat: 'every4h', color: 'classical', botFriendly: false },
   { id: 'bot-blitz-hourly', name: 'Блиц-арена с ботами', description: '3+2 · люди и боты', timeControl: 3, increment: 2, durationMin: 57, repeat: 'hourly', color: 'blitz', botFriendly: true },
-  { id: 'bot-rapid-2h', name: 'Рапид-арена с ботами', description: '10+0 · люди и боты', timeControl: 10, increment: 0, durationMin: 117, repeat: 'every2h', color: 'rapid', botFriendly: true }
+  { id: 'bot-rapid-2h', name: 'Рапид-арена с ботами', description: '10+0 · люди и боты', timeControl: 10, increment: 0, durationMin: 117, repeat: 'every2h', color: 'rapid', botFriendly: true },
+  { id: 'bot-bullet-halfhour', name: 'Пуля-арена с ботами', description: '1+0 · люди и боты', timeControl: 1, increment: 0, durationMin: 27, repeat: 'every30', color: 'bullet', botFriendly: true },
+  { id: 'bot-bullet-2h', name: 'Пуля-арена с ботами (2+1)', description: '2+1 · люди и боты', timeControl: 2, increment: 1, durationMin: 57, repeat: 'hourly', color: 'bullet', botFriendly: true }
 ];
 function nextStartFor(tpl, now) {
   const p = mskParts(now);
@@ -766,7 +760,6 @@ function watcherGamesInArena(arenaId) {
   return n;
 }
 function watcherHasActiveLobby() {
-  // Ожидающий вызов Watcher не должен блокировать его подбор соперника в арене.
   for (const l of lobbies.values()) {
     if (l.finished || !l.started) continue;
     if (l.host === WATCHER_NAME || l.guest === WATCHER_NAME) return true;
@@ -789,8 +782,6 @@ function isAvailableForPairing(p, arenaId) {
     return true;
   }
   if (p.paused) return false;
-  // Человек после завершения партии должен сам нажать «Вернуться к турниру».
-  // Пока он смотрит завершённую партию, новую жеребьёвку для него не проводим.
   if (!p.isBot && p.awaitingNextPair) return false;
   if (p.isBot) {
     if (botIsBusy(p.username)) return false;
@@ -957,13 +948,12 @@ setInterval(botBehaviorTick, 5000);
 setTimeout(botBehaviorTick, 3000);
 
 // ============================================================
-//  WATCHER TICK — заходит только в одну арену, не более
+//  WATCHER TICK
 // ============================================================
 function watcherTick() {
   const now = Date.now();
   const beh = botInitBehavior(WATCHER_NAME);
 
-  // Наблюдение за чужими партиями
   if (Math.random() < 0.4 || !beh.watchingLobbyId) {
     const liveGames = [];
     for (const [id, l] of lobbies.entries()) {
@@ -978,11 +968,9 @@ function watcherTick() {
     }
   }
 
-  // Если Watcher уже занят (в лобби или в арене) — ничего не делаем
   if (watcherHasActiveLobby()) return;
   if (watcherInAnyArena()) return;
 
-  // Заход в bot-friendly арену — не более одной
   if (beh.state !== 'in_arena' && Math.random() < 0.5) {
     const candidates = [...arenas.values()].filter(s =>
       !s.finished && s.botFriendly && (s.phase === 'live' || s.phase === 'waiting')
@@ -1014,7 +1002,6 @@ function watcherTick() {
     }
   }
 
-  // Иногда Watcher выставляет вызов в обычных лобби
   if (Math.random() < 0.30 && !beh.pendingLobbyId) {
     let existing = null;
     for (const [id, l] of lobbies.entries()) {
@@ -1088,7 +1075,6 @@ function tryPair(state) {
       if (i === j) continue;
       const b = available[j];
       if (used.has(b.username)) continue;
-      // Один и тот же участник не может быть обеими сторонами партии.
       if (a.username === b.username) continue;
       if (a.username === WATCHER_NAME && b.username === WATCHER_NAME) continue;
 
@@ -1096,7 +1082,6 @@ function tryPair(state) {
       const bWatcher = b.username === WATCHER_NAME;
 
       if (aWatcher || bWatcher) {
-        // не больше 1 пары с Watcher за тик
         if (watcherPairsThisTick >= 1) continue;
         if (watcherHasActiveLobby()) continue;
         if (watcherGamesInArena(state.id) >= MAX_WATCHER_ACTIVE_LOBBIES) continue;
@@ -1201,8 +1186,6 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   else { whiteP.score += calcArenaPoints(whiteP, 'draw'); blackP.score += calcArenaPoints(blackP, 'draw'); whiteP.draws++; blackP.draws++; }
   whiteP.isPlaying = false; blackP.isPlaying = false;
   whiteP.lobbyId = null; blackP.lobbyId = null;
-  // Для людей следующая партия начинается только после явного подтверждения.
-  // Боты продолжают турнир автоматически.
   whiteP.awaitingNextPair = !whiteP.isBot;
   blackP.awaitingNextPair = !blackP.isBot;
   if (!whiteP.paused && !whiteP.awaitingNextPair) whiteP.waitingSince = Date.now();
@@ -2464,7 +2447,6 @@ io.on('connection', (socket) => {
     p.awaitingNextPair = false;
     p.waitingSince = Date.now();
     io.to('arena:' + arenaId).emit('arenaUpdate', { arenaId });
-    // Дать клиенту обработать подтверждение и открыть страницу турнира до gameStart.
     if (state.phase === 'live') setTimeout(() => tryPair(state), 100);
     cb({ ok: true });
   });
