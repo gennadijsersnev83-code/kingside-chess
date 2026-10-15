@@ -1,23 +1,26 @@
 // watcher-learning.js
 // Q-learning для Watcher: Double Q + Replay + терминальная награда.
+// Улучшенная версия: расширенное состояние, более умный pickMove,
+// приоритетный replay, ε-decay, терминальная награда за мат/пат.
 
 const fs = require('fs');
 const path = require('path');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const QTABLE_PATH = path.join(DATA_DIR, 'watcher-qtable.json');
-const MAX_STATES = 200000;
+const MAX_STATES = 250000;
 const SAVE_INTERVAL_MS = 5 * 60 * 1000;
 
-const ALPHA = 0.28;
+const ALPHA = 0.30;
 const GAMMA = 0.99;
-const EPSILON_START = 0.30;
-const EPSILON_END = 0.05;
-const EPSILON_DECAY_STEPS = 6000;
+const EPSILON_START = 0.35;
+const EPSILON_END = 0.03;
+const EPSILON_DECAY_STEPS = 8000;
 
-const REPLAY_MAX = 50000;
-const REPLAY_SAMPLE = 64;
-const REPLAY_INTERVAL_STEPS = 25;
+const REPLAY_MAX = 80000;
+const REPLAY_SAMPLE = 96;
+const REPLAY_INTERVAL_STEPS = 20;
+const REPLAY_PRIORITY_FRESH = 0.6; // доля свежих transitions в батче
 
 function timeControlCode(timeMin, inc) {
   if (timeMin < 3) return 'B';
@@ -69,6 +72,8 @@ function zobristHash(board, turn, castling, ep) {
   return h >>> 0;
 }
 
+// Более информативное состояние: Zobrist + материал + счётчики фигур +
+// наличие ферзей, пешечная структура (сдвоенные/изолированные), сторона.
 function encodeState(fen, botColor, timeControl) {
   try {
     const parts = fen.split(' ');
@@ -88,10 +93,21 @@ function encodeState(fen, botColor, timeControl) {
     }
 
     let wp=0,wn=0,wb=0,wr=0,wq=0,bp=0,bn=0,bb=0,br=0,bq=0;
+    const wPawnFiles = [0,0,0,0,0,0,0,0];
+    const bPawnFiles = [0,0,0,0,0,0,0,0];
     for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
-      switch (board[rr][cc]) {
-        case 'P': wp++; break; case 'N': wn++; break; case 'B': wb++; break; case 'R': wr++; break; case 'Q': wq++; break;
-        case 'p': bp++; break; case 'n': bn++; break; case 'b': bb++; break; case 'r': br++; break; case 'q': bq++; break;
+      const p = board[rr][cc];
+      switch (p) {
+        case 'P': wp++; wPawnFiles[cc]++; break;
+        case 'N': wn++; break;
+        case 'B': wb++; break;
+        case 'R': wr++; break;
+        case 'Q': wq++; break;
+        case 'p': bp++; bPawnFiles[cc]++; break;
+        case 'n': bn++; break;
+        case 'b': bb++; break;
+        case 'r': br++; break;
+        case 'q': bq++; break;
       }
     }
     const wMat = wp*1 + wn*3 + wb*3 + wr*5 + wq*9;
@@ -99,15 +115,27 @@ function encodeState(fen, botColor, timeControl) {
     const wCount = wp+wn+wb+wr+wq;
     const bCount = bp+bn+bb+br+bq;
 
+    // Пешечная структура: сдвоенные / изолированные (грубо)
+    let wDoubled = 0, bDoubled = 0, wIsolated = 0, bIsolated = 0;
+    for (let f = 0; f < 8; f++) {
+      if (wPawnFiles[f] > 1) wDoubled++;
+      if (bPawnFiles[f] > 1) bDoubled++;
+      const wl = f > 0 ? wPawnFiles[f-1] : 0, wrp = f < 7 ? wPawnFiles[f+1] : 0;
+      if (wPawnFiles[f] > 0 && wl === 0 && wrp === 0) wIsolated++;
+      const bl = f > 0 ? bPawnFiles[f-1] : 0, brp = f < 7 ? bPawnFiles[f+1] : 0;
+      if (bPawnFiles[f] > 0 && bl === 0 && brp === 0) bIsolated++;
+    }
+
     const matBucket = (m) => m>=30?'A' : m>=20?'B' : m>=12?'C' : m>=6?'D' : m>=3?'E':'F';
     const cntBucket = (c) => c>=12?'a' : c>=8?'b' : c>=5?'c' : c>=3?'d':'e';
     const phase = fullmove < 10 ? 'O' : (fullmove < 25 ? 'M' : 'E');
     const turnSign = turn === botColor ? 'T' : 't';
     const tc = timeControlCode(timeControl && timeControl.time ? timeControl.time : 5, timeControl ? timeControl.inc : 0);
+    const queens = (wq > 0 ? 'q' : 'Q') + (bq > 0 ? 'q' : 'Q');
 
     const zh = zobristHash(board, turn, castling, ep).toString(36);
 
-    return `${tc}${zh}${matBucket(wMat)}${matBucket(bMat)}${cntBucket(wCount)}${cntBucket(bCount)}${turnSign}${phase}`;
+    return `${tc}${zh}${matBucket(wMat)}${matBucket(bMat)}${cntBucket(wCount)}${cntBucket(bCount)}${turnSign}${phase}${queens}${wDoubled}${bDoubled}${wIsolated}${bIsolated}`;
   } catch (e) { return 'ERR'; }
 }
 
@@ -185,7 +213,7 @@ function saveQTable() {
   if (!dirty) return;
   ensureDataDir();
   try {
-    const obj = { qa: {}, qb: {}, totalGames, totalSteps, savedAt: Date.now(), version: 2 };
+    const obj = { qa: {}, qb: {}, totalGames, totalSteps, savedAt: Date.now(), version: 3 };
     for (const [state, actions] of QA.entries()) {
       const a = {};
       for (const [act, val] of actions.entries()) a[act] = val;
@@ -229,13 +257,24 @@ function getEpsilon() {
   return EPSILON_START + (EPSILON_END - EPSILON_START) * t;
 }
 
+// Улучшенный выбор хода: комбинируем Q-значение с эвристической оценкой
+// позиции (материал, центр, мобильность через baseline в movesWithEval).
+function heuristicScore(mv, botColor) {
+  const base = (botColor === 'w' ? mv.eval : -mv.eval) / 1000;
+  return base;
+}
+
 function pickMove(fen, botColor, timeControl, movesWithEval) {
   if (!movesWithEval || movesWithEval.length === 0) return null;
   const state = encodeState(fen, botColor, timeControl);
   const eps = getEpsilon();
 
   if (Math.random() < eps) {
-    return movesWithEval[Math.floor(Math.random() * movesWithEval.length)];
+    // Исследование: с большей вероятностью возьмём не худший случайный,
+    // а один из разумных (top-3 по эвристике), чтобы не терять качество.
+    const sorted = movesWithEval.slice().sort((a, b) => heuristicScore(b, botColor) - heuristicScore(a, botColor));
+    const pool = sorted.slice(0, Math.min(3, sorted.length));
+    return pool[Math.floor(Math.random() * pool.length)];
   }
 
   let best = null, bestScore = -Infinity;
@@ -244,8 +283,9 @@ function pickMove(fen, botColor, timeControl, movesWithEval) {
     const qa = QA.get(state)?.get(act)?.q ?? 0;
     const qb = QB.get(state)?.get(act)?.q ?? 0;
     const qAvg = (qa + qb) / 2;
-    const baseline = (botColor === 'w' ? mv.eval : -mv.eval) / 1000;
-    const score = qAvg + baseline * 0.25;
+    const baseline = heuristicScore(mv, botColor);
+    // Q-значение — основной сигнал, эвристика — регуляризатор.
+    const score = qAvg * 0.7 + baseline * 0.3;
     if (score > bestScore) { bestScore = score; best = mv; }
   }
 
@@ -302,9 +342,9 @@ function recordTransition(state, action, reward, nextState, evalAfter) {
 
   if (currentEpisode) {
     currentEpisode.transitions.push({ state, action, reward, nextState, evalAfter });
-    if (currentEpisode.transitions.length > 400) currentEpisode.transitions.shift();
+    if (currentEpisode.transitions.length > 500) currentEpisode.transitions.shift();
   }
-  replay.push({ state, action, reward, nextState, evalAfter });
+  replay.push({ state, action, reward, nextState, evalAfter, ts: Date.now() });
   if (replay.length > REPLAY_MAX) replay.shift();
 
   if (totalSteps % REPLAY_INTERVAL_STEPS === 0) batchUpdate();
@@ -312,9 +352,18 @@ function recordTransition(state, action, reward, nextState, evalAfter) {
 
 function batchUpdate() {
   if (replay.length < REPLAY_SAMPLE) return;
-  for (let i = 0; i < REPLAY_SAMPLE; i++) {
+  // 60% — свежие transitions, 40% — случайные из буфера.
+  const freshCount = Math.floor(REPLAY_SAMPLE * REPLAY_PRIORITY_FRESH);
+  const randomCount = REPLAY_SAMPLE - freshCount;
+  const startFresh = Math.max(0, replay.length - freshCount * 4);
+  for (let i = 0; i < freshCount; i++) {
+    const idx = startFresh + Math.floor(Math.random() * (replay.length - startFresh));
+    const t = replay[idx];
+    if (t) updateQ(t.state, t.action, t.reward, t.nextState, t.evalAfter);
+  }
+  for (let i = 0; i < randomCount; i++) {
     const t = replay[Math.floor(Math.random() * replay.length)];
-    updateQ(t.state, t.action, t.reward, t.nextState, t.evalAfter);
+    if (t) updateQ(t.state, t.action, t.reward, t.nextState, t.evalAfter);
   }
 }
 
@@ -322,8 +371,8 @@ function finishEpisode(result, botColor) {
   if (!currentEpisode) return;
   let terminalReward = 0;
   if (result === 'draw' || !result) terminalReward = 0;
-  else if (result === botColor) terminalReward = 1.0;
-  else terminalReward = -1.0;
+  else if (result === botColor) terminalReward = 1.5;
+  else terminalReward = -1.5;
 
   const trans = currentEpisode.transitions;
   let discounted = terminalReward;
@@ -341,13 +390,13 @@ function finishEpisode(result, botColor) {
       if (oa && oa.has(bestAction)) maxNextQ = oa.get(bestAction).q;
     }
 
-    const combinedReward = t.reward + discounted * 0.5;
+    const combinedReward = t.reward + discounted * 0.6;
     const target = combinedReward + GAMMA * maxNextQ;
     entry.q = entry.q + ALPHA * (target - entry.q);
     entry.v = (entry.v || 0) + 1;
     entry.lastUsed = Date.now();
 
-    discounted *= GAMMA * 0.5;
+    discounted *= GAMMA * 0.6;
   }
 
   currentEpisode = null;
@@ -374,7 +423,7 @@ function learnFromObservedMove(prevFen, move, newFen, moverColor, timeControl, e
       if (oa && oa.has(bestAction)) maxNextQ = oa.get(bestAction).q;
     }
     const target = reward + GAMMA * maxNextQ;
-    entry.q = entry.q + (ALPHA * 0.3) * (target - entry.q);
+    entry.q = entry.q + (ALPHA * 0.35) * (target - entry.q);
     entry.v = (entry.v || 0) + 1;
     entry.lastUsed = Date.now();
     totalSteps++;
