@@ -323,6 +323,19 @@
   .playerStrip .dot.b { background:#333; }
   .playerStrip .nm { color:var(--text-bright); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; display:flex; align-items:center; min-width:0; }
   .playerStrip .nm:hover { color:var(--accent); }
+  .playerNick { cursor:pointer; }
+  #playerHoverCard { position:fixed; z-index:9999; display:none; width:310px; max-width:calc(100vw - 24px); padding:10px 12px; background:#302e2a; border:1px solid #45423c; border-radius:7px; box-shadow:0 8px 24px #0009; color:#d8d6d0; font-size:12px; pointer-events:none; }
+  #playerHoverCard .phName { color:#58a6ff; font-size:14px; font-weight:600; margin-bottom:5px; }
+  #playerHoverCard .phMeta { display:flex; gap:10px; flex-wrap:wrap; color:#b9b6ad; }
+  #playerHoverCard .phStats { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; margin-top:7px; }
+  #playerHoverCard .phStat { background:#24231f; padding:5px 6px; border-radius:4px; white-space:nowrap; }
+  .communityPage { max-width:1000px; margin:0 auto; padding:24px; }
+  .communityGrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:8px; margin-top:18px; }
+  .communityPlayer { display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--panel); border:1px solid var(--border); border-radius:6px; cursor:pointer; }
+  .communityPlayer:hover { background:var(--panel-hover); border-color:var(--accent); }
+  .communityAvatar { width:34px; height:34px; flex:0 0 34px; display:grid; place-items:center; border-radius:50%; background:var(--panel-2); }
+  .communityPlayer .cpName { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-bright); }
+  .communityPlayer .cpSub { font-size:11px; color:var(--muted); margin-top:3px; }
   .playerStrip .rt { color:var(--text-bright); font-size:15px; font-weight:500; }
   .movesPanel { background:var(--panel); border:1px solid var(--border); border-radius:4px; display:flex; flex-direction:column; height:200px; overflow:hidden; transition: height .15s; }
   .movesPanel.compact { height:110px; }
@@ -686,10 +699,11 @@
   </section>
 
   <section id="communityScreen" class="screen">
-    <div class="arenasEmpty" style="padding:80px 20px">
-      <div style="font-size:48px;margin-bottom:16px">💬</div>
-      <h2 style="color:var(--text-bright);font-weight:400">Сообщество</h2>
-      <p>Раздел в разработке</p>
+    <div class="communityPage">
+      <h2 style="color:var(--text-bright);font-weight:400;margin:0">Сообщество</h2>
+      <p style="color:var(--muted);margin:6px 0 0">Игроки, которые сейчас на сайте, включая ботов.</p>
+      <div id="communityOnlineCount" style="margin-top:14px;color:var(--muted)">Загрузка списка…</div>
+      <div id="communityOnlineList" class="communityGrid"></div>
     </div>
   </section>
 
@@ -900,7 +914,7 @@
     const crown = admin ? '<span class="crown">👑</span>' : '';
     const mark = (!admin && mod) ? '<span class="modMark" title="Модератор">!</span>' : '';
     const botTag = bot ? '<span class="botBadge" style="margin-right:4px">🤖 BOT</span>' : '';
-    return botTag + crown + mark + escapeHtml(username);
+    return `<span class="playerNick" data-player="${escapeHtml(username)}">${botTag}${crown}${mark}${escapeHtml(username)}</span>`;
   }
   function onlineDotHtml(online) {
     return online
@@ -911,6 +925,45 @@
     if (!n || n <= 0) return '';
     return `<span class="watchersBadge" title="Зрителей">👁 <b>${n}</b></span>`;
   }
+  let playerHoverTimer = null;
+  let playerHoverName = '';
+  function ensurePlayerHoverCard() {
+    let card = document.getElementById('playerHoverCard');
+    if (!card) { card = document.createElement('div'); card.id = 'playerHoverCard'; document.body.appendChild(card); }
+    return card;
+  }
+  function showPlayerHoverCard(target) {
+    const username = target && target.dataset ? target.dataset.player : '';
+    if (!username) return;
+    playerHoverName = username;
+    clearTimeout(playerHoverTimer);
+    playerHoverTimer = setTimeout(() => {
+      const card = ensurePlayerHoverCard();
+      const r = target.getBoundingClientRect();
+      card.style.left = Math.max(8, Math.min(window.innerWidth - 326, r.left)) + 'px';
+      card.style.top = Math.min(window.innerHeight - 160, r.bottom + 7) + 'px';
+      card.style.display = 'block';
+      card.innerHTML = `<div class="phName">${escapeHtml(username)}</div><div>Загрузка статистики…</div>`;
+      socket.emit('getPlayerCard', { username }, res => {
+        if (playerHoverName !== username || !res || !res.ok) return;
+        const u = res.user;
+        card.innerHTML = `<div class="phName">${u.online ? '🟢' : '⚪'} ${nickHtml(u.username,u.isAdmin,u.isMod,u.isBot)}</div><div class="phMeta"><span>♟ ${Number(u.rating)||1200}</span><span>🏆 ${Number(u.games)||0} партий</span><span>● ${u.online ? 'В сети' : 'Не в сети'}</span></div><div class="phStats"><div class="phStat">♔ ${Number(u.wins)||0} побед</div><div class="phStat">½ ${Number(u.draws)||0} ничьих</div><div class="phStat">♚ ${Number(u.losses)||0} пораж.</div><div class="phStat">${u.games ? Math.round((u.wins/u.games)*100) : 0}% побед</div></div>`;
+      });
+    }, 250);
+  }
+  document.addEventListener('mouseover', e => { const n = e.target.closest && e.target.closest('[data-player]'); if (n) showPlayerHoverCard(n); });
+  document.addEventListener('mouseout', e => { const n = e.target.closest && e.target.closest('[data-player]'); if (n && !n.contains(e.relatedTarget)) { clearTimeout(playerHoverTimer); playerHoverName = ''; const c = document.getElementById('playerHoverCard'); if (c) c.style.display = 'none'; } });
+  function renderCommunityPlayers(players) {
+    const list = document.getElementById('communityOnlineList');
+    const count = document.getElementById('communityOnlineCount');
+    if (!list || !count) return;
+    players = Array.isArray(players) ? players : [];
+    count.textContent = `В сети: ${players.length}`;
+    list.innerHTML = players.map(u => `<div class="communityPlayer" data-player="${escapeHtml(u.username)}" onclick="openProfileView('${escapeHtml(u.username)}')"><div class="communityAvatar">${u.isBot ? '🤖' : escapeHtml(u.username.charAt(0).toUpperCase())}</div><div style="min-width:0"><div class="cpName">${onlineDotHtml(true)}${nickHtml(u.username,u.isAdmin,u.isMod,u.isBot)}</div><div class="cpSub">${u.isBot ? 'Бот' : 'Игрок'} · ${Number(u.rating)||1200} рейтинга</div></div></div>`).join('') || '<div style="color:var(--muted)">Сейчас никого нет в сети.</div>';
+  }
+  socket.on('communityOnline', renderCommunityPlayers);
+  socket.emit('getCommunityOnline', renderCommunityPlayers);
+
 
   function parseFen(fen) {
     const parts = fen.split(' ');
@@ -1246,6 +1299,7 @@
     if (name === 'watch') refreshWatchList(true);
     if (name === 'arenas') refreshArenas(true);
     if (name === 'profile') { if (profileViewing) openProfileView(profileViewing); else if (me) openProfileView(me.username); }
+    if (name === 'community') socket.emit('getCommunityOnline', renderCommunityPlayers);
   }
   window.navTo = navTo;
   function doLogin() {
@@ -1426,10 +1480,20 @@
       pauseBtn.style.display = 'block';
       pauseBtn.textContent = (currentArenaState && currentArenaState.paused) ? '▶ ПРОДОЛЖИТЬ' : '⏸ ПАУЗА';
       findBtn.textContent = 'ВЕРНУТЬСЯ К ТУРНИРУ';
+      findBtn.textContent = 'ПЕРЕЙТИ В ТУРНИР';
       findBtn.onclick = () => {
-        hideGameResultBar();
-        if (currentArenaId) openArenaPage(currentArenaId);
-        else navTo('arenas');
+        const arenaId = currentArenaId;
+        if (!arenaId) { hideGameResultBar(); navTo('arenas'); return; }
+        // До нажатия этой кнопки сервер держит игрока вне жеребьёвки,
+        // чтобы он мог сколько угодно смотреть завершённую партию.
+        socket.emit('continueArenaPairing', { arenaId }, (res) => {
+          if (!res || !res.ok) {
+            alert((res && res.msg) || 'Не удалось вернуться в турнир');
+            return;
+          }
+          hideGameResultBar();
+          openArenaPage(arenaId);
+        });
       };
     } else {
       rematchBtn.style.display = 'block';
@@ -1584,7 +1648,7 @@
     const g = watchingGame;
     const state = parseFen(g.fen);
     const flip = g.white === me.username ? false : true;
-    const hash = g.id + '|' + g.fen + '|' + g.turn + '|' + flip + '|' + (g.watchersCount || 0);
+    const hash = g.id + '|' + g.fen + '|' + g.turn + '|' + flip;
     if (hash === lastWatchBoardHash) return;
     lastWatchBoardHash = hash;
     const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
@@ -1600,9 +1664,7 @@
       if (dc === 0) coords += `<span class="coord-r">${8 - r}</span>`;
       squares += `<div class="${cls}">${inner}${coords}</div>`;
     }
-    const watchersLine = (g.watchersCount && g.watchersCount > 0)
-      ? `<div style="font-size:12px;color:var(--muted);margin-top:4px;">👁 Зрителей: <b style="color:var(--accent)">${g.watchersCount}</b></div>`
-      : '';
+    const watchersLine = `<div class="watchersLineDynamic" style="font-size:12px;color:var(--muted);margin-top:4px;${g.watchersCount > 0 ? '' : 'display:none;'}">👁 Зрителей: <b style="color:var(--accent)">${g.watchersCount || 0}</b></div>`;
     box.innerHTML = `
       <div class="wbHeader"><div><div class="wbTitle">Партия ${g.isArena ? 'турнира' : ''}</div><div class="wbSub">${g.timeControl}+${g.increment}${g.arenaName ? ' · '+escapeHtml(g.arenaName) : ''}</div>${watchersLine}</div><button class="secondary" onclick="stopWatching()">✕ – Выйти</button></div>
       <div class="wbPlayers">
@@ -2211,21 +2273,12 @@
   socket.on('watchersUpdate', ({ lobbyId: lid, count }) => {
     if (watchingGame && watchingGame.id === lid) {
       watchingGame.watchersCount = count;
-      const line = document.querySelector('#watchBoardBox .wbSub');
-      // Обновим блок со зрителями без полной перерисовки
+      // Update the one dedicated counter in place; never append a new row.
       const box = document.getElementById('watchBoardBox');
-      if (box) {
-        let el = box.querySelector('.watchersLineDynamic');
-        if (!el) {
-          const header = box.querySelector('.wbHeader > div');
-          if (header) {
-            el = document.createElement('div');
-            el.className = 'watchersLineDynamic';
-            el.style.cssText = 'font-size:12px;color:var(--muted);margin-top:4px;';
-            header.appendChild(el);
-          }
-        }
-        if (el) el.innerHTML = count > 0 ? `👁 Зрителей: <b style="color:var(--accent)">${count}</b>` : '';
+      const el = box && box.querySelector('.watchersLineDynamic');
+      if (el) {
+        el.style.display = count > 0 ? '' : 'none';
+        el.innerHTML = count > 0 ? `👁 Зрителей: <b style="color:var(--accent)">${count}</b>` : '';
       }
     }
     // Обновляем список партий, если открыт
@@ -2429,3 +2482,4 @@
 </script>
 </body>
 </html>
+
