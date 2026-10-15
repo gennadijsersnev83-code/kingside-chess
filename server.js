@@ -394,10 +394,16 @@ function isUserOnline(username) {
   for (const [, name] of online.entries()) if (name === username) return true;
   return false;
 }
+// Найти все сокеты конкретного игрока (для адресной отправки)
+function socketsOfUser(username) {
+  const ids = [];
+  for (const [socketId, name] of online.entries()) if (name === username) ids.push(socketId);
+  return ids;
+}
 
 // ======================= ХРАНИЛИЩА =======================
 // `lobbies` — только ожидающие партии (запросы на игру).
-// `games`   — активные и недавно завершённые партии.
+// `games`   — активные партии + недавно завершённые (для реванша).
 const online = new Map();
 const lobbies = new Map();
 const games = new Map();
@@ -450,7 +456,7 @@ function broadcastWatchers(lobbyId) {
   io.emit('watchersUpdate', { lobbyId, count });
 }
 
-// Чистим зависшие "isPlaying" в аренах.
+// Чистка зависших "isPlaying" в аренах.
 function cleanupStuckPlaying() {
   for (const state of arenas.values()) {
     for (const p of state.participants.values()) {
@@ -472,7 +478,7 @@ function cleanupStuckPlaying() {
 }
 setInterval(cleanupStuckPlaying, 10000);
 
-// Чистим старые завершённые партии.
+// Чистка старых завершённых партий (для реванша они нужны какое-то время).
 setInterval(() => {
   const now = Date.now();
   let removed = 0;
@@ -623,8 +629,8 @@ async function finishGame(gameId, result, reason) {
     catch (e) { console.error('[arena] handleArenaGameEnd ошибка:', e.message); }
   }
 
-  // Не удаляем партию — оставляем на FINISHED_GAME_TTL_MS, чтобы реванш её нашёл.
-  // Сокеты из комнаты НЕ выкидываем: иначе реванш не сможет найти клиентов.
+  // Партию НЕ удаляем — держим FINISHED_GAME_TTL_MS, чтобы реванш её нашёл.
+  // Из комнаты сокеты НЕ выкидываем — иначе реванш не сможет вернуться.
 
   broadcastOnline();
 }
@@ -1483,9 +1489,6 @@ function scheduleBotMove(gameId) {
 
       if (botName === WATCHER_NAME) {
         try {
-          if (!watcherLearning.getStats().episodeActive) {
-            watcherLearning.startEpisode(botColor, { time: cur.time, inc: cur.inc });
-          }
           watcherLearning.recordTransition(prevFen, botToFen(nextState), from, to, botColor, { time: cur.time, inc: cur.inc }, captured || null);
         } catch (e) { console.error('[Watcher] Ошибка обучения:', e.message); }
       }
@@ -1670,9 +1673,6 @@ function scheduleBotMove(gameId) {
 
     if (botName === WATCHER_NAME) {
       try {
-        if (!watcherLearning.getStats().episodeActive) {
-          watcherLearning.startEpisode(botColor, { time: cur2.time, inc: cur2.inc });
-        }
         watcherLearning.recordTransition(prevFen, botToFen(nextState), from, to, botColor, { time: cur2.time, inc: cur2.inc }, captured || null);
       } catch (e) { console.error('[Watcher] Ошибка обучения:', e.message); }
     }
@@ -1800,7 +1800,6 @@ io.on('connection', (socket) => {
     if (socket.username !== g.host && socket.username !== g.guest) return cb({ ok: false, msg: 'Вы не участник' });
     if (g.host === socket.username) g.hostSocket = socket.id;
     else g.guestSocket = socket.id;
-    if (socket.username === g.host && !g.guestSocket && !g.isBot) return cb({ ok: false, msg: 'Соперник ещё не подключился' });
     socket.join(lid);
     socketToLobby.set(socket.id, lid);
     socket.lobbyId = lid;
@@ -1858,14 +1857,13 @@ io.on('connection', (socket) => {
     if (typeof cb !== 'function') return;
     const list = [];
     for (const [id, l] of lobbies.entries()) {
-      // В список попадают ТОЛЬКО ожидающие партии (без guest и без arenaId).
-      if (l.finished || l.arenaId || l.guest) continue;
-      if (l.started) continue;
+      if (l.finished || l.arenaId || l.guest || l.started) continue;
       list.push({
         id, host: l.host, time: l.time, inc: l.inc,
         hostIsAdmin: isAdmin(l.host), hostIsMod: isMod(l.host),
         status: 'waiting',
-        isBot: !!l.isBot && l.host !== WATCHER_NAME
+        isBot: !!l.isBot && l.host !== WATCHER_NAME,
+        hostRating: db.users[l.host] ? db.users[l.host].rating : null
       });
     }
     cb(list);
@@ -1876,8 +1874,6 @@ io.on('connection', (socket) => {
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
     time = Math.max(0.5, Math.min(60, +time || 5));
     inc  = Math.max(0, Math.min(60, +inc || 0));
-
-    // Пытаемся найти уже ожидающее лобби с тем же контролем времени.
     let matched = null;
     for (const [, l] of lobbies.entries()) {
       if (l.finished || l.arenaId || l.isBot || l.guest || l.started) continue;
@@ -1887,10 +1883,8 @@ io.on('connection', (socket) => {
       break;
     }
     if (matched) {
-      // Переводим в партию: убираем лобби из lobbies, создаём game.
       const gameId = matched.id;
       lobbies.delete(gameId);
-
       const hostIsWhite = Math.random() < 0.5;
       const g = {
         id: gameId, host: matched.host, hostSocket: matched.hostSocket,
@@ -1903,18 +1897,15 @@ io.on('connection', (socket) => {
         createdAt: Date.now(), rematch: null, isBot: false, history: []
       };
       games.set(gameId, g);
-
       socket.join(gameId);
       socketToLobby.set(socket.id, gameId);
       socket.lobbyId = gameId;
-      // Хост тоже уже в комнате, но на всякий — присоединим.
       const hostSocket = io.sockets.sockets.get(matched.hostSocket);
       if (hostSocket) {
         hostSocket.join(gameId);
         socketToLobby.set(matched.hostSocket, gameId);
         hostSocket.lobbyId = gameId;
       }
-
       const hostRating = db.users[g.host] ? db.users[g.host].rating : null;
       const guestRating = db.users[socket.username] ? db.users[socket.username].rating : null;
       io.to(g.hostSocket).emit('gameStart', { color: g.hostColor, opponent: g.guest, opponentRating: guestRating, opponentIsAdmin: isAdmin(g.guest), opponentIsMod: isMod(g.guest), opponentOnline: true, time: g.time, inc: g.inc, lobbyId: g.id, fen: g.fen, chat: g.chat, isArena: false });
@@ -1924,8 +1915,6 @@ io.on('connection', (socket) => {
       broadcastOnline();
       return;
     }
-
-    // Создаём новое лобби (запрос на игру).
     const id = genId();
     lobbies.set(id, {
       id, host: socket.username, hostSocket: socket.id, guest: null, guestSocket: null,
@@ -1952,8 +1941,6 @@ io.on('connection', (socket) => {
     const botUser = db.users[bot.name];
     const botRating = botUser ? botUser.rating : bot.rating;
     const gameId = genId();
-
-    // Партия сразу в games, в lobbies ничего не остаётся.
     games.set(gameId, {
       id: gameId, host: socket.username, hostSocket: socket.id, guest: bot.name, guestSocket: null,
       hostColor: 'w', guestColor: 'b', time, inc, timeW: time * 60, timeB: time * 60,
@@ -2003,7 +1990,6 @@ io.on('connection', (socket) => {
     if (l.host === socket.username) return cb({ ok: false, msg: 'Это ваше лобби' });
     if (socket.username === WATCHER_NAME && l.host === WATCHER_NAME) return cb({ ok: false, msg: 'Занято' });
 
-    // Убираем лобби, создаём game.
     const gameId = id;
     lobbies.delete(gameId);
 
@@ -2168,7 +2154,7 @@ io.on('connection', (socket) => {
     if (typeof cb !== 'function') cb = () => {};
     if (!isMod(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
     const g = games.get(lobbyId);
-    if (!g) return cb({ ok: false, msg: 'Лобби нет' });
+    if (!g) return cb({ ok: false, msg: 'Партия не найдена' });
     const idx = g.chat.findIndex(m => m.id === msgId);
     if (idx < 0) return cb({ ok: false, msg: 'Сообщение не найдено' });
     g.chat.splice(idx, 1);
@@ -2249,10 +2235,12 @@ io.on('connection', (socket) => {
     socket.to(lobbyId).emit('drawDeclined');
   });
 
+  // ============ РЕВАНШ ============
+  // Важно: игрок может быть не в комнате партии, поэтому проверяем только,
+  // что он участник. РеваншOffered летит напрямую в сокет соперника.
   socket.on('rematchRequest', ({ lobbyId }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     let g = games.get(lobbyId);
-    // Fallback: если id устарел, ищем завершённую партию с этим игроком.
     if (!g && socket.username) {
       for (const [id, cand] of games.entries()) {
         if (!cand.finished) continue;
@@ -2262,6 +2250,7 @@ io.on('connection', (socket) => {
       }
     }
     if (!g) return cb({ ok: false, msg: 'Партия не найдена' });
+    if (socket.username !== g.host && socket.username !== g.guest) return cb({ ok: false, msg: 'Вы не участник' });
     if (!g.finished) return cb({ ok: false, msg: 'Партия ещё не завершена' });
 
     if (g.isBot) {
@@ -2293,7 +2282,6 @@ io.on('connection', (socket) => {
         beh.state = 'playing'; beh.lastChange = Date.now();
         const hostSocket = io.sockets.sockets.get(g.hostSocket);
         if (hostSocket) {
-          hostSocket.leave(lobbyId);
           hostSocket.join(newId);
           socketToLobby.set(g.hostSocket, newId);
           hostSocket.lobbyId = newId;
@@ -2305,7 +2293,6 @@ io.on('connection', (socket) => {
             chat: [], isArena: false, isBot: true, botName: bot.name
           });
         }
-        // Старую партию можно оставить для истории — удалит таймер.
         broadcastLobbies();
         cb({ ok: true, started: true, newLobbyId: newId });
       }, 300 + Math.random() * 1000);
@@ -2313,12 +2300,16 @@ io.on('connection', (socket) => {
     }
 
     if (g.arenaId) return cb({ ok: false, msg: 'Реванш недоступен для арен' });
-    if (socket.id !== g.hostSocket && socket.id !== g.guestSocket) return cb({ ok: false, msg: 'Вы не участник' });
+
+    // Помечаем, что этот игрок готов к реваншу.
     if (!g.rematch) g.rematch = {};
     g.rematch[socket.username] = true;
+
     const otherName = socket.username === g.host ? g.guest : g.host;
-    const otherSocket = socket.username === g.host ? g.guestSocket : g.hostSocket;
+    const otherSocketIds = socketsOfUser(otherName);
+
     if (g.rematch[otherName]) {
+      // Оба согласны — создаём новую партию.
       const newId = genId();
       const newGame = {
         id: newId, host: g.host, hostSocket: g.hostSocket, guest: g.guest, guestSocket: g.guestSocket,
@@ -2331,21 +2322,37 @@ io.on('connection', (socket) => {
       games.set(newId, newGame);
       const hostRating = db.users[g.host] ? db.users[g.host].rating : null;
       const guestRating = db.users[g.guest] ? db.users[g.guest].rating : null;
-      const hostSocket = io.sockets.sockets.get(g.hostSocket);
-      const guestSocket = io.sockets.sockets.get(g.guestSocket);
-      if (hostSocket) {
-        hostSocket.leave(lobbyId); hostSocket.join(newId); socketToLobby.set(g.hostSocket, newId); hostSocket.lobbyId = newId;
-        hostSocket.emit('gameStart', { color: g.guestColor, opponent: g.guest, opponentRating: guestRating, opponentIsAdmin: isAdmin(g.guest), opponentIsMod: isMod(g.guest), opponentOnline: isUserOnline(g.guest), time: g.time, inc: g.inc, lobbyId: newId, fen: newGame.fen, chat: [], isArena: false });
+
+      // Сообщаем обоим игрокам о новой партии — каждому на все его сокеты,
+      // чтобы даже если он на другой странице, при заходе на игру всё нашлось.
+      const hostSockets = socketsOfUser(g.host);
+      const guestSockets = socketsOfUser(g.guest);
+
+      for (const sid of hostSockets) {
+        const s = io.sockets.sockets.get(sid);
+        if (!s) continue;
+        s.join(newId);
+        socketToLobby.set(sid, newId);
+        s.lobbyId = newId;
+        s.emit('gameStart', { color: g.guestColor, opponent: g.guest, opponentRating: guestRating, opponentIsAdmin: isAdmin(g.guest), opponentIsMod: isMod(g.guest), opponentOnline: isUserOnline(g.guest), time: g.time, inc: g.inc, lobbyId: newId, fen: newGame.fen, chat: [], isArena: false });
       }
-      if (guestSocket) {
-        guestSocket.leave(lobbyId); guestSocket.join(newId); socketToLobby.set(g.guestSocket, newId); guestSocket.lobbyId = newId;
-        guestSocket.emit('gameStart', { color: g.hostColor, opponent: g.host, opponentRating: hostRating, opponentIsAdmin: isAdmin(g.host), opponentIsMod: isMod(g.host), opponentOnline: isUserOnline(g.host), time: g.time, inc: g.inc, lobbyId: newId, fen: newGame.fen, chat: [], isArena: false });
+      for (const sid of guestSockets) {
+        const s = io.sockets.sockets.get(sid);
+        if (!s) continue;
+        s.join(newId);
+        socketToLobby.set(sid, newId);
+        s.lobbyId = newId;
+        s.emit('gameStart', { color: g.hostColor, opponent: g.host, opponentRating: hostRating, opponentIsAdmin: isAdmin(g.host), opponentIsMod: isMod(g.host), opponentOnline: isUserOnline(g.host), time: g.time, inc: g.inc, lobbyId: newId, fen: newGame.fen, chat: [], isArena: false });
       }
       broadcastLobbies();
       cb({ ok: true, started: true, newLobbyId: newId });
       return;
     }
-    if (otherSocket) io.to(otherSocket).emit('rematchOffered', { from: socket.username, lobbyId });
+
+    // Первый запросивший — рассылаем предложение на ВСЕ сокеты соперника.
+    for (const sid of otherSocketIds) {
+      io.to(sid).emit('rematchOffered', { from: socket.username, lobbyId });
+    }
     cb({ ok: true, started: false });
   });
 
@@ -2354,8 +2361,9 @@ io.on('connection', (socket) => {
     const g = games.get(lobbyId);
     if (!g) return cb({ ok: false });
     g.rematch = null;
-    const otherSocket = socket.id === g.hostSocket ? g.guestSocket : g.hostSocket;
-    if (otherSocket) io.to(otherSocket).emit('rematchDeclined');
+    const otherName = socket.username === g.host ? g.guest : g.host;
+    const otherSocketIds = socketsOfUser(otherName);
+    for (const sid of otherSocketIds) io.to(sid).emit('rematchDeclined');
     cb({ ok: true });
   });
 
