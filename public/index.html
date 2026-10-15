@@ -206,9 +206,9 @@
   .arenaSearch input { width:100%; padding:6px 12px; font-size:13px; height:32px; box-sizing:border-box; }
   .arenaJoinBtn { width:180px; min-width:180px; max-width:180px; height:40px; min-height:40px; max-height:40px; padding:0 12px; font-weight:700; letter-spacing:.5px; box-sizing:border-box; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .arenaParticipantsTable { background:var(--panel); border:1px solid var(--border); border-radius:6px; overflow:hidden; height:340px; min-height:340px; max-height:340px; display:flex; flex-direction:column; }
-  .arenaTableHeader { flex:0 0 auto; display:grid; grid-template-columns:36px minmax(0,1fr) 60px 90px 60px; gap:8px; padding:0 12px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; min-height:32px; height:32px; align-items:center; }
+  .arenaTableHeader { min-width:0; box-sizing:border-box; flex:0 0 auto; display:grid; grid-template-columns:28px minmax(0,1fr) 48px 72px 48px; gap:8px; padding:0 12px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; min-height:32px; height:32px; align-items:center; }
   .arenaTableBody { flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; }
-  .arenaTableRow { display:grid; grid-template-columns:36px minmax(0,1fr) 60px 90px 60px; gap:8px; padding:0 12px; align-items:center; font-size:13px; border-bottom:1px solid rgba(58,56,51,.35); height:40px; min-height:40px; max-height:40px; box-sizing:border-box; }
+  .arenaTableRow { min-width:0; display:grid; grid-template-columns:28px minmax(0,1fr) 48px 72px 48px; gap:8px; padding:0 12px; align-items:center; font-size:13px; border-bottom:1px solid rgba(58,56,51,.35); height:40px; min-height:40px; max-height:40px; box-sizing:border-box; }
   .arenaTableRow:last-child { border-bottom:none; }
   .arenaTableRow:hover { background:var(--panel-hover); }
   .arenaTableRow.me { background:rgba(191,129,29,.12); border-left:3px solid var(--accent); padding-left:9px; }
@@ -219,6 +219,9 @@
   .arenaTableRow .place.top2 { color:#d0d0d0; }
   .arenaTableRow .place.top3 { color:#d4904a; }
   .arenaTableRow .pname { color:var(--text-bright); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; display:flex; align-items:center; gap:4px; }
+  .arenaTableRow .pname > * { min-width:0; }
+  .arenaTableRow .pname .prat { flex:0 0 auto; }
+  .arenaTableRow .pname .playerNick { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .arenaTableRow .pname .prat { color:var(--muted); font-weight:400; font-size:11px; }
   .arenaTableRow .pname .pgreen { color:var(--green); font-size:10px; }
   .arenaTableRow .pname .ppause { color:var(--accent); font-size:11px; }
@@ -1745,59 +1748,64 @@
       { key:'blitz', label:'Блиц', color:'#4ade80' },
       { key:'bullet', label:'Пуля', color:'#fb7185' }
     ];
-    const usable = (games || []).filter(g => g.category && categories.some(c => c.key === g.category) && Number.isFinite(Number(g.finishedAt)));
-    if (!usable.length) {
-      wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Недостаточно данных для графика</div>';
-      return;
-    }
-    // Each game contributes the rating after that game to its own time-control line.
-    // All four series share one scale and are drawn over one another, like the reference image.
+    const usable = (games || []).filter(g =>
+      g.category && categories.some(c => c.key === g.category) &&
+      Number.isFinite(Number(g.finishedAt))
+    );
     const series = categories.map(c => {
-      const rows = usable.filter(g => g.category === c.key).sort((a,b) => a.finishedAt - b.finishedAt).map(g => ({
-        ts: g.finishedAt,
-        rating: g.white === username ? Number(g.whiteAfter) : Number(g.blackAfter)
-      })).filter(p => Number.isFinite(p.rating));
+      const rows = usable.filter(g => g.category === c.key)
+        .sort((a,b) => Number(a.finishedAt) - Number(b.finishedAt))
+        .map(g => ({
+          ts: Number(g.finishedAt),
+          rating: Number(g.white === username ? g.whiteAfter : g.blackAfter)
+        })).filter(p => Number.isFinite(p.rating));
       return { ...c, rows };
     }).filter(s => s.rows.length);
+
     if (!series.length) {
       wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Недостаточно данных для графика</div>';
       return;
     }
-    const all = series.flatMap(s => s.rows);
-    const W = 900, H = 280, PL = 48, PR = 16, PT = 18, PB = 30;
+
+    // У каждой категории собственная шкала рейтинга и собственная временная шкала.
+    // Координаты не зависят от количества партий и рейтингов других категорий.
+    const W = 900, H = 300, PL = 58, PR = 18, PT = 28, PB = 34;
     const IW = W - PL - PR, IH = H - PT - PB;
-    const minT = Math.min(...all.map(p => p.ts)), maxT = Math.max(...all.map(p => p.ts));
-    const ratings = all.map(p => p.rating);
-    const minR = Math.floor((Math.min(...ratings) - 50) / 100) * 100;
-    const maxR = Math.ceil((Math.max(...ratings) + 50) / 100) * 100;
-    const x = ts => PL + ((ts - minT) / ((maxT - minT) || 1)) * IW;
-    const y = rating => PT + IH - ((rating - minR) / ((maxR - minR) || 1)) * IH;
     const grid = [];
-    for (let i=0;i<=4;i++) {
-      const yy = PT + IH*i/4, val = Math.round(maxR - (maxR-minR)*i/4);
+    for (let i=0; i<=4; i++) {
+      const yy = PT + IH*i/4;
       grid.push(`<line x1="${PL}" y1="${yy}" x2="${W-PR}" y2="${yy}" stroke="#3a3833" stroke-width="1"/>`);
-      grid.push(`<text x="${PL-8}" y="${yy+4}" fill="#7d7a72" font-size="11" text-anchor="end">${val}</text>`);
     }
-    const labels = [];
-    for (let i=0;i<5;i++) {
-      const ts = minT + (maxT-minT)*i/4, xx = x(ts), d = new Date(ts);
-      labels.push(`<text x="${xx}" y="${H-8}" fill="#7d7a72" font-size="10" text-anchor="middle">${d.toLocaleDateString('ru-RU',{month:'2-digit',year:'2-digit'})}</text>`);
-    }
-    const lines = series.map(s => {
-      const pts = s.rows.map(p => `${x(p.ts).toFixed(1)},${y(p.rating).toFixed(1)}`);
-      const path = pts.map((p,i)=>(i?'L':'M')+p).join(' ');
+
+    const paths = series.map(s => {
+      const vals = s.rows.map(p => p.rating);
+      const lo = Math.floor((Math.min(...vals)-30)/50)*50;
+      const hi = Math.ceil((Math.max(...vals)+30)/50)*50;
+      const span = Math.max(100, hi-lo);
+      const minT = s.rows[0].ts, maxT = s.rows[s.rows.length-1].ts;
+      const px = (p,i) => PL + (s.rows.length < 2 ? IW/2 : (i/(s.rows.length-1))*IW);
+      const py = p => PT + IH - ((p.rating-lo)/span)*IH;
+      const d = s.rows.map((p,i) => `${i?'L':'M'}${px(p,i).toFixed(1)},${py(p).toFixed(1)}`).join(' ');
       const dash = s.key === 'classical' ? '' : ' stroke-dasharray="7 4"';
-      const dots = s.rows.length < 2 ? s.rows.map(p=>`<circle cx="${x(p.ts)}" cy="${y(p.rating)}" r="3" fill="${s.color}"/>`).join('') : '';
-      return `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2"${dash} stroke-linejoin="round" stroke-linecap="round">` +
-        `<title>${s.label}: ${s.rows.length} партий</title></path>${dots}`;
+      const dots = s.rows.length === 1
+        ? `<circle cx="${px(s.rows[0],0)}" cy="${py(s.rows[0])}" r="3.5" fill="${s.color}"/>` : '';
+      const yLabels = [0,1,2,3,4].map(i => {
+        const val = Math.round(hi - span*i/4);
+        return `<text x="${PL-8}" y="${PT+IH*i/4+4}" fill="${s.color}" opacity=".78" font-size="10" text-anchor="end">${val}</text>`;
+      }).join('');
+      const dateLabel = ts => ts ? new Date(ts).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'}) : '';
+      const first = dateLabel(minT), last = dateLabel(maxT);
+      const xLabels = `<text x="${PL}" y="${H-10}" fill="#7d7a72" font-size="10" text-anchor="start">${first}</text><text x="${W-PR}" y="${H-10}" fill="#7d7a72" font-size="10" text-anchor="end">${last}</text>`;
+      return `<g><title>${s.label}: ${s.rows.length} партий; шкала ${lo}–${hi}</title>${yLabels}${xLabels}<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.2"${dash} stroke-linejoin="round" stroke-linecap="round"/>${dots}</g>`;
     }).join('');
+
     const legend = categories.map(c => {
-      const found = series.find(s=>s.key===c.key);
+      const found = series.find(s => s.key === c.key);
       return `<span style="display:inline-flex;align-items:center;gap:5px;color:${found?c.color:'#777'};font-size:11px;opacity:${found?1:.45};white-space:nowrap"><i style="display:inline-block;width:18px;border-top:2px ${c.key==='classical'?'solid':'dashed'} ${c.color}"></i>${c.label}${found?' ('+found.rows.length+')':''}</span>`;
     }).join('');
     wrap.innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin:0 0 8px">${legend}</div>
-      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;max-height:300px;display:block">${grid.join('')}${lines}${labels.join('')}</svg>
-      <div style="color:var(--muted);font-size:11px;margin-top:5px;text-align:center">Рейтинг после каждой партии · категории наложены на один график</div>`;
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="История рейтингов по категориям" style="width:100%;height:auto;max-height:320px;display:block">${grid.join('')}${paths}</svg>
+      <div style="color:var(--muted);font-size:11px;margin-top:5px;text-align:center">Каждая категория масштабируется отдельно; линии наложены только для сравнения динамики</div>`;
   }
   function renderGamesList(games, username) {
     const el = document.getElementById('gamesList');
@@ -2473,3 +2481,4 @@
 </script>
 </body>
 </html>
+
