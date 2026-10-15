@@ -52,18 +52,10 @@ const BOT_NAMES = new Set(BOTS.map(b => b.name));
 
 // ======================= GLICKO-2 =======================
 const GLICKO2 = {
-  TAU: 0.5,
-  EPSILON: 1e-6,
-  SCALE: 173.7178,
-  DEFAULT_RATING: 1200,
-  DEFAULT_RD: 350,
-  DEFAULT_VOL: 0.06,
-  MIN_RD: 30,
-  MAX_RD: 350,
-  MIN_RATING: 400,
-  MAX_RATING: 3500
+  TAU: 0.5, EPSILON: 1e-6, SCALE: 173.7178,
+  DEFAULT_RATING: 1200, DEFAULT_RD: 350, DEFAULT_VOL: 0.06,
+  MIN_RD: 30, MAX_RD: 350, MIN_RATING: 400, MAX_RATING: 3500
 };
-
 function glicko2Scale(r) { return (r - GLICKO2.DEFAULT_RATING) / GLICKO2.SCALE; }
 function glicko2Unscale(mu) { return mu * GLICKO2.SCALE + GLICKO2.DEFAULT_RATING; }
 function glicko2G(phi) { return 1 / Math.sqrt(1 + (3 * phi * phi) / (Math.PI * Math.PI)); }
@@ -73,17 +65,11 @@ function updateGlicko2(rating, rd, vol, results) {
   if (!results || results.length === 0) {
     const phi = rd / GLICKO2.SCALE;
     const newPhi = Math.sqrt(phi * phi + vol * vol);
-    return {
-      rating,
-      rd: Math.max(GLICKO2.MIN_RD, Math.min(GLICKO2.MAX_RD, newPhi * GLICKO2.SCALE)),
-      vol
-    };
+    return { rating, rd: Math.max(GLICKO2.MIN_RD, Math.min(GLICKO2.MAX_RD, newPhi * GLICKO2.SCALE)), vol };
   }
-
   const mu = glicko2Scale(rating);
   const phi = rd / GLICKO2.SCALE;
   const sigma = vol;
-
   let v = 0;
   let deltaSum = 0;
   for (const res of results) {
@@ -96,7 +82,6 @@ function updateGlicko2(rating, rd, vol, results) {
   }
   if (v === 0) v = GLICKO2.EPSILON;
   const delta = deltaSum / v;
-
   const a = Math.log(sigma * sigma);
   const f = (x) => {
     const ex = Math.exp(x);
@@ -119,8 +104,7 @@ function updateGlicko2(rating, rd, vol, results) {
   while (Math.abs(B - A) > GLICKO2.EPSILON && iter < 100) {
     const C = A + (A - B) * fA / (fB - fA);
     const fC = f(C);
-    if (fC * fB <= 0) { A = B; fA = fB; }
-    else { fA = fA / 2; }
+    if (fC * fB <= 0) { A = B; fA = fB; } else { fA = fA / 2; }
     B = C; fB = fC;
     iter++;
   }
@@ -128,7 +112,6 @@ function updateGlicko2(rating, rd, vol, results) {
   const phiStar = Math.sqrt(phi * phi + newSigma * newSigma);
   const newPhi = 1 / Math.sqrt(1 / (phiStar * phiStar) + 1 / v);
   const newMu = mu + newPhi * newPhi * deltaSum;
-
   return {
     rating: Math.round(Math.max(GLICKO2.MIN_RATING, Math.min(GLICKO2.MAX_RATING, glicko2Unscale(newMu)))),
     rd: Math.max(GLICKO2.MIN_RD, Math.min(GLICKO2.MAX_RD, newPhi * GLICKO2.SCALE)),
@@ -255,7 +238,6 @@ async function loadDB() {
     }
     const cnt = await pool.query('SELECT COUNT(*)::int AS n FROM games');
     db.totalGames = cnt.rows[0].n || 0;
-
     for (const bot of BOTS) {
       const existing = db.users[bot.name];
       if (!existing) {
@@ -287,7 +269,6 @@ async function loadDB() {
         existing.isBot = true;
       }
     }
-
     console.log(`[DB] Загружено: ${Object.keys(db.users).length} игроков, ${db.totalGames} партий`);
   } catch (err) {
     console.error('[DB] Ошибка загрузки:', err.message || err.code || err);
@@ -477,24 +458,23 @@ function buildGamesList() {
 }
 
 // ======================= ФИНАЛИЗАЦИЯ =======================
+// ИСПРАВЛЕНО: гарантированно увеличиваем games и сохраняем всех, не падаем на undefined rd/vol
 async function finishGame(lobbyId, result, reason) {
   const l = lobbies.get(lobbyId);
   if (!l || l.finished) return;
   l.finished = true;
   l.started = false;
 
-  const hostUser = db.users[l.host];
-  const guestUser = db.users[l.guest];
-  if (!hostUser || !guestUser) { lobbies.delete(lobbyId); return; }
-
-  const isBotGame = !!l.isBot;
   const whiteName = l.hostColor === 'w' ? l.host : l.guest;
   const blackName = l.hostColor === 'b' ? l.host : l.guest;
   const whiteUser = db.users[whiteName];
   const blackUser = db.users[blackName];
   if (!whiteUser || !blackUser) { lobbies.delete(lobbyId); return; }
 
+  const isBotGame = !!l.isBot;
   const cat = categoryOf(l.time);
+
+  // Гарантируем наличие категории
   if (!whiteUser.categories) whiteUser.categories = {};
   if (!blackUser.categories) blackUser.categories = {};
   if (!whiteUser.categories[cat]) whiteUser.categories[cat] = emptyRatingBlock(whiteUser.rating);
@@ -509,14 +489,19 @@ async function finishGame(lobbyId, result, reason) {
   if (result === 'w') { whiteScore = 1; blackScore = 0; }
   else if (result === 'b') { whiteScore = 0; blackScore = 1; }
 
-  const whiteRes = updateGlicko2(wc.rating, wc.rd || GLICKO2.DEFAULT_RD, wc.vol || GLICKO2.DEFAULT_VOL,
-    [{ rating: bc.rating, rd: bc.rd || GLICKO2.DEFAULT_RD, score: whiteScore }]);
-  const blackRes = updateGlicko2(bc.rating, bc.rd || GLICKO2.DEFAULT_RD, bc.vol || GLICKO2.DEFAULT_VOL,
-    [{ rating: wc.rating, rd: wc.rd || GLICKO2.DEFAULT_RD, score: blackScore }]);
+  // Подставляем дефолты, если rd/vol вдруг undefined
+  const wRd = (typeof wc.rd === 'number' && wc.rd > 0) ? wc.rd : GLICKO2.DEFAULT_RD;
+  const wVol = (typeof wc.vol === 'number' && wc.vol > 0) ? wc.vol : GLICKO2.DEFAULT_VOL;
+  const bRd = (typeof bc.rd === 'number' && bc.rd > 0) ? bc.rd : GLICKO2.DEFAULT_RD;
+  const bVol = (typeof bc.vol === 'number' && bc.vol > 0) ? bc.vol : GLICKO2.DEFAULT_VOL;
+
+  const whiteRes = updateGlicko2(wc.rating, wRd, wVol,
+    [{ rating: bc.rating, rd: bRd, score: whiteScore }]);
+  const blackRes = updateGlicko2(bc.rating, bRd, bVol,
+    [{ rating: wc.rating, rd: wRd, score: blackScore }]);
 
   let whiteAfter = whiteRes.rating;
   let blackAfter = blackRes.rating;
-
   if (whiteUser.isBot) whiteAfter = Math.max(800, Math.min(3000, whiteAfter));
   if (blackUser.isBot) blackAfter = Math.max(800, Math.min(3000, blackAfter));
 
@@ -527,6 +512,7 @@ async function finishGame(lobbyId, result, reason) {
   if (result === 'b') bc.wins++; else if (result === 'w') bc.losses++;
   bc.games++;
 
+  // Общие счётчики
   whiteUser.rating = whiteAfter;
   whiteUser.rd = whiteRes.rd;
   whiteUser.vol = whiteRes.vol;
@@ -692,9 +678,7 @@ function botActiveGamesCount(botName) {
   }
   return n;
 }
-function botIsBusy(botName) {
-  return botActiveGamesCount(botName) >= MAX_BOT_GAMES;
-}
+function botIsBusy(botName) { return botActiveGamesCount(botName) >= MAX_BOT_GAMES; }
 function botGamesInArena(arenaId) {
   let n = 0;
   for (const l of lobbies.values()) {
@@ -721,33 +705,24 @@ function isAvailableForPairing(p, arenaId) {
 //  ЖИВОЕ ПОВЕДЕНИЕ БОТОВ
 // ============================================================
 const BOT_BEHAVIOR = new Map();
-
 function botInitBehavior(botName) {
   if (!BOT_BEHAVIOR.has(botName)) {
     BOT_BEHAVIOR.set(botName, {
-      state: 'idle',
-      activityId: null,
-      lastChange: Date.now(),
+      state: 'idle', activityId: null, lastChange: Date.now(),
       nextDecision: Date.now() + 2000 + Math.random() * 5000,
-      pendingDrawOffer: null,
-      pendingDrawResponse: null
+      pendingDrawOffer: null, pendingDrawResponse: null
     });
   }
   return BOT_BEHAVIOR.get(botName);
 }
-
 function botCloseOwnWaitingLobby(botName) {
   let closed = false;
   for (const [id, l] of lobbies.entries()) {
-    if (!l.finished && !l.started && l.host === botName && l.isBot) {
-      lobbies.delete(id);
-      closed = true;
-    }
+    if (!l.finished && !l.started && l.host === botName && l.isBot) { lobbies.delete(id); closed = true; }
   }
   if (closed) broadcastLobbies();
   return closed;
 }
-
 function botLeaveArena(botName, arenaId) {
   const state = arenas.get(arenaId);
   if (!state) return;
@@ -760,7 +735,6 @@ function botLeaveArena(botName, arenaId) {
     io.emit('arenaUpdate', { arenaId });
   }
 }
-
 function botJoinArena(botName, arenaId) {
   const state = arenas.get(arenaId);
   if (!state || state.finished || state.phase === 'finished') return false;
@@ -780,10 +754,7 @@ function botJoinArena(botName, arenaId) {
   io.emit('arenaUpdate', { arenaId });
   return true;
 }
-
-const BOT_WAITING_TIMES = [
-  { t: 1, i: 0 }, { t: 3, i: 0 }, { t: 5, i: 0 }, { t: 10, i: 0 }
-];
+const BOT_WAITING_TIMES = [{ t: 1, i: 0 }, { t: 3, i: 0 }, { t: 5, i: 0 }, { t: 10, i: 0 }];
 
 function botBehaviorTick() {
   const now = Date.now();
@@ -801,7 +772,6 @@ function botBehaviorTick() {
         if (accept) {
           finishGame(lobbyId, 'draw', 'Ничья по согласию');
         } else {
-          const otherName = l.host === botName ? l.guest : l.host;
           const otherSocket = l.host === botName ? l.guestSocket : l.hostSocket;
           if (otherSocket) io.to(otherSocket).emit('drawDeclined');
         }
@@ -809,31 +779,17 @@ function botBehaviorTick() {
     }
 
     if (botIsBusy(bot.name)) {
-      if (beh.state !== 'playing') {
-        beh.state = 'playing';
-        beh.lastChange = now;
-        botCloseOwnWaitingLobby(bot.name);
-      }
+      if (beh.state !== 'playing') { beh.state = 'playing'; beh.lastChange = now; botCloseOwnWaitingLobby(bot.name); }
       continue;
     }
-
-    if (beh.state === 'playing') {
-      beh.state = 'idle';
-      beh.activityId = null;
-      beh.lastChange = now;
-    }
+    if (beh.state === 'playing') { beh.state = 'idle'; beh.activityId = null; beh.lastChange = now; }
 
     if (beh.state === 'in_arena') {
       const state = arenas.get(beh.activityId);
-      if (!state || state.finished || state.phase === 'finished') {
-        beh.state = 'idle'; beh.activityId = null;
-      } else {
+      if (!state || state.finished || state.phase === 'finished') { beh.state = 'idle'; beh.activityId = null; }
+      else {
         const p = state.participants.get(bot.name);
-        if (p && p.isPlaying) {
-          beh.state = 'playing';
-          beh.lastChange = now;
-          continue;
-        }
+        if (p && p.isPlaying) { beh.state = 'playing'; beh.lastChange = now; continue; }
         if (p && Math.random() < 0.03) {
           p.paused = !p.paused;
           if (!p.paused) p.waitingSince = Date.now();
@@ -841,50 +797,38 @@ function botBehaviorTick() {
         }
         if (Math.random() < 0.04) {
           botLeaveArena(bot.name, beh.activityId);
-          beh.state = 'idle'; beh.activityId = null;
-          beh.lastChange = now;
+          beh.state = 'idle'; beh.activityId = null; beh.lastChange = now;
         }
       }
       continue;
     }
-
     if (beh.state === 'in_lobby') {
       const l = lobbies.get(beh.activityId);
-      if (!l || l.finished || l.started) {
-        beh.state = 'idle'; beh.activityId = null;
-      } else if (now - beh.lastChange > 40000 && Math.random() < 0.25) {
+      if (!l || l.finished || l.started) { beh.state = 'idle'; beh.activityId = null; }
+      else if (now - beh.lastChange > 40000 && Math.random() < 0.25) {
         botCloseOwnWaitingLobby(bot.name);
-        beh.state = 'idle'; beh.activityId = null;
-        beh.lastChange = now;
+        beh.state = 'idle'; beh.activityId = null; beh.lastChange = now;
       }
       continue;
     }
 
     const r = Math.random();
-
     if (r < 0.40) {
       const candidates = [...arenas.values()].filter(s =>
-        !s.finished && s.botFriendly &&
-        (s.phase === 'live' || s.phase === 'waiting') &&
-        !s.participants.has(bot.name)
+        !s.finished && s.botFriendly && (s.phase === 'live' || s.phase === 'waiting') && !s.participants.has(bot.name)
       );
       if (candidates.length) {
         candidates.sort((a, b) => {
-          const aLive = a.phase === 'live' ? 0 : 1;
-          const bLive = b.phase === 'live' ? 0 : 1;
+          const aLive = a.phase === 'live' ? 0 : 1, bLive = b.phase === 'live' ? 0 : 1;
           if (aLive !== bLive) return aLive - bLive;
           return a.startsAt - b.startsAt;
         });
         const chosen = candidates[0];
         if (botJoinArena(bot.name, chosen.id)) {
-          beh.state = 'in_arena';
-          beh.activityId = chosen.id;
-          beh.lastChange = now;
-          continue;
+          beh.state = 'in_arena'; beh.activityId = chosen.id; beh.lastChange = now; continue;
         }
       }
     }
-
     if (r < 0.75) {
       let alreadyHasLobby = false;
       for (const l of lobbies.values()) {
@@ -901,11 +845,8 @@ function botBehaviorTick() {
           started: false, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
           createdAt: Date.now(), rematch: null, isBot: true, botName: bot.name, botColor: 'b', history: []
         });
-        beh.state = 'in_lobby';
-        beh.activityId = id;
-        beh.lastChange = now;
-        broadcastLobbies();
-        continue;
+        beh.state = 'in_lobby'; beh.activityId = id; beh.lastChange = now;
+        broadcastLobbies(); continue;
       }
     }
   }
@@ -913,15 +854,13 @@ function botBehaviorTick() {
 setInterval(botBehaviorTick, 5000);
 setTimeout(botBehaviorTick, 3000);
 
+// ИСПРАВЛЕНО: жеребьёвка идёт только если есть зрители в комнате арены
 function tryPair(state) {
   if (state.finished || state.phase !== 'live') return;
-
   const hasHumans = [...state.participants.values()].some(p => !p.isBot);
   const hasViewers = state.chatViewers.size > 0;
-
-  if (!hasHumans && !hasViewers) {
-    if (Math.random() > 0.25) return;
-  }
+  // Если нет ни людей-участников, ни зрителей — не жеребьёвка вообще
+  if (!hasHumans && !hasViewers) return;
 
   const currentActive = state.activeLobbies.size;
   if (currentActive >= 6) return;
@@ -1006,12 +945,10 @@ function createArenaPairing(state, a, b) {
     bSocket.join(lobbyId);
     bSocket.emit('gameStart', { color: guestColor, opponent: a.username, opponentRating: aUser ? aUser.rating : null, opponentIsAdmin: isAdmin(a.username), opponentIsMod: isMod(a.username), opponentIsBot: !!a.isBot, opponentOnline: true, time, inc, lobbyId, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', chat: [], arenaId: state.id, arenaName: state.name, isBot: isBotGame });
   }
-  io.emit('arenaUpdate', { arenaId: state.id });
+  io.to('arena:' + state.id).emit('arenaUpdate', { arenaId: state.id });
   broadcastOnline();
 
-  if (isBotGame && lobbyId) {
-    setTimeout(() => scheduleBotMove(lobbyId), 500 + Math.random() * 500);
-  }
+  if (isBotGame && lobbyId) setTimeout(() => scheduleBotMove(lobbyId), 500 + Math.random() * 500);
 }
 function calcArenaPoints(p, result) {
   if (result === 'win') { const s = (p.winStreak || 0) + 1; p.winStreak = s; p.drawStreak = 0; return s >= 3 ? 4 : 2; }
@@ -1036,7 +973,7 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   if (state.finished || !whiteP || !blackP) {
     if (whiteP) { whiteP.isPlaying = false; whiteP.lobbyId = null; }
     if (blackP) { blackP.isPlaying = false; blackP.lobbyId = null; }
-    io.emit('arenaUpdate', { arenaId }); return;
+    io.to('arena:' + arenaId).emit('arenaUpdate', { arenaId }); return;
   }
   if (result === 'w') { whiteP.score += calcArenaPoints(whiteP, 'win'); whiteP.wins++; blackP.losses++; calcArenaPoints(blackP, 'loss'); }
   else if (result === 'b') { blackP.score += calcArenaPoints(blackP, 'win'); blackP.wins++; whiteP.losses++; calcArenaPoints(whiteP, 'loss'); }
@@ -1048,7 +985,7 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   if (whiteP.isBot) { const bh = botInitBehavior(whiteName); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
   if (blackP.isBot) { const bh = botInitBehavior(blackName); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
   setTimeout(() => tryPair(state), 300);
-  io.emit('arenaUpdate', { arenaId });
+  io.to('arena:' + arenaId).emit('arenaUpdate', { arenaId });
 }
 function finishArena(state) {
   if (state.finished) return;
@@ -1164,8 +1101,7 @@ function clearMute(username) {
 }
 
 // ============================================================
-//  ЛЁГКИЙ ШАХМАТНЫЙ ДВИЖОК (для проверки мата/пата и оценки позиции)
-//  Тяжёлые вычисления (minimax) вынесены в bot-worker.js
+//  ЛЁГКИЙ ШАХМАТНЫЙ ДВИЖОК (для проверки мата/пата и оценки)
 // ============================================================
 const PIECE_VALUES = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
 
@@ -1181,7 +1117,6 @@ function botToFen(state) {
 }
 const botIsWhite = p => !!p && p === p.toUpperCase();
 const botInBoard = (r,c) => r >= 0 && r < 8 && c >= 0 && c < 8;
-
 function botPseudoMoves(state, r, c) {
   const p = state.board[r][c]; if (!p) return [];
   const moves = []; const white = botIsWhite(p); const type = p.toLowerCase();
@@ -1222,7 +1157,6 @@ function botIsAttacked(state, r, c, byWhite) {
   return false;
 }
 function botInCheck(state, white) { const k = botFindKing(state, white); if (!k) return false; return botIsAttacked(state, k[0], k[1], !white); }
-
 function botApplyMove(state, from, to) {
   const copy = { board: state.board.map(row => row.slice()), turn: state.turn, castling: state.castling, ep: state.ep, half: state.half, full: state.full };
   const [fr, fc] = from, [tr, tc] = to;
@@ -1295,7 +1229,6 @@ function scheduleBotMove(lobbyId) {
   const state = botParseFen(l.fen);
   const botIsWhiteTurn = botColor === 'w';
   const botMoves = botAllLegalMoves(state, botIsWhiteTurn);
-
   const isBotVsBot = !!l.botName2;
 
   if (botMoves.length === 1) {
@@ -1346,7 +1279,6 @@ function scheduleBotMove(lobbyId) {
   else if (baseTime <= 600) baseDelay = 350;
   else if (baseTime <= 900) baseDelay = 500;
   else                      baseDelay = 800;
-
   if (isBotVsBot) baseDelay = Math.max(baseDelay, 300);
 
   let complexity = 1.0;
@@ -1373,7 +1305,6 @@ function scheduleBotMove(lobbyId) {
       reactionMultiplier = 0.8;
     }
   }
-
   if (botTimeLeft < 10) { baseDelay = 30; complexity = 1.0; reactionMultiplier = 1.0; }
   else if (botTimeLeft < 30) { baseDelay = Math.min(baseDelay, 80); complexity = Math.min(complexity, 1.2); reactionMultiplier = Math.min(reactionMultiplier, 1.3); }
 
@@ -1398,7 +1329,6 @@ function scheduleBotMove(lobbyId) {
     const botSign = botColor === 'w' ? 1 : -1;
     const myEval = evalScore * botSign;
 
-    // ===== СДАЧА =====
     let resignThreshold;
     if (botRating < 1100)      resignThreshold = -600;
     else if (botRating < 1350) resignThreshold = -900;
@@ -1406,7 +1336,6 @@ function scheduleBotMove(lobbyId) {
     else if (botRating < 1850) resignThreshold = -1500;
     else if (botRating < 2000) resignThreshold = -1800;
     else                       resignThreshold = -2200;
-
     const minMovesBeforeResign = botRating < 1500 ? 15 : 25;
     const myMaterial = botEvalMaterial(st, botColor === 'w');
     const oppMaterial = botEvalMaterial(st, botColor !== 'w');
@@ -1427,7 +1356,6 @@ function scheduleBotMove(lobbyId) {
       }
     }
 
-    // ===== ПРЕДЛОЖЕНИЕ НИЧЬЕЙ =====
     if (Math.abs(myEval) < 30 && st.full > 30 && !cur.drawOffer && !cur.botDrawOffered) {
       const myMoves = botAllLegalMoves(st, botColor === 'w');
       let hasMateIn1 = false;
@@ -1450,16 +1378,11 @@ function scheduleBotMove(lobbyId) {
           else if (Math.abs(myEval) < 40) acceptChance = 0.4;
           else acceptChance = 0.1;
           if (otherRating >= 1900) acceptChance *= 0.6;
-          otherBeh.pendingDrawResponse = {
-            lobbyId,
-            accept: Math.random() < acceptChance,
-            botName: otherName
-          };
+          otherBeh.pendingDrawResponse = { lobbyId, accept: Math.random() < acceptChance, botName: otherName };
         }
       }
     }
 
-    // ===== ТЯЖЁЛЫЙ РАСЧЁТ — В WORKER =====
     let mv;
     try {
       mv = await botPool.getMove(cur.fen, botRating, cur.time);
@@ -1469,14 +1392,13 @@ function scheduleBotMove(lobbyId) {
     }
     if (!mv) return;
 
-    // Перечитываем состояние — за время расчёта партия могла измениться
     const cur2 = lobbies.get(lobbyId);
     if (!cur2 || cur2.finished) return;
     if (cur2.turn !== botColor) return;
     const stillBot2 = (cur2.botColor === botColor && cur2.botName === botName) ||
                       (cur2.botColor2 === botColor && cur2.botName2 === botName);
     if (!stillBot2) return;
-    if (cur2.fen !== cur.fen) return; // позиция изменилась — расчёт неактуален
+    if (cur2.fen !== cur.fen) return;
 
     const st2 = botParseFen(cur2.fen);
     const { from, to } = mv;
@@ -1529,7 +1451,6 @@ io.on('connection', (socket) => {
     if (!/^[a-zA-Zа-яА-Я0-9_\-]+$/.test(username)) return cb({ ok: false, msg: 'Логин: буквы, цифры, _ и -' });
     if (password.length < 3) return cb({ ok: false, msg: 'Пароль минимум 3 символа' });
     if (password.length > 128) return cb({ ok: false, msg: 'Пароль слишком длинный' });
-
     let user = db.users[username];
     if (user) {
       if (!verifyPassword(password, user.salt, user.passwordHash)) return cb({ ok: false, msg: 'Неверный пароль' });
@@ -1556,12 +1477,13 @@ io.on('connection', (socket) => {
     broadcastOnline();
   });
 
+  // ИСПРАВЛЕНО: история строится из актуальных рейтингов (после партии)
   socket.on('getProfile', async ({ username }, cb) => {
     if (typeof cb !== 'function') return;
     const u = db.users[username];
     if (!u) return cb({ ok: false, msg: 'Игрок не найден' });
     try {
-      const gamesRes = await pool.query(`SELECT * FROM games WHERE white = $1 OR black = $1 ORDER BY finished_at DESC LIMIT 50`, [username]);
+      const gamesRes = await pool.query(`SELECT * FROM games WHERE white = $1 OR black = $1 ORDER BY finished_at DESC LIMIT 100`, [username]);
       const games = gamesRes.rows.map(r => ({
         white: r.white, black: r.black, result: r.result, reason: r.reason,
         timeControl: r.time_control, increment: r.increment,
@@ -1784,9 +1706,7 @@ io.on('connection', (socket) => {
     }
     io.to(l.hostSocket).emit('gameStart', { color: l.hostColor, opponent: l.guest, opponentRating: guestRating, opponentIsAdmin: isAdmin(l.guest), opponentIsMod: isMod(l.guest), opponentOnline: true, time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat, isArena: false, isBot: !!l.isBot, botName: l.isBot ? l.host : undefined });
     io.to(l.guestSocket).emit('gameStart', { color: l.guestColor, opponent: l.host, opponentRating: hostRating, opponentIsAdmin: isAdmin(l.host), opponentIsMod: isMod(l.host), opponentOnline: true, time: l.time, inc: l.inc, lobbyId: id, fen: l.fen, chat: l.chat, isArena: false, isBot: !!l.isBot, botName: l.isBot ? l.host : undefined });
-    if (l.isBot) {
-      setTimeout(() => scheduleBotMove(l.id), 500);
-    }
+    if (l.isBot) setTimeout(() => scheduleBotMove(l.id), 500);
     cb({ ok: true, id });
     broadcastLobbies();
     broadcastOnline();
@@ -1917,7 +1837,6 @@ io.on('connection', (socket) => {
     if (socket.id !== l.hostSocket && socket.id !== l.guestSocket) return;
     l.drawOffer = { by: socket.id, at: Date.now() };
     socket.to(lobbyId).emit('drawOffered', { from: socket.username });
-
     if (l.isBot) {
       const botColor = l.botColor === l.hostColor ? l.botColor : l.botColor2;
       const botName = l.botColor === l.hostColor ? l.botName : l.botName2;
@@ -1936,11 +1855,8 @@ io.on('connection', (socket) => {
         const cur = lobbies.get(lobbyId);
         if (!cur || cur.finished || !cur.drawOffer) return;
         cur.drawOffer = null;
-        if (accept) {
-          finishGame(lobbyId, 'draw', 'Ничья по согласию');
-        } else {
-          socket.emit('drawDeclined');
-        }
+        if (accept) finishGame(lobbyId, 'draw', 'Ничья по согласию');
+        else socket.emit('drawDeclined');
       }, 400 + Math.random() * 800);
     }
   });
@@ -2073,7 +1989,7 @@ io.on('connection', (socket) => {
   socket.on('getArenaState', ({ arenaId }, cb) => {
     if (typeof cb !== 'function') return;
     const state = arenas.get(arenaId);
-    if (!state) return cb({ joined: false, paused: false, participants: [], participantsCount: 0, phase: 'waiting', timeLeftMin: 0, timeLeftMs: 0, top3: null, pairingNow: null, startsAt: 0, endsAt: 0, serverNow: Date.now(), botFriendly: false });
+    if (!state) return cb({ joined: false, paused: false, participants: [], participantsCount: 0, phase: 'waiting', timeLeftMin: 0, timeLeftMs: 0, top3: null, pairingNow: null, startsAt: 0, endsAt: 0, serverNow: Date.now(), botFriendly: false, chatViewersCount: 0 });
     for (const p of state.participants.values()) {
       if (p.isPlaying) {
         const l = p.lobbyId ? lobbies.get(p.lobbyId) : null;
@@ -2083,9 +1999,7 @@ io.on('connection', (socket) => {
           if (p.isBot) {
             const beh = botInitBehavior(p.username);
             if (beh.state === 'playing') {
-              beh.state = 'in_arena';
-              beh.activityId = state.id;
-              beh.lastChange = Date.now();
+              beh.state = 'in_arena'; beh.activityId = state.id; beh.lastChange = Date.now();
             }
           }
         }
@@ -2107,7 +2021,8 @@ io.on('connection', (socket) => {
       timeLeftMin: Math.round(Math.max(0, state.endsAt - Date.now()) / 60000),
       top3: state.top3, pairingNow: state.pairingNow,
       startsAt: state.startsAt, endsAt: state.endsAt, serverNow: Date.now(),
-      botFriendly: !!state.botFriendly
+      botFriendly: !!state.botFriendly,
+      chatViewersCount: state.chatViewers.size
     });
   });
 
@@ -2162,7 +2077,12 @@ io.on('connection', (socket) => {
     if (state) for (const p of state.participants.values()) if (p.rating > topRating) topRating = p.rating;
     live.sort((a, b) => Math.max(b.whiteRating||0, b.blackRating||0) - Math.max(a.whiteRating||0, a.blackRating||0));
     done.sort((a, b) => Math.max(b.whiteRating||0, b.blackRating||0) - Math.max(a.whiteRating||0, a.blackRating||0));
-    cb({ live, done, topRating, featured: live[0] || done[0] || null });
+    cb({
+      live, done, topRating,
+      featured: live[0] || done[0] || null,
+      participantsCount: state ? state.participants.size : 0,
+      chatViewersCount: state ? state.chatViewers.size : 0
+    });
   });
 
   socket.on('joinArena', ({ arenaId }, cb) => {
@@ -2181,7 +2101,7 @@ io.on('connection', (socket) => {
     const sysMsg = { id: 'sys' + Date.now(), system: true, text: `${socket.username} присоединился к арене`, ts: Date.now(), arenaId: state.id };
     state.chat.push(sysMsg); if (state.chat.length > 300) state.chat.shift();
     io.to('arena:' + state.id).emit('arenaChatMessage', sysMsg);
-    io.emit('arenaUpdate', { arenaId });
+    io.to('arena:' + state.id).emit('arenaUpdate', { arenaId });
     if (state.phase === 'live') tryPair(state);
     cb({ ok: true });
   });
@@ -2197,11 +2117,12 @@ io.on('connection', (socket) => {
       const sysMsg = { id: 'sys' + Date.now(), system: true, text: `${socket.username} покинул арену`, ts: Date.now(), arenaId: state.id };
       state.chat.push(sysMsg); if (state.chat.length > 300) state.chat.shift();
       io.to('arena:' + state.id).emit('arenaChatMessage', sysMsg);
-      io.emit('arenaUpdate', { arenaId });
+      io.to('arena:' + state.id).emit('arenaUpdate', { arenaId });
     }
     cb({ ok: true });
   });
 
+  // ИСПРАВЛЕНО: pauseArena возвращает paused, клиент меняет текст кнопки
   socket.on('pauseArena', ({ arenaId }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     const state = arenas.get(arenaId);
@@ -2211,7 +2132,7 @@ io.on('connection', (socket) => {
     if (!p) return cb({ ok: false, msg: 'Вы не участвуете' });
     p.paused = !p.paused;
     if (!p.paused) p.waitingSince = Date.now();
-    io.emit('arenaUpdate', { arenaId });
+    io.to('arena:' + arenaId).emit('arenaUpdate', { arenaId });
     cb({ ok: true, paused: p.paused });
   });
 
@@ -2255,9 +2176,7 @@ io.on('connection', (socket) => {
           p.isPlaying = false; p.lobbyId = null;
           const beh = botInitBehavior(p.username);
           if (beh.state === 'playing') {
-            beh.state = 'in_arena';
-            beh.activityId = state.id;
-            beh.lastChange = Date.now();
+            beh.state = 'in_arena'; beh.activityId = state.id; beh.lastChange = Date.now();
           }
         }
       }
