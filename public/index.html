@@ -99,20 +99,63 @@
   .quickBtn .qb-time { font-size:26px; font-weight:300; color:var(--text-bright); letter-spacing:.5px; }
   .quickBtn .qb-name { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
   .quickBtn.custom .qb-time { font-size:20px; color:var(--accent); }
-  .lobbyList { display:flex; flex-direction:column; gap:6px; }
-  .lobbyRow { display:grid; grid-template-columns:28px 1fr 80px 90px 90px; gap:10px; padding:10px 14px; align-items:center; background:var(--panel-2); border-radius:6px; border:1px solid var(--border); font-size:13px; transition:.15s; min-height:48px; }
+
+  /* ===================== СПИСОК ЛОББИ (компактный) ===================== */
+  .lobbyList { display:flex; flex-direction:column; }
+  .lobbyRow {
+    display:grid;
+    grid-template-columns: 24px 64px minmax(0,1fr) 78px 110px 88px;
+    gap:10px;
+    align-items:center;
+    padding:8px 10px;
+    border-bottom:1px solid rgba(58,56,51,.4);
+    font-size:13px;
+    min-height:42px;
+    transition:background .12s;
+  }
+  .lobbyRow:last-child { border-bottom:none; }
   .lobbyRow:hover { background:var(--panel-hover); }
-  .lobbyRow.mine { border-color:var(--accent); background:rgba(191,129,29,.08); }
-  .lobbyRow .icon { font-size:18px; text-align:center; }
-  .lobbyRow .name { color:var(--text-bright); font-weight:500; }
-  .lobbyRow .name .mineTag { color:var(--accent); font-size:11px; margin-left:6px; }
-  .lobbyRow .time { font-family:monospace; text-align:center; color:var(--text-bright); }
-  .lobbyRow .mode { font-size:12px; color:var(--muted); text-align:center; }
-  .lobbyRow .action { text-align:right; }
-  .lobbyRow .action button { padding:6px 14px; font-size:13px; min-width:80px; }
+  .lobbyRow.mine { background:rgba(191,129,29,.07); }
+  .lobbyRow .lColor { width:12px; height:12px; border-radius:50%; border:1px solid #111; justify-self:center; flex-shrink:0; }
+  .lobbyRow .lColor.white { background:#f0f0f0; }
+  .lobbyRow .lColor.black { background:#333; }
+  .lobbyRow .lRating { color:var(--text-bright); font-weight:600; font-variant-numeric:tabular-nums; text-align:right; }
+  .lobbyRow .lRating.muted { color:var(--muted); font-weight:500; }
+  .lobbyRow .lName { color:var(--text-bright); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; display:flex; align-items:center; gap:4px; }
+  .lobbyRow .lName .playerNick { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  .lobbyRow .lName .mineTag { color:var(--accent); font-size:11px; flex-shrink:0; }
+  .lobbyRow .lTime { color:var(--text-bright); font-family:'Roboto Mono','Menlo',monospace; font-size:13px; text-align:center; font-variant-numeric:tabular-nums; }
+  .lobbyRow .lMode { color:var(--muted); font-size:12px; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; gap:5px; }
+  .lobbyRow .lMode .modeIcon { font-size:13px; }
+  .lobbyRow .lAction { text-align:right; }
+  .lobbyRow .lAction button { padding:5px 14px; font-size:12px; min-width:0; min-height:30px; border-radius:4px; }
+  .lobbyHeader {
+    display:grid;
+    grid-template-columns: 24px 64px minmax(0,1fr) 78px 110px 88px;
+    gap:10px;
+    padding:6px 10px;
+    font-size:10px;
+    color:var(--muted);
+    text-transform:uppercase;
+    letter-spacing:.6px;
+    font-weight:700;
+    border-bottom:1px solid var(--border);
+    background:var(--panel-2);
+  }
+  .lobbyHeader > * { text-align:left; }
+  .lobbyHeader .hRating { text-align:right; }
+  .lobbyHeader .hTime { text-align:center; }
+  .lobbyHeader .hAction { text-align:right; }
+  @media (max-width: 560px) {
+    .lobbyHeader { grid-template-columns: 20px 52px minmax(0,1fr) 60px 60px; gap:6px; }
+    .lobbyRow { grid-template-columns: 20px 52px minmax(0,1fr) 60px 60px; gap:6px; padding:7px 8px; }
+    .lobbyRow .lMode, .lobbyHeader .hMode { display:none; }
+    .lobbyRow .lAction button { padding:4px 10px; font-size:11px; }
+  }
+
   .arenaEmpty { padding:40px 20px; text-align:center; color:var(--muted); font-size:13px; }
 
-  /* ===================== WATCH (просмотр партий) ===================== */
+  /* ===================== WATCH ===================== */
   .watchWrap { display:grid; grid-template-columns:320px minmax(0,1fr); gap:16px; max-width:1100px; margin:0 auto; align-items:start; }
   @media (max-width:900px) { .watchWrap { grid-template-columns:minmax(0,1fr); } }
   .watchList { background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
@@ -126,7 +169,6 @@
   .watchRow .wrMeta { display:flex; justify-content:space-between; font-size:11px; color:var(--muted); gap:8px; }
   .watchRow .wrMeta b { color:var(--text-bright); }
   .watchRow .liveDot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#ff5555; margin-right:6px; animation:pulse 1.2s infinite; vertical-align:middle; }
-
   .watchBoard { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px; min-width:0; }
   .watchBoard .wbHeader { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; padding-bottom:12px; border-bottom:1px solid var(--border); gap:12px; flex-wrap:wrap; }
   .watchBoard .wbHeader .wbTitle { font-size:16px; color:var(--text-bright); font-weight:600; }
@@ -273,10 +315,6 @@
   .arenaTopGameLink { text-align:center; font-size:11px; color:var(--accent); cursor:pointer; padding:3px; border-radius:3px; flex-shrink:0; }
   .arenaTopGameLink:hover { background:var(--panel-hover); }
   .arenaGamesList { flex:1 1 auto; min-height:0; padding:6px; display:flex; flex-direction:column; gap:4px; overflow-y:auto; overflow-x:hidden; }
-  .arenaGamesList::-webkit-scrollbar { width:8px; }
-  .arenaGamesList::-webkit-scrollbar-track { background:var(--panel-2); border-radius:4px; }
-  .arenaGamesList::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
-  .arenaGamesList::-webkit-scrollbar-thumb:hover { background:#4a4740; }
   .arenaGameCard { background:var(--panel-2); border-radius:4px; padding:6px 8px; font-size:11px; border-left:3px solid var(--accent); flex-shrink:0; }
   .arenaGameCard .row1 { display:flex; justify-content:space-between; align-items:center; color:var(--text-bright); font-weight:600; overflow:hidden; }
   .arenaGameCard .row1 .res { font-weight:700; flex-shrink:0; margin-left:6px; }
@@ -332,67 +370,27 @@
   .playerStrip .nm:hover { color:var(--accent); }
   .playerNick { cursor:pointer; }
 
-  /* ============== PLAYER HOVER CARD (исправлено) ============== */
   #playerHoverCard {
-    position:fixed;
-    z-index:9999;
-    display:none;
-    width:300px;
-    max-width:calc(100vw - 24px);
+    position:fixed; z-index:9999; display:none;
+    width:300px; max-width:calc(100vw - 24px);
     padding:12px 14px;
-    background:#302e2a;
-    border:1px solid #45423c;
-    border-radius:8px;
-    box-shadow:0 8px 24px rgba(0,0,0,.55);
-    color:#d8d6d0;
-    font-size:12px;
-    pointer-events:none;
-    box-sizing:border-box;
-    overflow:hidden;
+    background:#302e2a; border:1px solid #45423c; border-radius:8px;
+    box-shadow:0 8px 24px rgba(0,0,0,.55); color:#d8d6d0; font-size:12px;
+    pointer-events:none; box-sizing:border-box; overflow:hidden;
   }
   #playerHoverCard .phName {
-    color:#58a6ff;
-    font-size:14px;
-    font-weight:600;
-    margin-bottom:8px;
-    display:flex;
-    align-items:center;
-    gap:6px;
-    overflow:hidden;
-    white-space:nowrap;
-    text-overflow:ellipsis;
-    min-width:0;
+    color:#58a6ff; font-size:14px; font-weight:600; margin-bottom:8px;
+    display:flex; align-items:center; gap:6px;
+    overflow:hidden; white-space:nowrap; text-overflow:ellipsis; min-width:0;
   }
-  #playerHoverCard .phName .playerNick {
-    overflow:hidden;
-    text-overflow:ellipsis;
-    white-space:nowrap;
-    min-width:0;
-  }
-  #playerHoverCard .phMeta {
-    display:flex;
-    flex-wrap:wrap;
-    gap:6px 10px;
-    color:#b9b6ad;
-    font-size:12px;
-    margin-bottom:8px;
-  }
+  #playerHoverCard .phName .playerNick { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+  #playerHoverCard .phMeta { display:flex; flex-wrap:wrap; gap:6px 10px; color:#b9b6ad; font-size:12px; margin-bottom:8px; }
   #playerHoverCard .phMeta span { white-space:nowrap; }
-  #playerHoverCard .phStats {
-    display:grid;
-    grid-template-columns:repeat(2, minmax(0,1fr));
-    gap:6px;
-    margin-top:4px;
-  }
+  #playerHoverCard .phStats { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px; margin-top:4px; }
   #playerHoverCard .phStat {
-    background:#24231f;
-    padding:6px 8px;
-    border-radius:4px;
-    white-space:nowrap;
-    overflow:hidden;
-    text-overflow:ellipsis;
-    font-size:11px;
-    color:#b9b6ad;
+    background:#24231f; padding:6px 8px; border-radius:4px;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    font-size:11px; color:#b9b6ad;
   }
 
   .communityPage { max-width:1000px; margin:0 auto; padding:24px; }
@@ -579,8 +577,6 @@
   .watchListBody { overscroll-behavior:contain; scrollbar-width:thin; }
   .movesPanel, .watchListBody, .arenaGamesList { scrollbar-width:thin; scrollbar-color:#625d50 transparent; }
   .movesPanel { overscroll-behavior:contain; }
-  .lobbyRow { grid-template-columns:24px minmax(0,1fr) 68px 78px 82px; gap:8px; }
-  .lobbyRow .name, .watchRow .name { min-width:0; overflow-wrap:anywhere; }
   header.topbar { padding-inline:clamp(8px,2vw,18px); }
   header.topbar nav a { padding-inline:clamp(7px,1vw,12px); }
   :focus-visible { outline:2px solid var(--accent-2); outline-offset:2px; }
@@ -601,12 +597,6 @@
     .watchBoard .wbBoardWrap { width:min(100%, 92vw); margin-bottom:10px; }
     .piece { font-size:clamp(20px, 8vw, 42px); }
     .watchBoard .wbPlayer .time { font-size:16px; }
-    .lobbyRow { grid-template-columns:22px minmax(0,1fr) 58px; }
-    .lobbyRow .mode { display:none; }
-    .lobbyRow .action { grid-column:3; grid-row:1; }
-    .lobbyRow .time { grid-column:2; text-align:left; font-size:11px; color:var(--muted); }
-    .lobbyRow .name { grid-column:2; }
-    .lobbyRow .action button { min-width:0; padding:5px 8px; }
     .arenasHeader h1 { font-size:26px; }
   }
   @media (prefers-reduced-motion: reduce) {
@@ -1012,6 +1002,7 @@
   let dragStartPos = null;
   let premove = null;
   let rematchRequested = false;
+  let rematchTimeoutHandle = null;
   let profileGamesVisible = false;
 
   let watchRequestId = 0;
@@ -1522,28 +1513,74 @@
       const allItems = [];
       for (const [id, l] of current) allItems.push({ kind: 'waiting', id, data: l });
       for (const [id, info] of disappearedLobbies) allItems.push({ kind: 'started', id, data: info.data });
-      if (!allItems.length) { el.innerHTML = '<div class="arenaEmpty">Нет активных вызовов.</div>'; return; }
-      allItems.sort((a, b) => { if (a.kind !== b.kind) return a.kind === 'started' ? -1 : 1; return (b.data.time || 0) - (a.data.time || 0); });
+      if (!allItems.length) {
+        el.innerHTML = `
+          <div class="lobbyHeader">
+            <div></div>
+            <div class="hRating">Рейтинг</div>
+            <div>Игрок</div>
+            <div class="hTime">Время</div>
+            <div class="hMode">Режим</div>
+            <div class="hAction"></div>
+          </div>
+          <div class="arenaEmpty" style="padding:30px 20px;">Нет активных вызовов.</div>`;
+        return;
+      }
+      allItems.sort((a, b) => {
+        if (a.kind !== b.kind) return a.kind === 'started' ? -1 : 1;
+        return (b.data.time || 0) - (a.data.time || 0);
+      });
+      const header = document.createElement('div');
+      header.className = 'lobbyHeader';
+      header.innerHTML = `
+        <div></div>
+        <div class="hRating">Рейтинг</div>
+        <div>Игрок</div>
+        <div class="hTime">Время</div>
+        <div class="hMode">Режим</div>
+        <div class="hAction"></div>`;
+      el.appendChild(header);
       const wrap = document.createElement('div'); wrap.className = 'lobbyList';
+      const isLightBg = true; // шахматная доска: 1-я клетка h1 — светлая
       for (const item of allItems) {
         const l = item.data;
         const isMine = me && l.host === me.username;
         const row = document.createElement('div');
         row.className = 'lobbyRow' + (isMine && item.kind === 'waiting' ? ' mine' : '');
+        // Цвет кружка — как у клетки a1: тёмная. Но условимся: у "ожидающих"
+        // показываем тёмный круг (как у чёрных, они по умолчанию хостят),
+        // у "начавшихся" — светлый, чтобы было визуально понятно, что там уже играют.
+        const circleCls = item.kind === 'started' ? 'white' : 'black';
+        // Рейтинг хоста: из данных getLobbies его нет, но можно показать через getPlayerCard.
+        // Здесь используем admin/mod флаги, чтобы хоть как-то различать.
+        const rating = l.rating || ''; // сервер шлёт рейтинг только в новых версиях; заглушка
+        const modeName = 'Рейтинговая';
+        const modeIcon = '♟';
         if (item.kind === 'started') {
-          row.style.opacity = '0.45'; row.style.cursor = 'default'; row.style.transition = 'opacity .4s';
-          row.innerHTML = `<div class="icon">⚔</div><div class="name">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod)}</div><div class="time">${l.time}+${l.inc}</div><div class="mode" style="color:var(--green-2);font-weight:600;">партия началась</div><div class="action"></div>`;
+          row.style.opacity = '0.55';
+          row.innerHTML = `
+            <div class="lColor ${circleCls}"></div>
+            <div class="lRating muted">—</div>
+            <div class="lName">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod)}<span class="mineTag">(началась)</span></div>
+            <div class="lTime">${l.time}+${l.inc}</div>
+            <div class="lMode"><span class="modeIcon">${modeIcon}</span>${modeName}</div>
+            <div class="lAction"></div>`;
         } else {
-          row.style.cursor = isMine ? 'pointer' : 'default';
-          const botLabel = l.isBot ? '🤖' : '♟';
-          const modeText = l.isBot ? 'ждёт соперника' : 'ожидание';
-          row.innerHTML = `<div class="icon">${botLabel}</div><div class="name">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod, l.isBot)}${isMine ? '<span class="mineTag">(ваш вызов)</span>' : ''}</div><div class="time">${l.time}+${l.inc}</div><div class="mode">${modeText}</div><div class="action"></div>`;
+          row.innerHTML = `
+            <div class="lColor ${circleCls}"></div>
+            <div class="lRating muted">—</div>
+            <div class="lName">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod, l.isBot)}${isMine ? '<span class="mineTag">(ваш)</span>' : ''}</div>
+            <div class="lTime">${l.time}+${l.inc}</div>
+            <div class="lMode"><span class="modeIcon">${modeIcon}</span>${modeName}</div>
+            <div class="lAction"></div>`;
           if (!isMine) {
             const btn = document.createElement('button'); btn.className = 'primary'; btn.textContent = 'Играть';
             btn.onclick = (e) => { e.stopPropagation(); socket.emit('joinLobby', { id: l.id }, (r) => { if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; } lobbyId = r.id || l.id; }); };
-            row.querySelector('.action').appendChild(btn);
+            row.querySelector('.lAction').appendChild(btn);
           } else {
-            row.onclick = () => { socket.emit('cancelLobby', { id: l.id }, () => refreshLobbies()); };
+            const btn = document.createElement('button'); btn.className = 'secondary'; btn.textContent = 'Отменить';
+            btn.onclick = (e) => { e.stopPropagation(); socket.emit('cancelLobby', { id: l.id }, () => refreshLobbies()); };
+            row.querySelector('.lAction').appendChild(btn);
           }
         }
         wrap.appendChild(row);
@@ -1664,8 +1701,18 @@
         document.getElementById('statusBar').textContent = 'Бот отклонил реванш';
         return;
       }
-      if (res.started) {}
-      else { rematchRequested = true; const btn = document.getElementById('grRematchBtn'); btn.disabled = true; btn.textContent = 'ОЖИДАНИЕ...'; }
+      if (res.started) return;
+      rematchRequested = true;
+      const btn = document.getElementById('grRematchBtn');
+      btn.disabled = true; btn.textContent = 'ОЖИДАНИЕ...';
+      if (rematchTimeoutHandle) clearTimeout(rematchTimeoutHandle);
+      rematchTimeoutHandle = setTimeout(() => {
+        if (rematchRequested) {
+          rematchRequested = false;
+          const b = document.getElementById('grRematchBtn');
+          if (b) { b.disabled = false; b.textContent = 'РЕВАНШ'; }
+        }
+      }, 15000);
     });
   }
   window.requestRematch = requestRematch;
@@ -2431,6 +2478,7 @@
   socket.on('rematchOffered', ({ from }) => showRematchOfferDialog(from || 'Соперник'));
   socket.on('rematchDeclined', () => {
     rematchRequested = false;
+    if (rematchTimeoutHandle) { clearTimeout(rematchTimeoutHandle); rematchTimeoutHandle = null; }
     const btn = document.getElementById('grRematchBtn');
     if (btn) { btn.disabled = false; btn.textContent = 'РЕВАНШ'; }
     document.getElementById('statusBar').className = 'statusYellow'; document.getElementById('statusBar').textContent = 'Соперник отклонил реванш';
