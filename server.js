@@ -394,7 +394,6 @@ function isUserOnline(username) {
   for (const [, name] of online.entries()) if (name === username) return true;
   return false;
 }
-// Найти все сокеты конкретного игрока (для адресной отправки)
 function socketsOfUser(username) {
   const ids = [];
   for (const [socketId, name] of online.entries()) if (name === username) ids.push(socketId);
@@ -403,14 +402,12 @@ function socketsOfUser(username) {
 
 // ======================= ХРАНИЛИЩА =======================
 // `lobbies` — только ожидающие партии (запросы на игру).
-// `games`   — активные партии + недавно завершённые (для реванша).
+// `games`   — активные партии; завершённые удаляются через 2 секунды.
 const online = new Map();
 const lobbies = new Map();
 const games = new Map();
 const socketToLobby = new Map();
 const arenas = new Map();
-
-const FINISHED_GAME_TTL_MS = 10 * 60 * 1000; // 10 минут держим завершённую партию
 
 function countActiveGames() {
   let n = 0;
@@ -456,7 +453,6 @@ function broadcastWatchers(lobbyId) {
   io.emit('watchersUpdate', { lobbyId, count });
 }
 
-// Чистка зависших "isPlaying" в аренах.
 function cleanupStuckPlaying() {
   for (const state of arenas.values()) {
     for (const p of state.participants.values()) {
@@ -477,21 +473,6 @@ function cleanupStuckPlaying() {
   }
 }
 setInterval(cleanupStuckPlaying, 10000);
-
-// Чистка старых завершённых партий (для реванша они нужны какое-то время).
-setInterval(() => {
-  const now = Date.now();
-  let removed = 0;
-  for (const [id, g] of games.entries()) {
-    if (!g.finished) continue;
-    if (g.finishedAt && now - g.finishedAt > FINISHED_GAME_TTL_MS) {
-      io.to(id).socketsLeave(id);
-      games.delete(id);
-      removed++;
-    }
-  }
-  if (removed) broadcastLobbies();
-}, 60000);
 
 function buildGamesList() {
   const list = [];
@@ -523,7 +504,6 @@ async function finishGame(gameId, result, reason) {
   if (!g || g.finished) return;
   g.finished = true;
   g.started = false;
-  g.finishedAt = Date.now();
 
   const whiteName = g.hostColor === 'w' ? g.host : g.guest;
   const blackName = g.hostColor === 'b' ? g.host : g.guest;
@@ -629,8 +609,16 @@ async function finishGame(gameId, result, reason) {
     catch (e) { console.error('[arena] handleArenaGameEnd ошибка:', e.message); }
   }
 
-  // Партию НЕ удаляем — держим FINISHED_GAME_TTL_MS, чтобы реванш её нашёл.
-  // Из комнаты сокеты НЕ выкидываем — иначе реванш не сможет вернуться.
+  // Партия завершена — удаляем её через 2 секунды, чтобы клиент успел
+  // получить gameEnded и показать результат.
+  setTimeout(() => {
+    const cur = games.get(gameId);
+    if (cur) {
+      io.to(gameId).socketsLeave(gameId);
+      games.delete(gameId);
+      broadcastLobbies();
+    }
+  }, 2000);
 
   broadcastOnline();
 }
@@ -1578,35 +1566,73 @@ function scheduleBotMove(gameId) {
     const botSign = botColor === 'w' ? 1 : -1;
     const myEval = evalScore * botSign;
 
+    // Боты почти не сдаются — только в безнадёжном эндшпиле.
     let resignThreshold;
-    if (botName === WATCHER_NAME) resignThreshold = -700;
-    else if (botRating < 1100)      resignThreshold = -600;
-    else if (botRating < 1350)      resignThreshold = -900;
-    else if (botRating < 1600)      resignThreshold = -1200;
-    else if (botRating < 1850)      resignThreshold = -1500;
-    else if (botRating < 2000)      resignThreshold = -1800;
-    else                            resignThreshold = -2200;
-    const minMovesBeforeResign = botName === WATCHER_NAME ? 20 : (botRating < 1500 ? 15 : 25);
+    if (botName === WATCHER_NAME) resignThreshold = -3000;
+    else if (botRating < 1100)      resignThreshold = -2500;
+    else if (botRating < 1350)      resignThreshold = -3000;
+    else if (botRating < 1600)      resignThreshold = -3500;
+    else if (botRating < 1850)      resignThreshold = -4000;
+    else if (botRating < 2000)      resignThreshold = -4500;
+    else                            resignThreshold = -5000;
+
+    const minMovesBeforeResign = botName === WATCHER_NAME ? 40 : (botRating < 1500 ? 30 : 40);
     const myMaterial = botEvalMaterial(st, botColor === 'w');
     const oppMaterial = botEvalMaterial(st, botColor !== 'w');
     const materialDiff = myMaterial - oppMaterial;
 
-    if (myEval < resignThreshold && st.full > minMovesBeforeResign && materialDiff < -500) {
+    const myQueen = (() => {
+      const q = botColor === 'w' ? 'Q' : 'q';
+      for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (st.board[r][c] === q) return true;
+      return false;
+    })();
+    const oppQueen = (() => {
+      const q = botColor === 'w' ? 'q' : 'Q';
+      for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (st.board[r][c] === q) return true;
+      return false;
+    })();
+
+    if (
+      myEval < resignThreshold &&
+      st.full > minMovesBeforeResign &&
+      materialDiff < -900 &&
+      !myQueen &&
+      oppQueen
+    ) {
       const myMoves = botAllLegalMoves(st, botColor === 'w');
       let hasMateIn1 = false;
+      let hasAnyCounterplay = false;
       for (const [from, to] of myMoves) {
         const next = botApplyMove(st, from, to);
         const oppWhite = next.turn === 'w';
         if (botInCheck(next, oppWhite) && botAllLegalMoves(next, oppWhite).length === 0) { hasMateIn1 = true; break; }
+        const target = st.board[to[0]][to[1]];
+        if (target && target.toLowerCase() === 'q') { hasAnyCounterplay = true; break; }
+        if (!botInCheck(next, oppWhite) && botAllLegalMoves(next, oppWhite).length === 0) { hasAnyCounterplay = true; break; }
+        if (botInCheck(next, oppWhite)) {
+          const afterOpp = botAllLegalMoves(next, oppWhite);
+          for (const [of, ot] of afterOpp) {
+            const after2 = botApplyMove(next, of, ot);
+            if (botInCheck(after2, botColor === 'w')) { hasAnyCounterplay = true; break; }
+          }
+          if (hasAnyCounterplay) break;
+        }
       }
-      if (!hasMateIn1 && Math.random() < 0.7) {
+      if (!hasMateIn1 && !hasAnyCounterplay && Math.random() < 0.4) {
         const winner = botColor === 'w' ? 'b' : 'w';
         finishGame(gameId, winner, 'Сдача');
         return;
       }
     }
 
-    if (Math.abs(myEval) < 30 && st.full > 30 && !cur.drawOffer && !cur.botDrawOffered) {
+    // Боты почти не предлагают ничью — только после 60 ходов в реально равной позиции.
+    if (
+      Math.abs(myEval) < 15 &&
+      st.full > 60 &&
+      !cur.drawOffer &&
+      !cur.botDrawOffered &&
+      Math.abs(materialDiff) < 100
+    ) {
       const myMoves = botAllLegalMoves(st, botColor === 'w');
       let hasMateIn1 = false;
       for (const [from, to] of myMoves) {
@@ -1614,7 +1640,7 @@ function scheduleBotMove(gameId) {
         const oppWhite = next.turn === 'w';
         if (botInCheck(next, oppWhite) && botAllLegalMoves(next, oppWhite).length === 0) { hasMateIn1 = true; break; }
       }
-      if (!hasMateIn1 && Math.random() < 0.08) {
+      if (!hasMateIn1 && Math.random() < 0.03) {
         cur.drawOffer = { by: botColor, at: Date.now(), fromBot: true };
         cur.botDrawOffered = true;
         const otherSocket = cur.host === botName ? cur.guestSocket : cur.hostSocket;
@@ -1623,11 +1649,11 @@ function scheduleBotMove(gameId) {
         if (ALL_BOT_NAMES.has(otherName)) {
           const otherBeh = botInitBehavior(otherName);
           const otherRating = db.users[otherName] ? db.users[otherName].rating : 1500;
-          let acceptChance = 0.5;
-          if (Math.abs(myEval) < 15) acceptChance = 0.8;
-          else if (Math.abs(myEval) < 40) acceptChance = 0.4;
-          else acceptChance = 0.1;
-          if (otherRating >= 1900) acceptChance *= 0.6;
+          let acceptChance = 0.3;
+          if (Math.abs(myEval) < 10) acceptChance = 0.5;
+          else if (Math.abs(myEval) < 30) acceptChance = 0.2;
+          else acceptChance = 0.05;
+          if (otherRating >= 1900) acceptChance *= 0.5;
           otherBeh.pendingDrawResponse = { lobbyId: gameId, accept: Math.random() < acceptChance, botName: otherName };
         }
       }
@@ -2236,8 +2262,6 @@ io.on('connection', (socket) => {
   });
 
   // ============ РЕВАНШ ============
-  // Важно: игрок может быть не в комнате партии, поэтому проверяем только,
-  // что он участник. РеваншOffered летит напрямую в сокет соперника.
   socket.on('rematchRequest', ({ lobbyId }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     let g = games.get(lobbyId);
@@ -2301,7 +2325,6 @@ io.on('connection', (socket) => {
 
     if (g.arenaId) return cb({ ok: false, msg: 'Реванш недоступен для арен' });
 
-    // Помечаем, что этот игрок готов к реваншу.
     if (!g.rematch) g.rematch = {};
     g.rematch[socket.username] = true;
 
@@ -2309,7 +2332,6 @@ io.on('connection', (socket) => {
     const otherSocketIds = socketsOfUser(otherName);
 
     if (g.rematch[otherName]) {
-      // Оба согласны — создаём новую партию.
       const newId = genId();
       const newGame = {
         id: newId, host: g.host, hostSocket: g.hostSocket, guest: g.guest, guestSocket: g.guestSocket,
@@ -2323,8 +2345,6 @@ io.on('connection', (socket) => {
       const hostRating = db.users[g.host] ? db.users[g.host].rating : null;
       const guestRating = db.users[g.guest] ? db.users[g.guest].rating : null;
 
-      // Сообщаем обоим игрокам о новой партии — каждому на все его сокеты,
-      // чтобы даже если он на другой странице, при заходе на игру всё нашлось.
       const hostSockets = socketsOfUser(g.host);
       const guestSockets = socketsOfUser(g.guest);
 
@@ -2349,7 +2369,6 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Первый запросивший — рассылаем предложение на ВСЕ сокеты соперника.
     for (const sid of otherSocketIds) {
       io.to(sid).emit('rematchOffered', { from: socket.username, lobbyId });
     }
