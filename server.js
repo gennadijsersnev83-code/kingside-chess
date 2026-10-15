@@ -294,7 +294,7 @@ async function saveUser(username) {
                           losses_classical, losses_rapid, losses_blitz, losses_bullet,
                           games_classical, games_rapid, games_blitz, games_bullet,
                           muted_until, is_bot)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37)
        ON CONFLICT (username) DO UPDATE SET
          rating = EXCLUDED.rating, rd = EXCLUDED.rd, vol = EXCLUDED.vol,
          wins = EXCLUDED.wins, losses = EXCLUDED.losses, draws = EXCLUDED.draws, games = EXCLUDED.games,
@@ -555,6 +555,7 @@ async function finishGame(lobbyId, result, reason) {
     isBot: isBotGame
   };
 
+  // Watcher обучается независимо от того, с кем играет
   if (whiteIsWatcher || blackIsWatcher) {
     try {
       watcherLearning.incrementGames();
@@ -566,7 +567,34 @@ async function finishGame(lobbyId, result, reason) {
                          (blackIsWatcher && whiteUser.isBot);
 
   if (isWatcherVsBot) {
-    console.log(`[Watcher] Партия против бота не сохранена в БД`);
+    // Партии Watcher против ботов:
+    //  - статистика Watcher обновляется (games/wins/losses)
+    //  - рейтинг Watcher фиксируется на 1200
+    //  - статистика бота-соперника НЕ трогается (он «спарринг-партнёр»)
+    //  - в таблицу games НЕ пишем, чтобы не засорять историю
+    const watcherName = whiteIsWatcher ? whiteName : blackName;
+    const botName = whiteIsWatcher ? blackName : whiteName;
+    const botUser = db.users[botName];
+    const wUser = db.users[watcherName];
+    if (botUser && botUser.categories) {
+      // откатываем изменения рейтинга/статистики бота
+      const botCat = botUser.categories[cat];
+      if (botCat) {
+        // эти поля мы уже увеличили выше — компенсируем
+        if (whiteIsWatcher) { botCat.losses = Math.max(0, botCat.losses - 1); botCat.games = Math.max(0, botCat.games - 1); }
+        else                { botCat.wins   = Math.max(0, botCat.wins   - 1); botCat.games = Math.max(0, botCat.games   - 1); }
+      }
+      if (whiteIsWatcher) { botUser.losses = Math.max(0, botUser.losses - 1); botUser.games = Math.max(0, botUser.games - 1); }
+      else                { botUser.wins   = Math.max(0, botUser.wins   - 1); botUser.games = Math.max(0, botUser.games   - 1); }
+    }
+    if (wUser) {
+      wUser.rating = 1200;
+      if (wUser.categories && wUser.categories[cat]) wUser.categories[cat].rating = 1200;
+      try { await saveUser(watcherName); } catch (e) { console.error('[DB] saveUser watcher fail:', e.message); }
+    }
+    // Партию в games не пишем (раскомментируйте saveGame, если хотите их видеть в истории)
+    // try { await saveGame(gameRecord); } catch (e) { console.error('[DB] saveGame (watcher vs bot) fail:', e.message); }
+    console.log(`[Watcher] Партия vs бот: статистика Watcher обновлена (рейтинг зафиксирован 1200)`);
   } else {
     try { await saveUser(whiteName); } catch (e) { console.error('[DB] saveUser white fail:', e.message); }
     try { await saveUser(blackName); } catch (e) { console.error('[DB] saveUser black fail:', e.message); }
@@ -1444,10 +1472,10 @@ function scheduleBotMove(lobbyId) {
     let resignThreshold;
     if (botName === WATCHER_NAME) resignThreshold = -700;
     else if (botRating < 1100)      resignThreshold = -600;
-    else if (botRating < 1350) resignThreshold = -900;
-    else if (botRating < 1600) resignThreshold = -1200;
-    else if (botRating < 1850) resignThreshold = -1500;
-    else if (botRating < 2000) resignThreshold = -1800;
+    else if (botRating < 1350)      resignThreshold = -900;
+    else if (botRating < 1600)      resignThreshold = -1200;
+    else if (botRating < 1850)      resignThreshold = -1500;
+    else if (botRating < 2000)      resignThreshold = -1800;
     else                       resignThreshold = -2200;
     const minMovesBeforeResign = botName === WATCHER_NAME ? 20 : (botRating < 1500 ? 15 : 25);
     const myMaterial = botEvalMaterial(st, botColor === 'w');
