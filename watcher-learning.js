@@ -1,5 +1,5 @@
 // watcher-learning.js
-// Q-learning для Watcher с Double Q-learning, replay buffer и терминальной наградой.
+// Q-learning для Watcher: Double Q + Replay + терминальная награда.
 
 const fs = require('fs');
 const path = require('path');
@@ -13,25 +13,20 @@ const ALPHA = 0.2;
 const GAMMA = 0.99;
 const EPSILON_START = 1.0;
 const EPSILON_END = 0.03;
-const EPSILON_DECAY_STEPS = 30000;   // затухание по сделанным ходам, не по партиям
+const EPSILON_DECAY_STEPS = 30000;
 
-// Replay buffer
 const REPLAY_MAX = 50000;
 const REPLAY_SAMPLE = 64;
-const REPLAY_INTERVAL_STEPS = 200;   // каждые N ходов делаем batch-update
+const REPLAY_INTERVAL_STEPS = 200;
 
-// ======================= КОНТРОЛЬ ВРЕМЕНИ =======================
 function timeControlCode(timeMin, inc) {
-  if (timeMin < 3) return 'B';       // bullet
-  if (timeMin < 10) return 'Z';      // blitz
-  if (timeMin < 30) return 'R';      // rapid
-  return 'C';                        // classical
+  if (timeMin < 3) return 'B';
+  if (timeMin < 10) return 'Z';
+  if (timeMin < 30) return 'R';
+  return 'C';
 }
 
-// ======================= ZOBRIST ХЕШ =======================
-// Детерминированный хеш позиции. Не идеален, но различимость на порядки выше старой схемы.
 const ZOBRIST = (() => {
-  // xorshift32, чтобы хеш был воспроизводимым
   let seed = 0x9E3779B9 >>> 0;
   const rand32 = () => {
     seed ^= (seed << 13) >>> 0;
@@ -74,9 +69,6 @@ function zobristHash(board, turn, castling, ep) {
   return h >>> 0;
 }
 
-// ======================= СОСТОЯНИЕ =======================
-// Комбинируем: zobrist(позиция) + материал + число фигур + фаза + TC
-// Это даёт десятки миллионов различимых состояний и при этом остаётся компактным.
 function encodeState(fen, botColor, timeControl) {
   try {
     const parts = fen.split(' ');
@@ -86,7 +78,6 @@ function encodeState(fen, botColor, timeControl) {
     const ep = parts[3] || '-';
     const fullmove = parseInt(parts[5] || '1', 10);
 
-    // Парсим доску в матрицу для zobrist
     const board = Array.from({ length: 8 }, () => Array(8).fill(null));
     let r = 0, c = 0;
     for (const ch of boardStr) {
@@ -124,8 +115,6 @@ function encodeAction(from, to) {
   return String.fromCharCode(97 + from[1]) + (8 - from[0]) + String.fromCharCode(97 + to[1]) + (8 - to[0]);
 }
 
-// ======================= ДВОЙНАЯ Q-ТАБЛИЦА =======================
-// Q_A и Q_B — две независимые таблицы, каждая обновляется по данным другой.
 let QA = new Map();
 let QB = new Map();
 let totalGames = 0;
@@ -133,10 +122,7 @@ let totalSteps = 0;
 let saveHandle = null;
 let dirty = false;
 
-// Текущая партия Watcher: сюда пишем (s, a, r, s') по мере ходов
 let currentEpisode = null;
-
-// Replay buffer
 const replay = [];
 
 function ensureDataDir() {
@@ -151,14 +137,6 @@ function getQEntry(table, state, action) {
   return actions.get(action);
 }
 
-function getMaxQ(table, state) {
-  const actions = table.get(state);
-  if (!actions || actions.size === 0) return 0;
-  let m = -Infinity;
-  for (const a of actions.values()) if (a.q > m) m = a.q;
-  return m === -Infinity ? 0 : m;
-}
-
 function getArgmaxQ(table, state) {
   const actions = table.get(state);
   if (!actions || actions.size === 0) return null;
@@ -169,7 +147,6 @@ function getArgmaxQ(table, state) {
   return best;
 }
 
-// ======================= ЗАГРУЗКА / СОХРАНЕНИЕ =======================
 function loadQTable() {
   ensureDataDir();
   try {
@@ -208,12 +185,7 @@ function saveQTable() {
   if (!dirty) return;
   ensureDataDir();
   try {
-    const obj = {
-      qa: {}, qb: {},
-      totalGames, totalSteps,
-      savedAt: Date.now(),
-      version: 2
-    };
+    const obj = { qa: {}, qb: {}, totalGames, totalSteps, savedAt: Date.now(), version: 2 };
     for (const [state, actions] of QA.entries()) {
       const a = {};
       for (const [act, val] of actions.entries()) a[act] = val;
@@ -236,7 +208,6 @@ function startAutoSave() {
 }
 
 function evictIfNeeded() {
-  // Чистим обе таблицы по суммарной ценности
   const cleanTable = (table) => {
     if (table.size <= MAX_STATES) return;
     const entries = [...table.entries()].map(([state, actions]) => {
@@ -252,39 +223,33 @@ function evictIfNeeded() {
   cleanTable(QB);
 }
 
-// ======================= EPSILON =======================
 function getEpsilon() {
   if (totalSteps >= EPSILON_DECAY_STEPS) return EPSILON_END;
   const t = totalSteps / EPSILON_DECAY_STEPS;
   return EPSILON_START + (EPSILON_END - EPSILON_START) * t;
 }
 
-// ======================= ВЫБОР ХОДА =======================
 function pickMove(fen, botColor, timeControl, movesWithEval) {
   if (!movesWithEval || movesWithEval.length === 0) return null;
   const state = encodeState(fen, botColor, timeControl);
   const eps = getEpsilon();
 
-  // Exploration
   if (Math.random() < eps) {
     return movesWithEval[Math.floor(Math.random() * movesWithEval.length)];
   }
 
-  // Exploitation: суммируем Q_A и Q_B
   let best = null, bestScore = -Infinity;
   for (const mv of movesWithEval) {
     const act = encodeAction(mv.from, mv.to);
     const qa = QA.get(state)?.get(act)?.q ?? 0;
     const qb = QB.get(state)?.get(act)?.q ?? 0;
     const qAvg = (qa + qb) / 2;
-    // Небольшой бонус за baseline eval — чтобы в начале, когда Q пустая, играл разумно
     const baseline = (botColor === 'w' ? mv.eval : -mv.eval) / 1000;
     const score = qAvg + baseline * 0.1;
     if (score > bestScore) { bestScore = score; best = mv; }
   }
 
   if (!best) {
-    // Fallback — лучший по eval
     const sorted = movesWithEval.slice().sort((a, b) =>
       (botColor === 'w' ? b.eval - a.eval : a.eval - b.eval)
     );
@@ -293,17 +258,13 @@ function pickMove(fen, botColor, timeControl, movesWithEval) {
   return best;
 }
 
-// ======================= ОБНОВЛЕНИЕ =======================
-// Мягкое обновление с Double Q-learning
 function updateQ(state, action, reward, nextState, evalAfter) {
-  // Определяем, какую таблицу обновляем (случайно)
   const updateA = Math.random() < 0.5;
   const table = updateA ? QA : QB;
   const otherTable = updateA ? QB : QA;
 
   const entry = getQEntry(table, state, action);
 
-  // Double Q: argmax берём из table, значение — из otherTable
   const bestAction = getArgmaxQ(table, nextState);
   let maxNextQ = 0;
   if (bestAction !== null) {
@@ -327,18 +288,15 @@ function updateQ(state, action, reward, nextState, evalAfter) {
   evictIfNeeded();
 }
 
-// ======================= ЭПИЗОД =======================
-// Начинаем эпизод при первом ходе Watcher в партии
 function startEpisode(botColor, timeControl) {
   currentEpisode = {
     botColor,
     timeControl,
-    transitions: [],      // { state, action, reward, nextState, evalAfter }
+    transitions: [],
     startedAt: Date.now()
   };
 }
 
-// Записываем переход в текущий эпизод + сразу обновляем Q (on-line)
 function recordTransition(state, action, reward, nextState, evalAfter) {
   updateQ(state, action, reward, nextState, evalAfter);
 
@@ -346,15 +304,12 @@ function recordTransition(state, action, reward, nextState, evalAfter) {
     currentEpisode.transitions.push({ state, action, reward, nextState, evalAfter });
     if (currentEpisode.transitions.length > 400) currentEpisode.transitions.shift();
   }
-  // Кладём в replay buffer
   replay.push({ state, action, reward, nextState, evalAfter });
   if (replay.length > REPLAY_MAX) replay.shift();
 
-  // Периодический batch-update
   if (totalSteps % REPLAY_INTERVAL_STEPS === 0) batchUpdate();
 }
 
-// Batch-update из replay buffer — сглаживает обучение
 function batchUpdate() {
   if (replay.length < REPLAY_SAMPLE) return;
   for (let i = 0; i < REPLAY_SAMPLE; i++) {
@@ -363,9 +318,6 @@ function batchUpdate() {
   }
 }
 
-// Завершение эпизода — разматываем терминальную награду назад с дисконтом.
-// result: 'w' | 'b' | 'draw' — с чьей стороны (с точки зрения партии)
-// botColor: 'w' | 'b' — за кого играл Watcher
 function finishEpisode(result, botColor) {
   if (!currentEpisode) return;
   let terminalReward = 0;
@@ -373,12 +325,10 @@ function finishEpisode(result, botColor) {
   else if (result === botColor) terminalReward = 1.0;
   else terminalReward = -1.0;
 
-  // Идём от последнего перехода к первому, накапливая дисконт
   const trans = currentEpisode.transitions;
   let discounted = terminalReward;
   for (let i = trans.length - 1; i >= 0; i--) {
     const t = trans[i];
-    // Здесь обновляем с терминальной составляющей
     const updateA = Math.random() < 0.5;
     const table = updateA ? QA : QB;
     const otherTable = updateA ? QB : QA;
@@ -391,14 +341,13 @@ function finishEpisode(result, botColor) {
       if (oa && oa.has(bestAction)) maxNextQ = oa.get(bestAction).q;
     }
 
-    // Комбинированная награда: шаговая + затухающая терминальная
     const combinedReward = t.reward + discounted * 0.5;
     const target = combinedReward + GAMMA * maxNextQ;
     entry.q = entry.q + ALPHA * (target - entry.q);
     entry.v = (entry.v || 0) + 1;
     entry.lastUsed = Date.now();
 
-    discounted *= GAMMA * 0.5;  // терминальный сигнал затухает быстрее
+    discounted *= GAMMA * 0.5;
   }
 
   currentEpisode = null;
@@ -407,14 +356,12 @@ function finishEpisode(result, botColor) {
   console.log(`[Watcher] Эпизод завершён. Результат: ${result}, ходов: ${trans.length}. Всего партий: ${totalGames}`);
 }
 
-// ======================= НАБЛЮДЕНИЕ ЗА ЧУЖИМИ ХОДАМИ =======================
 function learnFromObservedMove(prevFen, move, newFen, moverColor, timeControl, evalAfter) {
   try {
     const stateBefore = encodeState(prevFen, moverColor, timeControl);
     const actionStr = encodeAction(move.from, move.to);
     const stateAfter = encodeState(newFen, moverColor, timeControl);
     const reward = (moverColor === 'w' ? evalAfter : -evalAfter) / 1000;
-    // Наблюдательные ходы обновляют Q с маленьким весом (через меньшее ALPHA)
     const updateA = Math.random() < 0.5;
     const table = updateA ? QA : QB;
     const otherTable = updateA ? QB : QA;
@@ -434,9 +381,7 @@ function learnFromObservedMove(prevFen, move, newFen, moverColor, timeControl, e
   } catch (e) { /* ignore */ }
 }
 
-function incrementGames() {
-  // Оставлено для совместимости, но теперь игры считает finishEpisode
-}
+function incrementGames() { /* для совместимости */ }
 
 function getStats() {
   return {
