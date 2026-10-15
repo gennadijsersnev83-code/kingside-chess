@@ -465,10 +465,22 @@ const App = {
     s.on('lobbiesUpdate', () => Lobby.refreshIfActive());
     s.on('connect_error', () => console.warn('Не удалось подключиться'));
     s.on('gameStart', (payload) => Game.onGameStart(payload));
-    s.on('boardUpdate', (payload) => Game.onBoardUpdate(payload));
-    s.on('timeUpdate', (payload) => Game.onTimeUpdate(payload));
-    s.on('gameEnded', (payload) => Game.onGameEnded(payload));
-    s.on('chatMessage', (msg) => Game.onChatMessage(msg));
+    s.on('boardUpdate', (payload) => {
+      Game.onBoardUpdate(payload);
+      Watch.onBoardUpdate(payload);
+    });
+    s.on('timeUpdate', (payload) => {
+      Game.onTimeUpdate(payload);
+      Watch.onTimeUpdate(payload);
+    });
+    s.on('gameEnded', (payload) => {
+      Game.onGameEnded(payload);
+      Watch.onGameEnded(payload);
+    });
+    s.on('chatMessage', (msg) => {
+      Game.onChatMessage(msg);
+      Watch.onChatMessage(msg);
+    });
     s.on('chatMessageDeleted', ({ msgId }) => Game.onChatDeleted(msgId));
     s.on('chatError', ({ msg }) => alert(msg));
     s.on('drawOffered', ({ from }) => Banners.showDrawOffer(from));
@@ -930,6 +942,7 @@ const Watch = {
       if (reqId !== this.requestId) return;
       if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось начать просмотр'); this.watchingGameId = null; return; }
       this.watchingGame = res.game;
+      this.lastBoardHash = '';
       this.renderBoard();
     });
   },
@@ -951,8 +964,9 @@ const Watch = {
     }
     const g = this.watchingGame;
     const state = Chess.parseFen(g.fen);
-    const flip = g.white === (App.me ? App.me.username : '') ? false : true;
-    const hash = g.id + '|' + g.fen + '|' + g.turn + '|' + flip + '|' + (g.watchersCount || 0);
+    // Доска зрителя не переворачивается автоматически — всегда белые снизу.
+    const flip = false;
+    const hash = g.id + '|' + g.fen + '|' + g.turn + '|' + flip + '|' + (g.watchersCount || 0) + '|' + (g.finished ? 'F' : 'A');
     if (hash === this.lastBoardHash) return;
     this.lastBoardHash = hash;
     const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
@@ -968,6 +982,9 @@ const Watch = {
       if (dc === 0) coords += `<span class="coord-r">${8 - r}</span>`;
       squares += `<div class="${cls}">${inner}${coords}</div>`;
     }
+    const finishedLine = g.finished
+      ? `<div style="text-align:center; margin-top:10px; padding:8px 12px; background:rgba(98,153,36,.12); border-left:3px solid var(--green); border-radius:4px; color:var(--text-bright); font-size:13px;">✅ Партия завершена${g.reason ? ' · ' + Utils.escapeHtml(g.reason) : ''}</div>`
+      : '';
     box.innerHTML = `
       <div class="wbHeader">
         <div style="min-width:0; flex:1">
@@ -991,6 +1008,7 @@ const Watch = {
         </div>
       </div>
       <div class="wbBoardWrap"><div class="wbBoard">${squares}</div></div>
+      ${finishedLine}
       <div style="text-align:center; margin-top:8px; font-size:12px; color:var(--muted); ${g.watchersCount > 0 ? '' : 'display:none;'}">
         👁 Зрителей: <b style="color:var(--accent)">${g.watchersCount || 0}</b>
       </div>`;
@@ -1026,6 +1044,35 @@ const Watch = {
       this.renderBoard();
     }
     if (document.getElementById('watchScreen').classList.contains('active')) this.refresh(false);
+  },
+  onBoardUpdate({ lobbyId, fen, turn, san }) {
+    if (!this.watchingGame || this.watchingGame.id !== lobbyId) return;
+    this.watchingGame.fen = fen;
+    if (turn) this.watchingGame.turn = turn;
+    this.lastBoardHash = '';
+    this.renderBoard();
+  },
+  onTimeUpdate({ lobbyId, timeW, timeB, serverNow }) {
+    if (!this.watchingGame || this.watchingGame.id !== lobbyId) return;
+    this.watchingGame.timeW = timeW;
+    this.watchingGame.timeB = timeB;
+    this.watchClockSyncedAt = performance.now();
+    this.watchClockW = timeW;
+    this.watchClockB = timeB;
+    // turn мог не прийти — оставляем текущий
+  },
+  onGameEnded({ lobbyId, result, reason }) {
+    if (!this.watchingGame || this.watchingGame.id !== lobbyId) return;
+    this.watchingGame.finished = true;
+    this.watchingGame.result = result;
+    this.watchingGame.reason = reason;
+    this.lastBoardHash = '';
+    this.renderBoard();
+    this.refresh(false);
+  },
+  onChatMessage(msg) {
+    // Чат зрителям сервер не рассылает в watch-комнату — заглушка на будущее.
+    if (!this.watchingGame || this.watchingGame.id !== msg.lobbyId) return;
   }
 };
 
@@ -2511,11 +2558,6 @@ const Game = {
   },
 
   onTimeUpdate({ timeW, timeB, serverNow }) {
-    if (Watch.watchingGame) {
-      Watch.watchClockSyncedAt = performance.now();
-      Watch.watchClockW = timeW;
-      Watch.watchClockB = timeB;
-    }
     if (!App.gameActive || App.gameEnded) return;
     const state = Chess.parseFen(App.currentFen);
     this.updateTimersFromServer(timeW, timeB, serverNow, state.turn);
