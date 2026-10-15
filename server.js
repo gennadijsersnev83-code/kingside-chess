@@ -53,6 +53,7 @@ const BOTS = [
 const BOT_NAMES = new Set(BOTS.filter(b => !b.hidden).map(b => b.name));
 const ALL_BOT_NAMES = new Set(BOTS.map(b => b.name));
 const WATCHER_NAME = 'Watcher';
+const HUMAN_BOT_NAMES = new Set(BOTS.filter(b => !b.hidden).map(b => b.name));
 
 // ======================= GLICKO-2 =======================
 const GLICKO2 = {
@@ -433,7 +434,6 @@ function cleanupStuckPlaying() {
         if (!l || l.finished) {
           p.isPlaying = false; p.lobbyId = null;
           if (!p.paused) p.waitingSince = Date.now();
-          // Watcher НЕ переводим обратно в арену
           if (p.isBot && p.username !== WATCHER_NAME) {
             const beh = botInitBehavior(p.username);
             if (beh.state === 'playing') {
@@ -525,14 +525,16 @@ async function finishGame(lobbyId, result, reason) {
 
   const whiteIsWatcher = whiteName === WATCHER_NAME;
   const blackIsWatcher = blackName === WATCHER_NAME;
+
+  // Watcher: рейтинг фиксируется, статистика (games/wins/losses/draws) обновляется
   if (whiteIsWatcher) whiteAfter = 1200;
   if (blackIsWatcher) blackAfter = 1200;
 
   wc.rating = whiteAfter; wc.rd = whiteRes.rd; wc.vol = whiteRes.vol;
-  if (result === 'w') wc.wins++; else if (result === 'b') wc.losses++;
+  if (result === 'w') wc.wins++; else if (result === 'b') wc.losses++; else wc.draws++;
   wc.games++;
   bc.rating = blackAfter; bc.rd = blackRes.rd; bc.vol = blackRes.vol;
-  if (result === 'b') bc.wins++; else if (result === 'w') bc.losses++;
+  if (result === 'b') bc.wins++; else if (result === 'w') bc.losses++; else bc.draws++;
   bc.games++;
 
   whiteUser.rating = whiteAfter;
@@ -564,15 +566,12 @@ async function finishGame(lobbyId, result, reason) {
     isBot: isBotGame
   };
 
-  // Обучение Watcher: закрываем эпизод
   if (whiteIsWatcher || blackIsWatcher) {
     try {
       const watcherColor = whiteIsWatcher ? 'w' : 'b';
       watcherLearning.finishEpisode(result, watcherColor);
       watcherLearning.saveQTable();
     } catch (e) { console.error('[Watcher] Ошибка завершения эпизода:', e.message); }
-
-    // Сбрасываем поведение Watcher, чтобы он не остался в 'playing' после удаления лобби
     try {
       const beh = botInitBehavior(WATCHER_NAME);
       if (beh.state === 'playing') { beh.state = 'idle'; beh.activityId = null; beh.lastChange = Date.now(); }
@@ -583,6 +582,7 @@ async function finishGame(lobbyId, result, reason) {
                          (blackIsWatcher && whiteUser.isBot);
 
   if (isWatcherVsBot) {
+    // Статистика Watcher — сохраняем; боту-сопернику откатываем изменения
     const watcherName = whiteIsWatcher ? whiteName : blackName;
     const botName = whiteIsWatcher ? blackName : whiteName;
     const botUser = db.users[botName];
@@ -736,6 +736,7 @@ function scheduleArena(state) {
 
 const MAX_BOT_GAMES = 1;
 const MAX_BOT_GAMES_PER_ARENA = 2;
+const MAX_WATCHER_ACTIVE_LOBBIES = 1;
 
 function botActiveGamesCount(botName) {
   let n = 0;
@@ -748,7 +749,6 @@ function botActiveGamesCount(botName) {
 }
 function botIsBusy(botName) {
   if (botName === WATCHER_NAME) {
-    // Watcher занят, если у него есть активная партия или ожидающий вызов
     for (const l of lobbies.values()) {
       if (l.finished) continue;
       if (l.host === WATCHER_NAME || l.guest === WATCHER_NAME) return true;
@@ -766,9 +766,38 @@ function botGamesInArena(arenaId) {
   }
   return n;
 }
+function watcherGamesInArena(arenaId) {
+  let n = 0;
+  for (const l of lobbies.values()) {
+    if (l.finished) continue;
+    if (!l.isBot) continue;
+    if (l.arenaId !== arenaId) continue;
+    if (l.botName === WATCHER_NAME || l.botName2 === WATCHER_NAME) n++;
+  }
+  return n;
+}
+function watcherHasActiveLobby() {
+  for (const l of lobbies.values()) {
+    if (l.finished) continue;
+    if (l.host === WATCHER_NAME || l.guest === WATCHER_NAME) return true;
+  }
+  return false;
+}
+function watcherInAnyArena() {
+  for (const state of arenas.values()) {
+    if (state.finished) continue;
+    if (state.participants.has(WATCHER_NAME) && state.participants.get(WATCHER_NAME).isPlaying) return true;
+  }
+  return false;
+}
 function isAvailableForPairing(p, arenaId) {
   if (!p) return false;
-  if (p.username === WATCHER_NAME) return true; // Watcher может ждать в арене
+  if (p.username === WATCHER_NAME) {
+    if (p.paused) return false;
+    if (watcherHasActiveLobby()) return false;
+    if (watcherGamesInArena(arenaId) >= MAX_WATCHER_ACTIVE_LOBBIES) return false;
+    return true;
+  }
   if (p.paused) return false;
   if (p.isBot) {
     if (botIsBusy(p.username)) return false;
@@ -935,7 +964,7 @@ setInterval(botBehaviorTick, 5000);
 setTimeout(botBehaviorTick, 3000);
 
 // ============================================================
-//  WATCHER TICK — выставляет вызовы и заходит в арены
+//  WATCHER TICK — заходит только в одну арену, не более
 // ============================================================
 function watcherTick() {
   const now = Date.now();
@@ -956,12 +985,15 @@ function watcherTick() {
     }
   }
 
-  if (botIsBusy(WATCHER_NAME)) return;
+  // Если Watcher уже занят (в лобби или в арене) — ничего не делаем
+  if (watcherHasActiveLobby()) return;
+  if (watcherInAnyArena()) return;
 
-  // Watcher пытается зайти в дружественные к ботам арены
+  // Заход в bot-friendly арену — не более одной
   if (beh.state !== 'in_arena' && Math.random() < 0.5) {
     const candidates = [...arenas.values()].filter(s =>
-      !s.finished && s.botFriendly && (s.phase === 'live' || s.phase === 'waiting') && !s.participants.has(WATCHER_NAME)
+      !s.finished && s.botFriendly && (s.phase === 'live' || s.phase === 'waiting')
+      && !s.participants.has(WATCHER_NAME)
     );
     if (candidates.length) {
       candidates.sort((a, b) => {
@@ -1050,10 +1082,10 @@ function tryPair(state) {
   available.sort((a, b) => a.waitingSince - b.waitingSince);
   const used = new Set();
   let pairsCreated = 0;
-  const MAX_PAIRS_PER_TICK = 2;
+  const hasWatcher = available.some(p => p.username === WATCHER_NAME);
+  const MAX_PAIRS_PER_TICK = hasWatcher ? 1 : 2;
 
-  // Считаем сколько Watcher'ов в available (должен быть максимум один)
-  const watcherCount = available.filter(p => p.username === WATCHER_NAME).length;
+  let watcherPairsThisTick = 0;
 
   for (let i = 0; i < available.length && pairsCreated < MAX_PAIRS_PER_TICK; i++) {
     const a = available[i];
@@ -1064,16 +1096,22 @@ function tryPair(state) {
       const b = available[j];
       if (used.has(b.username)) continue;
 
-      // ЗАПРЕТ: Watcher vs Watcher
       if (a.username === WATCHER_NAME && b.username === WATCHER_NAME) continue;
+
+      const aWatcher = a.username === WATCHER_NAME;
+      const bWatcher = b.username === WATCHER_NAME;
+
+      if (aWatcher || bWatcher) {
+        // не больше 1 пары с Watcher за тик
+        if (watcherPairsThisTick >= 1) continue;
+        if (watcherHasActiveLobby()) continue;
+        if (watcherGamesInArena(state.id) >= MAX_WATCHER_ACTIVE_LOBBIES) continue;
+      }
 
       if (a.isBot && b.isBot) {
         const humansWaiting = available.some(p => !p.isBot && !used.has(p.username));
         if (humansWaiting) continue;
-        // Запрещаем пары «два бота», если один из них Watcher
-        if (a.username === WATCHER_NAME || b.username === WATCHER_NAME) {
-          // разрешено: Watcher vs обычный бот
-        } else {
+        if (!aWatcher && !bWatcher) {
           if (Math.random() < 0.7) continue;
         }
         if (botGamesInArena(state.id) >= MAX_BOT_GAMES_PER_ARENA) continue;
@@ -1086,6 +1124,7 @@ function tryPair(state) {
     used.add(a.username); used.add(best.username);
     a.waitingSince = null; best.waitingSince = null;
     pairsCreated++;
+    if (a.username === WATCHER_NAME || best.username === WATCHER_NAME) watcherPairsThisTick++;
   }
 }
 
@@ -1612,7 +1651,6 @@ function scheduleBotMove(lobbyId) {
     }
     if (!mv) return;
 
-    // Безопасное извлечение from/to
     const from = Array.isArray(mv.from) ? mv.from : (Array.isArray(mv[0]) ? mv[0] : null);
     const to = Array.isArray(mv.to) ? mv.to : (Array.isArray(mv[1]) ? mv[1] : null);
     if (!from || !to || from.length !== 2 || to.length !== 2) {
@@ -1937,7 +1975,6 @@ io.on('connection', (socket) => {
     if (l.finished) return cb({ ok: false, msg: 'Партия завершена' });
     if (l.guest) return cb({ ok: false, msg: 'Лобби занято' });
     if (l.host === socket.username) return cb({ ok: false, msg: 'Это ваше лобби' });
-    // Нельзя сесть за Watcher-вызов, если ты сам Watcher
     if (socket.username === WATCHER_NAME && l.host === WATCHER_NAME) return cb({ ok: false, msg: 'Занято' });
     l.guest = socket.username;
     l.guestSocket = socket.id;
