@@ -40,7 +40,7 @@ function isAdmin(username) { return ADMINS.has(username) || DEVS.has(username); 
 function isMod(username) { return isAdmin(username) || MODERATORS.has(username); }
 function isDev(username) { return DEVS.has(username); }
 
-// ======================= БОТЫ (объявлены ДО loadDB) =======================
+// ======================= БОТЫ =======================
 const BOTS = [
   { name: 'BotEasy',   rating: 1000, level: 1, title: 'Лёгкий',   desc: 'для новичков' },
   { name: 'BotMedium', rating: 1300, level: 2, title: 'Средний',  desc: 'подумает' },
@@ -48,6 +48,103 @@ const BOTS = [
   { name: 'BotMaster', rating: 2000, level: 4, title: 'Мастер',   desc: 'сильный соперник' }
 ];
 const BOT_NAMES = new Set(BOTS.map(b => b.name));
+
+// ======================= GLICKO-2 =======================
+const GLICKO2 = {
+  TAU: 0.5,
+  EPSILON: 1e-6,
+  SCALE: 173.7178,
+  DEFAULT_RATING: 1200,
+  DEFAULT_RD: 350,
+  DEFAULT_VOL: 0.06,
+  MIN_RD: 30,
+  MAX_RD: 350,
+  MIN_RATING: 400,
+  MAX_RATING: 3500
+};
+
+function glicko2Scale(r) { return (r - GLICKO2.DEFAULT_RATING) / GLICKO2.SCALE; }
+function glicko2Unscale(mu) { return mu * GLICKO2.SCALE + GLICKO2.DEFAULT_RATING; }
+
+function glicko2G(phi) { return 1 / Math.sqrt(1 + (3 * phi * phi) / (Math.PI * Math.PI)); }
+function glicko2E(mu, muJ, phiJ) { return 1 / (1 + Math.exp(-glicko2G(phiJ) * (mu - muJ))); }
+
+/**
+ * Обновление Glicko-2 для одного игрока.
+ * @param {number} rating  текущий рейтинг
+ * @param {number} rd      текущее отклонение
+ * @param {number} vol     текущая волатильность
+ * @param {Array}  results [{rating, rd, score}] — результаты против соперников
+ * @returns {{rating, rd, vol}}
+ */
+function updateGlicko2(rating, rd, vol, results) {
+  if (!results || results.length === 0) {
+    // Нет партий — только увеличиваем RD
+    const phi = rd / GLICKO2.SCALE;
+    const newPhi = Math.sqrt(phi * phi + vol * vol);
+    return {
+      rating,
+      rd: Math.max(GLICKO2.MIN_RD, Math.min(GLICKO2.MAX_RD, newPhi * GLICKO2.SCALE)),
+      vol
+    };
+  }
+
+  const mu = glicko2Scale(rating);
+  const phi = rd / GLICKO2.SCALE;
+  const sigma = vol;
+
+  let v = 0;
+  let deltaSum = 0;
+  for (const res of results) {
+    const muJ = glicko2Scale(res.rating);
+    const phiJ = res.rd / GLICKO2.SCALE;
+    const gPhiJ = glicko2G(phiJ);
+    const e = glicko2E(mu, muJ, phiJ);
+    v += gPhiJ * gPhiJ * e * (1 - e);
+    deltaSum += gPhiJ * (res.score - e);
+  }
+  if (v === 0) v = GLICKO2.EPSILON;
+  const delta = deltaSum / v;
+
+  // Итеративное вычисление новой волатильности
+  const a = Math.log(sigma * sigma);
+  const f = (x) => {
+    const ex = Math.exp(x);
+    const num = ex * (delta * delta - phi * phi - v - ex);
+    const den = 2 * Math.pow(phi * phi + v + ex, 2);
+    return num / den - (x - a) / (GLICKO2.TAU * GLICKO2.TAU);
+  };
+  let A = a;
+  let B;
+  if (delta * delta > phi * phi + v) {
+    B = Math.log(delta * delta - phi * phi - v);
+  } else {
+    let k = 1;
+    while (f(a - k * GLICKO2.TAU) < 0 && k < 100) k++;
+    B = a - k * GLICKO2.TAU;
+  }
+  let fA = f(A);
+  let fB = f(B);
+  let iter = 0;
+  while (Math.abs(B - A) > GLICKO2.EPSILON && iter < 100) {
+    const C = A + (A - B) * fA / (fB - fA);
+    const fC = f(C);
+    if (fC * fB <= 0) { A = B; fA = fB; }
+    else { fA = fA / 2; }
+    B = C; fB = fC;
+    iter++;
+  }
+  const newSigma = Math.exp(A / 2);
+  const phiStar = Math.sqrt(phi * phi + newSigma * newSigma);
+  const newPhi = 1 / Math.sqrt(1 / (phiStar * phiStar) + 1 / v);
+  const newMu = mu + newPhi * newPhi * deltaSum;
+
+  return {
+    rating: Math.round(Math.max(GLICKO2.MIN_RATING, Math.min(GLICKO2.MAX_RATING, glicko2Unscale(newMu)))),
+    rd: Math.max(GLICKO2.MIN_RD, Math.min(GLICKO2.MAX_RD, newPhi * GLICKO2.SCALE)),
+    vol: newSigma
+  };
+}
 
 // ======================= БАЗА =======================
 const pool = new Pool({
@@ -65,6 +162,8 @@ async function initDB() {
         password_hash TEXT NOT NULL,
         salt TEXT NOT NULL,
         rating INTEGER NOT NULL DEFAULT 1200,
+        rd REAL NOT NULL DEFAULT 350,
+        vol REAL NOT NULL DEFAULT 0.06,
         wins INTEGER NOT NULL DEFAULT 0,
         losses INTEGER NOT NULL DEFAULT 0,
         draws INTEGER NOT NULL DEFAULT 0,
@@ -72,10 +171,20 @@ async function initDB() {
         created_at BIGINT NOT NULL
       );
     `);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rd REAL DEFAULT 350;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS vol REAL DEFAULT 0.06;`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_classical INTEGER;`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_rapid INTEGER;`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_blitz INTEGER;`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rating_bullet INTEGER;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rd_classical REAL DEFAULT 350;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rd_rapid REAL DEFAULT 350;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rd_blitz REAL DEFAULT 350;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS rd_bullet REAL DEFAULT 350;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS vol_classical REAL DEFAULT 0.06;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS vol_rapid REAL DEFAULT 0.06;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS vol_blitz REAL DEFAULT 0.06;`);
+    await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS vol_bullet REAL DEFAULT 0.06;`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wins_classical INTEGER DEFAULT 0;`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wins_rapid INTEGER DEFAULT 0;`);
     await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wins_blitz INTEGER DEFAULT 0;`);
@@ -94,6 +203,10 @@ async function initDB() {
     await pool.query(`UPDATE users SET rating_rapid     = rating WHERE rating_rapid     IS NULL;`);
     await pool.query(`UPDATE users SET rating_blitz     = rating WHERE rating_blitz     IS NULL;`);
     await pool.query(`UPDATE users SET rating_bullet    = rating WHERE rating_bullet    IS NULL;`);
+    await pool.query(`UPDATE users SET rd_classical = 350 WHERE rd_classical IS NULL;`);
+    await pool.query(`UPDATE users SET rd_rapid     = 350 WHERE rd_rapid     IS NULL;`);
+    await pool.query(`UPDATE users SET rd_blitz     = 350 WHERE rd_blitz     IS NULL;`);
+    await pool.query(`UPDATE users SET rd_bullet    = 350 WHERE rd_bullet    IS NULL;`);
 
     await pool.query(`
       CREATE TABLE IF NOT EXISTS games (
@@ -125,7 +238,9 @@ async function initDB() {
   }
 }
 
-function emptyRatingBlock(base) { return { rating: base, wins: 0, losses: 0, games: 0 }; }
+function emptyRatingBlock(base) {
+  return { rating: base, rd: GLICKO2.DEFAULT_RD, vol: GLICKO2.DEFAULT_VOL, wins: 0, losses: 0, games: 0 };
+}
 
 async function loadDB() {
   try {
@@ -134,16 +249,17 @@ async function loadDB() {
     for (const row of res.rows) {
       db.users[row.username] = {
         passwordHash: row.password_hash, salt: row.salt,
-        rating: row.rating, wins: row.wins, losses: row.losses,
-        draws: row.draws, games: row.games,
+        rating: row.rating, rd: row.rd != null ? row.rd : GLICKO2.DEFAULT_RD,
+        vol: row.vol != null ? row.vol : GLICKO2.DEFAULT_VOL,
+        wins: row.wins, losses: row.losses, draws: row.draws, games: row.games,
         createdAt: Number(row.created_at),
         mutedUntil: Number(row.muted_until || 0),
         isBot: !!row.is_bot,
         categories: {
-          classical: { rating: row.rating_classical != null ? row.rating_classical : row.rating, wins: row.wins_classical || 0, losses: row.losses_classical || 0, games: row.games_classical || 0 },
-          rapid:     { rating: row.rating_rapid     != null ? row.rating_rapid     : row.rating, wins: row.wins_rapid     || 0, losses: row.losses_rapid     || 0, games: row.games_rapid     || 0 },
-          blitz:     { rating: row.rating_blitz     != null ? row.rating_blitz     : row.rating, wins: row.wins_blitz     || 0, losses: row.losses_blitz     || 0, games: row.games_blitz     || 0 },
-          bullet:    { rating: row.rating_bullet    != null ? row.rating_bullet    : row.rating, wins: row.wins_bullet    || 0, losses: row.losses_bullet    || 0, games: row.games_bullet    || 0 }
+          classical: { rating: row.rating_classical != null ? row.rating_classical : row.rating, rd: row.rd_classical != null ? row.rd_classical : GLICKO2.DEFAULT_RD, vol: row.vol_classical != null ? row.vol_classical : GLICKO2.DEFAULT_VOL, wins: row.wins_classical || 0, losses: row.losses_classical || 0, games: row.games_classical || 0 },
+          rapid:     { rating: row.rating_rapid     != null ? row.rating_rapid     : row.rating, rd: row.rd_rapid     != null ? row.rd_rapid     : GLICKO2.DEFAULT_RD, vol: row.vol_rapid     != null ? row.vol_rapid     : GLICKO2.DEFAULT_VOL, wins: row.wins_rapid     || 0, losses: row.losses_rapid     || 0, games: row.games_rapid     || 0 },
+          blitz:     { rating: row.rating_blitz     != null ? row.rating_blitz     : row.rating, rd: row.rd_blitz     != null ? row.rd_blitz     : GLICKO2.DEFAULT_RD, vol: row.vol_blitz     != null ? row.vol_blitz     : GLICKO2.DEFAULT_VOL, wins: row.wins_blitz     || 0, losses: row.losses_blitz     || 0, games: row.games_blitz     || 0 },
+          bullet:    { rating: row.rating_bullet    != null ? row.rating_bullet    : row.rating, rd: row.rd_bullet    != null ? row.rd_bullet    : GLICKO2.DEFAULT_RD, vol: row.vol_bullet    != null ? row.vol_bullet    : GLICKO2.DEFAULT_VOL, wins: row.wins_bullet    || 0, losses: row.losses_bullet    || 0, games: row.games_bullet    || 0 }
         }
       };
     }
@@ -155,6 +271,7 @@ async function loadDB() {
       if (!existing) {
         db.users[bot.name] = {
           passwordHash: '', salt: '', rating: bot.rating,
+          rd: GLICKO2.DEFAULT_RD, vol: GLICKO2.DEFAULT_VOL,
           wins: 0, losses: 0, draws: 0, games: 0,
           createdAt: Date.now(), mutedUntil: 0, isBot: true,
           categories: {
@@ -164,14 +281,16 @@ async function loadDB() {
         };
         try {
           await pool.query(
-            `INSERT INTO users (username, password_hash, salt, rating, wins, losses, draws, games, created_at,
+            `INSERT INTO users (username, password_hash, salt, rating, rd, vol, wins, losses, draws, games, created_at,
                                 rating_classical, rating_rapid, rating_blitz, rating_bullet,
+                                rd_classical, rd_rapid, rd_blitz, rd_bullet,
+                                vol_classical, vol_rapid, vol_blitz, vol_bullet,
                                 wins_classical, wins_rapid, wins_blitz, wins_bullet,
                                 losses_classical, losses_rapid, losses_blitz, losses_bullet,
                                 games_classical, games_rapid, games_blitz, games_bullet,
                                 muted_until, is_bot)
-             VALUES ($1,$2,$3,$4,0,0,0,0,$5,$4,$4,$4,$4,0,0,0,0,0,0,0,0,0,0,0,0,0,TRUE)`,
-            [bot.name, '', '', bot.rating, Date.now()]
+             VALUES ($1,$2,$3,$4,$5,$6,0,0,0,0,$7,$4,$4,$4,$4,$5,$5,$5,$5,$6,$6,$6,$6,0,0,0,0,0,0,0,0,0,0,0,0,0,TRUE)`,
+            [bot.name, '', '', bot.rating, GLICKO2.DEFAULT_RD, GLICKO2.DEFAULT_VOL, Date.now()]
           );
         } catch (e) { console.error('[DB] Ошибка вставки бота:', e.message); }
       } else {
@@ -192,17 +311,24 @@ async function saveUser(username) {
   const get = (k, f) => (c[k] ? c[k][f] : 0);
   try {
     await pool.query(
-      `INSERT INTO users (username, password_hash, salt, rating, wins, losses, draws, games, created_at,
+      `INSERT INTO users (username, password_hash, salt, rating, rd, vol, wins, losses, draws, games, created_at,
                           rating_classical, rating_rapid, rating_blitz, rating_bullet,
+                          rd_classical, rd_rapid, rd_blitz, rd_bullet,
+                          vol_classical, vol_rapid, vol_blitz, vol_bullet,
                           wins_classical, wins_rapid, wins_blitz, wins_bullet,
                           losses_classical, losses_rapid, losses_blitz, losses_bullet,
                           games_classical, games_rapid, games_blitz, games_bullet,
                           muted_until, is_bot)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38)
        ON CONFLICT (username) DO UPDATE SET
-         rating = EXCLUDED.rating, wins = EXCLUDED.wins, losses = EXCLUDED.losses, draws = EXCLUDED.draws, games = EXCLUDED.games,
+         rating = EXCLUDED.rating, rd = EXCLUDED.rd, vol = EXCLUDED.vol,
+         wins = EXCLUDED.wins, losses = EXCLUDED.losses, draws = EXCLUDED.draws, games = EXCLUDED.games,
          rating_classical = EXCLUDED.rating_classical, rating_rapid = EXCLUDED.rating_rapid,
          rating_blitz = EXCLUDED.rating_blitz, rating_bullet = EXCLUDED.rating_bullet,
+         rd_classical = EXCLUDED.rd_classical, rd_rapid = EXCLUDED.rd_rapid,
+         rd_blitz = EXCLUDED.rd_blitz, rd_bullet = EXCLUDED.rd_bullet,
+         vol_classical = EXCLUDED.vol_classical, vol_rapid = EXCLUDED.vol_rapid,
+         vol_blitz = EXCLUDED.vol_blitz, vol_bullet = EXCLUDED.vol_bullet,
          wins_classical = EXCLUDED.wins_classical, wins_rapid = EXCLUDED.wins_rapid,
          wins_blitz = EXCLUDED.wins_blitz, wins_bullet = EXCLUDED.wins_bullet,
          losses_classical = EXCLUDED.losses_classical, losses_rapid = EXCLUDED.losses_rapid,
@@ -212,11 +338,20 @@ async function saveUser(username) {
          muted_until = EXCLUDED.muted_until,
          is_bot = EXCLUDED.is_bot`,
       [
-        username, u.passwordHash, u.salt, u.rating, u.wins, u.losses, u.draws, u.games, u.createdAt,
+        username, u.passwordHash, u.salt, u.rating, u.rd || GLICKO2.DEFAULT_RD, u.vol || GLICKO2.DEFAULT_VOL,
+        u.wins, u.losses, u.draws, u.games, u.createdAt,
         c.classical ? c.classical.rating : u.rating,
         c.rapid ? c.rapid.rating : u.rating,
         c.blitz ? c.blitz.rating : u.rating,
         c.bullet ? c.bullet.rating : u.rating,
+        c.classical ? c.classical.rd : GLICKO2.DEFAULT_RD,
+        c.rapid ? c.rapid.rd : GLICKO2.DEFAULT_RD,
+        c.blitz ? c.blitz.rd : GLICKO2.DEFAULT_RD,
+        c.bullet ? c.bullet.rd : GLICKO2.DEFAULT_RD,
+        c.classical ? c.classical.vol : GLICKO2.DEFAULT_VOL,
+        c.rapid ? c.rapid.vol : GLICKO2.DEFAULT_VOL,
+        c.blitz ? c.blitz.vol : GLICKO2.DEFAULT_VOL,
+        c.bullet ? c.bullet.vol : GLICKO2.DEFAULT_VOL,
         get('classical','wins'), get('rapid','wins'), get('blitz','wins'), get('bullet','wins'),
         get('classical','losses'), get('rapid','losses'), get('blitz','losses'), get('bullet','losses'),
         get('classical','games'), get('rapid','games'), get('blitz','games'), get('bullet','games'),
@@ -258,12 +393,7 @@ function verifyPassword(password, salt, hash) {
   catch (e) { return false; }
 }
 
-// ======================= ЭЛО =======================
-function kFactor(rating, games) { if (games < 30) return 40; if (rating < 2400) return 20; return 10; }
-function eloDelta(myRating, oppRating, score, k) {
-  const expected = 1 / (1 + Math.pow(10, (oppRating - myRating) / 400));
-  return Math.round(k * (score - expected));
-}
+// ======================= КАТЕГОРИИ =======================
 function categoryOf(timeMin) {
   if (timeMin < 3) return 'bullet';
   if (timeMin < 10) return 'blitz';
@@ -277,7 +407,8 @@ function publicUser(name) {
   const u = db.users[name];
   if (!u) return null;
   return {
-    username: name, rating: u.rating, wins: u.wins, losses: u.losses, draws: u.draws, games: u.games,
+    username: name, rating: u.rating, rd: Math.round(u.rd || GLICKO2.DEFAULT_RD),
+    wins: u.wins, losses: u.losses, draws: u.draws, games: u.games,
     createdAt: u.createdAt, role: roleOf(name), isAdmin: isAdmin(name), isMod: isMod(name), isDev: isDev(name),
     mutedUntil: u.mutedUntil || 0, categories: u.categories || null, isBot: !!u.isBot
   };
@@ -298,7 +429,6 @@ function countActiveLobbies() {
   for (const l of lobbies.values()) { if (l.finished) continue; if (l.started) n++; }
   return n;
 }
-// ВАЖНО: боты считаются в онлайне — как в исходнике
 function countOnline() {
   let n = online.size;
   for (const bot of BOTS) if (db.users[bot.name]) n++;
@@ -389,27 +519,32 @@ async function finishGame(lobbyId, result, reason) {
   if (result === 'w') { whiteScore = 1; blackScore = 0; }
   else if (result === 'b') { whiteScore = 0; blackScore = 1; }
 
-  const kWhite = kFactor(whiteBefore, wc.games);
-  const kBlack = kFactor(blackBefore, bc.games);
-  const whiteDelta = eloDelta(whiteBefore, blackBefore, whiteScore, kWhite);
-  const blackDelta = eloDelta(blackBefore, whiteBefore, blackScore, kBlack);
-  let whiteAfter = whiteBefore + whiteDelta;
-  let blackAfter = blackBefore + blackDelta;
+  const whiteRes = updateGlicko2(wc.rating, wc.rd || GLICKO2.DEFAULT_RD, wc.vol || GLICKO2.DEFAULT_VOL,
+    [{ rating: bc.rating, rd: bc.rd || GLICKO2.DEFAULT_RD, score: whiteScore }]);
+  const blackRes = updateGlicko2(bc.rating, bc.rd || GLICKO2.DEFAULT_RD, bc.vol || GLICKO2.DEFAULT_VOL,
+    [{ rating: wc.rating, rd: wc.rd || GLICKO2.DEFAULT_RD, score: blackScore }]);
+
+  let whiteAfter = whiteRes.rating;
+  let blackAfter = blackRes.rating;
 
   if (whiteUser.isBot) whiteAfter = Math.max(800, Math.min(3000, whiteAfter));
   if (blackUser.isBot) blackAfter = Math.max(800, Math.min(3000, blackAfter));
 
-  wc.rating = whiteAfter;
+  wc.rating = whiteAfter; wc.rd = whiteRes.rd; wc.vol = whiteRes.vol;
   if (result === 'w') wc.wins++; else if (result === 'b') wc.losses++;
   wc.games++;
-  bc.rating = blackAfter;
+  bc.rating = blackAfter; bc.rd = blackRes.rd; bc.vol = blackRes.vol;
   if (result === 'b') bc.wins++; else if (result === 'w') bc.losses++;
   bc.games++;
 
   whiteUser.rating = whiteAfter;
+  whiteUser.rd = whiteRes.rd;
+  whiteUser.vol = whiteRes.vol;
   if (result === 'w') whiteUser.wins++; else if (result === 'b') whiteUser.losses++; else whiteUser.draws++;
   whiteUser.games++;
   blackUser.rating = blackAfter;
+  blackUser.rd = blackRes.rd;
+  blackUser.vol = blackRes.vol;
   if (result === 'b') blackUser.wins++; else if (result === 'w') blackUser.losses++; else blackUser.draws++;
   blackUser.games++;
 
@@ -430,7 +565,10 @@ async function finishGame(lobbyId, result, reason) {
 
   const isArena = !!l.arenaId;
   io.to(lobbyId).emit('gameEnded', {
-    result, reason, whiteDelta, blackDelta, whiteAfter, blackAfter, category: cat,
+    result, reason,
+    whiteDelta: whiteAfter - whiteBefore,
+    blackDelta: blackAfter - blackBefore,
+    whiteAfter, blackAfter, category: cat,
     isArena, arenaId: l.arenaId || null, arenaName: l.arenaName || null,
     isBot: isBotGame
   });
@@ -600,7 +738,9 @@ function botInitBehavior(botName) {
       state: 'idle',
       activityId: null,
       lastChange: Date.now(),
-      nextDecision: Date.now() + 2000 + Math.random() * 5000
+      nextDecision: Date.now() + 2000 + Math.random() * 5000,
+      pendingDrawOffer: null,
+      pendingDrawResponse: null
     });
   }
   return BOT_BEHAVIOR.get(botName);
@@ -661,6 +801,23 @@ function botBehaviorTick() {
     const beh = botInitBehavior(bot.name);
     if (now < beh.nextDecision) continue;
     beh.nextDecision = now + 3000 + Math.random() * 6000;
+
+    // Обработка отложенных решений по ничьей
+    if (beh.pendingDrawResponse) {
+      const { lobbyId, accept, botName } = beh.pendingDrawResponse;
+      beh.pendingDrawResponse = null;
+      const l = lobbies.get(lobbyId);
+      if (l && !l.finished && l.drawOffer) {
+        l.drawOffer = null;
+        if (accept) {
+          finishGame(lobbyId, 'draw', 'Ничья по согласию');
+        } else {
+          const otherName = l.host === botName ? l.guest : l.host;
+          const otherSocket = l.host === botName ? l.guestSocket : l.hostSocket;
+          if (otherSocket) io.to(otherSocket).emit('drawDeclined');
+        }
+      }
+    }
 
     if (botIsBusy(bot.name)) {
       if (beh.state !== 'playing') {
@@ -1015,7 +1172,7 @@ function clearMute(username) {
 }
 
 // ============================================================
-//  ШАХМАТНЫЙ ДВИЖОК ДЛЯ БОТА (без изменений)
+//  ШАХМАТНЫЙ ДВИЖОК ДЛЯ БОТА (улучшен)
 // ============================================================
 const PIECE_VALUES = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
 const PST = {
@@ -1113,20 +1270,60 @@ function botAllLegalMoves(state, white) {
   }
   return res;
 }
+
+// ============================================================
+//  УЛУЧШЕННАЯ ОЦЕНКА
+// ============================================================
 function botEval(state) {
   let score = 0;
   let whiteBishops = 0, blackBishops = 0;
+  let whiteMaterial = 0, blackMaterial = 0;
+  const whitePawnsByFile = [0,0,0,0,0,0,0,0];
+  const blackPawnsByFile = [0,0,0,0,0,0,0,0];
+
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     const white = botIsWhite(p); const t = p.toLowerCase();
     let v = PIECE_VALUES[t] || 0;
     if (t !== 'k') { const table = PST[t]; if (table) { const rr = white ? r : 7 - r; v += table[rr][c]; } }
     if (t === 'b') { if (white) whiteBishops++; else blackBishops++; }
+    if (t === 'p') { if (white) whitePawnsByFile[c]++; else blackPawnsByFile[c]++; }
+    if (white) whiteMaterial += v; else blackMaterial += v;
     score += white ? v : -v;
   }
+
+  // Бонус за пару слонов
   if (whiteBishops >= 2) score += 30;
   if (blackBishops >= 2) score -= 30;
-  const wK = botFindKing(state, true), bK = botFindKing(state, false);
+
+  // Штраф за сдвоенные пешки
+  for (let f = 0; f < 8; f++) {
+    if (whitePawnsByFile[f] > 1) score -= 10 * (whitePawnsByFile[f] - 1);
+    if (blackPawnsByFile[f] > 1) score += 10 * (blackPawnsByFile[f] - 1);
+  }
+
+  // Штраф за изолированные пешки
+  for (let f = 0; f < 8; f++) {
+    if (whitePawnsByFile[f] > 0) {
+      const left = f > 0 ? whitePawnsByFile[f-1] : 0;
+      const right = f < 7 ? whitePawnsByFile[f+1] : 0;
+      if (left === 0 && right === 0) score -= 15;
+    }
+    if (blackPawnsByFile[f] > 0) {
+      const left = f > 0 ? blackPawnsByFile[f-1] : 0;
+      const right = f < 7 ? blackPawnsByFile[f+1] : 0;
+      if (left === 0 && right === 0) score += 15;
+    }
+  }
+
+  // Мобильность
+  const whiteMoves = botAllLegalMoves(state, true).length;
+  const blackMoves = botAllLegalMoves(state, false).length;
+  score += (whiteMoves - blackMoves) * 2;
+
+  // Безопасность короля
+  const wK = botFindKing(state, true);
+  const bK = botFindKing(state, false);
   if (wK) {
     const attackers = botAllLegalMoves(state, false).filter(([f, t]) => state.board[t[0]][t[1]] === 'K');
     if (attackers.length > 0) score -= 500;
@@ -1135,8 +1332,26 @@ function botEval(state) {
     const attackers = botAllLegalMoves(state, true).filter(([f, t]) => state.board[t[0]][t[1]] === 'k');
     if (attackers.length > 0) score += 500;
   }
+
+  // Эндшпиль: ферзь и король активнее
+  const totalMaterial = whiteMaterial + blackMaterial;
+  if (totalMaterial < 2000) {
+    if (wK) score += (7 - Math.abs(wK[0] - 3.5) - Math.abs(wK[1] - 3.5)) * 5;
+    if (bK) score -= (7 - Math.abs(bK[0] - 3.5) - Math.abs(bK[1] - 3.5)) * 5;
+  }
+
+  // Ферзь: бонус за централизацию
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = state.board[r][c]; if (!p) continue;
+    if (p.toLowerCase() === 'q') {
+      const centerBonus = (3.5 - Math.abs(r - 3.5)) + (3.5 - Math.abs(c - 3.5));
+      score += botIsWhite(p) ? centerBonus * 3 : -centerBonus * 3;
+    }
+  }
+
   return score;
 }
+
 function moveScore(state, from, to) {
   const target = state.board[to[0]][to[1]];
   const piece = state.board[from[0]][from[1]];
@@ -1145,6 +1360,7 @@ function moveScore(state, from, to) {
   const attackerVal = PIECE_VALUES[piece.toLowerCase()] || 0;
   return victimVal * 10 - attackerVal;
 }
+
 function botQuiescence(state, alpha, beta, maximizing, depthLeft) {
   if (depthLeft <= 0) return botEval(state);
   const stand = botEval(state);
@@ -1171,6 +1387,7 @@ function botQuiescence(state, alpha, beta, maximizing, depthLeft) {
     return beta;
   }
 }
+
 function botMinimax(state, depth, alpha, beta, maximizing) {
   const key = ttKey(state);
   const cached = ttGet(key);
@@ -1214,6 +1431,7 @@ function botMinimax(state, depth, alpha, beta, maximizing) {
   ttSet(key, depth, best);
   return best;
 }
+
 function getBotParams(rating, baseTimeMin) {
   let depth, noise;
   if (rating < 1100)      { depth = 1; noise = 60; }
@@ -1222,14 +1440,21 @@ function getBotParams(rating, baseTimeMin) {
   else if (rating < 1700) { depth = 3; noise = 5; }
   else if (rating < 1850) { depth = 3; noise = 2; }
   else if (rating < 2000) { depth = 4; noise = 0; }
-  else if (rating < 2200) { depth = 4; noise = 0; }
-  else                    { depth = 5; noise = 0; }
+  else if (rating < 2200) { depth = 5; noise = 0; }
+  else                    { depth = 6; noise = 0; }
+
+  // Ограничение по времени
   if (baseTimeMin <= 1) depth = Math.min(depth, 1);
   else if (baseTimeMin <= 2) depth = Math.min(depth, 2);
   else if (baseTimeMin <= 3) depth = Math.min(depth, 3);
   else if (baseTimeMin <= 5) depth = Math.min(depth, 3);
+  else if (baseTimeMin <= 10) depth = Math.min(depth, 4);
+  else if (baseTimeMin <= 15) depth = Math.min(depth, 5);
+  // Иначе — полная глубина
+
   return { depth, noise };
 }
+
 function pickBotMoveByRating(fen, rating, baseTimeMin) {
   const state = botParseFen(fen);
   const white = state.turn === 'w';
@@ -1238,6 +1463,7 @@ function pickBotMoveByRating(fen, rating, baseTimeMin) {
   const { depth, noise } = getBotParams(rating, baseTimeMin);
   if (moves.length === 1) return moves[0];
   moves.sort((a, b) => moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]));
+
   const scored = moves.map(([from, to]) => {
     const next = botApplyMove(state, from, to);
     let score = botMinimax(next, depth - 1, -Infinity, Infinity, !white);
@@ -1245,18 +1471,20 @@ function pickBotMoveByRating(fen, rating, baseTimeMin) {
     return { from, to, score };
   });
   scored.sort((a, b) => white ? b.score - a.score : a.score - b.score);
+
   if (rating < 1100 && scored.length > 2 && Math.random() < 0.4) return scored[1 + Math.floor(Math.random() * 2)];
   if (rating < 1350 && scored.length > 1 && Math.random() < 0.25) return scored[1];
   if (rating < 1500 && scored.length > 1 && Math.random() < 0.1) return scored[1];
   return scored[0];
 }
+
 function evaluateCurrentPosition(fen) {
   const state = botParseFen(fen);
   return botEval(state);
 }
 
 // ============================================================
-//  ХОД БОТА
+//  ХОД БОТА (с ничьими и сдачей)
 // ============================================================
 function scheduleBotMove(lobbyId) {
   const l = lobbies.get(lobbyId);
@@ -1273,6 +1501,48 @@ function scheduleBotMove(lobbyId) {
   const botMoves = botAllLegalMoves(state, botIsWhiteTurn);
 
   const isBotVsBot = !!l.botName2;
+
+  // Если есть только один ход — не тянем время, делаем быстро
+  if (botMoves.length === 1) {
+    const delay = 150 + Math.random() * 200;
+    setTimeout(() => {
+      const cur = lobbies.get(lobbyId);
+      if (!cur || cur.finished) return;
+      if (cur.turn !== botColor) return;
+      const stillBot = (cur.botColor === botColor && cur.botName === botName) ||
+                       (cur.botColor2 === botColor && cur.botName2 === botName);
+      if (!stillBot) return;
+      const st = botParseFen(cur.fen);
+      const mv = botMoves[0];
+      const { from, to } = mv;
+      const captured = st.board[to[0]][to[1]];
+      const nextState = botApplyMove(st, from, to);
+      if (!cur.history) cur.history = [];
+      cur.history.push({ from, to, captured: captured || null, byColor: botColor, ts: Date.now() });
+      if (cur.history.length > 10) cur.history.shift();
+      const now = Date.now();
+      const elapsed = Math.floor((now - cur.lastTick) / 1000);
+      if (botColor === 'w') cur.timeW = Math.max(0, cur.timeW - elapsed) + cur.inc;
+      else cur.timeB = Math.max(0, cur.timeB - elapsed) + cur.inc;
+      cur.lastTick = now;
+      cur.fen = botToFen(nextState);
+      cur.turn = nextState.turn;
+      cur.drawOffer = null;
+      io.to(lobbyId).emit('boardUpdate', { fen: cur.fen, turn: cur.turn, san: null });
+      const humanSocket = (cur.hostSocket && !cur.isBot) ? io.sockets.sockets.get(cur.hostSocket) : null;
+      if (humanSocket) humanSocket.emit('timeUpdate', { timeW: cur.timeW, timeB: cur.timeB, serverNow: now });
+      const sideToMoveWhite = cur.turn === 'w';
+      const hasMoves = botAllLegalMoves(botParseFen(cur.fen), sideToMoveWhite).length > 0;
+      if (!hasMoves) {
+        if (botInCheck(botParseFen(cur.fen), sideToMoveWhite)) finishGame(lobbyId, sideToMoveWhite ? 'b' : 'w', 'Мат');
+        else finishGame(lobbyId, 'draw', 'Пат');
+      } else if (cur.isBot && ((cur.botColor && cur.turn === cur.botColor) || (cur.botColor2 && cur.turn === cur.botColor2))) {
+        const nextDelay = isBotVsBot ? (400 + Math.random() * 600) : (250 + Math.random() * 400);
+        setTimeout(() => scheduleBotMove(lobbyId), nextDelay);
+      }
+    }, delay);
+    return;
+  }
 
   let baseDelay;
   if (baseTime <= 60)       baseDelay = 60;
@@ -1333,19 +1603,70 @@ function scheduleBotMove(lobbyId) {
     const botSign = botColor === 'w' ? 1 : -1;
     const myEval = evalScore * botSign;
 
-    if (myEval < -900 && st.full > 25) {
-      if (Math.random() < 0.6) {
+    // ===== СДАЧА (осмысленная) =====
+    // Бот сдаётся только если позиция безнадёжна, и чем сильнее бот — тем дольше борется
+    let resignThreshold;
+    if (botRating < 1100)      resignThreshold = -600;
+    else if (botRating < 1350) resignThreshold = -900;
+    else if (botRating < 1600) resignThreshold = -1200;
+    else if (botRating < 1850) resignThreshold = -1500;
+    else if (botRating < 2000) resignThreshold = -1800;
+    else                       resignThreshold = -2200;
+
+    const minMovesBeforeResign = botRating < 1500 ? 15 : 25;
+    const myMaterial = botEvalMaterial(st, botColor === 'w');
+    const oppMaterial = botEvalMaterial(st, botColor !== 'w');
+    const materialDiff = myMaterial - oppMaterial;
+
+    if (myEval < resignThreshold && st.full > minMovesBeforeResign && materialDiff < -500) {
+      // Проверяем, нет ли у нас мата в 1
+      const myMoves = botAllLegalMoves(st, botColor === 'w');
+      let hasMateIn1 = false;
+      for (const [from, to] of myMoves) {
+        const next = botApplyMove(st, from, to);
+        const oppWhite = next.turn === 'w';
+        if (botInCheck(next, oppWhite) && botAllLegalMoves(next, oppWhite).length === 0) { hasMateIn1 = true; break; }
+      }
+      if (!hasMateIn1 && Math.random() < 0.7) {
         const winner = botColor === 'w' ? 'b' : 'w';
         finishGame(lobbyId, winner, 'Сдача');
         return;
       }
     }
 
-    if (Math.abs(myEval) < 40 && st.full > 40 && !cur.drawOffer) {
-      if (Math.random() < 0.1) {
+    // ===== ПРЕДЛОЖЕНИЕ НИЧЬЕЙ =====
+    // Бот предлагает ничью, если позиция равная и партия затянулась
+    if (Math.abs(myEval) < 30 && st.full > 30 && !cur.drawOffer && !cur.botDrawOffered) {
+      // Не предлагаем, если у нас есть мат в 1
+      const myMoves = botAllLegalMoves(st, botColor === 'w');
+      let hasMateIn1 = false;
+      for (const [from, to] of myMoves) {
+        const next = botApplyMove(st, from, to);
+        const oppWhite = next.turn === 'w';
+        if (botInCheck(next, oppWhite) && botAllLegalMoves(next, oppWhite).length === 0) { hasMateIn1 = true; break; }
+      }
+      if (!hasMateIn1 && Math.random() < 0.08) {
         cur.drawOffer = { by: botColor, at: Date.now(), fromBot: true };
-        if (cur.hostSocket) io.to(cur.hostSocket).emit('drawOffered', { from: botName });
-        if (cur.guestSocket) io.to(cur.guestSocket).emit('drawOffered', { from: botName });
+        cur.botDrawOffered = true;
+        // Отправляем предложение сопернику
+        const otherSocket = cur.host === botName ? cur.guestSocket : cur.hostSocket;
+        if (otherSocket) io.to(otherSocket).emit('drawOffered', { from: botName });
+        // Если соперник — бот, обрабатываем через botBehaviorTick
+        const otherName = cur.host === botName ? cur.guest : cur.host;
+        if (BOT_NAMES.has(otherName)) {
+          const otherBeh = botInitBehavior(otherName);
+          const otherRating = db.users[otherName] ? db.users[otherName].rating : 1500;
+          let acceptChance = 0.5;
+          if (Math.abs(myEval) < 15) acceptChance = 0.8;
+          else if (Math.abs(myEval) < 40) acceptChance = 0.4;
+          else acceptChance = 0.1;
+          if (otherRating >= 1900) acceptChance *= 0.6;
+          otherBeh.pendingDrawResponse = {
+            lobbyId,
+            accept: Math.random() < acceptChance,
+            botName: otherName
+          };
+        }
       }
     }
 
@@ -1369,6 +1690,7 @@ function scheduleBotMove(lobbyId) {
     cur.fen = botToFen(nextState);
     cur.turn = nextState.turn;
     cur.drawOffer = null;
+    cur.botDrawOffered = false;
 
     io.to(lobbyId).emit('boardUpdate', { fen: cur.fen, turn: cur.turn, san: null });
     const humanSocket = (cur.hostSocket && !cur.isBot) ? io.sockets.sockets.get(cur.hostSocket) : null;
@@ -1384,6 +1706,15 @@ function scheduleBotMove(lobbyId) {
       setTimeout(() => scheduleBotMove(lobbyId), nextDelay);
     }
   }, delay);
+}
+
+function botEvalMaterial(state, white) {
+  let m = 0;
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = state.board[r][c]; if (!p) continue;
+    if (botIsWhite(p) === white) m += PIECE_VALUES[p.toLowerCase()] || 0;
+  }
+  return m;
 }
 
 // ============================================================
@@ -1409,7 +1740,9 @@ io.on('connection', (socket) => {
       const passwordHash = hashPassword(password, salt);
       const base = 1200;
       db.users[username] = {
-        passwordHash, salt, rating: base, wins: 0, losses: 0, draws: 0, games: 0,
+        passwordHash, salt, rating: base,
+        rd: GLICKO2.DEFAULT_RD, vol: GLICKO2.DEFAULT_VOL,
+        wins: 0, losses: 0, draws: 0, games: 0,
         createdAt: Date.now(), mutedUntil: 0, isBot: false,
         categories: {
           classical: emptyRatingBlock(base), rapid: emptyRatingBlock(base),
@@ -1462,7 +1795,7 @@ io.on('connection', (socket) => {
     if (typeof cb !== 'function') return;
     cb(BOTS.map(b => {
       const u = db.users[b.name];
-      return { name: b.name, title: b.title, desc: b.desc, level: b.level, rating: u ? u.rating : b.rating, games: u ? u.games : 0, wins: u ? u.wins : 0, losses: u ? u.losses : 0, draws: u ? u.draws : 0, initialRating: b.rating };
+      return { name: b.name, title: b.title, desc: b.desc, level: b.level, rating: u ? u.rating : b.rating, games: u ? u.games : 0, wins: u ? u.wins : 0, losses: u ? u.losses : 0, draws: u ? u.draws : 0, initialRating: b.rating, rd: u ? Math.round(u.rd) : 350 };
     }));
   });
 
@@ -1786,6 +2119,7 @@ io.on('connection', (socket) => {
     if (socket.id !== l.hostSocket && socket.id !== l.guestSocket) return;
     l.drawOffer = { by: socket.id, at: Date.now() };
     socket.to(lobbyId).emit('drawOffered', { from: socket.username });
+
     if (l.isBot) {
       const botColor = l.botColor === l.hostColor ? l.botColor : l.botColor2;
       const botName = l.botColor === l.hostColor ? l.botName : l.botName2;
