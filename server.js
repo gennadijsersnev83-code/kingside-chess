@@ -1315,16 +1315,6 @@ function clearMute(username) {
 // ============================================================
 const PIECE_VALUES = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
 
-// Piece-square tables — те же, что в bot-worker.js.
-const PST = {
-  p: [[0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20,10,10],[5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-5,-10,0,0,-10,-5,5],[5,10,10,-20,-20,10,10,5],[0,0,0,0,0,0,0,0]],
-  n: [[-50,-40,-30,-30,-30,-30,-40,-50],[-40,-20,0,0,0,0,-20,-40],[-30,0,10,15,15,10,0,-30],[-30,5,15,20,20,15,5,-30],[-30,0,15,20,20,15,0,-30],[-30,5,10,15,15,10,5,-30],[-40,-20,0,5,5,0,-20,-40],[-50,-40,-30,-30,-30,-30,-40,-50]],
-  b: [[-20,-10,-10,-10,-10,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,10,10,5,0,-10],[-10,5,5,10,10,5,5,-10],[-10,0,10,10,10,10,0,-10],[-10,10,10,10,10,10,10,-10],[-10,5,0,0,0,0,5,-10],[-20,-10,-10,-10,-10,-10,-10,-20]],
-  r: [[0,0,0,0,0,0,0,0],[5,10,10,10,10,10,10,5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[0,0,0,5,5,0,0,0]],
-  q: [[-20,-10,-10,-5,-5,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,5,5,5,0,-10],[-5,0,5,5,5,5,0,-5],[0,0,5,5,5,5,0,-5],[-10,5,5,5,5,5,0,-10],[-10,0,5,0,0,0,0,-10],[-20,-10,-10,-5,-5,-10,-10,-20]],
-  k: [[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-20,-30,-30,-40,-40,-30,-30,-20],[-10,-20,-20,-20,-20,-20,-20,-10],[20,20,0,0,0,0,20,20],[20,30,10,0,0,10,30,20]]
-};
-
 function botParseFen(fen) {
   const parts = fen.split(' ');
   const board = Array.from({length:8}, () => Array(8).fill(null));
@@ -1406,138 +1396,19 @@ function botAllLegalMoves(state, white) {
   }
   return res;
 }
-
-// Улучшенная оценка позиции: материал + PST + мобильность + король в опасности.
 function botEval(state) {
   let score = 0;
   let whiteBishops = 0, blackBishops = 0;
-  let whitePawnsByFile = [0,0,0,0,0,0,0,0];
-  let blackPawnsByFile = [0,0,0,0,0,0,0,0];
-  let whiteMaterial = 0, blackMaterial = 0;
-
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     const white = botIsWhite(p); const t = p.toLowerCase();
     let v = PIECE_VALUES[t] || 0;
-    if (t !== 'k') { const table = PST[t]; if (table) { const rr = white ? r : 7 - r; v += table[rr][c]; } }
-    if (t === 'b') { if (white) whiteBishops++; else blackBishops++; }
-    if (t === 'p') { if (white) whitePawnsByFile[c]++; else blackPawnsByFile[c]++; }
-    if (white) whiteMaterial += v; else blackMaterial += v;
     score += white ? v : -v;
+    if (t === 'b') { if (white) whiteBishops++; else blackBishops++; }
   }
-
   if (whiteBishops >= 2) score += 30;
   if (blackBishops >= 2) score -= 30;
-
-  // Сдвоенные и изолированные пешки
-  for (let f = 0; f < 8; f++) {
-    if (whitePawnsByFile[f] > 1) score -= 10 * (whitePawnsByFile[f] - 1);
-    if (blackPawnsByFile[f] > 1) score += 10 * (blackPawnsByFile[f] - 1);
-    if (whitePawnsByFile[f] > 0) {
-      const left = f > 0 ? whitePawnsByFile[f-1] : 0;
-      const right = f < 7 ? whitePawnsByFile[f+1] : 0;
-      if (left === 0 && right === 0) score -= 15;
-    }
-    if (blackPawnsByFile[f] > 0) {
-      const left = f > 0 ? blackPawnsByFile[f-1] : 0;
-      const right = f < 7 ? blackPawnsByFile[f+1] : 0;
-      if (left === 0 && right === 0) score += 15;
-    }
-  }
-
-  // Мобильность
-  const whiteMoves = botAllLegalMoves(state, true).length;
-  const blackMoves = botAllLegalMoves(state, false).length;
-  score += (whiteMoves - blackMoves) * 2;
-
-  // Безопасность короля
-  if (botInCheck(state, true)) score -= 30;
-  if (botInCheck(state, false)) score += 30;
-
   return score;
-}
-
-// Оценка с точки зрения цвета.
-function evalFor(state, color) {
-  const e = botEval(state);
-  return color === 'w' ? e : -e;
-}
-
-// 1-ply lookahead: смотрим, что соперник ответит лучшим ходом.
-// Возвращаем оценку с точки зрения sideToMove после его хода.
-function lookahead1(state, sideToMove) {
-  const moves = botAllLegalMoves(state, sideToMove === 'w');
-  if (moves.length === 0) {
-    if (botInCheck(state, sideToMove === 'w')) {
-      return sideToMove === 'w' ? -99999 : 99999;
-    }
-    return 0;
-  }
-  let best = sideToMove === 'w' ? -Infinity : Infinity;
-  for (const [from, to] of moves) {
-    const next = botApplyMove(state, from, to);
-    const opp = next.turn;
-    const oppMoves = botAllLegalMoves(next, opp === 'w');
-    let replyScore;
-    if (oppMoves.length === 0) {
-      if (botInCheck(next, opp === 'w')) {
-        replyScore = opp === 'w' ? -99999 : 99999;
-      } else {
-        replyScore = 0;
-      }
-    } else {
-      // Соперник выбирает ход, минимизирующий нашу оценку.
-      let worstForUs = sideToMove === 'w' ? Infinity : -Infinity;
-      for (const [of, ot] of oppMoves) {
-        const after = botApplyMove(next, of, ot);
-        const e = evalFor(after, sideToMove);
-        if (sideToMove === 'w') worstForUs = Math.min(worstForUs, e);
-        else worstForUs = Math.max(worstForUs, e);
-      }
-      replyScore = worstForUs;
-    }
-    if (sideToMove === 'w') best = Math.max(best, replyScore);
-    else best = Math.min(best, replyScore);
-  }
-  return best;
-}
-
-// Взятие лучшего своего хода + проверка подстав.
-// Возвращаем массив { from, to, eval } — eval это оценка ПОСЛЕ 1-ply lookahead,
-// с точки зрения бота.
-function evaluateMovesWithLookahead(fen, botColor) {
-  const state = botParseFen(fen);
-  const myMoves = botAllLegalMoves(state, botColor === 'w');
-  const result = [];
-  for (const [from, to] of myMoves) {
-    const next = botApplyMove(state, from, to);
-    const opp = next.turn;
-    const oppMoves = botAllLegalMoves(next, opp === 'w');
-    let evalAfter;
-    if (oppMoves.length === 0) {
-      if (botInCheck(next, opp === 'w')) {
-        evalAfter = opp === 'w' ? -99999 : 99999;
-      } else {
-        evalAfter = 0;
-      }
-    } else {
-      let worst = botColor === 'w' ? Infinity : -Infinity;
-      for (const [of, ot] of oppMoves) {
-        const after = botApplyMove(next, of, ot);
-        const e = evalFor(after, botColor);
-        if (botColor === 'w') worst = Math.min(worst, e);
-        else worst = Math.max(worst, e);
-      }
-      evalAfter = worst;
-    }
-    result.push({ from, to, eval: evalAfter });
-  }
-  return { state, moves: result };
-}
-
-function evaluateCurrentPosition(fen) {
-  const state = botParseFen(fen);
-  return botEval(state);
 }
 function botEvalMaterial(state, white) {
   let m = 0;
@@ -1546,6 +1417,10 @@ function botEvalMaterial(state, white) {
     if (botIsWhite(p) === white) m += PIECE_VALUES[p.toLowerCase()] || 0;
   }
   return m;
+}
+function evaluateCurrentPosition(fen) {
+  const state = botParseFen(fen);
+  return botEval(state);
 }
 
 // ============================================================
@@ -1595,15 +1470,8 @@ function scheduleBotMove(lobbyId) {
           const stateBefore = watcherLearning.encodeState(prevFen, botColor, { time: cur.time, inc: cur.inc });
           const actionStr = watcherLearning.encodeAction(from, to);
           const stateAfter = watcherLearning.encodeState(botToFen(nextState), botColor, { time: cur.time, inc: cur.inc });
-          const evalBefore = evaluateCurrentPosition(prevFen);
-          const evalAfter = evaluateCurrentPosition(botToFen(nextState));
-          const myBefore = botColor === 'w' ? evalBefore : -evalBefore;
-          const myAfter = botColor === 'w' ? evalAfter : -evalAfter;
-          const delta = myAfter - myBefore;
-          const immediateReward = delta / 400;
-          const capturedValue = captured ? (PIECE_VALUES[captured.toLowerCase()] || 0) : 0;
-          const captureBonus = capturedValue / 400;
-          const reward = immediateReward + captureBonus * 0.5;
+          const evalAfter = botEval(nextState);
+          const reward = (botColor === 'w' ? evalAfter : -evalAfter) / 1000;
           watcherLearning.recordTransition(stateBefore, actionStr, reward, stateAfter, evalAfter);
         } catch (e) { console.error('[Watcher] Ошибка обучения:', e.message); }
       }
@@ -1750,12 +1618,13 @@ function scheduleBotMove(lobbyId) {
 
     let mv;
     if (botName === WATCHER_NAME) {
-      // Watcher: используем 1-ply lookahead, чтобы видеть ответы соперника.
-      const { moves: movesWithEval } = evaluateMovesWithLookahead(cur.fen, botColor);
-      if (!movesWithEval.length) {
-        const sorted = botAllLegalMoves(st, botColor === 'w').map(([from, to]) => ({ from, to, eval: 0 }));
-        if (!sorted.length) return;
-      }
+      const botIsWhiteMove = botColor === 'w';
+      const curState = botParseFen(cur.fen);
+      const availableMoves = botAllLegalMoves(curState, botIsWhiteMove);
+      const movesWithEval = availableMoves.map(([from, to]) => {
+        const nextSt = botApplyMove(curState, from, to);
+        return { from, to, eval: botEval(nextSt) };
+      });
       mv = watcherLearning.pickMove(cur.fen, botColor, { time: cur.time, inc: cur.inc }, movesWithEval);
     } else {
       try { mv = await botPool.getMove(cur.fen, botRating, cur.time); }
@@ -1797,15 +1666,8 @@ function scheduleBotMove(lobbyId) {
         const stateBefore = watcherLearning.encodeState(prevFen, botColor, { time: cur2.time, inc: cur2.inc });
         const actionStr = watcherLearning.encodeAction(from, to);
         const stateAfter = watcherLearning.encodeState(botToFen(nextState), botColor, { time: cur2.time, inc: cur2.inc });
-        const evalBefore = evaluateCurrentPosition(prevFen);
-        const evalAfter = evaluateCurrentPosition(botToFen(nextState));
-        const myBefore = botColor === 'w' ? evalBefore : -evalBefore;
-        const myAfter = botColor === 'w' ? evalAfter : -evalAfter;
-        const delta = myAfter - myBefore;
-        const immediateReward = delta / 400;
-        const capturedValue = captured ? (PIECE_VALUES[captured.toLowerCase()] || 0) : 0;
-        const captureBonus = capturedValue / 400;
-        const reward = immediateReward + captureBonus * 0.5;
+        const evalAfter = botEval(nextState);
+        const reward = (botColor === 'w' ? evalAfter : -evalAfter) / 1000;
         watcherLearning.recordTransition(stateBefore, actionStr, reward, stateAfter, evalAfter);
       } catch (e) { console.error('[Watcher] Ошибка обучения:', e.message); }
     }
@@ -2683,7 +2545,7 @@ io.on('connection', (socket) => {
     console.log(`  Порт: ${PORT}`);
     console.log(`  CPU ядер доступно: ${require('os').cpus().length}`);
     console.log('  Боты работают в отдельных потоках (worker_threads)');
-    console.log('  Watcher: обучаемый бот-наблюдатель (Double Q + Replay + 1-ply lookahead)');
+    console.log('  Watcher: обучаемый бот-наблюдатель (Double Q + Replay)');
     console.log('==================================================');
   });
 })();
