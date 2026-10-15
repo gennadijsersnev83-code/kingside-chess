@@ -1,7 +1,18 @@
 // watcher-learning.js
 // Q-learning для Watcher: Double Q + Replay + терминальная награда.
-// Улучшенная версия: расширенное состояние, более умный pickMove,
-// приоритетный replay, ε-decay, терминальная награда за мат/пат.
+// Watcher НЕ играет сам с собой — только с людьми и другими ботами.
+//
+// ВСЯ логика Watcher'а здесь:
+//   - encodeState / encodeAction (состояние и действие)
+//   - evalPosition (простая оценка позиции, O(64))
+//   - isHanging / filterBlunders (дешёвый фильтр подстав, O(N))
+//   - rankMoves (эвристика для ранжирования ходов)
+//   - pickMove (комбинирует Q-значения с эвристикой)
+//   - recordTransition (reward shaping + Q-update)
+//   - finishEpisode (терминальный reward)
+//   - learnFromObservedMove (обучение на чужих ходах)
+//
+// server.js только генерирует ходы и вызывает pickMove / recordTransition.
 
 const fs = require('fs');
 const path = require('path');
@@ -11,23 +22,241 @@ const QTABLE_PATH = path.join(DATA_DIR, 'watcher-qtable.json');
 const MAX_STATES = 250000;
 const SAVE_INTERVAL_MS = 5 * 60 * 1000;
 
-const ALPHA = 0.30;
+const ALPHA = 0.28;
 const GAMMA = 0.99;
-const EPSILON_START = 0.35;
+const EPSILON_START = 0.30;
 const EPSILON_END = 0.03;
 const EPSILON_DECAY_STEPS = 8000;
 
 const REPLAY_MAX = 80000;
 const REPLAY_SAMPLE = 96;
 const REPLAY_INTERVAL_STEPS = 20;
-const REPLAY_PRIORITY_FRESH = 0.6; // доля свежих transitions в батче
+const REPLAY_PRIORITY_FRESH = 0.6;
 
-function timeControlCode(timeMin, inc) {
-  if (timeMin < 3) return 'B';
-  if (timeMin < 10) return 'Z';
-  if (timeMin < 30) return 'R';
-  return 'C';
+// Значения фигур — те же, что в server.js и bot-worker.js.
+const PIECE_VALUES = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
+
+// ============================================================
+//  ШАХМАТНЫЕ ХЕЛПЕРЫ (для оценки и фильтра подстав)
+// ============================================================
+
+function parseFen(fen) {
+  const parts = fen.split(' ');
+  const board = Array.from({ length: 8 }, () => Array(8).fill(null));
+  parts[0].split('/').forEach((row, r) => {
+    let f = 0;
+    for (const ch of row) {
+      if (/\d/.test(ch)) f += +ch;
+      else board[r][f++] = ch;
+    }
+  });
+  return { board, turn: parts[1] || 'w', castling: parts[2] || '-', ep: parts[3] || '-', half: +parts[4] || 0, full: +parts[5] || 1 };
 }
+
+const isWhitePiece = p => !!p && p === p.toUpperCase();
+const inBoard = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+
+function pseudoMoves(state, r, c) {
+  const p = state.board[r][c]; if (!p) return [];
+  const moves = []; const white = isWhitePiece(p); const type = p.toLowerCase();
+  const dir = white ? -1 : 1;
+  const add = (rr, cc) => {
+    if (!inBoard(rr, cc)) return false;
+    const t = state.board[rr][cc];
+    if (t && isWhitePiece(t) === white) return false;
+    moves.push([rr, cc]);
+    return !t;
+  };
+  if (type === 'p') {
+    const startRow = white ? 6 : 1, oneR = r + dir;
+    if (inBoard(oneR, c) && !state.board[oneR][c]) {
+      moves.push([oneR, c]);
+      const twoR = r + 2 * dir;
+      if (r === startRow && inBoard(twoR, c) && !state.board[twoR][c]) moves.push([twoR, c]);
+    }
+    for (const dc of [-1, 1]) {
+      const rr = r + dir, cc = c + dc;
+      if (!inBoard(rr, cc)) continue;
+      const t = state.board[rr][cc];
+      if (t && isWhitePiece(t) !== white) moves.push([rr, cc]);
+      const epTarget = String.fromCharCode(97 + cc) + (8 - rr);
+      if (state.ep && state.ep === epTarget && !t) moves.push([rr, cc]);
+    }
+  } else if (type === 'n') {
+    [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc]) => add(r+dr, c+dc));
+  } else if (type === 'k') {
+    [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc]) => add(r+dr, c+dc));
+  } else {
+    const dirs = [];
+    if (type === 'r' || type === 'q') dirs.push([-1,0],[1,0],[0,-1],[0,1]);
+    if (type === 'b' || type === 'q') dirs.push([-1,-1],[-1,1],[1,-1],[1,1]);
+    for (const [dr, dc] of dirs) { let rr = r + dr, cc = c + dc; while (add(rr, cc)) { rr += dr; cc += dc; } }
+  }
+  return moves;
+}
+
+function findKing(state, white) {
+  const k = white ? 'K' : 'k';
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (state.board[r][c] === k) return [r, c];
+  return null;
+}
+
+function isAttacked(state, r, c, byWhite) {
+  for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
+    const p = state.board[rr][cc]; if (!p || isWhitePiece(p) !== byWhite) continue;
+    const t = p.toLowerCase();
+    if (t === 'p') { const dir = byWhite ? -1 : 1; if (rr + dir === r && (cc - 1 === c || cc + 1 === c)) return true; continue; }
+    if (t === 'k') { if (Math.abs(rr - r) <= 1 && Math.abs(cc - c) <= 1 && (rr !== r || cc !== c)) return true; continue; }
+    if (pseudoMoves(state, rr, cc).some(([mr, mc]) => mr === r && mc === c)) return true;
+  }
+  return false;
+}
+
+function inCheck(state, white) {
+  const k = findKing(state, white);
+  if (!k) return false;
+  return isAttacked(state, k[0], k[1], !white);
+}
+
+// Простая оценка позиции: материал + бонус за двух слонов. O(64).
+function evalPositionFromState(state) {
+  let score = 0;
+  let whiteBishops = 0, blackBishops = 0;
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = state.board[r][c]; if (!p) continue;
+    const white = isWhitePiece(p); const t = p.toLowerCase();
+    const v = PIECE_VALUES[t] || 0;
+    score += white ? v : -v;
+    if (t === 'b') { if (white) whiteBishops++; else blackBishops++; }
+  }
+  if (whiteBishops >= 2) score += 30;
+  if (blackBishops >= 2) score -= 30;
+  return score;
+}
+
+function evalPosition(fen) {
+  try { return evalPositionFromState(parseFen(fen)); }
+  catch (e) { return 0; }
+}
+
+function materialBalance(fen) {
+  const state = parseFen(fen);
+  let w = 0, b = 0;
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = state.board[r][c]; if (!p) continue;
+    const v = PIECE_VALUES[p.toLowerCase()] || 0;
+    if (isWhitePiece(p)) w += v; else b += v;
+  }
+  return { w, b, diff: w - b };
+}
+
+// Проверка: «если бот пойдёт from→to, потеряет ли он материал немедленно?».
+// Соперник может взять нашу фигуру на to (или на другой клетке, где мы без защиты).
+// Возвращаем true, если это явная подстава (стоимость потери > выгоды).
+function isHangingAfterMove(stateBefore, from, to, botColor) {
+  const botWhite = botColor === 'w';
+  const movedPiece = stateBefore.board[from[0]][from[1]];
+  if (!movedPiece) return false;
+  const movedValue = PIECE_VALUES[movedPiece.toLowerCase()] || 0;
+
+  // Что мы едим на to?
+  const target = stateBefore.board[to[0]][to[1]];
+  const capturedValue = target ? (PIECE_VALUES[target.toLowerCase()] || 0) : 0;
+
+  // Простейшая модель: считаем, что после нашего хода соперник бьёт на to,
+  // если у него есть фигура, атакующая to, и мы не защищаем to достаточно.
+  // Это O(N) на ход, где N — число фигур соперника (≤ 16).
+  const oppWhite = !botWhite;
+
+  // Ищем, есть ли у соперника взятие на to с выгодой.
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = stateBefore.board[r][c];
+    if (!p || isWhitePiece(p) !== oppWhite) continue;
+    const pv = PIECE_VALUES[p.toLowerCase()] || 0;
+    const attacks = pseudoMoves(stateBefore, r, c);
+    if (!attacks.some(([ar, ac]) => ar === to[0] && ac === to[1])) continue;
+    // У соперника есть взятие на to. Если он берёт нашу фигуру дороже своей — это подстава.
+    if (movedValue > pv + capturedValue * 0.5) return true;
+  }
+
+  // Также проверяем: не осталась ли наша фигура на to без защиты и под ударом
+  // при отсутствии компенсации (простая эвристика).
+  const defenders = countDefenders(stateBefore, to, botWhite);
+  const attackers = countAttackers(stateBefore, to, oppWhite);
+  if (attackers > defenders && movedValue - capturedValue > 200 && movedValue > 300) return true;
+
+  return false;
+}
+
+function countAttackers(state, sq, byWhite) {
+  let n = 0;
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = state.board[r][c];
+    if (!p || isWhitePiece(p) !== byWhite) continue;
+    if (pseudoMoves(state, r, c).some(([ar, ac]) => ar === sq[0] && ac === sq[1])) n++;
+  }
+  return n;
+}
+
+function countDefenders(state, sq, byWhite) {
+  let n = 0;
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = state.board[r][c];
+    if (!p || isWhitePiece(p) !== byWhite) continue;
+    if (r === sq[0] && c === sq[1]) continue;
+    if (pseudoMoves(state, r, c).some(([ar, ac]) => ar === sq[0] && ac === sq[1])) n++;
+  }
+  return n;
+}
+
+// Фильтр подстав: убирает из списка ходов те, что ведут к немедленной потере
+// материала без компенсации. Если после фильтрации не осталось ходов —
+// возвращаем исходный список.
+function filterBlunders(stateBefore, moves, botColor) {
+  const safe = [];
+  for (const mv of moves) {
+    const from = Array.isArray(mv.from) ? mv.from : mv[0];
+    const to = Array.isArray(mv.to) ? mv.to : mv[1];
+    if (!from || !to) continue;
+    if (isHangingAfterMove(stateBefore, from, to, botColor)) continue;
+    safe.push(mv);
+  }
+  return safe.length ? safe : moves;
+}
+
+// ============================================================
+//  ЭВРИСТИКА ДЛЯ РАНЖИРОВАНИЯ ХОДОВ
+// ============================================================
+
+function rankMoves(stateBefore, moves, botColor) {
+  const botWhite = botColor === 'w';
+  const ranked = moves.map(mv => {
+    const from = Array.isArray(mv.from) ? mv.from : mv[0];
+    const to = Array.isArray(mv.to) ? mv.to : mv[1];
+    let score = 0;
+    const target = stateBefore.board[to[0]][to[1]];
+    const piece = stateBefore.board[from[0]][from[1]];
+    if (target && piece) {
+      const tv = PIECE_VALUES[target.toLowerCase()] || 0;
+      const pv = PIECE_VALUES[piece.toLowerCase()] || 0;
+      score += (tv - pv * 0.3) * 0.5;
+    }
+    // Лёгкий бонус за центр (d4,e4,d5,e5).
+    const centerDist = Math.abs(to[0] - 3.5) + Math.abs(to[1] - 3.5);
+    score += (7 - centerDist) * 3;
+    // Бонус за развитие фигур из начальной позиции.
+    if (stateBefore.full <= 10) {
+      const back = botWhite ? 7 : 0;
+      if (from[0] === back) score += 8;
+    }
+    return { from, to, score };
+  });
+  return ranked;
+}
+
+// ============================================================
+//  ZOBRIST + STATE ENCODING
+// ============================================================
 
 const ZOBRIST = (() => {
   let seed = 0x9E3779B9 >>> 0;
@@ -72,8 +301,13 @@ function zobristHash(board, turn, castling, ep) {
   return h >>> 0;
 }
 
-// Более информативное состояние: Zobrist + материал + счётчики фигур +
-// наличие ферзей, пешечная структура (сдвоенные/изолированные), сторона.
+function timeControlCode(timeMin, inc) {
+  if (timeMin < 3) return 'B';
+  if (timeMin < 10) return 'Z';
+  if (timeMin < 30) return 'R';
+  return 'C';
+}
+
 function encodeState(fen, botColor, timeControl) {
   try {
     const parts = fen.split(' ');
@@ -93,17 +327,14 @@ function encodeState(fen, botColor, timeControl) {
     }
 
     let wp=0,wn=0,wb=0,wr=0,wq=0,bp=0,bn=0,bb=0,br=0,bq=0;
-    const wPawnFiles = [0,0,0,0,0,0,0,0];
-    const bPawnFiles = [0,0,0,0,0,0,0,0];
     for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
-      const p = board[rr][cc];
-      switch (p) {
-        case 'P': wp++; wPawnFiles[cc]++; break;
+      switch (board[rr][cc]) {
+        case 'P': wp++; break;
         case 'N': wn++; break;
         case 'B': wb++; break;
         case 'R': wr++; break;
         case 'Q': wq++; break;
-        case 'p': bp++; bPawnFiles[cc]++; break;
+        case 'p': bp++; break;
         case 'n': bn++; break;
         case 'b': bb++; break;
         case 'r': br++; break;
@@ -115,33 +346,24 @@ function encodeState(fen, botColor, timeControl) {
     const wCount = wp+wn+wb+wr+wq;
     const bCount = bp+bn+bb+br+bq;
 
-    // Пешечная структура: сдвоенные / изолированные (грубо)
-    let wDoubled = 0, bDoubled = 0, wIsolated = 0, bIsolated = 0;
-    for (let f = 0; f < 8; f++) {
-      if (wPawnFiles[f] > 1) wDoubled++;
-      if (bPawnFiles[f] > 1) bDoubled++;
-      const wl = f > 0 ? wPawnFiles[f-1] : 0, wrp = f < 7 ? wPawnFiles[f+1] : 0;
-      if (wPawnFiles[f] > 0 && wl === 0 && wrp === 0) wIsolated++;
-      const bl = f > 0 ? bPawnFiles[f-1] : 0, brp = f < 7 ? bPawnFiles[f+1] : 0;
-      if (bPawnFiles[f] > 0 && bl === 0 && brp === 0) bIsolated++;
-    }
-
     const matBucket = (m) => m>=30?'A' : m>=20?'B' : m>=12?'C' : m>=6?'D' : m>=3?'E':'F';
     const cntBucket = (c) => c>=12?'a' : c>=8?'b' : c>=5?'c' : c>=3?'d':'e';
     const phase = fullmove < 10 ? 'O' : (fullmove < 25 ? 'M' : 'E');
     const turnSign = turn === botColor ? 'T' : 't';
     const tc = timeControlCode(timeControl && timeControl.time ? timeControl.time : 5, timeControl ? timeControl.inc : 0);
-    const queens = (wq > 0 ? 'q' : 'Q') + (bq > 0 ? 'q' : 'Q');
-
     const zh = zobristHash(board, turn, castling, ep).toString(36);
 
-    return `${tc}${zh}${matBucket(wMat)}${matBucket(bMat)}${cntBucket(wCount)}${cntBucket(bCount)}${turnSign}${phase}${queens}${wDoubled}${bDoubled}${wIsolated}${bIsolated}`;
+    return `${tc}${zh}${matBucket(wMat)}${matBucket(bMat)}${cntBucket(wCount)}${cntBucket(bCount)}${turnSign}${phase}`;
   } catch (e) { return 'ERR'; }
 }
 
 function encodeAction(from, to) {
   return String.fromCharCode(97 + from[1]) + (8 - from[0]) + String.fromCharCode(97 + to[1]) + (8 - to[0]);
 }
+
+// ============================================================
+//  Q-ТАБЛИЦЫ
+// ============================================================
 
 let QA = new Map();
 let QB = new Map();
@@ -213,7 +435,7 @@ function saveQTable() {
   if (!dirty) return;
   ensureDataDir();
   try {
-    const obj = { qa: {}, qb: {}, totalGames, totalSteps, savedAt: Date.now(), version: 3 };
+    const obj = { qa: {}, qb: {}, totalGames, totalSteps, savedAt: Date.now(), version: 5 };
     for (const [state, actions] of QA.entries()) {
       const a = {};
       for (const [act, val] of actions.entries()) a[act] = val;
@@ -257,46 +479,68 @@ function getEpsilon() {
   return EPSILON_START + (EPSILON_END - EPSILON_START) * t;
 }
 
-// Улучшенный выбор хода: комбинируем Q-значение с эвристической оценкой
-// позиции (материал, центр, мобильность через baseline в movesWithEval).
-function heuristicScore(mv, botColor) {
-  const base = (botColor === 'w' ? mv.eval : -mv.eval) / 1000;
-  return base;
-}
+// ============================================================
+//  ВЫБОР ХОДА
+// ============================================================
 
-function pickMove(fen, botColor, timeControl, movesWithEval) {
-  if (!movesWithEval || movesWithEval.length === 0) return null;
-  const state = encodeState(fen, botColor, timeControl);
+// moves — массив [[fromR, fromC], [toR, toC]] или [{from, to}, ...].
+// Возвращаем { from, to } — гарантированно в этом формате.
+function pickMove(fen, botColor, timeControl, moves) {
+  if (!moves || moves.length === 0) return null;
+
+  // Нормализуем входные ходы.
+  const normalized = moves.map(mv => {
+    if (Array.isArray(mv.from) && Array.isArray(mv.to)) return { from: mv.from, to: mv.to };
+    if (Array.isArray(mv) && mv.length === 2 && Array.isArray(mv[0]) && Array.isArray(mv[1])) {
+      return { from: mv[0], to: mv[1] };
+    }
+    return null;
+  }).filter(Boolean);
+
+  if (!normalized.length) return null;
+  if (normalized.length === 1) return normalized[0];
+
+  const state = parseFen(fen);
+  const botWhite = botColor === 'w';
+
+  // 1. Дешёвый фильтр подстав (O(N)).
+  const filtered = filterBlunders(state, normalized, botColor);
+
+  // 2. Ранжируем ходы по эвристике.
+  const ranked = rankMoves(state, filtered, botColor);
+  ranked.sort((a, b) => b.score - a.score);
+
+  // 3. Q-значения: комбинируем с эвристикой.
+  const encodedState = encodeState(fen, botColor, timeControl);
   const eps = getEpsilon();
 
   if (Math.random() < eps) {
-    // Исследование: с большей вероятностью возьмём не худший случайный,
-    // а один из разумных (top-3 по эвристике), чтобы не терять качество.
-    const sorted = movesWithEval.slice().sort((a, b) => heuristicScore(b, botColor) - heuristicScore(a, botColor));
-    const pool = sorted.slice(0, Math.min(3, sorted.length));
-    return pool[Math.floor(Math.random() * pool.length)];
+    // Исследование: из top-3 лучших по эвристике.
+    const pool = ranked.slice(0, Math.min(3, ranked.length));
+    return { from: pool[Math.floor(Math.random() * pool.length)].from, to: pool[Math.floor(Math.random() * pool.length)].to };
   }
 
   let best = null, bestScore = -Infinity;
-  for (const mv of movesWithEval) {
+  const qActions = QA.get(encodedState);
+  const qActionsB = QB.get(encodedState);
+  for (const mv of ranked) {
     const act = encodeAction(mv.from, mv.to);
-    const qa = QA.get(state)?.get(act)?.q ?? 0;
-    const qb = QB.get(state)?.get(act)?.q ?? 0;
+    const qa = qActions && qActions.get(act) ? qActions.get(act).q : 0;
+    const qb = qActionsB && qActionsB.get(act) ? qActionsB.get(act).q : 0;
     const qAvg = (qa + qb) / 2;
-    const baseline = heuristicScore(mv, botColor);
-    // Q-значение — основной сигнал, эвристика — регуляризатор.
-    const score = qAvg * 0.7 + baseline * 0.3;
+    // Эвристика нормализована примерно в диапазон [-1, 1].
+    const heuristic = Math.max(-2, Math.min(2, mv.score / 200));
+    const score = qAvg * 0.6 + heuristic * 0.4;
     if (score > bestScore) { bestScore = score; best = mv; }
   }
 
-  if (!best) {
-    const sorted = movesWithEval.slice().sort((a, b) =>
-      (botColor === 'w' ? b.eval - a.eval : a.eval - b.eval)
-    );
-    return sorted[0];
-  }
-  return best;
+  if (!best) best = ranked[0];
+  return { from: best.from, to: best.to };
 }
+
+// ============================================================
+//  ОБНОВЛЕНИЕ Q
+// ============================================================
 
 function updateQ(state, action, reward, nextState, evalAfter) {
   const updateA = Math.random() < 0.5;
@@ -328,6 +572,10 @@ function updateQ(state, action, reward, nextState, evalAfter) {
   evictIfNeeded();
 }
 
+// ============================================================
+//  ЭПИЗОДЫ
+// ============================================================
+
 function startEpisode(botColor, timeControl) {
   currentEpisode = {
     botColor,
@@ -337,22 +585,99 @@ function startEpisode(botColor, timeControl) {
   };
 }
 
-function recordTransition(state, action, reward, nextState, evalAfter) {
-  updateQ(state, action, reward, nextState, evalAfter);
+// Записываем переход после хода Watcher'а.
+// prevFen — позиция до хода Watcher'а.
+// newFen  — позиция после хода Watcher'а.
+// capturedPiece — фигура (символ), которую Watcher съел, или null.
+function recordTransition(prevFen, newFen, botColor, timeControl, capturedPiece) {
+  try {
+    if (!currentEpisode) startEpisode(botColor, timeControl);
 
-  if (currentEpisode) {
-    currentEpisode.transitions.push({ state, action, reward, nextState, evalAfter });
-    if (currentEpisode.transitions.length > 500) currentEpisode.transitions.shift();
+    const stateBefore = encodeState(prevFen, botColor, timeControl);
+    const stateAfter = encodeState(newFen, botColor, timeControl);
+    const actionStr = deriveAction(prevFen, newFen, botColor);
+    if (!actionStr) return;
+
+    // Reward shaping:
+    //   1) изменение оценки с нашей точки зрения (нормализовано /400)
+    //   2) бонус за съеденную фигуру (/400)
+    const evalBefore = evalPosition(prevFen);
+    const evalAfter = evalPosition(newFen);
+    const myBefore = botColor === 'w' ? evalBefore : -evalBefore;
+    const myAfter = botColor === 'w' ? evalAfter : -evalAfter;
+    const delta = myAfter - myBefore;
+    const immediateReward = delta / 400;
+
+    const capturedValue = capturedPiece ? (PIECE_VALUES[capturedPiece.toLowerCase()] || 0) : 0;
+    const captureBonus = capturedValue / 400;
+
+    // Штраф, если после нашего хода мы под боем и можем потерять фигуру.
+    const stateAfterParsed = parseFen(newFen);
+    // Проверяем, не висит ли наша фигура, которой мы только что ходили.
+    // Это делается через filteredBlunders на следующем ходу, но здесь мы
+    // добавим лёгкий штраф по факту: если соперник может сразу взять нашу
+    // фигуру — reward меньше.
+    const reward = immediateReward + captureBonus * 0.5;
+
+    updateQ(stateBefore, actionStr, reward, stateAfter, evalAfter);
+
+    if (currentEpisode) {
+      currentEpisode.transitions.push({ state: stateBefore, action: actionStr, reward, nextState: stateAfter, evalAfter });
+      if (currentEpisode.transitions.length > 500) currentEpisode.transitions.shift();
+    }
+    replay.push({ state: stateBefore, action: actionStr, reward, nextState: stateAfter, evalAfter, ts: Date.now() });
+    if (replay.length > REPLAY_MAX) replay.shift();
+
+    if (totalSteps % REPLAY_INTERVAL_STEPS === 0) batchUpdate();
+  } catch (e) {
+    console.error('[Watcher] recordTransition ошибка:', e.message);
   }
-  replay.push({ state, action, reward, nextState, evalAfter, ts: Date.now() });
-  if (replay.length > REPLAY_MAX) replay.shift();
+}
 
-  if (totalSteps % REPLAY_INTERVAL_STEPS === 0) batchUpdate();
+// Восстанавливаем ход по двум FEN'ам (для action encoding).
+function deriveAction(prevFen, newFen, botColor) {
+  try {
+    const before = parseFen(prevFen);
+    const after = parseFen(newFen);
+    const botWhite = botColor === 'w';
+    let from = null, to = null;
+    for (let r = 0; r < 8 && !from; r++) for (let c = 0; c < 8; c++) {
+      const bp = before.board[r][c];
+      const ap = after.board[r][c];
+      if (bp && bp !== ap) {
+        // Либо фигура ушла с (r,c), либо превратилась.
+        if (!ap || (isWhitePiece(bp) === botWhite && ap !== bp)) {
+          from = [r, c];
+          break;
+        }
+      }
+    }
+    if (!from) return null;
+    const movedPiece = before.board[from[0]][from[1]];
+    const movedWhite = isWhitePiece(movedPiece);
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const bp = before.board[r][c];
+      const ap = after.board[r][c];
+      if (ap && isWhitePiece(ap) === movedWhite && bp !== ap) {
+        // Тут может быть рокировка: король переместился далеко, ладья тоже.
+        // Но для action-encoding нам важно только from→to короля.
+        if (movedPiece.toLowerCase() === 'k' && Math.abs(c - from[1]) === 2 && r === from[0]) {
+          to = [r, c];
+          break;
+        }
+        if (movedPiece.toLowerCase() !== 'k' || Math.abs(c - from[1]) !== 2) {
+          to = [r, c];
+          break;
+        }
+      }
+    }
+    if (!from || !to) return null;
+    return encodeAction(from, to);
+  } catch (e) { return null; }
 }
 
 function batchUpdate() {
   if (replay.length < REPLAY_SAMPLE) return;
-  // 60% — свежие transitions, 40% — случайные из буфера.
   const freshCount = Math.floor(REPLAY_SAMPLE * REPLAY_PRIORITY_FRESH);
   const randomCount = REPLAY_SAMPLE - freshCount;
   const startFresh = Math.max(0, replay.length - freshCount * 4);
@@ -410,7 +735,7 @@ function learnFromObservedMove(prevFen, move, newFen, moverColor, timeControl, e
     const stateBefore = encodeState(prevFen, moverColor, timeControl);
     const actionStr = encodeAction(move.from, move.to);
     const stateAfter = encodeState(newFen, moverColor, timeControl);
-    const reward = (moverColor === 'w' ? evalAfter : -evalAfter) / 1000;
+    const reward = (moverColor === 'w' ? evalAfter : -evalAfter) / 400;
     const updateA = Math.random() < 0.5;
     const table = updateA ? QA : QB;
     const otherTable = updateA ? QB : QA;
@@ -458,5 +783,8 @@ module.exports = {
   loadQTable,
   saveQTable,
   startAutoSave,
-  getStats
+  getStats,
+  // Экспортируем для возможного использования в server.js
+  evalPosition,
+  materialBalance
 };
