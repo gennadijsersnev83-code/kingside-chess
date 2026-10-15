@@ -4,6 +4,7 @@ const { Server } = require('socket.io');
 const path = require('path');
 const crypto = require('crypto');
 const { Pool } = require('pg');
+const botPool = require('./bot-pool');
 
 const app = express();
 const server = http.createServer(app);
@@ -65,21 +66,11 @@ const GLICKO2 = {
 
 function glicko2Scale(r) { return (r - GLICKO2.DEFAULT_RATING) / GLICKO2.SCALE; }
 function glicko2Unscale(mu) { return mu * GLICKO2.SCALE + GLICKO2.DEFAULT_RATING; }
-
 function glicko2G(phi) { return 1 / Math.sqrt(1 + (3 * phi * phi) / (Math.PI * Math.PI)); }
 function glicko2E(mu, muJ, phiJ) { return 1 / (1 + Math.exp(-glicko2G(phiJ) * (mu - muJ))); }
 
-/**
- * Обновление Glicko-2 для одного игрока.
- * @param {number} rating  текущий рейтинг
- * @param {number} rd      текущее отклонение
- * @param {number} vol     текущая волатильность
- * @param {Array}  results [{rating, rd, score}] — результаты против соперников
- * @returns {{rating, rd, vol}}
- */
 function updateGlicko2(rating, rd, vol, results) {
   if (!results || results.length === 0) {
-    // Нет партий — только увеличиваем RD
     const phi = rd / GLICKO2.SCALE;
     const newPhi = Math.sqrt(phi * phi + vol * vol);
     return {
@@ -106,7 +97,6 @@ function updateGlicko2(rating, rd, vol, results) {
   if (v === 0) v = GLICKO2.EPSILON;
   const delta = deltaSum / v;
 
-  // Итеративное вычисление новой волатильности
   const a = Math.log(sigma * sigma);
   const f = (x) => {
     const ex = Math.exp(x);
@@ -802,7 +792,6 @@ function botBehaviorTick() {
     if (now < beh.nextDecision) continue;
     beh.nextDecision = now + 3000 + Math.random() * 6000;
 
-    // Обработка отложенных решений по ничьей
     if (beh.pendingDrawResponse) {
       const { lobbyId, accept, botName } = beh.pendingDrawResponse;
       beh.pendingDrawResponse = null;
@@ -1145,7 +1134,10 @@ setInterval(() => {
     if (side === 'w') lobby.timeW = Math.max(0, lobby.timeW - elapsed);
     else              lobby.timeB = Math.max(0, lobby.timeB - elapsed);
     if (!lobby.isBot) {
-      io.to(id).emit('timeUpdate', { timeW: lobby.timeW, timeB: lobby.timeB, serverNow: now });
+      if (!lobby._lastTimeEmit || now - lobby._lastTimeEmit > 2000) {
+        lobby._lastTimeEmit = now;
+        io.to(id).emit('timeUpdate', { timeW: lobby.timeW, timeB: lobby.timeB, serverNow: now });
+      }
     }
     if (lobby.timeW <= 0) finishGame(id, 'b', 'Время');
     else if (lobby.timeB <= 0) finishGame(id, 'w', 'Время');
@@ -1172,22 +1164,10 @@ function clearMute(username) {
 }
 
 // ============================================================
-//  ШАХМАТНЫЙ ДВИЖОК ДЛЯ БОТА (улучшен)
+//  ЛЁГКИЙ ШАХМАТНЫЙ ДВИЖОК (для проверки мата/пата и оценки позиции)
+//  Тяжёлые вычисления (minimax) вынесены в bot-worker.js
 // ============================================================
 const PIECE_VALUES = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
-const PST = {
-  p: [[0,0,0,0,0,0,0,0],[50,50,50,50,50,50,50,50],[10,10,20,30,30,20,10,10],[5,5,10,25,25,10,5,5],[0,0,0,20,20,0,0,0],[5,-5,-10,0,0,-10,-5,5],[5,10,10,-20,-20,10,10,5],[0,0,0,0,0,0,0,0]],
-  n: [[-50,-40,-30,-30,-30,-30,-40,-50],[-40,-20,0,0,0,0,-20,-40],[-30,0,10,15,15,10,0,-30],[-30,5,15,20,20,15,5,-30],[-30,0,15,20,20,15,0,-30],[-30,5,10,15,15,10,5,-30],[-40,-20,0,5,5,0,-20,-40],[-50,-40,-30,-30,-30,-30,-40,-50]],
-  b: [[-20,-10,-10,-10,-10,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,10,10,5,0,-10],[-10,5,5,10,10,5,5,-10],[-10,0,10,10,10,10,0,-10],[-10,10,10,10,10,10,10,-10],[-10,5,0,0,0,0,5,-10],[-20,-10,-10,-10,-10,-10,-10,-20]],
-  r: [[0,0,0,0,0,0,0,0],[5,10,10,10,10,10,10,5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[-5,0,0,0,0,0,0,-5],[0,0,0,5,5,0,0,0]],
-  q: [[-20,-10,-10,-5,-5,-10,-10,-20],[-10,0,0,0,0,0,0,-10],[-10,0,5,5,5,5,0,-10],[-5,0,5,5,5,5,0,-5],[0,0,5,5,5,5,0,-5],[-10,5,5,5,5,5,0,-10],[-10,0,5,0,0,0,0,-10],[-20,-10,-10,-5,-5,-10,-10,-20]],
-  k: [[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-30,-40,-40,-50,-50,-40,-40,-30],[-20,-30,-30,-40,-40,-30,-30,-20],[-10,-20,-20,-20,-20,-20,-20,-10],[20,20,0,0,0,0,20,20],[20,30,10,0,0,10,30,20]]
-};
-const TT_CACHE = new Map();
-const TT_MAX = 200000;
-function ttKey(state) { return state.board.map(row => row.map(c => c || '.').join('')).join('/') + state.turn + state.castling + state.ep; }
-function ttGet(k) { return TT_CACHE.get(k); }
-function ttSet(k, d, s) { if (TT_CACHE.size > TT_MAX) TT_CACHE.clear(); TT_CACHE.set(k, { depth: d, score: s }); }
 
 function botParseFen(fen) {
   const parts = fen.split(' ');
@@ -1201,6 +1181,7 @@ function botToFen(state) {
 }
 const botIsWhite = p => !!p && p === p.toUpperCase();
 const botInBoard = (r,c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+
 function botPseudoMoves(state, r, c) {
   const p = state.board[r][c]; if (!p) return [];
   const moves = []; const white = botIsWhite(p); const type = p.toLowerCase();
@@ -1241,6 +1222,7 @@ function botIsAttacked(state, r, c, byWhite) {
   return false;
 }
 function botInCheck(state, white) { const k = botFindKing(state, white); if (!k) return false; return botIsAttacked(state, k[0], k[1], !white); }
+
 function botApplyMove(state, from, to) {
   const copy = { board: state.board.map(row => row.slice()), turn: state.turn, castling: state.castling, ep: state.ep, half: state.half, full: state.full };
   const [fr, fc] = from, [tr, tc] = to;
@@ -1270,221 +1252,35 @@ function botAllLegalMoves(state, white) {
   }
   return res;
 }
-
-// ============================================================
-//  УЛУЧШЕННАЯ ОЦЕНКА
-// ============================================================
 function botEval(state) {
   let score = 0;
   let whiteBishops = 0, blackBishops = 0;
-  let whiteMaterial = 0, blackMaterial = 0;
-  const whitePawnsByFile = [0,0,0,0,0,0,0,0];
-  const blackPawnsByFile = [0,0,0,0,0,0,0,0];
-
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     const white = botIsWhite(p); const t = p.toLowerCase();
     let v = PIECE_VALUES[t] || 0;
-    if (t !== 'k') { const table = PST[t]; if (table) { const rr = white ? r : 7 - r; v += table[rr][c]; } }
-    if (t === 'b') { if (white) whiteBishops++; else blackBishops++; }
-    if (t === 'p') { if (white) whitePawnsByFile[c]++; else blackPawnsByFile[c]++; }
-    if (white) whiteMaterial += v; else blackMaterial += v;
     score += white ? v : -v;
+    if (t === 'b') { if (white) whiteBishops++; else blackBishops++; }
   }
-
-  // Бонус за пару слонов
   if (whiteBishops >= 2) score += 30;
   if (blackBishops >= 2) score -= 30;
-
-  // Штраф за сдвоенные пешки
-  for (let f = 0; f < 8; f++) {
-    if (whitePawnsByFile[f] > 1) score -= 10 * (whitePawnsByFile[f] - 1);
-    if (blackPawnsByFile[f] > 1) score += 10 * (blackPawnsByFile[f] - 1);
-  }
-
-  // Штраф за изолированные пешки
-  for (let f = 0; f < 8; f++) {
-    if (whitePawnsByFile[f] > 0) {
-      const left = f > 0 ? whitePawnsByFile[f-1] : 0;
-      const right = f < 7 ? whitePawnsByFile[f+1] : 0;
-      if (left === 0 && right === 0) score -= 15;
-    }
-    if (blackPawnsByFile[f] > 0) {
-      const left = f > 0 ? blackPawnsByFile[f-1] : 0;
-      const right = f < 7 ? blackPawnsByFile[f+1] : 0;
-      if (left === 0 && right === 0) score += 15;
-    }
-  }
-
-  // Мобильность
-  const whiteMoves = botAllLegalMoves(state, true).length;
-  const blackMoves = botAllLegalMoves(state, false).length;
-  score += (whiteMoves - blackMoves) * 2;
-
-  // Безопасность короля
-  const wK = botFindKing(state, true);
-  const bK = botFindKing(state, false);
-  if (wK) {
-    const attackers = botAllLegalMoves(state, false).filter(([f, t]) => state.board[t[0]][t[1]] === 'K');
-    if (attackers.length > 0) score -= 500;
-  }
-  if (bK) {
-    const attackers = botAllLegalMoves(state, true).filter(([f, t]) => state.board[t[0]][t[1]] === 'k');
-    if (attackers.length > 0) score += 500;
-  }
-
-  // Эндшпиль: ферзь и король активнее
-  const totalMaterial = whiteMaterial + blackMaterial;
-  if (totalMaterial < 2000) {
-    if (wK) score += (7 - Math.abs(wK[0] - 3.5) - Math.abs(wK[1] - 3.5)) * 5;
-    if (bK) score -= (7 - Math.abs(bK[0] - 3.5) - Math.abs(bK[1] - 3.5)) * 5;
-  }
-
-  // Ферзь: бонус за централизацию
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = state.board[r][c]; if (!p) continue;
-    if (p.toLowerCase() === 'q') {
-      const centerBonus = (3.5 - Math.abs(r - 3.5)) + (3.5 - Math.abs(c - 3.5));
-      score += botIsWhite(p) ? centerBonus * 3 : -centerBonus * 3;
-    }
-  }
-
   return score;
 }
-
-function moveScore(state, from, to) {
-  const target = state.board[to[0]][to[1]];
-  const piece = state.board[from[0]][from[1]];
-  if (!target) return 0;
-  const victimVal = PIECE_VALUES[target.toLowerCase()] || 0;
-  const attackerVal = PIECE_VALUES[piece.toLowerCase()] || 0;
-  return victimVal * 10 - attackerVal;
-}
-
-function botQuiescence(state, alpha, beta, maximizing, depthLeft) {
-  if (depthLeft <= 0) return botEval(state);
-  const stand = botEval(state);
-  if (maximizing) { if (stand >= beta) return beta; if (stand > alpha) alpha = stand; }
-  else { if (stand <= alpha) return alpha; if (stand < beta) beta = stand; }
-  const white = state.turn === 'w';
-  const captures = botAllLegalMoves(state, white).filter(([f, t]) => state.board[t[0]][t[1]]);
-  captures.sort((a, b) => moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]));
-  if (maximizing) {
-    for (const [from, to] of captures) {
-      const next = botApplyMove(state, from, to);
-      const score = botQuiescence(next, alpha, beta, false, depthLeft - 1);
-      if (score >= beta) return beta;
-      if (score > alpha) alpha = score;
-    }
-    return alpha;
-  } else {
-    for (const [from, to] of captures) {
-      const next = botApplyMove(state, from, to);
-      const score = botQuiescence(next, alpha, beta, true, depthLeft - 1);
-      if (score <= alpha) return alpha;
-      if (score < beta) beta = score;
-    }
-    return beta;
+function botEvalMaterial(state, white) {
+  let m = 0;
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = state.board[r][c]; if (!p) continue;
+    if (botIsWhite(p) === white) m += PIECE_VALUES[p.toLowerCase()] || 0;
   }
+  return m;
 }
-
-function botMinimax(state, depth, alpha, beta, maximizing) {
-  const key = ttKey(state);
-  const cached = ttGet(key);
-  if (cached && cached.depth >= depth) return cached.score;
-  if (depth === 0) return botQuiescence(state, alpha, beta, maximizing, 2);
-  const white = state.turn === 'w';
-  const moves = botAllLegalMoves(state, white);
-  if (!moves.length) {
-    if (botInCheck(state, white)) return white ? -99999 + (10 - depth) : 99999 - (10 - depth);
-    return 0;
-  }
-  moves.sort((a, b) => moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]));
-  let best;
-  if (maximizing) {
-    best = -Infinity;
-    for (let i = 0; i < moves.length; i++) {
-      const [from, to] = moves[i];
-      const next = botApplyMove(state, from, to);
-      const isCapture = !!state.board[to[0]][to[1]];
-      let reduction = 0;
-      if (!isCapture && i >= 4 && depth >= 3) reduction = 1;
-      const score = botMinimax(next, depth - 1 - reduction, alpha, beta, false);
-      if (score > best) best = score;
-      if (best > alpha) alpha = best;
-      if (beta <= alpha) break;
-    }
-  } else {
-    best = Infinity;
-    for (let i = 0; i < moves.length; i++) {
-      const [from, to] = moves[i];
-      const next = botApplyMove(state, from, to);
-      const isCapture = !!state.board[to[0]][to[1]];
-      let reduction = 0;
-      if (!isCapture && i >= 4 && depth >= 3) reduction = 1;
-      const score = botMinimax(next, depth - 1 - reduction, alpha, beta, true);
-      if (score < best) best = score;
-      if (best < beta) beta = best;
-      if (beta <= alpha) break;
-    }
-  }
-  ttSet(key, depth, best);
-  return best;
-}
-
-function getBotParams(rating, baseTimeMin) {
-  let depth, noise;
-  if (rating < 1100)      { depth = 1; noise = 60; }
-  else if (rating < 1350) { depth = 2; noise = 25; }
-  else if (rating < 1500) { depth = 2; noise = 12; }
-  else if (rating < 1700) { depth = 3; noise = 5; }
-  else if (rating < 1850) { depth = 3; noise = 2; }
-  else if (rating < 2000) { depth = 4; noise = 0; }
-  else if (rating < 2200) { depth = 5; noise = 0; }
-  else                    { depth = 6; noise = 0; }
-
-  // Ограничение по времени
-  if (baseTimeMin <= 1) depth = Math.min(depth, 1);
-  else if (baseTimeMin <= 2) depth = Math.min(depth, 2);
-  else if (baseTimeMin <= 3) depth = Math.min(depth, 3);
-  else if (baseTimeMin <= 5) depth = Math.min(depth, 3);
-  else if (baseTimeMin <= 10) depth = Math.min(depth, 4);
-  else if (baseTimeMin <= 15) depth = Math.min(depth, 5);
-  // Иначе — полная глубина
-
-  return { depth, noise };
-}
-
-function pickBotMoveByRating(fen, rating, baseTimeMin) {
-  const state = botParseFen(fen);
-  const white = state.turn === 'w';
-  const moves = botAllLegalMoves(state, white);
-  if (!moves.length) return null;
-  const { depth, noise } = getBotParams(rating, baseTimeMin);
-  if (moves.length === 1) return moves[0];
-  moves.sort((a, b) => moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]));
-
-  const scored = moves.map(([from, to]) => {
-    const next = botApplyMove(state, from, to);
-    let score = botMinimax(next, depth - 1, -Infinity, Infinity, !white);
-    if (noise > 0) score += (Math.random() * 2 - 1) * noise;
-    return { from, to, score };
-  });
-  scored.sort((a, b) => white ? b.score - a.score : a.score - b.score);
-
-  if (rating < 1100 && scored.length > 2 && Math.random() < 0.4) return scored[1 + Math.floor(Math.random() * 2)];
-  if (rating < 1350 && scored.length > 1 && Math.random() < 0.25) return scored[1];
-  if (rating < 1500 && scored.length > 1 && Math.random() < 0.1) return scored[1];
-  return scored[0];
-}
-
 function evaluateCurrentPosition(fen) {
   const state = botParseFen(fen);
   return botEval(state);
 }
 
 // ============================================================
-//  ХОД БОТА (с ничьими и сдачей)
+//  ХОД БОТА (асинхронный, через worker pool)
 // ============================================================
 function scheduleBotMove(lobbyId) {
   const l = lobbies.get(lobbyId);
@@ -1502,7 +1298,6 @@ function scheduleBotMove(lobbyId) {
 
   const isBotVsBot = !!l.botName2;
 
-  // Если есть только один ход — не тянем время, делаем быстро
   if (botMoves.length === 1) {
     const delay = 150 + Math.random() * 200;
     setTimeout(() => {
@@ -1590,7 +1385,7 @@ function scheduleBotMove(lobbyId) {
   const botUser = db.users[botName];
   const botRating = botUser ? botUser.rating : 1500;
 
-  setTimeout(() => {
+  setTimeout(async () => {
     const cur = lobbies.get(lobbyId);
     if (!cur || cur.finished) return;
     if (cur.turn !== botColor) return;
@@ -1599,12 +1394,11 @@ function scheduleBotMove(lobbyId) {
     if (!stillBot) return;
 
     const st = botParseFen(cur.fen);
-    const evalScore = botEval(st);
+    const evalScore = evaluateCurrentPosition(cur.fen);
     const botSign = botColor === 'w' ? 1 : -1;
     const myEval = evalScore * botSign;
 
-    // ===== СДАЧА (осмысленная) =====
-    // Бот сдаётся только если позиция безнадёжна, и чем сильнее бот — тем дольше борется
+    // ===== СДАЧА =====
     let resignThreshold;
     if (botRating < 1100)      resignThreshold = -600;
     else if (botRating < 1350) resignThreshold = -900;
@@ -1619,7 +1413,6 @@ function scheduleBotMove(lobbyId) {
     const materialDiff = myMaterial - oppMaterial;
 
     if (myEval < resignThreshold && st.full > minMovesBeforeResign && materialDiff < -500) {
-      // Проверяем, нет ли у нас мата в 1
       const myMoves = botAllLegalMoves(st, botColor === 'w');
       let hasMateIn1 = false;
       for (const [from, to] of myMoves) {
@@ -1635,9 +1428,7 @@ function scheduleBotMove(lobbyId) {
     }
 
     // ===== ПРЕДЛОЖЕНИЕ НИЧЬЕЙ =====
-    // Бот предлагает ничью, если позиция равная и партия затянулась
     if (Math.abs(myEval) < 30 && st.full > 30 && !cur.drawOffer && !cur.botDrawOffered) {
-      // Не предлагаем, если у нас есть мат в 1
       const myMoves = botAllLegalMoves(st, botColor === 'w');
       let hasMateIn1 = false;
       for (const [from, to] of myMoves) {
@@ -1648,10 +1439,8 @@ function scheduleBotMove(lobbyId) {
       if (!hasMateIn1 && Math.random() < 0.08) {
         cur.drawOffer = { by: botColor, at: Date.now(), fromBot: true };
         cur.botDrawOffered = true;
-        // Отправляем предложение сопернику
         const otherSocket = cur.host === botName ? cur.guestSocket : cur.hostSocket;
         if (otherSocket) io.to(otherSocket).emit('drawOffered', { from: botName });
-        // Если соперник — бот, обрабатываем через botBehaviorTick
         const otherName = cur.host === botName ? cur.guest : cur.host;
         if (BOT_NAMES.has(otherName)) {
           const otherBeh = botInitBehavior(otherName);
@@ -1670,51 +1459,60 @@ function scheduleBotMove(lobbyId) {
       }
     }
 
-    const mv = pickBotMoveByRating(cur.fen, botRating, cur.time);
+    // ===== ТЯЖЁЛЫЙ РАСЧЁТ — В WORKER =====
+    let mv;
+    try {
+      mv = await botPool.getMove(cur.fen, botRating, cur.time);
+    } catch (err) {
+      console.error('[bot-pool] ошибка получения хода:', err.message);
+      return;
+    }
     if (!mv) return;
+
+    // Перечитываем состояние — за время расчёта партия могла измениться
+    const cur2 = lobbies.get(lobbyId);
+    if (!cur2 || cur2.finished) return;
+    if (cur2.turn !== botColor) return;
+    const stillBot2 = (cur2.botColor === botColor && cur2.botName === botName) ||
+                      (cur2.botColor2 === botColor && cur2.botName2 === botName);
+    if (!stillBot2) return;
+    if (cur2.fen !== cur.fen) return; // позиция изменилась — расчёт неактуален
+
+    const st2 = botParseFen(cur2.fen);
     const { from, to } = mv;
-    const legal = botLegalMovesFor(st, from[0], from[1]);
+    const legal = botLegalMovesFor(st2, from[0], from[1]);
     if (!legal.some(([r, c]) => r === to[0] && c === to[1])) return;
 
-    const captured = st.board[to[0]][to[1]];
-    const nextState = botApplyMove(st, from, to);
-    if (!cur.history) cur.history = [];
-    cur.history.push({ from, to, captured: captured || null, byColor: botColor, ts: Date.now() });
-    if (cur.history.length > 10) cur.history.shift();
+    const captured = st2.board[to[0]][to[1]];
+    const nextState = botApplyMove(st2, from, to);
+    if (!cur2.history) cur2.history = [];
+    cur2.history.push({ from, to, captured: captured || null, byColor: botColor, ts: Date.now() });
+    if (cur2.history.length > 10) cur2.history.shift();
 
     const now = Date.now();
-    const elapsed = Math.floor((now - cur.lastTick) / 1000);
-    if (botColor === 'w') cur.timeW = Math.max(0, cur.timeW - elapsed) + cur.inc;
-    else cur.timeB = Math.max(0, cur.timeB - elapsed) + cur.inc;
-    cur.lastTick = now;
-    cur.fen = botToFen(nextState);
-    cur.turn = nextState.turn;
-    cur.drawOffer = null;
-    cur.botDrawOffered = false;
+    const elapsed = Math.floor((now - cur2.lastTick) / 1000);
+    if (botColor === 'w') cur2.timeW = Math.max(0, cur2.timeW - elapsed) + cur2.inc;
+    else cur2.timeB = Math.max(0, cur2.timeB - elapsed) + cur2.inc;
+    cur2.lastTick = now;
+    cur2.fen = botToFen(nextState);
+    cur2.turn = nextState.turn;
+    cur2.drawOffer = null;
+    cur2.botDrawOffered = false;
 
-    io.to(lobbyId).emit('boardUpdate', { fen: cur.fen, turn: cur.turn, san: null });
-    const humanSocket = (cur.hostSocket && !cur.isBot) ? io.sockets.sockets.get(cur.hostSocket) : null;
-    if (humanSocket) humanSocket.emit('timeUpdate', { timeW: cur.timeW, timeB: cur.timeB, serverNow: now });
+    io.to(lobbyId).emit('boardUpdate', { fen: cur2.fen, turn: cur2.turn, san: null });
+    const humanSocket = (cur2.hostSocket && !cur2.isBot) ? io.sockets.sockets.get(cur2.hostSocket) : null;
+    if (humanSocket) humanSocket.emit('timeUpdate', { timeW: cur2.timeW, timeB: cur2.timeB, serverNow: now });
 
-    const sideToMoveWhite = cur.turn === 'w';
-    const hasMoves = botAllLegalMoves(botParseFen(cur.fen), sideToMoveWhite).length > 0;
+    const sideToMoveWhite = cur2.turn === 'w';
+    const hasMoves = botAllLegalMoves(botParseFen(cur2.fen), sideToMoveWhite).length > 0;
     if (!hasMoves) {
-      if (botInCheck(botParseFen(cur.fen), sideToMoveWhite)) finishGame(lobbyId, sideToMoveWhite ? 'b' : 'w', 'Мат');
+      if (botInCheck(botParseFen(cur2.fen), sideToMoveWhite)) finishGame(lobbyId, sideToMoveWhite ? 'b' : 'w', 'Мат');
       else finishGame(lobbyId, 'draw', 'Пат');
-    } else if (cur.isBot && ((cur.botColor && cur.turn === cur.botColor) || (cur.botColor2 && cur.turn === cur.botColor2))) {
+    } else if (cur2.isBot && ((cur2.botColor && cur2.turn === cur2.botColor) || (cur2.botColor2 && cur2.turn === cur2.botColor2))) {
       const nextDelay = isBotVsBot ? (400 + Math.random() * 600) : (250 + Math.random() * 400);
       setTimeout(() => scheduleBotMove(lobbyId), nextDelay);
     }
   }, delay);
-}
-
-function botEvalMaterial(state, white) {
-  let m = 0;
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = state.board[r][c]; if (!p) continue;
-    if (botIsWhite(p) === white) m += PIECE_VALUES[p.toLowerCase()] || 0;
-  }
-  return m;
 }
 
 // ============================================================
@@ -2490,10 +2288,12 @@ io.on('connection', (socket) => {
     console.log('==================================================');
     console.log('  Kingside — сервер запущен');
     console.log(`  Порт: ${PORT}`);
+    console.log(`  CPU ядер доступно: ${require('os').cpus().length}`);
+    console.log('  Боты работают в отдельных потоках (worker_threads)');
     console.log('==================================================');
   });
 })();
 
-process.on('SIGINT', () => { process.exit(0); });
-process.on('SIGTERM', () => { process.exit(0); });
+process.on('SIGINT', async () => { try { await botPool.terminate(); } catch (e) {} process.exit(0); });
+process.on('SIGTERM', async () => { try { await botPool.terminate(); } catch (e) {} process.exit(0); });
 process.on('uncaughtException', (err) => { console.error('[Server] Ошибка:', err); });
