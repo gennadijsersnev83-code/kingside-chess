@@ -245,7 +245,7 @@
   .arenaRight  { width:300px; min-width:300px; max-width:300px; display:flex; flex-direction:column; }
   @media (max-width:1110px) { .arenaLeft { width:260px; min-width:260px; max-width:260px; } .arenaCenter { width:auto; min-width:0; max-width:none; } .arenaRight { width:280px; min-width:280px; max-width:280px; } }
   @media (max-width:940px) { .arenaLeft, .arenaCenter, .arenaRight { width:100%; min-width:0; max-width:none; } }
-  .arenaRightCol { height:576px; min-height:576px; max-height:576px; background:var(--panel); border:1px solid var(--border); border-radius:6px; display:flex; flex-direction:column; overflow:hidden; }
+  .arenaRightCol { min-height:576px; background:var(--panel); border:1px solid var(--border); border-radius:6px; display:flex; flex-direction:column; overflow:hidden; }
   .arenaGamesHeader { flex:0 0 auto; padding:8px 12px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
   .arenaTopGame { flex:0 0 auto; padding:8px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:6px; box-sizing:border-box; }
   .arenaTopGameEmpty { padding:30px 10px; text-align:center; color:var(--muted); font-size:12px; }
@@ -278,6 +278,8 @@
   .arenaGameCard .row2 { color:var(--muted); font-size:10px; margin-top:2px; display:flex; justify-content:space-between; }
   .arenaPage * { min-width:0; }
   .arenaPage button { flex-shrink:0; }
+  .arenaStatsBox { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:8px 12px; font-size:12px; color:var(--muted); display:flex; justify-content:space-between; gap:10px; flex:0 0 auto; }
+  .arenaStatsBox b { color:var(--text-bright); }
   .gameWrap { display:grid; grid-template-columns:280px 480px 280px; gap:16px; align-items:start; justify-content:center; margin:0 auto; }
   @media (max-width:1120px) { .gameWrap { grid-template-columns:240px minmax(0,1fr) 260px; } }
   @media (max-width:940px) { .gameWrap { grid-template-columns:1fr; max-width:520px; } .col-chat { order:3; } .col-info { order:2; } .col-board { order:1; } }
@@ -350,6 +352,10 @@
   .gameResultCompact .grBtn.rematch:disabled { background: #3a5014; color: #888; cursor: not-allowed; }
   .gameResultCompact .grBtn.findOpp { background: var(--panel-2); color: var(--text-bright); border: 1px solid var(--border); }
   .gameResultCompact .grBtn.findOpp:hover { background: var(--panel-hover); }
+  .gameResultCompact .grBtn.pauseArenaBtn { background: var(--panel-2); color: var(--text-bright); border: 1px solid var(--accent); }
+  .gameResultCompact .grBtn.pauseArenaBtn:hover { background: var(--panel-hover); }
+  .gameResultCompact .grBtnRow { display: flex; gap: 6px; }
+  .gameResultCompact .grBtnRow .grBtn { flex: 1; }
   .col-chat { display:flex; flex-direction:column; gap:8px; min-width:0; }
   #chatBox { background:var(--panel); border:1px solid var(--border); border-radius:4px; display:flex; flex-direction:column; height:420px; overflow:hidden; }
   #chatTabs { display:flex; border-bottom:1px solid var(--border); }
@@ -407,6 +413,9 @@
   .catCard.rapid     { border-top:3px solid #4a9ce8; }
   .catCard.blitz     { border-top:3px solid #7db63a; }
   .catCard.bullet    { border-top:3px solid #c94a3a; }
+  .profileShowGamesBtn { display:block; width:100%; margin:16px 0 0; padding:12px; background:var(--panel-2); border:1px solid var(--border); border-radius:6px; color:var(--text-bright); font-weight:600; cursor:pointer; font-size:14px; text-align:center; transition:.15s; }
+  .profileShowGamesBtn:hover { background:var(--panel-hover); border-color:var(--accent); }
+  .profileGamesHidden { display:none; }
   @media (max-width: 700px) {
     main { padding:10px 8px; }
     header.topbar { padding:0 8px; gap:2px; }
@@ -631,6 +640,10 @@
           <div class="arenaGamesList" id="arenaGamesList">
             <div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>
           </div>
+          <div class="arenaStatsBox" id="arenaStatsBox">
+            <span>👥 Участников: <b id="arenaParticipantsCount">0</b></span>
+            <span>👁 Зрителей: <b id="arenaViewersCount">0</b></span>
+          </div>
         </div>
       </aside>
     </div>
@@ -662,8 +675,11 @@
         <div style="color:var(--muted);font-size:12px;margin-bottom:8px">📈 Динамика рейтинга по дням</div>
         <div id="ratingChartWrap"></div>
       </div>
-      <h3 style="margin:16px 0 8px; color:var(--text-bright); font-weight:500">Последние партии</h3>
-      <div class="gamesList" id="gamesList"></div>
+      <button class="profileShowGamesBtn" id="showGamesBtn" onclick="toggleProfileGames()">📜 Показать партии</button>
+      <div class="profileGamesHidden" id="profileGamesWrap">
+        <h3 style="margin:16px 0 8px; color:var(--text-bright); font-weight:500">Последние партии</h3>
+        <div class="gamesList" id="gamesList"></div>
+      </div>
     </div>
   </section>
 
@@ -713,7 +729,10 @@
         <div class="gameResultCompact" id="gameResultCompact">
           <div class="grTitle" id="grTitleCompact">—</div>
           <div class="grSub" id="grSubCompact">—</div>
-          <button class="grBtn rematch" id="grRematchBtn" onclick="requestRematch()">РЕВАНШ</button>
+          <div class="grBtnRow" id="grBtnRow">
+            <button class="grBtn rematch" id="grRematchBtn" onclick="requestRematch()">РЕВАНШ</button>
+            <button class="grBtn pauseArenaBtn" id="grPauseBtn" onclick="toggleArenaPause()" style="display:none;">⏸ ПАУЗА</button>
+          </div>
           <button class="grBtn findOpp" id="grFindBtn" onclick="findNewOpponent()">НАЙТИ ДРУГОГО СОПЕРНИКА</button>
         </div>
         <div class="playerStrip" id="bottomStrip">
@@ -855,8 +874,8 @@
   let dragStartPos = null;
   let premove = null;
   let rematchRequested = false;
+  let profileGamesVisible = false;
 
-  // ===== ПРОСМОТР: отмена устаревших запросов =====
   let watchRequestId = 0;
   let watchClockHandle = null;
   let watchClockSyncedAt = 0;
@@ -1062,42 +1081,25 @@
     if (!gameActive || gameEnded || viewIndex !== -1) return;
     const state = parseFen(currentFen);
     const myTurn = state.turn === myColor;
-    // Если сейчас не наш ход — ставим премьюв
     if (!myTurn) {
       const p = state.board[r][c];
       const isMyPiece = p && isWhitePiece(p) === (myColor === 'w');
       if (selected) {
-        // Уже что-то выбрано — пытаемся поставить премьюв на эту клетку
         const from = selected;
-        if (from[0] === r && from[1] === c) {
-          selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); return;
-        }
+        if (from[0] === r && from[1] === c) { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); return; }
         const piece = state.board[from[0]][from[1]];
         if (piece && isWhitePiece(piece) === (myColor === 'w')) {
           premove = { from, to: [r, c], san: '' };
           selected = null; legalMoves = [];
           lastBoardHash = ''; renderBoard();
           return;
-        } else {
-          selected = null; legalMoves = [];
-        }
+        } else { selected = null; legalMoves = []; }
       }
-      // Если выбрана своя фигура — показываем её ходы как подсказку (для премьюва)
-      if (isMyPiece) {
-        selected = [r, c];
-        legalMoves = legalMovesFor(state, r, c);
-        lastBoardHash = ''; renderBoard();
-      } else {
-        selected = null; legalMoves = [];
-        lastBoardHash = ''; renderBoard();
-      }
+      if (isMyPiece) { selected = [r, c]; legalMoves = legalMovesFor(state, r, c); lastBoardHash = ''; renderBoard(); }
+      else { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); }
       return;
     }
-    // Наш ход
-    if (premove) {
-      // Клик по цели премьюва — отменяем
-      if (premove.to[0] === r && premove.to[1] === c) { premove = null; lastBoardHash = ''; renderBoard(); return; }
-    }
+    if (premove) { if (premove.to[0] === r && premove.to[1] === c) { premove = null; lastBoardHash = ''; renderBoard(); return; } }
     if (selected) {
       const isLegal = legalMoves.some(([mr, mc]) => mr === r && mc === c);
       if (isLegal) { const from = selected; selected = null; legalMoves = []; applyUserMove(from, [r, c], false); return; }
@@ -1135,11 +1137,7 @@
     dragging = null; clearGhost(); dragStartPos = null;
     if (!target) { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); return; }
     if (target[0] === from[0] && target[1] === from[1]) { selected = from; legalMoves = legalMovesFor(parseFen(currentFen), from[0], from[1]); lastBoardHash = ''; renderBoard(); return; }
-    if (wasPremove) {
-      premove = { from, to: target, san: '' };
-      selected = null; legalMoves = []; lastBoardHash = ''; renderBoard();
-      return;
-    }
+    if (wasPremove) { premove = { from, to: target, san: '' }; selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); return; }
     const ok = applyUserMove(from, target, false); if (!ok) { selected = null; legalMoves = []; lastBoardHash = ''; renderBoard(); }
   });
   function renderMoves() {
@@ -1202,8 +1200,6 @@
     oppTime = clockOppAtSync;
     if (!clockLoopRunning) startClockLoop();
   }
-
-  // ===== ПРОСМОТР: локальный тикер =====
   function startWatchClock() {
     if (watchClockHandle) cancelAnimationFrame(watchClockHandle);
     watchClockSyncedAt = performance.now();
@@ -1417,13 +1413,21 @@
     title.textContent = text; title.className = 'grTitle ' + cls;
     sub.textContent = reason || '';
     const rematchBtn = document.getElementById('grRematchBtn');
+    const pauseBtn = document.getElementById('grPauseBtn');
     const findBtn = document.getElementById('grFindBtn');
     if (currentGameIsArena) {
       rematchBtn.style.display = 'none';
+      pauseBtn.style.display = 'block';
+      pauseBtn.textContent = (currentArenaState && currentArenaState.paused) ? '▶ ПРОДОЛЖИТЬ' : '⏸ ПАУЗА';
       findBtn.textContent = 'ВЕРНУТЬСЯ К ТУРНИРУ';
-      findBtn.onclick = () => { hideGameResultBar(); cleanupGame(); if (currentArenaId) openArenaPage(currentArenaId); else navTo('arenas'); };
+      findBtn.onclick = () => {
+        hideGameResultBar();
+        if (currentArenaId) openArenaPage(currentArenaId);
+        else navTo('arenas');
+      };
     } else {
       rematchBtn.style.display = 'block';
+      pauseBtn.style.display = 'none';
       rematchBtn.disabled = false;
       rematchBtn.textContent = 'РЕВАНШ';
       findBtn.textContent = 'НАЙТИ ДРУГОГО СОПЕРНИКА';
@@ -1433,6 +1437,17 @@
     document.getElementById('movesPanel').classList.add('compact');
     document.getElementById('bigActionsRow').style.display = 'none';
   }
+  function toggleArenaPause() {
+    if (!currentArenaId) return;
+    socket.emit('pauseArena', { arenaId: currentArenaId }, (res) => {
+      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
+      const pauseBtn = document.getElementById('grPauseBtn');
+      if (pauseBtn) pauseBtn.textContent = res.paused ? '▶ ПРОДОЛЖИТЬ' : '⏸ ПАУЗА';
+      lastArenaStateHash = '';
+      loadArenaPage();
+    });
+  }
+  window.toggleArenaPause = toggleArenaPause;
   function requestRematch() {
     if (!lobbyId) return;
     if (rematchRequested) { alert('Реванш уже предложен'); return; }
@@ -1520,7 +1535,6 @@
   }
   document.addEventListener('click', (e) => { if (modMenuEl && !modMenuEl.contains(e.target)) closeModMenu(); });
 
-  // ===== ПРОСМОТР ПАРТИЙ (без лагов) =====
   function refreshWatchList(force) {
     socket.emit('getLiveGames', (list) => {
       const box = document.getElementById('watchListBody'); if (!box) return;
@@ -1547,7 +1561,7 @@
     lastWatchBoardHash = '';
     const reqId = ++watchRequestId;
     socket.emit('watchGame', { id }, (res) => {
-      if (reqId !== watchRequestId) return; // устаревший ответ
+      if (reqId !== watchRequestId) return;
       if (!res || !res.ok) {
         alert((res && res.msg) || 'Не удалось начать просмотр');
         watchingGameId = null;
@@ -1601,11 +1615,29 @@
   window.openOpponentProfile = openOpponentProfile;
   function openProfileView(username) {
     profileViewing = username;
+    profileGamesVisible = false;
+    const wrap = document.getElementById('profileGamesWrap');
+    const btn = document.getElementById('showGamesBtn');
+    if (wrap) wrap.classList.add('profileGamesHidden');
+    if (btn) btn.textContent = '📜 Показать партии';
     show('profileScreen');
     document.querySelectorAll('#mainNav a').forEach(a => a.classList.remove('active'));
     socket.emit('getProfile', { username }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } renderProfilePage(res.user, res.games, res.history); });
   }
   window.openProfileView = openProfileView;
+  function toggleProfileGames() {
+    profileGamesVisible = !profileGamesVisible;
+    const wrap = document.getElementById('profileGamesWrap');
+    const btn = document.getElementById('showGamesBtn');
+    if (profileGamesVisible) {
+      wrap.classList.remove('profileGamesHidden');
+      btn.textContent = '📜 Скрыть партии';
+    } else {
+      wrap.classList.add('profileGamesHidden');
+      btn.textContent = '📜 Показать партии';
+    }
+  }
+  window.toggleProfileGames = toggleProfileGames;
   function renderProfilePage(user, games, history) {
     const avatarEl = document.getElementById('pAvatarBig');
     avatarEl.className = 'profileAvatar' + (user.isBot ? ' botAvatar' : '');
@@ -1732,7 +1764,6 @@
     });
   }
 
-  // ===== АРЕНЫ =====
   function refreshArenas(force) {
     if (!force && !document.getElementById('arenasScreen').classList.contains('active')) return;
     socket.emit('getArenas', (res) => {
@@ -1904,7 +1935,10 @@
     const wrap = document.getElementById('arenaJoinBtnWrap');
     if (state.phase === 'finished') { wrap.innerHTML = `<button class="secondary" disabled style="width:180px;">ЗАТЕРШЕНА</button>`; return; }
     if (state.phase === 'waiting') { if (state.joined) wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="leaveCurrentArena()">ОТМЕНИТЬ</button>`; else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="joinCurrentArena()">УЧАСТВОВАТЬ</button>`; return; }
-    if (state.joined) { if (state.paused) wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="pauseCurrentArena()">▶ – ИГРАТЬ</button>`; else wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="pauseCurrentArena()">⏸ – ПАУЗА</button>`; } else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="joinCurrentArena()">УЧАСТВОВАТЬ</button>`;
+    if (state.joined) {
+      if (state.paused) wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="pauseCurrentArena()">▶ ПРОДОЛЖИТЬ</button>`;
+      else wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="pauseCurrentArena()">⏸ ПАУЗА</button>`;
+    } else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="joinCurrentArena()">УЧАСТВОВАТЬ</button>`;
   }
   function renderArenaPairingBox(state) {
     const box = document.getElementById('arenaPairingBox'); if (!box) return;
@@ -1944,6 +1978,12 @@
     socket.emit('getArenaGames', { arenaId: currentArenaId }, (res) => {
       if (!res || typeof res !== 'object') return;
       const live = res.live || [], done = res.done || [];
+      const participantsCount = res.participantsCount || 0;
+      const viewersCount = res.chatViewersCount || 0;
+      const pcEl = document.getElementById('arenaParticipantsCount');
+      const vcEl = document.getElementById('arenaViewersCount');
+      if (pcEl) pcEl.textContent = participantsCount;
+      if (vcEl) vcEl.textContent = viewersCount;
       const hash = JSON.stringify({ live: live.map(g => [g.lobbyId, g.fen, g.timeW, g.timeB]), done: done.slice(0, 30).map(g => [g.white, g.black, g.result, g.finishedAt]) });
       if (hash === lastArenaGamesHash) return;
       lastArenaGamesHash = hash;
@@ -2133,7 +2173,6 @@
     const state = parseFen(currentFen);
     if (san) playMoveSound(san);
     checkGameEnd(state); tryApplyPremove();
-    // Обновляем часы просмотра, если мы смотрим эту партию
     if (watchingGame && watchingGame.id === lobbyId) {
       watchClockSyncedAt = performance.now();
       watchClockW = watchingGame.timeW;
@@ -2142,7 +2181,6 @@
     }
   });
   socket.on('timeUpdate', ({ timeW, timeB, serverNow }) => {
-    // Синхронизируем локальные часы просмотра, если смотрим
     if (watchingGame) {
       watchClockSyncedAt = performance.now();
       watchClockW = timeW;
@@ -2206,14 +2244,12 @@
         socket.emit('watchGame', { id: watchingGameId }, (res) => {
           if (res && res.ok) {
             watchingGame = res.game;
-            // Не сбрасываем lastWatchBoardHash, если fen не изменился — просто синхронизируем часы
             const oldHash = lastWatchBoardHash;
             const newHash = res.game.id + '|' + res.game.fen + '|' + res.game.turn + '|' + (res.game.white === me.username ? false : true);
             if (newHash !== oldHash) {
               lastWatchBoardHash = '';
               renderWatchBoard();
             } else {
-              // Обновляем только часы
               watchClockSyncedAt = performance.now();
               watchClockW = res.game.timeW;
               watchClockB = res.game.timeB;
