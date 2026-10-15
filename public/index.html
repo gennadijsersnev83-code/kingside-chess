@@ -1693,7 +1693,7 @@
     if (btn) btn.textContent = '📜 Показать партии';
     show('profileScreen');
     document.querySelectorAll('#mainNav a').forEach(a => a.classList.remove('active'));
-    socket.emit('getProfile', { username }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } renderProfilePage(res.user, res.games, res.history); });
+    socket.emit('getProfile', { username }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } renderProfilePage(res.user, res.games, res.history, res.categoryHistory); });
   }
   window.openProfileView = openProfileView;
   function toggleProfileGames() {
@@ -1709,7 +1709,7 @@
     }
   }
   window.toggleProfileGames = toggleProfileGames;
-  function renderProfilePage(user, games, history) {
+  function renderProfilePage(user, games, history, categoryHistory) {
     const avatarEl = document.getElementById('pAvatarBig');
     avatarEl.className = 'profileAvatar' + (user.isBot ? ' botAvatar' : '');
     avatarEl.innerHTML = (user.isAdmin ? '<span class="pCrown">👑</span>' : '') + (user.isBot ? '🤖' : user.username.charAt(0).toUpperCase());
@@ -1734,79 +1734,70 @@
       const cats = [{ key:'classical', name:'Классика', icon:'🐢' },{ key:'rapid', name:'Рапид', icon:'⏱' },{ key:'blitz', name:'Блиц', icon:'⚡' },{ key:'bullet', name:'Пуля', icon:'🔫' }];
       catEl.innerHTML = cats.map(c => { const r = user.categories[c.key] || { rating:user.rating, games:0 }; return `<div class="catCard ${c.key}"><div class="catIcon">${c.icon}</div><div class="catName">${c.name}</div><div class="catRating">${r.rating}</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">${r.games||0} партий</div></div>`; }).join('');
     } else catEl.innerHTML = '';
-    renderRatingChart(history);
+    renderRatingChart(history, categoryHistory || games, user.username);
     renderGamesList(games, user.username);
   }
-  function renderRatingChart(history) {
+  function renderRatingChart(history, games, username) {
     const wrap = document.getElementById('ratingChartWrap');
-    if (!history || history.length < 2) { wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Недостаточно данных для графика</div>'; return; }
-    const byDay = new Map();
-    for (const h of history) {
-      const d = new Date(h.ts);
-      const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
-      if (!byDay.has(key)) byDay.set(key, { key, ts: h.ts, first: h.rating, last: h.rating, min: h.rating, max: h.rating, count: 1 });
-      else { const b = byDay.get(key); b.ts = h.ts; b.last = h.rating; if (h.rating < b.min) b.min = h.rating; if (h.rating > b.max) b.max = h.rating; b.count++; }
+    const categories = [
+      { key:'classical', label:'Классика', color:'#a78bfa' },
+      { key:'rapid', label:'Рапид', color:'#38bdf8' },
+      { key:'blitz', label:'Блиц', color:'#4ade80' },
+      { key:'bullet', label:'Пуля', color:'#fb7185' }
+    ];
+    const usable = (games || []).filter(g => g.category && categories.some(c => c.key === g.category) && Number.isFinite(Number(g.finishedAt)));
+    if (!usable.length) {
+      wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Недостаточно данных для графика</div>';
+      return;
     }
-    const days = [...byDay.values()].sort((a,b) => a.ts - b.ts);
-    const W = 900, H = 200, PADL = 44, PADR = 14, PADT = 16, PADB = 28;
-    const innerW = W - PADL - PADR, innerH = H - PADT - PADB;
-    let minR, maxR, points, xFor, yFor, daysUsed;
-    if (days.length >= 2) {
-      daysUsed = days;
-      const ratings = days.flatMap(d => [d.min, d.max, d.first, d.last]);
-      minR = Math.min(...ratings) - 20; maxR = Math.max(...ratings) + 20;
-      const rangeR = (maxR - minR) || 1;
-      xFor = (i) => PADL + (i / (days.length - 1)) * innerW;
-      yFor = (r) => PADT + innerH - ((r - minR) / rangeR) * innerH;
-      points = days.map((d, i) => ({ x: xFor(i), y: yFor(d.last), day: d }));
-    } else {
-      daysUsed = history.map(h => ({ ts: h.ts, last: h.rating, min: h.rating, max: h.rating, first: h.rating, count: 1 }));
-      const ratings = history.map(h => h.rating);
-      minR = Math.min(...ratings) - 20; maxR = Math.max(...ratings) + 20;
-      const rangeR = (maxR - minR) || 1;
-      xFor = (i) => PADL + (i / (history.length - 1)) * innerW;
-      yFor = (r) => PADT + innerH - ((r - minR) / rangeR) * innerH;
-      points = history.map((h, i) => ({ x: xFor(i), y: yFor(h.rating), day: { ts: h.ts, last: h.rating, min: h.rating, max: h.rating, count: 1 } }));
+    // Each game contributes the rating after that game to its own time-control line.
+    // All four series share one scale and are drawn over one another, like the reference image.
+    const series = categories.map(c => {
+      const rows = usable.filter(g => g.category === c.key).sort((a,b) => a.finishedAt - b.finishedAt).map(g => ({
+        ts: g.finishedAt,
+        rating: g.white === username ? Number(g.whiteAfter) : Number(g.blackAfter)
+      })).filter(p => Number.isFinite(p.rating));
+      return { ...c, rows };
+    }).filter(s => s.rows.length);
+    if (!series.length) {
+      wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Недостаточно данных для графика</div>';
+      return;
     }
-    const pathD = points.map((p, i) => (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
-    const gridLines = [];
-    for (let g = 0; g <= 4; g++) {
-      const y = PADT + (g / 4) * innerH;
-      const val = Math.round(maxR - (g / 4) * (maxR - minR));
-      gridLines.push(`<line x1="${PADL}" y1="${y.toFixed(1)}" x2="${(W - PADR).toFixed(1)}" y2="${y.toFixed(1)}" stroke="#3a3833" stroke-width="1" stroke-dasharray="3,3"/>`);
-      gridLines.push(`<text x="${PADL - 6}" y="${(y + 4).toFixed(1)}" fill="#7d7a72" font-size="11" text-anchor="end">${val}</text>`);
+    const all = series.flatMap(s => s.rows);
+    const W = 900, H = 280, PL = 48, PR = 16, PT = 18, PB = 30;
+    const IW = W - PL - PR, IH = H - PT - PB;
+    const minT = Math.min(...all.map(p => p.ts)), maxT = Math.max(...all.map(p => p.ts));
+    const ratings = all.map(p => p.rating);
+    const minR = Math.floor((Math.min(...ratings) - 50) / 100) * 100;
+    const maxR = Math.ceil((Math.max(...ratings) + 50) / 100) * 100;
+    const x = ts => PL + ((ts - minT) / ((maxT - minT) || 1)) * IW;
+    const y = rating => PT + IH - ((rating - minR) / ((maxR - minR) || 1)) * IH;
+    const grid = [];
+    for (let i=0;i<=4;i++) {
+      const yy = PT + IH*i/4, val = Math.round(maxR - (maxR-minR)*i/4);
+      grid.push(`<line x1="${PL}" y1="${yy}" x2="${W-PR}" y2="${yy}" stroke="#3a3833" stroke-width="1"/>`);
+      grid.push(`<text x="${PL-8}" y="${yy+4}" fill="#7d7a72" font-size="11" text-anchor="end">${val}</text>`);
     }
-    const xLabels = [];
-    const maxLabels = Math.min(daysUsed.length, 8);
-    const step = Math.max(1, Math.floor(daysUsed.length / maxLabels));
-    for (let i = 0; i < daysUsed.length; i += step) {
-      const d = daysUsed[i], x = xFor(i), date = new Date(d.ts);
-      const label = String(date.getDate()).padStart(2,'0') + '.' + String(date.getMonth()+1).padStart(2,'0');
-      xLabels.push(`<text x="${x.toFixed(1)}" y="${H - 8}" fill="#7d7a72" font-size="10" text-anchor="middle">${label}</text>`);
+    const labels = [];
+    for (let i=0;i<5;i++) {
+      const ts = minT + (maxT-minT)*i/4, xx = x(ts), d = new Date(ts);
+      labels.push(`<text x="${xx}" y="${H-8}" fill="#7d7a72" font-size="10" text-anchor="middle">${d.toLocaleDateString('ru-RU',{month:'2-digit',year:'2-digit'})}</text>`);
     }
-    if (daysUsed.length > 1 && (daysUsed.length - 1) % step !== 0) {
-      const i = daysUsed.length - 1, d = daysUsed[i], x = xFor(i), date = new Date(d.ts);
-      const label = String(date.getDate()).padStart(2,'0') + '.' + String(date.getMonth()+1).padStart(2,'0');
-      xLabels.push(`<text x="${x.toFixed(1)}" y="${H - 8}" fill="#7d7a72" font-size="10" text-anchor="middle">${label}</text>`);
-    }
-    const dayBars = points.map((p) => { const yMin = yFor(p.day.min), yMax = yFor(p.day.max); if (Math.abs(yMax - yMin) < 1) return ''; return `<line x1="${p.x.toFixed(1)}" y1="${yMin.toFixed(1)}" x2="${p.x.toFixed(1)}" y2="${yMax.toFixed(1)}" stroke="rgba(191,129,29,.35)" stroke-width="3" stroke-linecap="round"/>`; }).join('');
-    const dots = points.map((p, i) => {
-      const isLast = i === points.length - 1, d = p.day;
-      const dateStr = new Date(d.ts).toLocaleDateString('ru-RU');
-      const title = `${dateStr} · рейтинг: ${d.last}${d.count > 1 ? ' · партий: ' + d.count : ''}${d.min !== d.max ? ' · диапазон: ' + d.min + '–' + d.max : ''}`;
-      return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${isLast ? 4.5 : 3}" fill="${isLast ? '#bf811d' : '#629924'}" stroke="#161512" stroke-width="1"><title>${escapeHtml(title)}</title></circle>`;
+    const lines = series.map(s => {
+      const pts = s.rows.map(p => `${x(p.ts).toFixed(1)},${y(p.rating).toFixed(1)}`);
+      const path = pts.map((p,i)=>(i?'L':'M')+p).join(' ');
+      const dash = s.key === 'classical' ? '' : ' stroke-dasharray="7 4"';
+      const dots = s.rows.length < 2 ? s.rows.map(p=>`<circle cx="${x(p.ts)}" cy="${y(p.rating)}" r="3" fill="${s.color}"/>`).join('') : '';
+      return `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2"${dash} stroke-linejoin="round" stroke-linecap="round">` +
+        `<title>${s.label}: ${s.rows.length} партий</title></path>${dots}`;
     }).join('');
-    const areaD = pathD + ` L ${points[points.length-1].x.toFixed(1)},${(PADT + innerH).toFixed(1)} L ${points[0].x.toFixed(1)},${(PADT + innerH).toFixed(1)} Z`;
-    wrap.innerHTML = `
-      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:200px;display:block">
-        ${gridLines.join('')}
-        <path d="${areaD}" fill="rgba(191,129,29,.10)" />
-        ${dayBars}
-        <path d="${pathD}" fill="none" stroke="#bf811d" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
-        ${dots}
-        ${xLabels.join('')}
-      </svg>
-      <div style="color:var(--muted);font-size:11px;margin-top:6px;text-align:center">${days.length >= 2 ? 'По дням · последний рейтинг дня · вертикальная полоса — разброс за день' : 'По партиям · каждая точка — партия'}</div>`;
+    const legend = categories.map(c => {
+      const found = series.find(s=>s.key===c.key);
+      return `<span style="display:inline-flex;align-items:center;gap:5px;color:${found?c.color:'#777'};font-size:11px;opacity:${found?1:.45};white-space:nowrap"><i style="display:inline-block;width:18px;border-top:2px ${c.key==='classical'?'solid':'dashed'} ${c.color}"></i>${c.label}${found?' ('+found.rows.length+')':''}</span>`;
+    }).join('');
+    wrap.innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin:0 0 8px">${legend}</div>
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;max-height:300px;display:block">${grid.join('')}${lines}${labels.join('')}</svg>
+      <div style="color:var(--muted);font-size:11px;margin-top:5px;text-align:center">Рейтинг после каждой партии · категории наложены на один график</div>`;
   }
   function renderGamesList(games, username) {
     const el = document.getElementById('gamesList');
@@ -2482,4 +2473,3 @@
 </script>
 </body>
 </html>
-
