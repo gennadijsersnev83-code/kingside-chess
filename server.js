@@ -1769,18 +1769,15 @@ io.on('connection', (socket) => {
         finishedAt: Number(r.finished_at), category: r.category || 'blitz',
         isBot: !!r.is_bot
       }));
-      const historyRes = await pool.query(`SELECT white, black, white_before, black_before, white_after, black_after, finished_at, category FROM games WHERE white = $1 OR black = $1 ORDER BY finished_at ASC`, [username]);
+      const historyRes = await pool.query(`SELECT white, black, white_after, black_after, finished_at FROM games WHERE white = $1 OR black = $1 ORDER BY finished_at ASC`, [username]);
       const history = [{ ts: u.createdAt, rating: 1200 }];
-      const categoryHistory = [];
       for (const r of historyRes.rows) {
         const isWhite = r.white === username;
-        const rating = isWhite ? r.white_after : r.black_after;
-        history.push({ ts: Number(r.finished_at), rating });
-        categoryHistory.push({ white: r.white, black: r.black, whiteAfter: r.white_after, blackAfter: r.black_after, finishedAt: Number(r.finished_at), category: r.category || 'blitz' });
+        history.push({ ts: Number(r.finished_at), rating: isWhite ? r.white_after : r.black_after });
       }
       const user = publicUser(username);
       user.online = isUserOnline(username) || !!u.isBot;
-      cb({ ok: true, user, games, history, categoryHistory });
+      cb({ ok: true, user, games, history });
     } catch (err) {
       console.error('[DB] Ошибка загрузки профиля:', err.message || err.code || err);
       cb({ ok: false, msg: 'Ошибка базы данных' });
