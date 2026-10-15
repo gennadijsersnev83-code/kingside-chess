@@ -2,17 +2,11 @@
 // Q-learning для Watcher: Double Q + Replay + терминальная награда.
 // Watcher НЕ играет сам с собой — только с людьми и другими ботами.
 //
-// ВСЯ логика Watcher'а здесь:
-//   - encodeState / encodeAction (состояние и действие)
-//   - evalPosition (простая оценка позиции, O(64))
-//   - isHanging / filterBlunders (дешёвый фильтр подстав, O(N))
-//   - rankMoves (эвристика для ранжирования ходов)
-//   - pickMove (комбинирует Q-значения с эвристикой)
-//   - recordTransition (reward shaping + Q-update)
-//   - finishEpisode (терминальный reward)
-//   - learnFromObservedMove (обучение на чужих ходах)
-//
-// server.js только генерирует ходы и вызывает pickMove / recordTransition.
+// ВСЯ логика Watcher'а здесь. server.js только:
+//   - передаёт FEN + список легальных ходов в pickMove
+//   - передаёт prevFen/newFen/from/to/captured в recordTransition
+//   - вызывает startEpisode при старте партии Watcher'а
+//   - вызывает finishEpisode при завершении
 
 const fs = require('fs');
 const path = require('path');
@@ -33,11 +27,10 @@ const REPLAY_SAMPLE = 96;
 const REPLAY_INTERVAL_STEPS = 20;
 const REPLAY_PRIORITY_FRESH = 0.6;
 
-// Значения фигур — те же, что в server.js и bot-worker.js.
 const PIECE_VALUES = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
 
 // ============================================================
-//  ШАХМАТНЫЕ ХЕЛПЕРЫ (для оценки и фильтра подстав)
+//  ШАХМАТНЫЕ ХЕЛПЕРЫ
 // ============================================================
 
 function parseFen(fen) {
@@ -95,30 +88,6 @@ function pseudoMoves(state, r, c) {
   return moves;
 }
 
-function findKing(state, white) {
-  const k = white ? 'K' : 'k';
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (state.board[r][c] === k) return [r, c];
-  return null;
-}
-
-function isAttacked(state, r, c, byWhite) {
-  for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
-    const p = state.board[rr][cc]; if (!p || isWhitePiece(p) !== byWhite) continue;
-    const t = p.toLowerCase();
-    if (t === 'p') { const dir = byWhite ? -1 : 1; if (rr + dir === r && (cc - 1 === c || cc + 1 === c)) return true; continue; }
-    if (t === 'k') { if (Math.abs(rr - r) <= 1 && Math.abs(cc - c) <= 1 && (rr !== r || cc !== c)) return true; continue; }
-    if (pseudoMoves(state, rr, cc).some(([mr, mc]) => mr === r && mc === c)) return true;
-  }
-  return false;
-}
-
-function inCheck(state, white) {
-  const k = findKing(state, white);
-  if (!k) return false;
-  return isAttacked(state, k[0], k[1], !white);
-}
-
-// Простая оценка позиции: материал + бонус за двух слонов. O(64).
 function evalPositionFromState(state) {
   let score = 0;
   let whiteBishops = 0, blackBishops = 0;
@@ -139,101 +108,57 @@ function evalPosition(fen) {
   catch (e) { return 0; }
 }
 
-function materialBalance(fen) {
-  const state = parseFen(fen);
-  let w = 0, b = 0;
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = state.board[r][c]; if (!p) continue;
-    const v = PIECE_VALUES[p.toLowerCase()] || 0;
-    if (isWhitePiece(p)) w += v; else b += v;
-  }
-  return { w, b, diff: w - b };
-}
-
-// Проверка: «если бот пойдёт from→to, потеряет ли он материал немедленно?».
-// Соперник может взять нашу фигуру на to (или на другой клетке, где мы без защиты).
-// Возвращаем true, если это явная подстава (стоимость потери > выгоды).
+// Дешёвая проверка: если бот пойдёт from→to, потеряет ли он материал немедленно?
 function isHangingAfterMove(stateBefore, from, to, botColor) {
   const botWhite = botColor === 'w';
   const movedPiece = stateBefore.board[from[0]][from[1]];
   if (!movedPiece) return false;
   const movedValue = PIECE_VALUES[movedPiece.toLowerCase()] || 0;
 
-  // Что мы едим на to?
   const target = stateBefore.board[to[0]][to[1]];
   const capturedValue = target ? (PIECE_VALUES[target.toLowerCase()] || 0) : 0;
 
-  // Простейшая модель: считаем, что после нашего хода соперник бьёт на to,
-  // если у него есть фигура, атакующая to, и мы не защищаем to достаточно.
-  // Это O(N) на ход, где N — число фигур соперника (≤ 16).
+  if (capturedValue >= movedValue) return false;
+
   const oppWhite = !botWhite;
 
-  // Ищем, есть ли у соперника взятие на to с выгодой.
+  let attackers = 0;
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = stateBefore.board[r][c];
     if (!p || isWhitePiece(p) !== oppWhite) continue;
-    const pv = PIECE_VALUES[p.toLowerCase()] || 0;
-    const attacks = pseudoMoves(stateBefore, r, c);
-    if (!attacks.some(([ar, ac]) => ar === to[0] && ac === to[1])) continue;
-    // У соперника есть взятие на to. Если он берёт нашу фигуру дороже своей — это подстава.
-    if (movedValue > pv + capturedValue * 0.5) return true;
+    if (pseudoMoves(stateBefore, r, c).some(([ar, ac]) => ar === to[0] && ac === to[1])) attackers++;
+  }
+  if (attackers === 0) return false;
+
+  let defenders = 0;
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    if (r === to[0] && c === to[1]) continue;
+    const p = stateBefore.board[r][c];
+    if (!p || isWhitePiece(p) !== botWhite) continue;
+    if (pseudoMoves(stateBefore, r, c).some(([ar, ac]) => ar === to[0] && ac === to[1])) defenders++;
   }
 
-  // Также проверяем: не осталась ли наша фигура на to без защиты и под ударом
-  // при отсутствии компенсации (простая эвристика).
-  const defenders = countDefenders(stateBefore, to, botWhite);
-  const attackers = countAttackers(stateBefore, to, oppWhite);
-  if (attackers > defenders && movedValue - capturedValue > 200 && movedValue > 300) return true;
+  if (attackers > defenders && movedValue - capturedValue > 150) return true;
+  if (attackers >= 1 && defenders === 0 && movedValue - capturedValue > 200) return true;
 
   return false;
 }
 
-function countAttackers(state, sq, byWhite) {
-  let n = 0;
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = state.board[r][c];
-    if (!p || isWhitePiece(p) !== byWhite) continue;
-    if (pseudoMoves(state, r, c).some(([ar, ac]) => ar === sq[0] && ac === sq[1])) n++;
-  }
-  return n;
-}
-
-function countDefenders(state, sq, byWhite) {
-  let n = 0;
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = state.board[r][c];
-    if (!p || isWhitePiece(p) !== byWhite) continue;
-    if (r === sq[0] && c === sq[1]) continue;
-    if (pseudoMoves(state, r, c).some(([ar, ac]) => ar === sq[0] && ac === sq[1])) n++;
-  }
-  return n;
-}
-
-// Фильтр подстав: убирает из списка ходов те, что ведут к немедленной потере
-// материала без компенсации. Если после фильтрации не осталось ходов —
-// возвращаем исходный список.
-function filterBlunders(stateBefore, moves, botColor) {
+function filterBlunders(stateBefore, normalizedMoves, botColor) {
   const safe = [];
-  for (const mv of moves) {
-    const from = Array.isArray(mv.from) ? mv.from : mv[0];
-    const to = Array.isArray(mv.to) ? mv.to : mv[1];
-    if (!from || !to) continue;
-    if (isHangingAfterMove(stateBefore, from, to, botColor)) continue;
+  for (const mv of normalizedMoves) {
+    if (isHangingAfterMove(stateBefore, mv.from, mv.to, botColor)) continue;
     safe.push(mv);
   }
-  return safe.length ? safe : moves;
+  return safe.length ? safe : normalizedMoves;
 }
 
-// ============================================================
-//  ЭВРИСТИКА ДЛЯ РАНЖИРОВАНИЯ ХОДОВ
-// ============================================================
-
-function rankMoves(stateBefore, moves, botColor) {
+function rankMoves(stateBefore, normalizedMoves, botColor) {
   const botWhite = botColor === 'w';
-  const ranked = moves.map(mv => {
-    const from = Array.isArray(mv.from) ? mv.from : mv[0];
-    const to = Array.isArray(mv.to) ? mv.to : mv[1];
+  return normalizedMoves.map(mv => {
+    const { from, to } = mv;
     let score = 0;
+
     const target = stateBefore.board[to[0]][to[1]];
     const piece = stateBefore.board[from[0]][from[1]];
     if (target && piece) {
@@ -241,17 +166,17 @@ function rankMoves(stateBefore, moves, botColor) {
       const pv = PIECE_VALUES[piece.toLowerCase()] || 0;
       score += (tv - pv * 0.3) * 0.5;
     }
-    // Лёгкий бонус за центр (d4,e4,d5,e5).
+
     const centerDist = Math.abs(to[0] - 3.5) + Math.abs(to[1] - 3.5);
     score += (7 - centerDist) * 3;
-    // Бонус за развитие фигур из начальной позиции.
+
     if (stateBefore.full <= 10) {
       const back = botWhite ? 7 : 0;
       if (from[0] === back) score += 8;
     }
+
     return { from, to, score };
   });
-  return ranked;
 }
 
 // ============================================================
@@ -435,7 +360,7 @@ function saveQTable() {
   if (!dirty) return;
   ensureDataDir();
   try {
-    const obj = { qa: {}, qb: {}, totalGames, totalSteps, savedAt: Date.now(), version: 5 };
+    const obj = { qa: {}, qb: {}, totalGames, totalSteps, savedAt: Date.now(), version: 6 };
     for (const [state, actions] of QA.entries()) {
       const a = {};
       for (const [act, val] of actions.entries()) a[act] = val;
@@ -483,52 +408,52 @@ function getEpsilon() {
 //  ВЫБОР ХОДА
 // ============================================================
 
-// moves — массив [[fromR, fromC], [toR, toC]] или [{from, to}, ...].
-// Возвращаем { from, to } — гарантированно в этом формате.
+// moves — массив [[fromR,fromC],[toR,toC]] (как botAllLegalMoves в server.js).
+// Возвращаем всегда { from: [r,c], to: [r,c] } или null.
 function pickMove(fen, botColor, timeControl, moves) {
   if (!moves || moves.length === 0) return null;
 
-  // Нормализуем входные ходы.
-  const normalized = moves.map(mv => {
-    if (Array.isArray(mv.from) && Array.isArray(mv.to)) return { from: mv.from, to: mv.to };
-    if (Array.isArray(mv) && mv.length === 2 && Array.isArray(mv[0]) && Array.isArray(mv[1])) {
-      return { from: mv[0], to: mv[1] };
+  const normalized = [];
+  for (const mv of moves) {
+    if (Array.isArray(mv) && mv.length === 2 && Array.isArray(mv[0]) && Array.isArray(mv[1]) && mv[0].length === 2 && mv[1].length === 2) {
+      normalized.push({ from: [mv[0][0], mv[0][1]], to: [mv[1][0], mv[1][1]] });
+    } else if (mv && Array.isArray(mv.from) && Array.isArray(mv.to)) {
+      normalized.push({ from: [mv.from[0], mv.from[1]], to: [mv.to[0], mv.to[1]] });
     }
-    return null;
-  }).filter(Boolean);
-
+  }
   if (!normalized.length) return null;
   if (normalized.length === 1) return normalized[0];
 
   const state = parseFen(fen);
-  const botWhite = botColor === 'w';
 
-  // 1. Дешёвый фильтр подстав (O(N)).
+  // 1. Дешёвый фильтр подстав.
   const filtered = filterBlunders(state, normalized, botColor);
 
-  // 2. Ранжируем ходы по эвристике.
+  // 2. Ранжирование по эвристике.
   const ranked = rankMoves(state, filtered, botColor);
   ranked.sort((a, b) => b.score - a.score);
 
-  // 3. Q-значения: комбинируем с эвристикой.
   const encodedState = encodeState(fen, botColor, timeControl);
   const eps = getEpsilon();
 
+  // 3. Исследование vs использование.
   if (Math.random() < eps) {
-    // Исследование: из top-3 лучших по эвристике.
+    // Исследование: случайный из top-3 лучших по эвристике.
     const pool = ranked.slice(0, Math.min(3, ranked.length));
-    return { from: pool[Math.floor(Math.random() * pool.length)].from, to: pool[Math.floor(Math.random() * pool.length)].to };
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    return { from: pick.from, to: pick.to };
   }
 
-  let best = null, bestScore = -Infinity;
-  const qActions = QA.get(encodedState);
+  // 4. Использование: комбинируем Q-значения с эвристикой.
+  const qActionsA = QA.get(encodedState);
   const qActionsB = QB.get(encodedState);
+
+  let best = null, bestScore = -Infinity;
   for (const mv of ranked) {
     const act = encodeAction(mv.from, mv.to);
-    const qa = qActions && qActions.get(act) ? qActions.get(act).q : 0;
+    const qa = qActionsA && qActionsA.get(act) ? qActionsA.get(act).q : 0;
     const qb = qActionsB && qActionsB.get(act) ? qActionsB.get(act).q : 0;
     const qAvg = (qa + qb) / 2;
-    // Эвристика нормализована примерно в диапазон [-1, 1].
     const heuristic = Math.max(-2, Math.min(2, mv.score / 200));
     const score = qAvg * 0.6 + heuristic * 0.4;
     if (score > bestScore) { bestScore = score; best = mv; }
@@ -583,24 +508,21 @@ function startEpisode(botColor, timeControl) {
     transitions: [],
     startedAt: Date.now()
   };
+  console.log(`[Watcher] Эпизод начат: цвет=${botColor}, tc=${timeControl.time}+${timeControl.inc}`);
 }
 
-// Записываем переход после хода Watcher'а.
-// prevFen — позиция до хода Watcher'а.
-// newFen  — позиция после хода Watcher'а.
-// capturedPiece — фигура (символ), которую Watcher съел, или null.
-function recordTransition(prevFen, newFen, botColor, timeControl, capturedPiece) {
+// prevFen, newFen — позиции до/после хода Watcher'а.
+// from, to — координаты хода Watcher'а (гарантированно корректные).
+// captured — символ съеденной фигуры или null.
+function recordTransition(prevFen, newFen, from, to, botColor, timeControl, captured) {
   try {
+    if (!from || !to || from.length !== 2 || to.length !== 2) return;
     if (!currentEpisode) startEpisode(botColor, timeControl);
 
     const stateBefore = encodeState(prevFen, botColor, timeControl);
     const stateAfter = encodeState(newFen, botColor, timeControl);
-    const actionStr = deriveAction(prevFen, newFen, botColor);
-    if (!actionStr) return;
+    const actionStr = encodeAction(from, to);
 
-    // Reward shaping:
-    //   1) изменение оценки с нашей точки зрения (нормализовано /400)
-    //   2) бонус за съеденную фигуру (/400)
     const evalBefore = evalPosition(prevFen);
     const evalAfter = evalPosition(newFen);
     const myBefore = botColor === 'w' ? evalBefore : -evalBefore;
@@ -608,15 +530,9 @@ function recordTransition(prevFen, newFen, botColor, timeControl, capturedPiece)
     const delta = myAfter - myBefore;
     const immediateReward = delta / 400;
 
-    const capturedValue = capturedPiece ? (PIECE_VALUES[capturedPiece.toLowerCase()] || 0) : 0;
+    const capturedValue = captured ? (PIECE_VALUES[captured.toLowerCase()] || 0) : 0;
     const captureBonus = capturedValue / 400;
 
-    // Штраф, если после нашего хода мы под боем и можем потерять фигуру.
-    const stateAfterParsed = parseFen(newFen);
-    // Проверяем, не висит ли наша фигура, которой мы только что ходили.
-    // Это делается через filteredBlunders на следующем ходу, но здесь мы
-    // добавим лёгкий штраф по факту: если соперник может сразу взять нашу
-    // фигуру — reward меньше.
     const reward = immediateReward + captureBonus * 0.5;
 
     updateQ(stateBefore, actionStr, reward, stateAfter, evalAfter);
@@ -632,48 +548,6 @@ function recordTransition(prevFen, newFen, botColor, timeControl, capturedPiece)
   } catch (e) {
     console.error('[Watcher] recordTransition ошибка:', e.message);
   }
-}
-
-// Восстанавливаем ход по двум FEN'ам (для action encoding).
-function deriveAction(prevFen, newFen, botColor) {
-  try {
-    const before = parseFen(prevFen);
-    const after = parseFen(newFen);
-    const botWhite = botColor === 'w';
-    let from = null, to = null;
-    for (let r = 0; r < 8 && !from; r++) for (let c = 0; c < 8; c++) {
-      const bp = before.board[r][c];
-      const ap = after.board[r][c];
-      if (bp && bp !== ap) {
-        // Либо фигура ушла с (r,c), либо превратилась.
-        if (!ap || (isWhitePiece(bp) === botWhite && ap !== bp)) {
-          from = [r, c];
-          break;
-        }
-      }
-    }
-    if (!from) return null;
-    const movedPiece = before.board[from[0]][from[1]];
-    const movedWhite = isWhitePiece(movedPiece);
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-      const bp = before.board[r][c];
-      const ap = after.board[r][c];
-      if (ap && isWhitePiece(ap) === movedWhite && bp !== ap) {
-        // Тут может быть рокировка: король переместился далеко, ладья тоже.
-        // Но для action-encoding нам важно только from→to короля.
-        if (movedPiece.toLowerCase() === 'k' && Math.abs(c - from[1]) === 2 && r === from[0]) {
-          to = [r, c];
-          break;
-        }
-        if (movedPiece.toLowerCase() !== 'k' || Math.abs(c - from[1]) !== 2) {
-          to = [r, c];
-          break;
-        }
-      }
-    }
-    if (!from || !to) return null;
-    return encodeAction(from, to);
-  } catch (e) { return null; }
 }
 
 function batchUpdate() {
@@ -784,7 +658,5 @@ module.exports = {
   saveQTable,
   startAutoSave,
   getStats,
-  // Экспортируем для возможного использования в server.js
-  evalPosition,
-  materialBalance
+  evalPosition
 };
