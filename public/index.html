@@ -36,6 +36,8 @@
   .botBadge { display:inline-flex; align-items:center; gap:3px; padding:1px 7px; border-radius:10px; font-size:10px; font-weight:800; text-transform:uppercase; letter-spacing:.5px; background:linear-gradient(180deg,#4a3d8f,#2a2557); color:#c9bfff; border:1px solid #6f5fbf; }
   .onlineDot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#629924; margin-right:5px; flex-shrink:0; vertical-align:middle; box-shadow:0 0 4px rgba(98,153,36,.7); }
   .offlineDot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#555; margin-right:5px; flex-shrink:0; vertical-align:middle; }
+  .watchersBadge { display:inline-flex; align-items:center; gap:3px; font-size:11px; color:var(--muted); margin-left:6px; }
+  .watchersBadge b { color:var(--accent); }
   .backToGameBtn { background:var(--green); border:none; color:#fff; padding:6px 12px; border-radius:6px; cursor:pointer; font-size:12px; font-weight:700; display:none; align-items:center; gap:6px; white-space:nowrap; animation:pulse 1.6s infinite; }
   .backToGameBtn:hover { background:var(--green-2); }
   .backToGameBtn.show { display:flex; }
@@ -245,7 +247,7 @@
   .arenaRight  { width:300px; min-width:300px; max-width:300px; display:flex; flex-direction:column; }
   @media (max-width:1110px) { .arenaLeft { width:260px; min-width:260px; max-width:260px; } .arenaCenter { width:auto; min-width:0; max-width:none; } .arenaRight { width:280px; min-width:280px; max-width:280px; } }
   @media (max-width:940px) { .arenaLeft, .arenaCenter, .arenaRight { width:100%; min-width:0; max-width:none; } }
-  .arenaRightCol { min-height:576px; background:var(--panel); border:1px solid var(--border); border-radius:6px; display:flex; flex-direction:column; overflow:hidden; }
+  .arenaRightCol { min-height:576px; max-height:720px; background:var(--panel); border:1px solid var(--border); border-radius:6px; display:flex; flex-direction:column; overflow:hidden; }
   .arenaGamesHeader { flex:0 0 auto; padding:8px 12px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; font-weight:700; }
   .arenaTopGame { flex:0 0 auto; padding:8px; border-bottom:1px solid var(--border); display:flex; flex-direction:column; gap:6px; box-sizing:border-box; }
   .arenaTopGameEmpty { padding:30px 10px; text-align:center; color:var(--muted); font-size:12px; }
@@ -263,10 +265,10 @@
   .arenaTopGameBoard .sq .piece.b { color:#1e1e1e; text-shadow:-1px -1px 0 #ddd,1px -1px 0 #ddd,-1px 1px 0 #ddd,1px 1px 0 #ddd; }
   .arenaTopGameLink { text-align:center; font-size:11px; color:var(--accent); cursor:pointer; padding:3px; border-radius:3px; flex-shrink:0; }
   .arenaTopGameLink:hover { background:var(--panel-hover); }
-  .arenaGamesList { flex:1 1 auto; min-height:0; padding:6px; display:flex; flex-direction:column; gap:4px; overflow-y:auto; overflow-x:hidden; }
-  .arenaGamesList::-webkit-scrollbar { width:6px; }
-  .arenaGamesList::-webkit-scrollbar-track { background:transparent; }
-  .arenaGamesList::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+  .arenaGamesList { flex:1 1 auto; min-height:0; padding:6px; display:flex; flex-direction:column; gap:4px; overflow-y:auto; overflow-x:hidden; max-height:280px; }
+  .arenaGamesList::-webkit-scrollbar { width:8px; }
+  .arenaGamesList::-webkit-scrollbar-track { background:var(--panel-2); border-radius:4px; }
+  .arenaGamesList::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
   .arenaGamesList::-webkit-scrollbar-thumb:hover { background:#4a4740; }
   .arenaGameCard { background:var(--panel-2); border-radius:4px; padding:6px 8px; font-size:11px; border-left:3px solid var(--accent); flex-shrink:0; }
   .arenaGameCard .row1 { display:flex; justify-content:space-between; align-items:center; color:var(--text-bright); font-weight:600; overflow:hidden; }
@@ -905,6 +907,10 @@
       ? '<span class="onlineDot" title="В сети"></span>'
       : '<span class="offlineDot" title="Не в сети"></span>';
   }
+  function watchersHtml(n) {
+    if (!n || n <= 0) return '';
+    return `<span class="watchersBadge" title="Зрителей">👁 <b>${n}</b></span>`;
+  }
 
   function parseFen(fen) {
     const parts = fen.split(' ');
@@ -1336,7 +1342,7 @@
           row.innerHTML = `<div class="icon">⚔</div><div class="name">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod)}</div><div class="time">${l.time}+${l.inc}</div><div class="mode" style="color:var(--green-2);font-weight:600;">партия началась</div><div class="action"></div>`;
         } else {
           row.style.cursor = isMine ? 'pointer' : 'default';
-          const botLabel = l.isBot ? '🤖 бот' : '♟';
+          const botLabel = l.isBot ? '🤖' : '♟';
           const modeText = l.isBot ? 'ждёт соперника' : 'ожидание';
           row.innerHTML = `<div class="icon">${botLabel}</div><div class="name">${nickHtml(l.host, l.hostIsAdmin, l.hostIsMod, l.isBot)}${isMine ? '<span class="mineTag">(ваш вызов)</span>' : ''}</div><div class="time">${l.time}+${l.inc}</div><div class="mode">${modeText}</div><div class="action"></div>`;
           if (!isMine) {
@@ -1547,7 +1553,7 @@
         return `<div class="${cls}" onclick="watchGame('${g.id}')">
           <div class="wrPlayers"><span><span class="liveDot"></span>⚪ ${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${g.whiteRating ? ' <span class="prat">('+g.whiteRating+')</span>' : ''}</span><span>${formatTime(g.timeW)}</span></div>
           <div class="wrPlayers"><span>⚫ ${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${g.blackRating ? ' <span class="prat">('+g.blackRating+')</span>' : ''}</span><span>${formatTime(g.timeB)}</span></div>
-          <div class="wrMeta"><span>${g.timeControl}+${g.increment}${arenaTag}</span><span>ход: <b>${g.turn === 'w' ? 'белые' : 'чёрные'}</b></span></div>
+          <div class="wrMeta"><span>${g.timeControl}+${g.increment}${arenaTag}</span><span>ход: <b>${g.turn === 'w' ? 'белые' : 'чёрные'}</b> ${watchersHtml(g.watchersCount)}</span></div>
         </div>`;
       }).join('');
     });
@@ -1578,7 +1584,7 @@
     const g = watchingGame;
     const state = parseFen(g.fen);
     const flip = g.white === me.username ? false : true;
-    const hash = g.id + '|' + g.fen + '|' + g.turn + '|' + flip;
+    const hash = g.id + '|' + g.fen + '|' + g.turn + '|' + flip + '|' + (g.watchersCount || 0);
     if (hash === lastWatchBoardHash) return;
     lastWatchBoardHash = hash;
     const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
@@ -1594,8 +1600,11 @@
       if (dc === 0) coords += `<span class="coord-r">${8 - r}</span>`;
       squares += `<div class="${cls}">${inner}${coords}</div>`;
     }
+    const watchersLine = (g.watchersCount && g.watchersCount > 0)
+      ? `<div style="font-size:12px;color:var(--muted);margin-top:4px;">👁 Зрителей: <b style="color:var(--accent)">${g.watchersCount}</b></div>`
+      : '';
     box.innerHTML = `
-      <div class="wbHeader"><div><div class="wbTitle">Партия ${g.isArena ? 'турнира' : ''}</div><div class="wbSub">${g.timeControl}+${g.increment}${g.arenaName ? ' · '+escapeHtml(g.arenaName) : ''}</div></div><button class="secondary" onclick="stopWatching()">✕ – Выйти</button></div>
+      <div class="wbHeader"><div><div class="wbTitle">Партия ${g.isArena ? 'турнира' : ''}</div><div class="wbSub">${g.timeControl}+${g.increment}${g.arenaName ? ' · '+escapeHtml(g.arenaName) : ''}</div>${watchersLine}</div><button class="secondary" onclick="stopWatching()">✕ – Выйти</button></div>
       <div class="wbPlayers">
         <div class="wbPlayer ${blackActive?'active':''}"><span><span class="name">⚫ ${nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}</span><span class="time" id="watchTimeB">${formatTime(g.timeB)}</span></div>
         <div class="wbPlayer ${whiteActive?'active':''}"><span><span class="name">⚪ ${nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}</span><span class="time" id="watchTimeW">${formatTime(g.timeW)}</span></div>
@@ -2199,6 +2208,29 @@
     if (arenaId) currentArenaId = arenaId;
     endGame(winner, reason, true, currentGameIsArena);
   });
+  socket.on('watchersUpdate', ({ lobbyId: lid, count }) => {
+    if (watchingGame && watchingGame.id === lid) {
+      watchingGame.watchersCount = count;
+      const line = document.querySelector('#watchBoardBox .wbSub');
+      // Обновим блок со зрителями без полной перерисовки
+      const box = document.getElementById('watchBoardBox');
+      if (box) {
+        let el = box.querySelector('.watchersLineDynamic');
+        if (!el) {
+          const header = box.querySelector('.wbHeader > div');
+          if (header) {
+            el = document.createElement('div');
+            el.className = 'watchersLineDynamic';
+            el.style.cssText = 'font-size:12px;color:var(--muted);margin-top:4px;';
+            header.appendChild(el);
+          }
+        }
+        if (el) el.innerHTML = count > 0 ? `👁 Зрителей: <b style="color:var(--accent)">${count}</b>` : '';
+      }
+    }
+    // Обновляем список партий, если открыт
+    if (document.getElementById('watchScreen').classList.contains('active')) refreshWatchList(false);
+  });
   socket.on('drawOffered', ({ from }) => showDrawOfferDialog(from || 'Соперник'));
   socket.on('drawDeclined', () => { document.getElementById('statusBar').className = 'statusYellow'; document.getElementById('statusBar').textContent = 'Соперник отклонил ничью'; pendingDrawOffer = false; });
   socket.on('rematchOffered', ({ from }) => showRematchOfferDialog(from || 'Соперник'));
@@ -2245,7 +2277,7 @@
           if (res && res.ok) {
             watchingGame = res.game;
             const oldHash = lastWatchBoardHash;
-            const newHash = res.game.id + '|' + res.game.fen + '|' + res.game.turn + '|' + (res.game.white === me.username ? false : true);
+            const newHash = res.game.id + '|' + res.game.fen + '|' + res.game.turn + '|' + (res.game.white === me.username ? false : true) + '|' + (res.game.watchersCount || 0);
             if (newHash !== oldHash) {
               lastWatchBoardHash = '';
               renderWatchBoard();
