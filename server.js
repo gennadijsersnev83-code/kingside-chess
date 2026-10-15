@@ -1311,7 +1311,8 @@ function clearMute(username) {
 }
 
 // ============================================================
-//  ЛЁГКИЙ ШАХМАТНЫЙ ДВИЖОК
+//  ПРОСТОЙ ШАХМАТНЫЙ ДВИЖОК (только для серверной логики)
+//  Тяжёлая оценка — в bot-worker.js (worker_threads).
 // ============================================================
 const PIECE_VALUES = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
 
@@ -1396,6 +1397,9 @@ function botAllLegalMoves(state, white) {
   }
   return res;
 }
+
+// Простая оценка (как в исходной версии): материал + пара слонов.
+// Никаких PST, мобильности, lookahead — это всё в bot-worker.js.
 function botEval(state) {
   let score = 0;
   let whiteBishops = 0, blackBishops = 0;
@@ -1464,15 +1468,7 @@ function scheduleBotMove(lobbyId) {
 
       if (botName === WATCHER_NAME) {
         try {
-          if (!watcherLearning.getStats().episodeActive) {
-            watcherLearning.startEpisode(botColor, { time: cur.time, inc: cur.inc });
-          }
-          const stateBefore = watcherLearning.encodeState(prevFen, botColor, { time: cur.time, inc: cur.inc });
-          const actionStr = watcherLearning.encodeAction(from, to);
-          const stateAfter = watcherLearning.encodeState(botToFen(nextState), botColor, { time: cur.time, inc: cur.inc });
-          const evalAfter = botEval(nextState);
-          const reward = (botColor === 'w' ? evalAfter : -evalAfter) / 1000;
-          watcherLearning.recordTransition(stateBefore, actionStr, reward, stateAfter, evalAfter);
+          watcherLearning.recordTransition(prevFen, botToFen(nextState), botColor, { time: cur.time, inc: cur.inc }, captured || null);
         } catch (e) { console.error('[Watcher] Ошибка обучения:', e.message); }
       }
 
@@ -1618,14 +1614,9 @@ function scheduleBotMove(lobbyId) {
 
     let mv;
     if (botName === WATCHER_NAME) {
-      const botIsWhiteMove = botColor === 'w';
-      const curState = botParseFen(cur.fen);
-      const availableMoves = botAllLegalMoves(curState, botIsWhiteMove);
-      const movesWithEval = availableMoves.map(([from, to]) => {
-        const nextSt = botApplyMove(curState, from, to);
-        return { from, to, eval: botEval(nextSt) };
-      });
-      mv = watcherLearning.pickMove(cur.fen, botColor, { time: cur.time, inc: cur.inc }, movesWithEval);
+      // Watcher думает сам, вся логика — в watcher-learning.js.
+      // Передаём только FEN, цвет и список легальных ходов.
+      mv = watcherLearning.pickMove(cur.fen, botColor, { time: cur.time, inc: cur.inc }, botMoves);
     } else {
       try { mv = await botPool.getMove(cur.fen, botRating, cur.time); }
       catch (err) { console.error('[bot-pool] ошибка получения хода:', err.message); return; }
@@ -1660,15 +1651,7 @@ function scheduleBotMove(lobbyId) {
 
     if (botName === WATCHER_NAME) {
       try {
-        if (!watcherLearning.getStats().episodeActive) {
-          watcherLearning.startEpisode(botColor, { time: cur2.time, inc: cur2.inc });
-        }
-        const stateBefore = watcherLearning.encodeState(prevFen, botColor, { time: cur2.time, inc: cur2.inc });
-        const actionStr = watcherLearning.encodeAction(from, to);
-        const stateAfter = watcherLearning.encodeState(botToFen(nextState), botColor, { time: cur2.time, inc: cur2.inc });
-        const evalAfter = botEval(nextState);
-        const reward = (botColor === 'w' ? evalAfter : -evalAfter) / 1000;
-        watcherLearning.recordTransition(stateBefore, actionStr, reward, stateAfter, evalAfter);
+        watcherLearning.recordTransition(prevFen, botToFen(nextState), botColor, { time: cur2.time, inc: cur2.inc }, captured || null);
       } catch (e) { console.error('[Watcher] Ошибка обучения:', e.message); }
     }
 
