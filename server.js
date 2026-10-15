@@ -407,18 +407,41 @@ function countActiveLobbies() {
   for (const l of lobbies.values()) { if (l.finished) continue; if (l.started) n++; }
   return n;
 }
-function countOnline() {
-  let n = online.size;
-  for (const bot of BOTS) if (db.users[bot.name] && bot.name !== WATCHER_NAME) n++;
-  return n;
+function onlinePlayersList() {
+  const byName = new Map();
+  for (const username of online.values()) {
+    if (db.users[username]) byName.set(username, { ...publicUser(username), online: true });
+  }
+  // Bots are online services; Watcher is a real bot-player too and must be counted.
+  for (const bot of BOTS) {
+    if (db.users[bot.name]) byName.set(bot.name, { ...publicUser(bot.name), online: true, isBot: true });
+  }
+  if (db.users[WATCHER_NAME]) byName.set(WATCHER_NAME, { ...publicUser(WATCHER_NAME), online: true, isBot: true });
+  return [...byName.values()].sort((a, b) => Number(b.isBot) - Number(a.isBot) || b.rating - a.rating || a.username.localeCompare(b.username));
 }
+function countOnline() { return onlinePlayersList().length; }
 function broadcastOnline() {
-  const on = countOnline();
-  io.emit('stats', { online: on, games: db.totalGames, activeGames: countActiveLobbies() });
+  const players = onlinePlayersList();
+  io.emit('stats', { online: players.length, games: db.totalGames, activeGames: countActiveLobbies() });
+  io.emit('communityOnline', players);
 }
 function broadcastLobbies() { io.emit('lobbiesUpdate'); }
 
-function watchersCountOf(l) { return l && l.watchers ? l.watchers.size : 0; }
+function watchersCountOf(l) {
+  if (!l || !l.watchers) return 0;
+  // Count unique connected accounts, not socket IDs: multiple tabs/reconnects
+  // from the same account should not inflate the audience counter.
+  const names = new Set();
+  for (const socketId of [...l.watchers]) {
+    const viewerSocket = io.sockets.sockets.get(socketId);
+    if (!viewerSocket || !viewerSocket.connected) {
+      l.watchers.delete(socketId);
+      continue;
+    }
+    names.add(viewerSocket.username || socketId);
+  }
+  return names.size;
+}
 function broadcastWatchers(lobbyId) {
   const l = lobbies.get(lobbyId);
   if (!l) return;
@@ -526,9 +549,8 @@ async function finishGame(lobbyId, result, reason) {
   const whiteIsWatcher = whiteName === WATCHER_NAME;
   const blackIsWatcher = blackName === WATCHER_NAME;
 
-  // Watcher: рейтинг фиксируется, статистика (games/wins/losses/draws) обновляется
-  if (whiteIsWatcher) whiteAfter = 1200;
-  if (blackIsWatcher) blackAfter = 1200;
+  // Watcher uses the same Glicko-2 rating update as other players.
+  // Do not pin its rating to 1200: 1200 is only the starting rating.
 
   wc.rating = whiteAfter; wc.rd = whiteRes.rd; wc.vol = whiteRes.vol;
   if (result === 'w') wc.wins++; else if (result === 'b') wc.losses++; else wc.draws++;
@@ -547,15 +569,6 @@ async function finishGame(lobbyId, result, reason) {
   blackUser.vol = blackRes.vol;
   if (result === 'b') blackUser.wins++; else if (result === 'w') blackUser.losses++; else blackUser.draws++;
   blackUser.games++;
-
-  if (whiteIsWatcher) {
-    whiteUser.rating = 1200;
-    if (whiteUser.categories[cat]) whiteUser.categories[cat].rating = 1200;
-  }
-  if (blackIsWatcher) {
-    blackUser.rating = 1200;
-    if (blackUser.categories[cat]) blackUser.categories[cat].rating = 1200;
-  }
 
   const gameRecord = {
     white: whiteName, black: blackName, result, reason,
@@ -578,35 +591,11 @@ async function finishGame(lobbyId, result, reason) {
     } catch (e) { /* ignore */ }
   }
 
-  const isWatcherVsBot = (whiteIsWatcher && blackUser.isBot) ||
-                         (blackIsWatcher && whiteUser.isBot);
-
-  if (isWatcherVsBot) {
-    // Статистика Watcher — сохраняем; боту-сопернику откатываем изменения
-    const watcherName = whiteIsWatcher ? whiteName : blackName;
-    const botName = whiteIsWatcher ? blackName : whiteName;
-    const botUser = db.users[botName];
-    const wUser = db.users[watcherName];
-    if (botUser && botUser.categories) {
-      const botCat = botUser.categories[cat];
-      if (botCat) {
-        if (whiteIsWatcher) { botCat.losses = Math.max(0, botCat.losses - 1); botCat.games = Math.max(0, botCat.games - 1); }
-        else                { botCat.wins   = Math.max(0, botCat.wins   - 1); botCat.games = Math.max(0, botCat.games   - 1); }
-      }
-      if (whiteIsWatcher) { botUser.losses = Math.max(0, botUser.losses - 1); botUser.games = Math.max(0, botUser.games - 1); }
-      else                { botUser.wins   = Math.max(0, botUser.wins   - 1); botUser.games = Math.max(0, botUser.games   - 1); }
-    }
-    if (wUser) {
-      wUser.rating = 1200;
-      if (wUser.categories && wUser.categories[cat]) wUser.categories[cat].rating = 1200;
-      try { await saveUser(watcherName); } catch (e) { console.error('[DB] saveUser watcher fail:', e.message); }
-    }
-    console.log(`[Watcher] Партия vs бот: статистика Watcher обновлена`);
-  } else {
-    try { await saveUser(whiteName); } catch (e) { console.error('[DB] saveUser white fail:', e.message); }
-    try { await saveUser(blackName); } catch (e) { console.error('[DB] saveUser black fail:', e.message); }
-    try { await saveGame(gameRecord); } catch (e) { console.error('[DB] saveGame fail:', e.message); }
-  }
+  // Every completed game updates both players' ratings/statistics and is saved,
+  // including Watcher training games against bots.
+  try { await saveUser(whiteName); } catch (e) { console.error('[DB] saveUser white fail:', e.message); }
+  try { await saveUser(blackName); } catch (e) { console.error('[DB] saveUser black fail:', e.message); }
+  try { await saveGame(gameRecord); } catch (e) { console.error('[DB] saveGame fail:', e.message); }
 
   const isArena = !!l.arenaId;
   io.to(lobbyId).emit('gameEnded', {
@@ -800,6 +789,9 @@ function isAvailableForPairing(p, arenaId) {
     return true;
   }
   if (p.paused) return false;
+  // Человек после завершения партии должен сам нажать «Вернуться к турниру».
+  // Пока он смотрит завершённую партию, новую жеребьёвку для него не проводим.
+  if (!p.isBot && p.awaitingNextPair) return false;
   if (p.isBot) {
     if (botIsBusy(p.username)) return false;
     if (arenaId && botGamesInArena(arenaId) >= MAX_BOT_GAMES_PER_ARENA) return false;
@@ -1209,8 +1201,12 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   else { whiteP.score += calcArenaPoints(whiteP, 'draw'); blackP.score += calcArenaPoints(blackP, 'draw'); whiteP.draws++; blackP.draws++; }
   whiteP.isPlaying = false; blackP.isPlaying = false;
   whiteP.lobbyId = null; blackP.lobbyId = null;
-  if (!whiteP.paused) whiteP.waitingSince = Date.now();
-  if (!blackP.paused) blackP.waitingSince = Date.now();
+  // Для людей следующая партия начинается только после явного подтверждения.
+  // Боты продолжают турнир автоматически.
+  whiteP.awaitingNextPair = !whiteP.isBot;
+  blackP.awaitingNextPair = !blackP.isBot;
+  if (!whiteP.paused && !whiteP.awaitingNextPair) whiteP.waitingSince = Date.now();
+  if (!blackP.paused && !blackP.awaitingNextPair) blackP.waitingSince = Date.now();
   if (whiteP.isBot && whiteName !== WATCHER_NAME) { const bh = botInitBehavior(whiteName); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
   else if (whiteName === WATCHER_NAME) { const bh = botInitBehavior(WATCHER_NAME); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
   if (blackP.isBot && blackName !== WATCHER_NAME) { const bh = botInitBehavior(blackName); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
@@ -1789,6 +1785,15 @@ io.on('connection', (socket) => {
   });
 
   socket.on('getStats', (cb) => { if (typeof cb === 'function') cb({ online: countOnline(), games: db.totalGames, activeGames: countActiveLobbies() }); });
+  socket.on('getCommunityOnline', (cb) => { if (typeof cb === 'function') cb(onlinePlayersList()); });
+  socket.on('getPlayerCard', ({ username }, cb) => {
+    if (typeof cb !== 'function') return;
+    const user = publicUser(username);
+    if (!user) return cb({ ok: false });
+    user.online = isUserOnline(username) || !!user.isBot || username === WATCHER_NAME;
+    if (username === WATCHER_NAME) user.isBot = true;
+    cb({ ok: true, user });
+  });
   socket.on('getTopArenas', (cb) => { if (typeof cb === 'function') cb(getTopLiveArenas()); });
   socket.on('getLiveGames', (cb) => { if (typeof cb === 'function') cb(buildGamesList()); });
 
@@ -2419,7 +2424,8 @@ io.on('connection', (socket) => {
       username: socket.username,
       rating: db.users[socket.username] ? db.users[socket.username].rating : 1200,
       score: 0, wins: 0, draws: 0, losses: 0, winStreak: 0, drawStreak: 0,
-      socketId: socket.id, lobbyId: null, isPlaying: false, paused: false, waitingSince: Date.now(), isBot: false
+      socketId: socket.id, lobbyId: null, isPlaying: false, paused: false, waitingSince: Date.now(), isBot: false,
+      awaitingNextPair: false
     });
     const sysMsg = { id: 'sys' + Date.now(), system: true, text: `${socket.username} присоединился к арене`, ts: Date.now(), arenaId: state.id };
     state.chat.push(sysMsg); if (state.chat.length > 300) state.chat.shift();
@@ -2442,6 +2448,24 @@ io.on('connection', (socket) => {
       io.to('arena:' + state.id).emit('arenaChatMessage', sysMsg);
       io.to('arena:' + state.id).emit('arenaUpdate', { arenaId });
     }
+    cb({ ok: true });
+  });
+
+  socket.on('continueArenaPairing', ({ arenaId }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
+    const state = arenas.get(arenaId);
+    if (!state) return cb({ ok: false, msg: 'Турнир не найден' });
+    if (state.finished || state.phase === 'finished') return cb({ ok: false, msg: 'Турнир уже завершён' });
+    const p = state.participants.get(socket.username);
+    if (!p) return cb({ ok: false, msg: 'Вы не участвуете в этом турнире' });
+    if (p.isPlaying) return cb({ ok: false, msg: 'Ваша партия ещё не завершена' });
+    if (p.paused) return cb({ ok: false, msg: 'Сначала нажмите «Продолжить» в турнире' });
+    p.awaitingNextPair = false;
+    p.waitingSince = Date.now();
+    io.to('arena:' + arenaId).emit('arenaUpdate', { arenaId });
+    // Дать клиенту обработать подтверждение и открыть страницу турнира до gameStart.
+    if (state.phase === 'live') setTimeout(() => tryPair(state), 100);
     cb({ ok: true });
   });
 
@@ -2547,3 +2571,4 @@ io.on('connection', (socket) => {
 process.on('SIGINT', async () => { try { await botPool.terminate(); watcherLearning.saveQTable(); } catch (e) {} process.exit(0); });
 process.on('SIGTERM', async () => { try { await botPool.terminate(); watcherLearning.saveQTable(); } catch (e) {} process.exit(0); });
 process.on('uncaughtException', (err) => { console.error('[Server] Ошибка:', err); });
+
