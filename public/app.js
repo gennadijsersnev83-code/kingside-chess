@@ -438,30 +438,16 @@ const App = {
 
   bindSocket() {
     const s = this.socket;
-    s.on('connect', () => {
-      s.emit('stats', () => {});
-    });
+    s.on('connect', () => { s.emit('stats', () => {}); });
     s.on('stats', (st) => Stats.onStats(st));
     s.on('communityOnline', (players) => Community.render(players));
     s.on('lobbiesUpdate', () => Lobby.refreshIfActive());
     s.on('connect_error', () => console.warn('Не удалось подключиться'));
     s.on('gameStart', (payload) => Game.onGameStart(payload));
-    s.on('boardUpdate', (payload) => {
-      Game.onBoardUpdate(payload);
-      Watch.onBoardUpdate(payload);
-    });
-    s.on('timeUpdate', (payload) => {
-      Game.onTimeUpdate(payload);
-      Watch.onTimeUpdate(payload);
-    });
-    s.on('gameEnded', (payload) => {
-      Game.onGameEnded(payload);
-      Watch.onGameEnded(payload);
-    });
-    s.on('chatMessage', (msg) => {
-      Game.onChatMessage(msg);
-      Watch.onChatMessage(msg);
-    });
+    s.on('boardUpdate', (payload) => { Game.onBoardUpdate(payload); Watch.onBoardUpdate(payload); });
+    s.on('timeUpdate', (payload) => { Game.onTimeUpdate(payload); Watch.onTimeUpdate(payload); });
+    s.on('gameEnded', (payload) => { Game.onGameEnded(payload); Watch.onGameEnded(payload); });
+    s.on('chatMessage', (msg) => { Game.onChatMessage(msg); Watch.onChatMessage(msg); });
     s.on('chatMessageDeleted', ({ msgId }) => Game.onChatDeleted(msgId));
     s.on('chatError', ({ msg }) => alert(msg));
     s.on('drawOffered', ({ from }) => Banners.showDrawOffer(from));
@@ -477,7 +463,6 @@ const App = {
     s.on('arenaUpdate', ({ arenaId }) => Arena.onUpdate(arenaId));
     s.on('arenaStarted', ({ arenaId }) => Arena.onUpdate(arenaId));
     s.on('arenaFinished', ({ arenaId, top3 }) => Arena.onFinished(arenaId, top3));
-    // Автообновление списка живых партий для Watch.
     s.on('liveGamesUpdate', (list) => {
       if (document.getElementById('watchScreen').classList.contains('active')) {
         Watch.refreshFromList(list);
@@ -609,9 +594,7 @@ const TopArenas = {
 // ============================================================
 const Stats = {
   init() {},
-  refresh() {
-    App.socket.emit('getStats', (s) => this.onStats(s));
-  },
+  refresh() { App.socket.emit('getStats', (s) => this.onStats(s)); },
   onStats(s) {
     if (!s) return;
     const e1 = document.getElementById('statOnline');
@@ -630,24 +613,29 @@ const Lobby = {
   currentTab: 'create',
   known: new Map(),
   disappeared: new Map(),
+
   init() {
     document.querySelectorAll('[data-tab]').forEach(b => {
       b.onclick = () => this.switchTab(b.dataset.tab);
     });
   },
+
   enter() {
     TopArenas.refresh();
     Stats.refresh();
     this.render();
   },
+
   switchTab(tab) {
     this.currentTab = tab;
     document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
     this.render();
   },
+
   refreshIfActive() {
     if (document.getElementById('lobbyScreen').classList.contains('active') && this.currentTab === 'waiting') this.render();
   },
+
   render() {
     const el = document.getElementById('lobbyTabContent');
     if (!el) return;
@@ -664,7 +652,7 @@ const Lobby = {
           ).join('')}
           <button class="quickBtn custom" onclick="Lobby.showCustom()"><div class="qb-time">Своя</div><div class="qb-name">игра</div></button>
         </div>
-        <div id="customGamePanel" style="display:none; margin-top:14px; padding:14px; background:var(--panel-2); border-radius:6px;">
+        <div id="customGamePanel" style="display:none; margin:0 16px 16px; padding:14px; background:var(--panel-2); border-radius:6px;">
           <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <label style="color:var(--muted);font-size:13px;">Минуты:</label>
             <input id="customMin" type="number" value="5" min="1" max="60" style="width:70px;">
@@ -677,6 +665,7 @@ const Lobby = {
     }
     this.renderWaiting();
   },
+
   renderWaiting() {
     const el = document.getElementById('lobbyTabContent');
     App.socket.emit('getLobbies', (list) => {
@@ -687,10 +676,11 @@ const Lobby = {
       for (const [id, data] of this.known) if (!current.has(id)) this.disappeared.set(id, { data, removedAt: now + 5000 });
       this.known = current;
       for (const [id, info] of this.disappeared) if (Date.now() > info.removedAt) this.disappeared.delete(id);
+
       const allItems = [];
       for (const [id, l] of current) allItems.push({ kind: 'waiting', id, data: l });
       for (const [id, info] of this.disappeared) allItems.push({ kind: 'started', id, data: info.data });
-  
+
       if (!allItems.length) {
         el.innerHTML = `
           <div class="lobbyHeader">
@@ -703,12 +693,12 @@ const Lobby = {
           <div class="arenaEmpty" style="padding:30px 20px;">Нет активных вызовов. Нажми «Создать запрос на игру» справа.</div>`;
         return;
       }
-  
+
       allItems.sort((a, b) => {
         if (a.kind !== b.kind) return a.kind === 'started' ? -1 : 1;
         return (b.data.time || 0) - (a.data.time || 0);
       });
-  
+
       const header = document.createElement('div');
       header.className = 'lobbyHeader';
       header.innerHTML = `
@@ -718,29 +708,29 @@ const Lobby = {
         <div class="hTime">Время</div>
         <div class="hMode">Режим</div>`;
       el.appendChild(header);
-  
+
       const wrap = document.createElement('div');
       wrap.className = 'lobbyList';
-  
+
       for (const item of allItems) {
         const l = item.data;
         const isMine = App.me && l.host === App.me.username;
         const isStarted = item.kind === 'started';
         const row = document.createElement('div');
         row.className = 'lobbyRow' + (isMine && !isStarted ? ' mine' : '') + (isStarted ? ' started' : '');
-  
+
         const circleCls = isStarted ? 'white' : 'black';
         const rating = l.hostRating || '';
         const modeName = 'Рейтинговая';
         const modeIcon = '⚔';
-  
+
         row.innerHTML = `
           <div class="lColor ${circleCls}"></div>
           <div class="lRating muted">${rating || '—'}</div>
           <div class="lName">${Utils.nickHtml(l.host, l.hostIsAdmin, l.hostIsMod, l.isBot)}${isStarted ? '<span class="mineTag">(началась)</span>' : (isMine ? '<span class="mineTag">(ваш)</span>' : '')}</div>
           <div class="lTime">${l.time}+${l.inc}</div>
           <div class="lMode"><span class="modeIcon">${modeIcon}</span>${modeName}</div>`;
-  
+
         if (!isStarted) {
           row.title = isMine ? 'Нажми, чтобы отменить свой вызов' : 'Нажми, чтобы начать партию';
           row.onclick = () => this.onRowClick(l, isMine);
@@ -748,10 +738,11 @@ const Lobby = {
         wrap.appendChild(row);
       }
       el.appendChild(wrap);
-  
+
       if (this.disappeared.size) setTimeout(() => { if (this.currentTab === 'waiting') this.render(); }, 5200);
     });
   },
+
   onRowClick(l, isMine) {
     if (isMine) {
       App.socket.emit('cancelLobby', { id: l.id }, () => this.render());
@@ -762,6 +753,7 @@ const Lobby = {
       App.lobbyId = r.id || l.id;
     });
   },
+
   quickStart(time, inc) {
     App.socket.emit('createLobby', { time, inc }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
@@ -789,10 +781,12 @@ const Lobby = {
       bar.textContent = 'Ожидание соперника...';
     });
   },
+
   showCustom() {
     const p = document.getElementById('customGamePanel');
     if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none';
   },
+
   createCustom() {
     const m = +document.getElementById('customMin').value || 5;
     const i = +document.getElementById('customInc').value || 0;
@@ -1884,6 +1878,7 @@ const Game = {
   clockOppAtSync: 0,
   clockTurn: 'w',
   chatMsgIds: new Set(),
+  rematchSpinnerTimer: null,
 
   init() {
     const board = document.getElementById('board');
@@ -1928,6 +1923,7 @@ const Game = {
     this.pendingDrawOffer = false;
     this.rematchRequested = false;
     this.chatMsgIds.clear();
+    this.stopRematchSpinner();
     const box = document.getElementById('chatMessages');
     if (box) box.innerHTML = '';
   },
@@ -1949,6 +1945,7 @@ const Game = {
     document.getElementById('movesPanel').classList.remove('compact');
     const btn = document.getElementById('grRematchBtn');
     if (btn) { btn.classList.remove('accept'); btn.disabled = false; btn.textContent = 'РЕВАНШ'; }
+    this.stopRematchSpinner();
   },
 
   showResultBar(winner, reason) {
@@ -1995,6 +1992,25 @@ const Game = {
     bar.classList.add('show');
     document.getElementById('movesPanel').classList.add('compact');
     document.getElementById('bigActionsRow').style.display = 'none';
+  },
+
+  startRematchSpinner() {
+    const btn = document.getElementById('grRematchBtn');
+    if (!btn) return;
+    this.stopRematchSpinner();
+    const frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
+    let i = 0;
+    btn.disabled = true;
+    btn.classList.remove('accept');
+    btn.textContent = frames[0] + ' ОЖИДАНИЕ';
+    this.rematchSpinnerTimer = setInterval(() => {
+      i = (i + 1) % frames.length;
+      btn.textContent = frames[i] + ' ОЖИДАНИЕ';
+    }, 80);
+  },
+
+  stopRematchSpinner() {
+    if (this.rematchSpinnerTimer) { clearInterval(this.rematchSpinnerTimer); this.rematchSpinnerTimer = null; }
   },
 
   cleanupAndLeave() {
@@ -2417,6 +2433,7 @@ const Game = {
     App.gameActive = false;
     this.premove = null;
     this.rematchRequested = false;
+    this.stopRematchSpinner();
     if (typeof isArena === 'boolean') App.currentGameIsArena = isArena;
     this.showResultBar(winner, reason);
     if (!fromServer) App.socket.emit('gameOver', { lobbyId: App.lobbyId, result: winner || 'draw' });
@@ -2427,7 +2444,11 @@ const Game = {
   },
 
   requestRematch() {
-    if (!App.lobbyId) return;
+    if (!App.lobbyId) {
+      // Нет активного lobbyId — используем сохранённый lastLobbyId.
+      const saved = localStorage.getItem('kingside_last_lobby');
+      if (saved) App.lobbyId = saved;
+    }
     if (Banners.rematchFrom) {
       App.socket.emit('rematchRequest', { lobbyId: App.lobbyId }, (res) => {
         if (res && res.ok && res.started) Banners.hideRematch();
@@ -2436,18 +2457,35 @@ const Game = {
       return;
     }
     if (this.rematchRequested) { alert('Реванш уже предложен'); return; }
+    this.rematchRequested = true;
+    this.startRematchSpinner();
     App.socket.emit('rematchRequest', { lobbyId: App.lobbyId }, (res) => {
-      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
+      if (!res || !res.ok) {
+        this.stopRematchSpinner();
+        this.rematchRequested = false;
+        const bar = document.getElementById('statusBar');
+        bar.className = 'statusYellow';
+        bar.textContent = (res && res.msg) || 'Ошибка реванша';
+        const btn = document.getElementById('grRematchBtn');
+        if (btn) { btn.disabled = false; btn.textContent = 'РЕВАНШ'; }
+        return;
+      }
       if (res.declined) {
+        this.stopRematchSpinner();
+        this.rematchRequested = false;
         const bar = document.getElementById('statusBar');
         bar.className = 'statusYellow';
         bar.textContent = 'Бот отклонил реванш';
+        const btn = document.getElementById('grRematchBtn');
+        if (btn) { btn.disabled = false; btn.textContent = 'РЕВАНШ'; }
         return;
       }
-      if (res.started) return;
-      this.rematchRequested = true;
-      const btn = document.getElementById('grRematchBtn');
-      btn.disabled = true; btn.textContent = 'ОЖИДАНИЕ...';
+      if (res.started) {
+        this.stopRematchSpinner();
+        this.rematchRequested = false;
+        return;
+      }
+      // Ждём второго игрока — спиннер продолжает крутиться.
     });
   },
 
@@ -2516,6 +2554,7 @@ const Game = {
 
   onRematchDeclined() {
     this.rematchRequested = false;
+    this.stopRematchSpinner();
     const btn = document.getElementById('grRematchBtn');
     if (btn) { btn.disabled = false; btn.classList.remove('accept'); btn.textContent = 'РЕВАНШ'; }
     const bar = document.getElementById('statusBar');
@@ -2587,7 +2626,10 @@ const Game = {
     this.renderMoves();
     this.updateTimers();
     this.updateBackToGameBtn();
-    try { localStorage.setItem('kingside_active_lobby', App.lobbyId); } catch (e) {}
+    try {
+      localStorage.setItem('kingside_active_lobby', App.lobbyId);
+      localStorage.setItem('kingside_last_lobby', App.lobbyId);
+    } catch (e) {}
     Sounds.start();
   },
 
