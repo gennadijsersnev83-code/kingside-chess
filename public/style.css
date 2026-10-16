@@ -165,56 +165,155 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .quickBtn .qb-name { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
 .quickBtn.custom .qb-time { font-size:20px; color:var(--accent); }
 
-/* COMPACT LOBBY LIST */
-.lobbyHeader {
-  display:grid;
-  grid-template-columns: 24px 64px minmax(0,1fr) 78px 110px;
-  gap:10px;
-  padding:6px 12px;
-  font-size:10px;
-  color:var(--muted);
-  text-transform:uppercase;
-  letter-spacing:.6px;
-  font-weight:700;
-  border-bottom:1px solid var(--border);
-  background:var(--panel-2);
-}
-.lobbyHeader .hRating { text-align:right; }
-.lobbyHeader .hTime { text-align:center; }
-.lobbyList { display:flex; flex-direction:column; }
+/* COMPACT LOBBY LIST — Lichess style */
+.lobbyHeader,
 .lobbyRow {
-  display:grid;
-  grid-template-columns: 24px 64px minmax(0,1fr) 78px 110px;
-  gap:10px;
-  align-items:center;
-  padding:10px 12px;
-  border-bottom:1px solid rgba(58,56,51,.4);
-  font-size:13px;
-  min-height:44px;
-  cursor:pointer;
-  transition:background .12s;
+  display: grid;
+  grid-template-columns: 22px 78px minmax(0,1fr) 72px 130px;
+  align-items: center;
+  gap: 14px;
+  padding: 0 16px;
+  height: 40px;
+  min-height: 40px;
+  box-sizing: border-box;
 }
-.lobbyRow:last-child { border-bottom:none; }
-.lobbyRow:hover { background:var(--panel-hover); }
-.lobbyRow.mine { background:rgba(191,129,29,.07); }
-.lobbyRow.mine:hover { background:rgba(191,129,29,.15); }
-.lobbyRow.started { opacity:.55; cursor:default; }
-.lobbyRow.started:hover { background:transparent; }
-.lobbyRow .lColor { width:12px; height:12px; border-radius:50%; border:1px solid #111; justify-self:center; flex-shrink:0; }
-.lobbyRow .lColor.white { background:#f0f0f0; }
-.lobbyRow .lColor.black { background:#333; }
-.lobbyRow .lRating { color:var(--text-bright); font-weight:600; font-variant-numeric:tabular-nums; text-align:right; }
-.lobbyRow .lRating.muted { color:var(--muted); font-weight:500; }
-.lobbyRow .lName { color:var(--text-bright); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; display:flex; align-items:center; gap:4px; }
-.lobbyRow .lName .playerNick { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
-.lobbyRow .lName .mineTag { color:var(--accent); font-size:11px; flex-shrink:0; }
-.lobbyRow .lTime { color:var(--text-bright); font-family:'Roboto Mono','Menlo',monospace; font-size:13px; text-align:center; font-variant-numeric:tabular-nums; }
-.lobbyRow .lMode { color:var(--muted); font-size:12px; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; gap:5px; }
-.lobbyRow .lMode .modeIcon { font-size:13px; }
+
+.lobbyHeader {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .7px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  height: 32px;
+  min-height: 32px;
+}
+.lobbyHeader .hRating { text-align: right; }
+.lobbyHeader .hTime   { text-align: center; }
+.lobbyHeader .hMode   { text-align: left; }
+.lobbyHeader .hPlayer { text-align: left; }
+
+.lobbyList { display: flex; flex-direction: column; }
+
+.lobbyRow {
+  font-size: 13.5px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+  cursor: pointer;
+  transition: background .1s ease;
+  background: transparent;
+  color: var(--text);
+}
+.lobbyRow:nth-child(even) { background: rgba(255,255,255,0.012); }
+.lobbyRow:last-child { border-bottom: none; }
+.lobbyRow:hover { background: rgba(255,255,255,0.05); }
+.lobbyRow.mine { background: rgba(191,129,29,.06); }
+.lobbyRow.mine:hover { background: rgba(191,129,29,.12); }
+.lobbyRow.started { opacity: .4; cursor: default; }
+.lobbyRow.started:hover { background: transparent; }
+
+/* Цветовая точка */
+.lobbyRow .lColor {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(0,0,0,.6);
+  justify-self: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.06);
+}
+.lobbyRow .lColor.white { background: #e8e6e3; }
+.lobbyRow .lColor.black { background: #2b2a27; }
+
+/* Рейтинг */
+.lobbyRow .lRating {
+  color: var(--text-bright);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  font-size: 13.5px;
+  letter-spacing: .2px;
+}
+.lobbyRow .lRating.muted { color: var(--muted); font-weight: 400; }
+
+/* Имя */
+.lobbyRow .lName {
+  color: var(--text-bright);
+  font-weight: 400;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+}
+.lobbyRow .lName .playerNick {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  font-weight: 400;
+}
+.lobbyRow .lName .mineTag {
+  color: var(--accent);
+  font-size: 11px;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+.lobbyRow .lName .crown,
+.lobbyRow .lName .modMark { font-size: 12px; }
+
+/* Время */
+.lobbyRow .lTime {
+  color: var(--text-bright);
+  font-family: 'Roboto Mono','Menlo',monospace;
+  font-size: 13px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .3px;
+}
+
+/* Режим */
+.lobbyRow .lMode {
+  color: var(--muted);
+  font-size: 12.5px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.lobbyRow .lMode .modeIcon {
+  font-size: 13px;
+  opacity: .75;
+  flex-shrink: 0;
+  filter: grayscale(.15);
+}
+
+/* Заголовок — лёгкая подсветка как в личессе */
+.lobbyHeader .hRating::after {
+  content: '';
+}
+
+/* Мобильная версия — прячем режим */
 @media (max-width: 560px) {
-  .lobbyHeader { grid-template-columns: 20px 52px minmax(0,1fr) 60px; gap:6px; }
-  .lobbyRow { grid-template-columns: 20px 52px minmax(0,1fr) 60px; gap:6px; padding:8px 10px; }
-  .lobbyRow .lMode, .lobbyHeader .hMode { display:none; }
+  .lobbyHeader,
+  .lobbyRow {
+    grid-template-columns: 18px 54px minmax(0,1fr) 56px;
+    gap: 8px;
+    padding: 0 10px;
+    height: 36px;
+    min-height: 36px;
+    font-size: 13px;
+  }
+  .lobbyHeader { height: 28px; min-height: 28px; }
+  .lobbyRow .lMode,
+  .lobbyHeader .hMode { display: none; }
 }
 
 /* ========= WATCH ========= */
