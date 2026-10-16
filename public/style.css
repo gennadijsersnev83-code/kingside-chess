@@ -94,7 +94,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 /* ========= HOME / LOBBY ========= */
 .homeWrap {
   display:grid; grid-template-columns:280px 1fr 280px; gap:20px;
-  max-width:1200px; margin:24px auto 0; align-items:start;
+  max-width:1200px; margin:24px auto 0; align-items:stretch;
 }
 @media (max-width:1050px) { .homeWrap { grid-template-columns:1fr; } }
 .homeLeft,.homeRight { display:flex; flex-direction:column; gap:12px; }
