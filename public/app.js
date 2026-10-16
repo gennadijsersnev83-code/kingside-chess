@@ -617,14 +617,7 @@ const TopArenas = {
 // STATS
 // ============================================================
 const Stats = {
-  pollHandle: null,
-  init() {
-    // Сервер может не прислать stats при каждом старте/завершении партии.
-    // Периодический запрос держит счётчик активных партий синхронизированным.
-    if (this.pollHandle) clearInterval(this.pollHandle);
-    this.refresh();
-    this.pollHandle = setInterval(() => this.refresh(), 2500);
-  },
+  init() {},
   refresh() {
     App.socket.emit('getStats', (s) => this.onStats(s));
   },
@@ -904,23 +897,7 @@ const Watch = {
   watchClockW: 0, watchClockB: 0, watchClockTurn: 'w',
   requestId: 0,
 
-  pollHandle: null,
-  init() {
-    // Обновляем список, даже если пользователь не открывал партию из турнира.
-    if (this.pollHandle) clearInterval(this.pollHandle);
-    this.pollHandle = setInterval(() => {
-      const screen = document.getElementById('watchScreen');
-      if (screen && screen.classList.contains('active')) this.refresh(false);
-    }, 2000);
-    App.socket.on('lobbiesUpdate', () => {
-      const screen = document.getElementById('watchScreen');
-      if (screen && screen.classList.contains('active')) this.refresh(true);
-    });
-    App.socket.on('connect', () => {
-      const screen = document.getElementById('watchScreen');
-      if (screen && screen.classList.contains('active')) this.refresh(true);
-    });
-  },
+  init() {},
   enter(gameId) {
     this.refresh(true);
     if (gameId) this.watch(gameId);
@@ -2694,4 +2671,3 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 })();
-
