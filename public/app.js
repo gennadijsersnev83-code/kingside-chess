@@ -568,10 +568,11 @@ const Lobby = {
   },
   renderWaiting() {
     const el = document.getElementById('lobbyTabContent');
-    App.socket.emit('getLobbies', (list) => {
+    App.socket.emit('getLobbies', (res) => {
+      const list = Array.isArray(res) ? res : ((res && Array.isArray(res.list)) ? res.list : []);
       el.innerHTML = '';
       const current = new Map();
-      if (list && list.length) for (const l of list) if (l.status === 'waiting') current.set(l.id, l);
+      if (list.length) for (const l of list) if (l.status === 'waiting') current.set(l.id, l);
       const now = Date.now();
       for (const [id, data] of this.known) if (!current.has(id)) this.disappeared.set(id, { data, removedAt: now + 5000 });
       this.known = current;
