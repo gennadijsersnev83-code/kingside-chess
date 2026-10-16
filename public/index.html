@@ -23,7 +23,6 @@
 .activeGameNoticeFoot { margin-top:21px; font-size:14px; color:#c7c3bc; }
 @media(max-width:600px) { .activeGameNoticeScreen { inset:56px 0 0; padding:10px; } .activeGameNoticeCard { min-height:calc(100vh - 90px); padding:90px 16px 32px; } .activeGameNoticeTitle { font-size:32px; } .activeGameWatermark { font-size:350px; } .activeGameReturnBtn { margin-top:42px; } }
 </style>
-
 </head>
 <body>
 
@@ -36,13 +35,55 @@
     <a data-nav="community" onclick="Router.go('community')">Сообщество</a>
   </nav>
   <div class="right">
-    <button class="userBtn" id="userBtn" onclick="Router.go('profile')" style="display:none">
+    <button class="iconBtn" id="msgBellBtn" onclick="Messenger.open()" title="Сообщения" style="display:none">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="badge" id="msgBadge" style="display:none">0</span>
+    </button>
+    <button class="userBtn" id="userBtn" onclick="UserMenu.toggle(event)" style="display:none">
       <span class="avatar" id="userAvatar">?</span>
       <span id="userName">—</span>
     </button>
     <button class="userBtn" onclick="App.logout()" id="logoutBtn" style="display:none">Выйти</button>
   </div>
 </header>
+
+<!-- Меню пользователя -->
+<div id="userMenu" class="userMenu" style="display:none;">
+  <div class="umHeader">
+    <div class="umAvatar" id="umAvatar">?</div>
+    <div class="umName" id="umName">—</div>
+  </div>
+  <div class="umDivider"></div>
+  <a class="umItem" onclick="UserMenu.goProfile()">
+    <span class="umIcon">👤</span>
+    <span class="umLabel">Профиль</span>
+  </a>
+  <a class="umItem" onclick="Messenger.open()">
+    <span class="umIcon">✉</span>
+    <span class="umLabel">Входящие</span>
+    <span class="umCount" id="umInboxCount"></span>
+  </a>
+  <a class="umItem" onclick="UserMenu.togglePing()">
+    <span class="umIcon">📡</span>
+    <span class="umLabel">Соединение</span>
+    <span class="umCount" id="umPing"></span>
+  </a>
+  <div class="umDivider"></div>
+  <a class="umItem" onclick="App.logout()">
+    <span class="umIcon">⏻</span>
+    <span class="umLabel">Выйти</span>
+  </a>
+  <div class="umFooter" id="umFooter">
+    <div class="umPingRow">
+      <span>PING <b id="umPingValue">—</b></span>
+      <div class="pingBars" id="umPingBars"><i></i><i></i><i></i><i></i></div>
+    </div>
+    <div class="umPingRow">
+      <span>SERVER <b id="umServerValue">—</b></span>
+      <span class="umServerDot" id="umServerDot"></span>
+    </div>
+  </div>
+</div>
 
 <main>
   <!-- LOGIN -->
@@ -213,7 +254,8 @@
           </h2>
           <div class="sub" id="pSub">—</div>
         </div>
-        <div style="margin-left:auto;">
+        <div style="margin-left:auto; display:flex; gap:8px;">
+          <button class="secondary" id="pWriteBtn" onclick="Profile.writeMessage()" style="display:none">✉ Написать</button>
           <button class="secondary" onclick="Router.go('lobby')">← На главную</button>
         </div>
       </div>
@@ -246,7 +288,7 @@
     </div>
   </section>
 
-  <!-- ACTIVE GAME NOTICE: показывается вместо других разделов, пока партия продолжается -->
+  <!-- ACTIVE GAME NOTICE -->
   <section id="activeGameNoticeScreen" class="screen activeGameNoticeScreen">
     <div class="activeGameNoticeCard">
       <div class="activeGameWatermark" aria-hidden="true">♞</div>
@@ -330,7 +372,7 @@
   </div>
 </div>
 
-<!-- REMATCH BANNER (плавающий) -->
+<!-- REMATCH BANNER -->
 <div id="rematchBanner" class="rematchBanner" style="display:none;">
   <span class="rbText" id="rematchBannerText">⚔ Иван предлагает реванш</span>
   <button class="rbAccept" id="rematchBannerAccept">Принять</button>
@@ -342,6 +384,38 @@
   <span class="rbText" id="drawOfferBannerText">½ Соперник предлагает ничью</span>
   <button class="rbAccept" id="drawOfferBannerAccept">Принять</button>
   <button class="rbDecline" id="drawOfferBannerDecline">Отклонить</button>
+</div>
+
+<!-- MESSENGER MODAL -->
+<div id="messengerModal" class="messengerModal">
+  <div class="messengerBox">
+    <aside class="msgSidebar">
+      <div class="msgSidebarHead">
+        <span>Сообщения</span>
+        <button class="msgNewBtn" onclick="Messenger.newDialog()" title="Написать игроку">＋</button>
+      </div>
+      <div class="msgNewRow" id="msgNewRow" style="display:none;">
+        <input id="msgNewInput" placeholder="Логин игрока…" autocomplete="off">
+        <button onclick="Messenger.startWithInput()">→</button>
+      </div>
+      <div class="msgDialogs" id="msgDialogs"></div>
+    </aside>
+    <section class="msgChat">
+      <div class="msgChatHead" id="msgChatHead">
+        <span class="msgChatName" id="msgChatName">Выберите диалог</span>
+        <div class="msgChatActions">
+          <button id="msgChatOpenProfile" onclick="Messenger.openProfile()" title="Профиль" style="display:none">👤</button>
+          <button id="msgChatDelete" onclick="Messenger.deleteCurrent()" title="Удалить чат" style="display:none">🗑</button>
+          <button onclick="Messenger.close()" title="Закрыть">✕</button>
+        </div>
+      </div>
+      <div class="msgChatBody" id="msgChatBody"></div>
+      <form class="msgChatForm" id="msgChatForm" onsubmit="Messenger.send(event)">
+        <input id="msgChatInput" placeholder="Сообщение…" maxlength="2000" autocomplete="off">
+        <button type="submit">→</button>
+      </form>
+    </section>
+  </div>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
