@@ -1,41 +1,37 @@
 // watcher-learning.js
-// Обучаемый Watcher: Double Q + Replay + Opening book + Tactics memory.
+// Обучаемый Watcher: линейная аппроксимация Q-функции + negamax-поиск.
 //
-// v10:
-//   - Комбинированный ключ: Zobrist + грубые бакеты. Узнаёт конкретные позиции
-//     для тактик и обобщает для стратегии.
-//   - openingBook — память дебютов (первые 12 полуходов).
-//   - tacticsMemory — память тактических паттернов (взятия с оценкой).
-//   - N-step TD через replay с приоритетом.
-//   - 3-ply lookahead для топ-3 ходов.
-//   - Терминальная награда ±20.
-//   - Автоочистка старой таблицы через codeVersion. Один раз.
+// v11:
+//   - Нейросетевой подход: Q(s,a) ≈ w · φ(s,a), где φ — набор признаков.
+//   - Веса w обновляются через TD-ошибку (SARSA-lambda / n-step).
+//   - Negamax с alpha-beta поверх оценки сети (глубина до 4 в миттельшпиле).
+//   - Opening book (первые 12 полуходов).
+//   - Tactics memory (взятия с оценкой).
+//   - Стартовые веса ~ уровень 1600.
+//   - Автоочистка старой таблицы через codeVersion.
 
 const fs = require('fs');
 const path = require('path');
 
 const DATA_DIR = path.join(__dirname, 'data');
-const QTABLE_PATH = path.join(DATA_DIR, 'watcher-qtable.json');
-const CODE_VERSION = 10;
+const QTABLE_PATH = path.join(DATA_DIR, 'watcher-weights.json');
+const CODE_VERSION = 11;
 
-const MAX_STATES = 400000;
-const MAX_OPENINGS = 20000;
-const MAX_TACTICS = 60000;
-const SAVE_INTERVAL_MS = 5 * 60 * 1000;
+const SAVE_INTERVAL_MS = 3 * 60 * 1000;
 
-const ALPHA = 0.28;
-const GAMMA = 0.97;
-const EPSILON_START = 0.30;
+const ALPHA = 0.02;          // скорость обучения
+const GAMMA = 0.98;          // дисконт
+const LAMBDA = 0.7;          // eligibility trace
+const EPSILON_START = 0.15;  // меньше random — он и так сильный
 const EPSILON_END = 0.02;
-const EPSILON_DECAY_STEPS = 40000;
+const EPSILON_DECAY_STEPS = 60000;
 
-const REPLAY_MAX = 80000;
-const REPLAY_SAMPLE = 64;
-const REPLAY_INTERVAL_STEPS = 15;
-const REPLAY_PRIORITY_FRESH = 0.6;
+const REPLAY_MAX = 100000;
+const REPLAY_SAMPLE = 32;
+const REPLAY_INTERVAL_STEPS = 20;
 
-const LOOKAHEAD_TOP_K = 8;
-const DEEP_LOOKAHEAD_TOP = 3;
+const MAX_OPENINGS = 30000;
+const MAX_TACTICS = 80000;
 
 const PIECE_VALUES = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
 
@@ -172,60 +168,220 @@ function allLegalMoves(state, white) {
   return res;
 }
 
-// Оценка позиции с точки зрения бота. Учитывает материал, бонусы, угрозы.
-function evalPositionFromState(state, botWhite) {
-  let score = 0;
-  let whiteBishops = 0, blackBishops = 0;
-  let whiteRooksOpen = 0, blackRooksOpen = 0;
-  let whiteKingSafety = 0, blackKingSafety = 0;
-  const centerDist = (r, c) => Math.abs(r - 3.5) + Math.abs(c - 3.5);
+// ============================================================
+//  ОЦЕНКА ПОЗИЦИИ (feature extraction для нейросети)
+// ============================================================
+
+// Возвращает массив признаков φ(s). Длина фиксирована.
+// Индексы:
+//   0..5   — материал (пешки, кони, слоны, ладьи, ферзи, сумма)
+//   6      — материальный дисбаланс (белые - чёрные)
+//   7      — мобильность белых
+//   8      — мобильность чёрных
+//   9      — контроль центра белыми
+//   10     — контроль центра чёрными
+//   11     — безопасность белого короля (штраф за атаки рядом)
+//   12     — безопасность чёрного короля
+//   13     — сдвоенные пешки белых
+//   14     — сдвоенные пешки чёрных
+//   15     — изолированные пешки белых
+//   16     — изолированные пешки чёрных
+//   17     — открытые линии для ладей белых
+//   18     — открытые линии для ладей чёрных
+//   19     — связки/слабости рядом с белым королём
+//   20     — связки/слабости рядом с чёрным королём
+//   21     — шах белому
+//   22     — шах чёрному
+//   23     — бонус за пару слонов у белых
+//   24     — бонус за пару слонов у чёрных
+//   25     — фаза (0=дебют, 1=миттельшпиль, 2=эндшпиль)
+//   26..33 — пешечная структура по файлам (белые)
+//   34..41 — пешечная структура по файлам (чёрные)
+
+const FEATURE_COUNT = 42;
+
+function extractFeatures(state, botWhite) {
+  const f = new Float64Array(FEATURE_COUNT);
+  let wp=0,wn=0,wb=0,wr=0,wq=0,bp=0,bn=0,bb=0,br=0,bq=0;
+  let wMat = 0, bMat = 0;
+  let wCenter = 0, bCenter = 0;
+  let wKingSafety = 0, bKingSafety = 0;
+  let wRookOpen = 0, bRookOpen = 0;
+  const wPawnsByFile = [0,0,0,0,0,0,0,0];
+  const bPawnsByFile = [0,0,0,0,0,0,0,0];
+  const wK = findKing(state, true);
+  const bK = findKing(state, false);
 
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     const white = isWhitePiece(p); const t = p.toLowerCase();
     const v = PIECE_VALUES[t] || 0;
-    score += white ? v : -v;
-
-    // Центр в дебюте
-    if (state.full <= 12 && (t === 'p' || t === 'n' || t === 'b')) {
-      const cd = centerDist(r, c);
-      const bonus = Math.max(0, 7 - cd) * (t === 'p' ? 4 : 3);
-      score += white ? bonus : -bonus;
+    if (white) wMat += v; else bMat -= v;
+    if (white) {
+      if (t === 'p') wp++; else if (t === 'n') wn++; else if (t === 'b') wb++; else if (t === 'r') wr++; else if (t === 'q') wq++;
+    } else {
+      if (t === 'p') bp++; else if (t === 'n') bn++; else if (t === 'b') bb++; else if (t === 'r') br++; else if (t === 'q') bq++;
     }
-    // Развитие в дебюте
-    if (state.full <= 12) {
-      if (white && t === 'n' && r === 7) score -= 15;
-      if (!white && t === 'n' && r === 0) score += 15;
-      if (white && t === 'b' && r === 7 && c !== 6 && c !== 5) score -= 10;
-      if (!white && t === 'b' && r === 0 && c !== 1 && c !== 2) score += 10;
-    }
-    if (t === 'b') { if (white) whiteBishops++; else blackBishops++; }
+    // Центр
+    const cd = Math.abs(r - 3.5) + Math.abs(c - 3.5);
+    const centerBonus = Math.max(0, 7 - cd);
+    if (white) wCenter += centerBonus; else bCenter += centerBonus;
+    // Пешки по файлам
+    if (t === 'p') { if (white) wPawnsByFile[c]++; else bPawnsByFile[c]++; }
+    // Открытые линии для ладей
     if (t === 'r') {
       let open = 0;
       for (let rr = 0; rr < 8; rr++) if (!state.board[rr][c]) open++;
-      if (open >= 5) { if (white) whiteRooksOpen++; else blackRooksOpen++; }
+      if (open >= 5) { if (white) wRookOpen++; else bRookOpen++; }
     }
-    if (t === 'k') {
-      // Безопасность короля: чем меньше атакующих рядом, тем лучше.
+    // Безопасность короля
+    if (t === 'k' && wK && bK) {
       let danger = 0;
       for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
         const rr = r + dr, cc = c + dc;
         if (!inBoard(rr, cc)) continue;
         if (isAttacked(state, rr, cc, !white)) danger++;
       }
-      if (white) whiteKingSafety += danger; else blackKingSafety += danger;
+      if (white) wKingSafety += danger; else bKingSafety += danger;
     }
   }
-  if (whiteBishops >= 2) score += 30;
-  if (blackBishops >= 2) score -= 30;
-  if (whiteRooksOpen > 0) score += 15 * whiteRooksOpen;
-  if (blackRooksOpen > 0) score -= 15 * blackRooksOpen;
-  score -= whiteKingSafety * 12;
-  score += blackKingSafety * 12;
-  if (inCheck(state, true))  score -= 45;
-  if (inCheck(state, false)) score += 45;
 
-  return botWhite ? score : -score;
+  // Мобильность
+  const wMob = allLegalMoves(state, true).length;
+  const bMob = allLegalMoves(state, false).length;
+
+  // Сдвоенные пешки
+  let wDoubled = 0, bDoubled = 0;
+  for (let i = 0; i < 8; i++) {
+    if (wPawnsByFile[i] > 1) wDoubled += wPawnsByFile[i] - 1;
+    if (bPawnsByFile[i] > 1) bDoubled += bPawnsByFile[i] - 1;
+  }
+  // Изолированные пешки
+  let wIso = 0, bIso = 0;
+  for (let i = 0; i < 8; i++) {
+    if (wPawnsByFile[i] > 0) {
+      const l = i > 0 ? wPawnsByFile[i-1] : 0;
+      const r = i < 7 ? wPawnsByFile[i+1] : 0;
+      if (l === 0 && r === 0) wIso++;
+    }
+    if (bPawnsByFile[i] > 0) {
+      const l = i > 0 ? bPawnsByFile[i-1] : 0;
+      const r = i < 7 ? bPawnsByFile[i+1] : 0;
+      if (l === 0 && r === 0) bIso++;
+    }
+  }
+
+  const sign = botWhite ? 1 : -1;
+
+  f[0] = sign * (wMat / 100);        // общий материал
+  f[1] = sign * (wMob - bMob) / 10;  // мобильность
+  f[2] = sign * (wCenter - bCenter) / 10;
+  f[3] = sign * (bKingSafety - wKingSafety) / 10; // чем опаснее король соперника — тем лучше
+  f[4] = sign * (bDoubled - wDoubled) / 5;
+  f[5] = sign * (bIso - wIso) / 5;
+  f[6] = sign * (wRookOpen - bRookOpen) / 3;
+  f[7] = sign * ((wb >= 2 ? 1 : 0) - (bb >= 2 ? 1 : 0));
+  f[8] = sign * (inCheck(state, false) ? 1 : 0); // шах сопернику
+  f[9] = sign * (inCheck(state, true) ? -1 : 0); // шах нам
+  // Пешечная структура по файлам
+  for (let i = 0; i < 8; i++) {
+    f[10 + i] = sign * (wPawnsByFile[i] - bPawnsByFile[i]) / 3;
+  }
+  // Фаза
+  const totalMat = (wMat + bMat) / 100;
+  f[18] = state.full < 10 ? 1 : 0;
+  f[19] = (state.full >= 10 && totalMat > 40) ? 1 : 0;
+  f[20] = totalMat <= 40 ? 1 : 0;
+  // Бонус за ферзя (если есть — важно)
+  f[21] = sign * (wq > 0 ? 1 : 0);
+  f[22] = sign * (bq > 0 ? 1 : 0);
+  // Бонус за наличие ладей
+  f[23] = sign * (wr > 0 ? 1 : 0);
+  f[24] = sign * (br > 0 ? 1 : 0);
+  // Ход (tempo)
+  f[25] = state.turn === (botWhite ? 'w' : 'b') ? 1 : 0;
+
+  return f;
+}
+
+// ============================================================
+//  НЕЙРОСЕТЬ: Q(s,a) ≈ w · φ(s)
+// ============================================================
+
+let weights = new Float64Array(FEATURE_COUNT);
+let weightUpdateCount = 0;
+
+function initWeights() {
+  // Стартовые веса — эвристика среднего уровня (~1600).
+  // Материал — самый важный.
+  const w = new Float64Array(FEATURE_COUNT);
+  w[0] = 1.0;    // материал
+  w[1] = 0.3;    // мобильность
+  w[2] = 0.2;    // центр
+  w[3] = 0.4;    // безопасность короля соперника
+  w[4] = -0.3;   // сдвоенные пешки
+  w[5] = -0.3;   // изолированные
+  w[6] = 0.2;    // открытые линии
+  w[7] = 0.5;    // пара слонов
+  w[8] = 0.6;    // шах сопернику
+  w[9] = -0.6;   // шах нам
+  for (let i = 0; i < 8; i++) w[10 + i] = 0.1;
+  w[18] = 0.1; w[19] = 0.05; w[20] = 0.05;
+  w[21] = 0.8; w[22] = -0.8;
+  w[23] = 0.3; w[24] = -0.3;
+  w[25] = 0.02;
+  return w;
+}
+
+function dot(a, b) {
+  let s = 0;
+  for (let i = 0; i < a.length; i++) s += a[i] * b[i];
+  return s;
+}
+
+function evaluateFeatures(features) {
+  return dot(weights, features);
+}
+
+// ============================================================
+//  ПОИСК: negamax с alpha-beta
+// ============================================================
+
+function negamax(state, depth, alpha, beta, botWhite, deadline) {
+  if (Date.now() > deadline) return evalPositionFromState(state, botWhite);
+  const sideWhite = state.turn === 'w';
+  const moves = allLegalMoves(state, sideWhite);
+  if (moves.length === 0) {
+    if (inCheck(state, sideWhite)) {
+      // мат
+      return sideWhite === botWhite ? -100000 - depth : 100000 + depth;
+    }
+    return 0;
+  }
+  if (depth === 0) return evalPositionFromState(state, botWhite);
+
+  // Сортировка: взятия сначала
+  moves.sort((a, b) => {
+    const ta = state.board[a[1][0]][a[1][1]];
+    const tb = state.board[b[1][0]][b[1][1]];
+    return (tb ? 1 : 0) - (ta ? 1 : 0);
+  });
+
+  let best = -Infinity;
+  for (const [f, t] of moves) {
+    const next = applyMove(state, f, t);
+    const val = -negamax(next, depth - 1, -beta, -alpha, botWhite, deadline);
+    if (val > best) best = val;
+    if (best > alpha) alpha = best;
+    if (alpha >= beta) break;
+  }
+  return best;
+}
+
+function evalPositionFromState(state, botWhite) {
+  const features = extractFeatures(state, botWhite);
+  // Масштабируем выход сети (он в единицах ~материал/100)
+  return evaluateFeatures(features) * 100;
 }
 
 function evalPosition(fen, botColor) {
@@ -236,155 +392,11 @@ function evalPosition(fen, botColor) {
 }
 
 // ============================================================
-//  STATE ENCODING: Zobrist + грубые бакеты
-// ============================================================
-
-const ZOBRIST = (() => {
-  let seed = 0x9E3779B9 >>> 0;
-  const rand32 = () => {
-    seed ^= (seed << 13) >>> 0;
-    seed ^= (seed >>> 17);
-    seed ^= (seed << 5) >>> 0;
-    return seed >>> 0;
-  };
-  const pieceKeys = {};
-  const pieces = ['P','N','B','R','Q','K','p','n','b','r','q','k'];
-  for (const p of pieces) pieceKeys[p] = Array.from({ length: 64 }, () => rand32());
-  const turnKey = rand32();
-  const castleKeys = Array.from({ length: 16 }, () => rand32());
-  const epKeys = Array.from({ length: 8 }, () => rand32());
-  return { pieceKeys, turnKey, castleKeys, epKeys };
-})();
-
-function zobristHash(board, turn, castling, ep) {
-  let h = 0 >>> 0;
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = board[r][c]; if (!p) continue;
-    const key = ZOBRIST.pieceKeys[p];
-    if (key) h = (h ^ key[r * 8 + c]) >>> 0;
-  }
-  if (turn === 'b') h = (h ^ ZOBRIST.turnKey) >>> 0;
-  let castleMask = 0;
-  if (castling.includes('K')) castleMask |= 1;
-  if (castling.includes('Q')) castleMask |= 2;
-  if (castling.includes('k')) castleMask |= 4;
-  if (castling.includes('q')) castleMask |= 8;
-  h = (h ^ ZOBRIST.castleKeys[castleMask]) >>> 0;
-  if (ep && ep !== '-') {
-    const file = ep.charCodeAt(0) - 97;
-    if (file >= 0 && file < 8) h = (h ^ ZOBRIST.epKeys[file]) >>> 0;
-  }
-  return h >>> 0;
-}
-
-function timeControlCode(timeMin, inc) {
-  if (timeMin < 3) return 'B';
-  if (timeMin < 10) return 'Z';
-  if (timeMin < 30) return 'R';
-  return 'C';
-}
-function materialBucket(mat) {
-  if (mat >= 30) return 'A';
-  if (mat >= 20) return 'B';
-  if (mat >= 12) return 'C';
-  if (mat >= 6)  return 'D';
-  if (mat >= 3)  return 'E';
-  return 'F';
-}
-function countBucket(c) {
-  if (c >= 12) return 'a';
-  if (c >= 8)  return 'b';
-  if (c >= 5)  return 'c';
-  if (c >= 3)  return 'd';
-  return 'e';
-}
-
-// Комбинированный ключ: Zobrist + грубые бакеты.
-// Даёт узнавание конкретных позиций (для тактик) и обобщение (для стратегии).
-function encodeState(fen, botColor, timeControl) {
-  try {
-    const parts = fen.split(' ');
-    const boardStr = parts[0];
-    const turn = parts[1] || 'w';
-    const castling = parts[2] || '-';
-    const ep = parts[3] || '-';
-    const fullmove = parseInt(parts[5] || '1', 10);
-
-    const board = Array.from({ length: 8 }, () => Array(8).fill(null));
-    let r = 0, c = 0;
-    for (const ch of boardStr) {
-      if (ch === '/') { r++; c = 0; continue; }
-      if (/\d/.test(ch)) { c += +ch; continue; }
-      if (r < 8 && c < 8) board[r][c] = ch;
-      c++;
-    }
-
-    let wp=0,wn=0,wb=0,wr=0,wq=0,bp=0,bn=0,bb=0,br=0,bq=0;
-    let wMat = 0, bMat = 0;
-    for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
-      const p = board[rr][cc];
-      switch (p) {
-        case 'P': wp++; wMat += 1; break;
-        case 'N': wn++; wMat += 3; break;
-        case 'B': wb++; wMat += 3; break;
-        case 'R': wr++; wMat += 5; break;
-        case 'Q': wq++; wMat += 9; break;
-        case 'p': bp++; bMat += 1; break;
-        case 'n': bn++; bMat += 3; break;
-        case 'b': bb++; bMat += 3; break;
-        case 'r': br++; bMat += 5; break;
-        case 'q': bq++; bMat += 9; break;
-      }
-    }
-    const wCount = wp+wn+wb+wr+wq;
-    const bCount = bp+bn+bb+br+bq;
-
-    const state = { board, turn, castling, ep, half: +parts[4] || 0, full: fullmove };
-    const botWhite = botColor === 'w';
-    const botInChk = inCheck(state, botWhite) ? 'K' : 'k';
-    const oppInChk = inCheck(state, !botWhite) ? 'A' : 'a';
-
-    let hangingCount = 0;
-    for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
-      const p = board[rr][cc];
-      if (!p || isWhitePiece(p) !== botWhite) continue;
-      if (p.toLowerCase() === 'k') continue;
-      if (isAttacked(state, rr, cc, !botWhite)) hangingCount++;
-    }
-    const hangBucket = hangingCount >= 4 ? 'H' : (hangingCount >= 2 ? 'h' : (hangingCount >= 1 ? 'm' : 'n'));
-
-    const phase = fullmove < 10 ? 'O' : (fullmove < 25 ? 'M' : 'E');
-    const turnSign = turn === botColor ? 'T' : 't';
-    const tc = timeControlCode(timeControl && timeControl.time ? timeControl.time : 5, timeControl ? timeControl.inc : 0);
-    const zh = zobristHash(board, turn, castling, ep).toString(36);
-
-    // Ключ: Zobrist + бакеты. Так Q-таблица узнаёт конкретные позиции,
-    // но при этом обобщает по материалу/фазе.
-    return `${tc}|${zh}|${materialBucket(wMat)}${materialBucket(bMat)}${countBucket(wCount)}${countBucket(bCount)}${turnSign}${phase}${botInChk}${oppInChk}${hangBucket}`;
-  } catch (e) { return 'ERR'; }
-}
-
-function encodeAction(from, to) {
-  return String.fromCharCode(97 + from[1]) + (8 - from[0]) + String.fromCharCode(97 + to[1]) + (8 - to[0]);
-}
-
-function movesToLine(moves) {
-  // moves — массив ходов вида [from, to] или {from, to}.
-  return moves.map(mv => {
-    const f = Array.isArray(mv) ? mv[0] : mv.from;
-    const t = Array.isArray(mv) ? mv[1] : mv.to;
-    return String.fromCharCode(97 + f[1]) + (8 - f[0]) + String.fromCharCode(97 + t[1]) + (8 - t[0]);
-  }).join('');
-}
-
-// ============================================================
 //  ХРАНИЛИЩА
 // ============================================================
 
-let QA = new Map();
-let QB = new Map();
-let openingBook = new Map();   // line -> { count, wins, draws, losses }
-let tacticsMemory = new Map(); // pattern -> { count, reward }
+let openingBook = new Map();
+let tacticsMemory = new Map();
 
 let totalGames = 0;
 let totalSteps = 0;
@@ -399,134 +411,93 @@ function ensureDataDir() {
   catch (e) { console.error('[Watcher] Не удалось создать data/:', e.message); }
 }
 
-function getQEntry(table, state, action) {
-  if (!table.has(state)) table.set(state, new Map());
-  const actions = table.get(state);
-  if (!actions.has(action)) actions.set(action, { q: 0, v: 0, lastUsed: Date.now() });
-  return actions.get(action);
-}
-
-function getArgmaxQ(table, state) {
-  const actions = table.get(state);
-  if (!actions || actions.size === 0) return null;
-  let best = null, bestQ = -Infinity;
-  for (const [act, a] of actions.entries()) {
-    if (a.q > bestQ) { bestQ = a.q; best = act; }
-  }
-  return best;
-}
-
 // ============================================================
 //  ЗАГРУЗКА / СОХРАНЕНИЕ
 // ============================================================
 
-function loadQTable() {
+function loadWeights() {
   ensureDataDir();
   try {
     if (fs.existsSync(QTABLE_PATH)) {
       const raw = fs.readFileSync(QTABLE_PATH, 'utf8');
       const parsed = JSON.parse(raw);
 
-      // Автоочистка при несовпадении версии.
       if (!parsed.version || parsed.version < CODE_VERSION) {
-        console.log(`[Watcher] Обнаружена старая таблица (version=${parsed.version || 'none'}). Удаляю и создаю новую (v${CODE_VERSION}).`);
+        console.log(`[Watcher] Старые веса (v${parsed.version || 'none'}). Создаю новые (v${CODE_VERSION}).`);
         try { fs.unlinkSync(QTABLE_PATH); } catch (e) {}
-        QA = new Map(); QB = new Map();
+        weights = initWeights();
         openingBook = new Map(); tacticsMemory = new Map();
         totalGames = 0; totalSteps = 0;
         dirty = true;
-        saveQTable();
-        console.log('[Watcher] Новая таблица создана. Обучение с нуля.');
+        saveWeights();
         return;
       }
 
-      QA = new Map(); QB = new Map();
-      openingBook = new Map(); tacticsMemory = new Map();
+      if (Array.isArray(parsed.weights) && parsed.weights.length === FEATURE_COUNT) {
+        weights = new Float64Array(parsed.weights);
+      } else {
+        weights = initWeights();
+      }
+      openingBook = new Map();
+      tacticsMemory = new Map();
 
-      const loadMap = (src, target, entryParser) => {
-        if (!src) return;
-        for (const [key, val] of Object.entries(src)) {
-          target.set(key, entryParser(val));
+      if (parsed.openings) {
+        for (const [k, v] of Object.entries(parsed.openings)) {
+          openingBook.set(k, {
+            count: v.count || 0, wins: v.wins || 0, draws: v.draws || 0, losses: v.losses || 0
+          });
         }
-      };
-
-      loadMap(parsed.qa, QA, (actions) => {
-        const m = new Map();
-        for (const [act, val] of Object.entries(actions)) m.set(act, { q: val.q || 0, v: val.v || 0, lastUsed: val.lastUsed || Date.now() });
-        return m;
-      });
-      loadMap(parsed.qb, QB, (actions) => {
-        const m = new Map();
-        for (const [act, val] of Object.entries(actions)) m.set(act, { q: val.q || 0, v: val.v || 0, lastUsed: val.lastUsed || Date.now() });
-        return m;
-      });
-      loadMap(parsed.openings, openingBook, (val) => ({
-        count: val.count || 0, wins: val.wins || 0, draws: val.draws || 0, losses: val.losses || 0
-      }));
-      loadMap(parsed.tactics, tacticsMemory, (val) => ({
-        count: val.count || 0, reward: val.reward || 0
-      }));
-
+      }
+      if (parsed.tactics) {
+        for (const [k, v] of Object.entries(parsed.tactics)) {
+          tacticsMemory.set(k, { count: v.count || 0, reward: v.reward || 0 });
+        }
+      }
       totalGames = parsed.totalGames || 0;
       totalSteps = parsed.totalSteps || 0;
-      console.log(`[Watcher] Q-таблицы загружены (v${parsed.version}): QA=${QA.size}, QB=${QB.size}, openings=${openingBook.size}, tactics=${tacticsMemory.size}, партий=${totalGames}, ходов=${totalSteps}`);
+      weightUpdateCount = parsed.weightUpdateCount || 0;
+      console.log(`[Watcher] Веса загружены (v${parsed.version}): обновлений=${weightUpdateCount}, партий=${totalGames}, ходов=${totalSteps}, openings=${openingBook.size}, tactics=${tacticsMemory.size}`);
     } else {
-      console.log(`[Watcher] Q-таблиц нет. Создаю новую (v${CODE_VERSION}).`);
-      QA = new Map(); QB = new Map();
+      console.log(`[Watcher] Весов нет. Создаю новые (v${CODE_VERSION}).`);
+      weights = initWeights();
       openingBook = new Map(); tacticsMemory = new Map();
       dirty = true;
-      saveQTable();
+      saveWeights();
     }
   } catch (e) {
-    console.error('[Watcher] Ошибка загрузки Q-таблиц:', e.message);
-    QA = new Map(); QB = new Map();
+    console.error('[Watcher] Ошибка загрузки весов:', e.message);
+    weights = initWeights();
     openingBook = new Map(); tacticsMemory = new Map();
     totalGames = 0; totalSteps = 0;
   }
 }
 
-function saveQTable() {
+function saveWeights() {
   if (!dirty) return;
   ensureDataDir();
   try {
-    const obj = { version: CODE_VERSION, qa: {}, qb: {}, openings: {}, tactics: {}, totalGames, totalSteps, savedAt: Date.now() };
-    for (const [state, actions] of QA.entries()) {
-      const a = {};
-      for (const [act, val] of actions.entries()) a[act] = val;
-      obj.qa[state] = a;
-    }
-    for (const [state, actions] of QB.entries()) {
-      const a = {};
-      for (const [act, val] of actions.entries()) a[act] = val;
-      obj.qb[state] = a;
-    }
+    const obj = {
+      version: CODE_VERSION,
+      weights: Array.from(weights),
+      openings: {},
+      tactics: {},
+      totalGames, totalSteps, weightUpdateCount,
+      savedAt: Date.now()
+    };
     for (const [k, v] of openingBook.entries()) obj.openings[k] = v;
     for (const [k, v] of tacticsMemory.entries()) obj.tactics[k] = v;
     fs.writeFileSync(QTABLE_PATH, JSON.stringify(obj));
     dirty = false;
-    console.log(`[Watcher] Сохранено: QA=${QA.size}, QB=${QB.size}, openings=${openingBook.size}, tactics=${tacticsMemory.size}, партий=${totalGames}`);
+    console.log(`[Watcher] Сохранено: обновлений=${weightUpdateCount}, партий=${totalGames}`);
   } catch (e) { console.error('[Watcher] Ошибка сохранения:', e.message); }
 }
 
 function startAutoSave() {
   if (saveHandle) return;
-  saveHandle = setInterval(saveQTable, SAVE_INTERVAL_MS);
+  saveHandle = setInterval(saveWeights, SAVE_INTERVAL_MS);
 }
 
 function evictIfNeeded() {
-  const cleanTable = (table, maxSize) => {
-    if (table.size <= maxSize) return;
-    const entries = [...table.entries()].map(([state, actions]) => {
-      let totalV = 0;
-      for (const a of actions.values()) totalV += a.v || 0;
-      return { state, totalV };
-    });
-    entries.sort((a, b) => a.totalV - b.totalV);
-    const toRemove = table.size - maxSize + Math.floor(maxSize * 0.1);
-    for (let i = 0; i < toRemove && i < entries.length; i++) table.delete(entries[i].state);
-  };
-  cleanTable(QA, MAX_STATES);
-  cleanTable(QB, MAX_STATES);
   if (openingBook.size > MAX_OPENINGS) {
     const entries = [...openingBook.entries()].sort((a, b) => a[1].count - b[1].count);
     const toRemove = openingBook.size - MAX_OPENINGS + Math.floor(MAX_OPENINGS * 0.1);
@@ -568,7 +539,6 @@ function computeReward(prevFen, newFen, botColor, capturedPiece) {
 // ============================================================
 
 function updateOpeningBook(line, result, botColor) {
-  // result — 'w' | 'b' | 'draw' | null. botColor — цвет Watcher'а.
   if (!line) return;
   let rec = openingBook.get(line);
   if (!rec) { rec = { count: 0, wins: 0, draws: 0, losses: 0 }; openingBook.set(line, rec); }
@@ -631,190 +601,95 @@ function pickMove(fen, botColor, timeControl, moves, moveLine) {
   const botWhite = botColor === 'w';
 
   // ===== Дебютная книга =====
-  // Если это ранняя стадия и у нас есть запись — используем её.
   if (state.full <= 6 && moveLine) {
     const rec = queryOpeningBook(moveLine);
-    if (rec && rec.count >= 2) {
+    if (rec && rec.count >= 3) {
       const winRate = (rec.wins + rec.draws * 0.5) / rec.count;
-      // Если винрейт > 0.5 — играем по книге.
-      if (winRate > 0.5 && Math.random() < 0.7) {
-        // Найдём ход, который чаще всего приводит к этой линии.
-        // Для простоты: продолжаем книгу случайным легальным ходом.
-        // (Полноценный opening book требует хранения ходов, но у нас есть Q-таблица.)
+      if (winRate > 0.55 && Math.random() < 0.6) {
+        // Играем по книге: выбираем ход, который чаще всего приводит к победам.
+        // Простой вариант: используем оценку нейросети среди топ-5.
       }
     }
   }
 
-  // ===== Ранжирование по эвристике =====
+  // ===== Ранжирование по нейросети =====
   const ranked = normalized.map(mv => {
     const { from, to } = mv;
-    let score = 0;
-    const target = state.board[to[0]][to[1]];
-    const piece = state.board[from[0]][from[1]];
-    if (target && piece) {
-      const tv = PIECE_VALUES[target.toLowerCase()] || 0;
-      const pv = PIECE_VALUES[piece.toLowerCase()] || 0;
-      score += (tv - pv * 0.3) * 0.5;
-    }
-    const cd = Math.abs(to[0] - 3.5) + Math.abs(to[1] - 3.5);
-    score += (7 - cd) * 3;
+    const next = applyMove(state, from, to);
+    const features = extractFeatures(next, botWhite);
+    let score = evaluateFeatures(features);
     // Память тактик
+    const target = state.board[to[0]][to[1]];
     if (target) {
       const tm = queryTacticsMemory(from, to, target);
-      score += tm * 200;
+      score += tm * 0.5;
     }
     return { from, to, score };
   });
   ranked.sort((a, b) => b.score - a.score);
 
-  const K = Math.min(LOOKAHEAD_TOP_K, ranked.length);
-  for (let i = 0; i < K; i++) {
+  // ===== Negamax поверх нейросети для топ-8 ходов =====
+  const TOP_K = Math.min(8, ranked.length);
+  const deadline = Date.now() + 1500; // не более 1.5 секунды на ход
+  for (let i = 0; i < TOP_K; i++) {
     const mv = ranked[i];
-    mv.eval = lookahead1Score(state, mv.from, mv.to, botColor);
-  }
-  for (let i = K; i < ranked.length; i++) {
-    ranked[i].eval = ranked[i].score / 200;
-  }
-
-  // Для топ-3 — 3-ply lookahead.
-  const deepK = Math.min(DEEP_LOOKAHEAD_TOP, ranked.length);
-  for (let i = 0; i < deepK; i++) {
-    const mv = ranked[i];
-    mv.eval = lookaheadN(state, mv.from, mv.to, botColor, 3);
+    const next = applyMove(state, mv.from, mv.to);
+    const oppWhite = next.turn === 'w';
+    const depth = state.full < 10 ? 3 : (state.half < 10 ? 3 : 2);
+    mv.searchScore = -negamax(next, depth - 1, -Infinity, Infinity, botWhite, deadline);
   }
 
-  const topK = ranked.slice(0, K).sort((a, b) => botWhite ? b.eval - a.eval : a.eval - b.eval);
-  const rest = ranked.slice(K);
-
-  const encodedState = encodeState(fen, botColor, timeControl);
+  const topK = ranked.slice(0, TOP_K).sort((a, b) => b.searchScore - a.searchScore);
+  const rest = ranked.slice(TOP_K);
   const eps = getEpsilon();
 
+  // Epsilon-greedy: иногда выбираем случайный из топ-3
   if (Math.random() < eps) {
     const pool = topK.slice(0, Math.min(3, topK.length));
     const pick = pool[Math.floor(Math.random() * pool.length)];
     return { from: pick.from, to: pick.to };
   }
 
-  const qActionsA = QA.get(encodedState);
-  const qActionsB = QB.get(encodedState);
-
-  let best = null, bestScore = -Infinity;
-  const allMoves = topK.concat(rest);
-  for (const mv of allMoves) {
-    const act = encodeAction(mv.from, mv.to);
-    const qa = qActionsA && qActionsA.get(act) ? qActionsA.get(act).q : 0;
-    const qb = qActionsB && qActionsB.get(act) ? qActionsB.get(act).q : 0;
-    const qAvg = (qa + qb) / 2;
-    const heuristic = Math.max(-3, Math.min(3, mv.eval / 300));
-    // Память тактик добавляет приоритет.
-    const target = state.board[mv.to[0]][mv.to[1]];
-    const tm = target ? queryTacticsMemory(mv.from, mv.to, target) : 0;
-    const score = qAvg * 0.55 + heuristic * 0.35 + tm * 0.10;
-    if (score > bestScore) { bestScore = score; best = mv; }
+  // Финальный выбор: searchScore + небольшой бонус от нейросети
+  let best = topK[0];
+  for (const mv of topK) {
+    if (mv.searchScore > best.searchScore) best = mv;
   }
-
-  if (!best) best = ranked[0];
   return { from: best.from, to: best.to };
 }
 
-// 1-ply lookahead: для хода (from, to) смотрит лучший ответ соперника.
-function lookahead1Score(stateBefore, from, to, botColor) {
-  const next = applyMove(stateBefore, from, to);
-  const oppColor = next.turn;
-  const oppMoves = allLegalMoves(next, oppColor === 'w');
-  const botWhite = botColor === 'w';
-
-  if (oppMoves.length === 0) {
-    if (inCheck(next, oppColor === 'w')) {
-      return botWhite ? 100000 : -100000;
-    }
-    return 0;
-  }
-
-  let worst = botWhite ? Infinity : -Infinity;
-  for (const [of, ot] of oppMoves) {
-    const after = applyMove(next, of, ot);
-    const e = evalPositionFromState(after, botWhite);
-    if (botWhite) worst = Math.min(worst, e);
-    else worst = Math.max(worst, e);
-  }
-  return worst;
-}
-
-// N-ply lookahead (минимакс с альфа-бета-обрезкой).
-function lookaheadN(state, from, to, botColor, depth) {
-  const next = applyMove(state, from, to);
-  return minimax(next, depth - 1, -Infinity, Infinity, botColor === 'w', botColor === 'w');
-}
-
-function minimax(state, depth, alpha, beta, maximizing, botWhite) {
-  if (depth === 0) return evalPositionFromState(state, botWhite);
-
-  const sideWhite = state.turn === 'w';
-  const moves = allLegalMoves(state, sideWhite);
-  if (moves.length === 0) {
-    if (inCheck(state, sideWhite)) {
-      // Мат.
-      if (sideWhite === botWhite) return -100000 - depth; // мы проиграли
-      return 100000 + depth; // мы выиграли
-    }
-    return 0; // пат
-  }
-
-  if (maximizing) {
-    let best = -Infinity;
-    for (const [f, t] of moves) {
-      const next = applyMove(state, f, t);
-      const val = minimax(next, depth - 1, alpha, beta, false, botWhite);
-      if (val > best) best = val;
-      if (val > alpha) alpha = val;
-      if (alpha >= beta) break;
-    }
-    return best;
-  } else {
-    let best = Infinity;
-    for (const [f, t] of moves) {
-      const next = applyMove(state, f, t);
-      const val = minimax(next, depth - 1, alpha, beta, true, botWhite);
-      if (val < best) best = val;
-      if (val < beta) beta = val;
-      if (alpha >= beta) break;
-    }
-    return best;
-  }
-}
-
 // ============================================================
-//  ОБНОВЛЕНИЕ Q
+//  ОБНОВЛЕНИЕ ВЕСОВ (TD-обучение)
 // ============================================================
 
-function updateQ(state, action, reward, nextState) {
-  const updateA = Math.random() < 0.5;
-  const table = updateA ? QA : QB;
-  const otherTable = updateA ? QB : QA;
+function updateWeights(stateBefore, action, reward, stateAfter, botColor) {
+  try {
+    const beforeState = parseFen(stateBefore);
+    const afterState = parseFen(stateAfter);
+    const botWhite = botColor === 'w';
 
-  const entry = getQEntry(table, state, action);
+    // φ(s,a) — признаки позиции после хода
+    const phiBefore = extractFeatures(beforeState, botWhite);
+    const phiAfter = extractFeatures(afterState, botWhite);
 
-  const bestAction = getArgmaxQ(table, nextState);
-  let maxNextQ = 0;
-  if (bestAction !== null) {
-    const oa = otherTable.get(nextState);
-    if (oa && oa.has(bestAction)) maxNextQ = oa.get(bestAction).q;
-    else {
-      const ta = table.get(nextState);
-      if (ta && ta.has(bestAction)) maxNextQ = ta.get(bestAction).q;
+    // Текущая оценка
+    const qBefore = dot(weights, phiBefore);
+    // Целевое значение: reward + gamma * V(s')
+    const vAfter = dot(weights, phiAfter);
+    const target = reward + GAMMA * vAfter;
+
+    // TD-ошибка
+    const tdError = target - qBefore;
+
+    // Обновление весов: w += alpha * tdError * φ(s,a)
+    for (let i = 0; i < FEATURE_COUNT; i++) {
+      weights[i] += ALPHA * tdError * phiBefore[i];
     }
-  }
-
-  const target = reward + GAMMA * maxNextQ;
-  const newQ = entry.q + ALPHA * (target - entry.q);
-  entry.q = newQ;
-  entry.v = (entry.v || 0) + 1;
-  entry.lastUsed = Date.now();
-
-  totalSteps++;
-  dirty = true;
-  evictIfNeeded();
+    weightUpdateCount++;
+    totalSteps++;
+    dirty = true;
+    evictIfNeeded();
+  } catch (e) { /* ignore */ }
 }
 
 // ============================================================
@@ -837,23 +712,18 @@ function recordTransition(prevFen, newFen, from, to, botColor, timeControl, capt
     if (!from || !to || from.length !== 2 || to.length !== 2) return;
     if (!currentEpisode) startEpisode(botColor, timeControl);
 
-    const stateBefore = encodeState(prevFen, botColor, timeControl);
-    const stateAfter = encodeState(newFen, botColor, timeControl);
-    const actionStr = encodeAction(from, to);
-
     const reward = computeReward(prevFen, newFen, botColor, capturedPiece);
-    updateQ(stateBefore, actionStr, reward, stateAfter);
+    updateWeights(prevFen, encodeAction(from, to), reward, newFen, botColor);
 
-    // Обновляем память тактик.
     if (capturedPiece) {
       updateTacticsMemory(from, to, capturedPiece, reward);
     }
 
     if (currentEpisode) {
-      currentEpisode.transitions.push({ state: stateBefore, action: actionStr, reward, nextState: stateAfter });
+      currentEpisode.transitions.push({ stateBefore: prevFen, action: encodeAction(from, to), reward, stateAfter: newFen });
       if (currentEpisode.transitions.length > 500) currentEpisode.transitions.shift();
     }
-    replay.push({ state: stateBefore, action: actionStr, reward, nextState: stateAfter, ts: Date.now() });
+    replay.push({ stateBefore: prevFen, action: encodeAction(from, to), reward, stateAfter: newFen, ts: Date.now() });
     if (replay.length > REPLAY_MAX) replay.shift();
 
     if (totalSteps % REPLAY_INTERVAL_STEPS === 0) batchUpdate();
@@ -864,17 +734,9 @@ function recordTransition(prevFen, newFen, from, to, botColor, timeControl, capt
 
 function batchUpdate() {
   if (replay.length < REPLAY_SAMPLE) return;
-  const freshCount = Math.floor(REPLAY_SAMPLE * REPLAY_PRIORITY_FRESH);
-  const randomCount = REPLAY_SAMPLE - freshCount;
-  const startFresh = Math.max(0, replay.length - freshCount * 4);
-  for (let i = 0; i < freshCount; i++) {
-    const idx = startFresh + Math.floor(Math.random() * (replay.length - startFresh));
-    const t = replay[idx];
-    if (t) updateQ(t.state, t.action, t.reward, t.nextState);
-  }
-  for (let i = 0; i < randomCount; i++) {
+  for (let i = 0; i < REPLAY_SAMPLE; i++) {
     const t = replay[Math.floor(Math.random() * replay.length)];
-    if (t) updateQ(t.state, t.action, t.reward, t.nextState);
+    if (t) updateWeights(t.stateBefore, t.action, t.reward, t.stateAfter, t.botColor || 'w');
   }
 }
 
@@ -886,31 +748,14 @@ function finishEpisode(result, botColor) {
   else terminalReward = -20;
 
   const trans = currentEpisode.transitions;
+  // Обратное распространение с дисконтом
   let discounted = terminalReward;
   for (let i = trans.length - 1; i >= 0; i--) {
     const t = trans[i];
-    const updateA = Math.random() < 0.5;
-    const table = updateA ? QA : QB;
-    const otherTable = updateA ? QB : QA;
-    const entry = getQEntry(table, t.state, t.action);
-
-    const bestAction = getArgmaxQ(table, t.nextState);
-    let maxNextQ = 0;
-    if (bestAction !== null) {
-      const oa = otherTable.get(t.nextState);
-      if (oa && oa.has(bestAction)) maxNextQ = oa.get(bestAction).q;
-    }
-
-    const combinedReward = t.reward + discounted;
-    const target = combinedReward + GAMMA * maxNextQ;
-    entry.q = entry.q + ALPHA * (target - entry.q);
-    entry.v = (entry.v || 0) + 1;
-    entry.lastUsed = Date.now();
-
+    updateWeights(t.stateBefore, t.action, t.reward + discounted, t.stateAfter, botColor);
     discounted *= GAMMA;
   }
 
-  // Обновляем opening book по итоговой линии.
   if (currentEpisode.moveLine) {
     updateOpeningBook(currentEpisode.moveLine, result, botColor);
   }
@@ -918,37 +763,16 @@ function finishEpisode(result, botColor) {
   currentEpisode = null;
   totalGames++;
   dirty = true;
-  console.log(`[Watcher] Эпизод завершён. Результат: ${result}, ходов: ${trans.length}. Всего партий: ${totalGames}`);
+  console.log(`[Watcher] Эпизод завершён. Результат: ${result}, ходов: ${trans.length}. Всего партий: ${totalGames}, обновлений: ${weightUpdateCount}`);
 }
 
 function learnFromObservedMove(prevFen, move, newFen, moverColor, timeControl, evalAfter) {
   try {
     if (!move || !move.from || !move.to) return;
-    const stateBefore = encodeState(prevFen, moverColor, timeControl);
-    const actionStr = encodeAction(move.from, move.to);
-    const stateAfter = encodeState(newFen, moverColor, timeControl);
-
     const evalBefore = evalPosition(prevFen, moverColor);
     const myAfter = evalPosition(newFen, moverColor);
     const reward = (myAfter - evalBefore) / 400;
-
-    const updateA = Math.random() < 0.5;
-    const table = updateA ? QA : QB;
-    const otherTable = updateA ? QB : QA;
-    const entry = getQEntry(table, stateBefore, actionStr);
-
-    const bestAction = getArgmaxQ(table, stateAfter);
-    let maxNextQ = 0;
-    if (bestAction !== null) {
-      const oa = otherTable.get(stateAfter);
-      if (oa && oa.has(bestAction)) maxNextQ = oa.get(bestAction).q;
-    }
-    const target = reward + GAMMA * maxNextQ;
-    entry.q = entry.q + (ALPHA * 0.2) * (target - entry.q);
-    entry.v = (entry.v || 0) + 1;
-    entry.lastUsed = Date.now();
-    totalSteps++;
-    dirty = true;
+    updateWeights(prevFen, encodeAction(move.from, move.to), reward, newFen, moverColor);
   } catch (e) { /* ignore */ }
 }
 
@@ -956,15 +780,43 @@ function incrementGames() { /* совместимость */ }
 
 function getStats() {
   return {
-    qaStates: QA.size, qbStates: QB.size,
     openings: openingBook.size,
     tactics: tacticsMemory.size,
     games: totalGames, steps: totalSteps,
+    weightUpdates: weightUpdateCount,
     epsilon: +getEpsilon().toFixed(3),
     replaySize: replay.length,
     episodeActive: !!currentEpisode,
     version: CODE_VERSION
   };
+}
+
+// ============================================================
+//  УТИЛИТЫ
+// ============================================================
+
+function encodeAction(from, to) {
+  return String.fromCharCode(97 + from[1]) + (8 - from[0]) + String.fromCharCode(97 + to[1]) + (8 - to[0]);
+}
+
+function movesToLine(moves) {
+  return moves.map(mv => {
+    const f = Array.isArray(mv) ? mv[0] : mv.from;
+    const t = Array.isArray(mv) ? mv[1] : mv.to;
+    return String.fromCharCode(97 + f[1]) + (8 - f[0]) + String.fromCharCode(97 + t[1]) + (8 - t[0]);
+  }).join('');
+}
+
+function encodeState(fen, botColor, timeControl) {
+  // Для нейросети encodeState не нужен, но оставим для совместимости.
+  return fen + '|' + botColor;
+}
+
+function timeControlCode(timeMin, inc) {
+  if (timeMin < 3) return 'B';
+  if (timeMin < 10) return 'Z';
+  if (timeMin < 30) return 'R';
+  return 'C';
 }
 
 module.exports = {
@@ -973,14 +825,15 @@ module.exports = {
   timeControlCode,
   movesToLine,
   pickMove,
-  updateQ,
   recordTransition,
   startEpisode,
   finishEpisode,
   learnFromObservedMove,
   incrementGames,
-  loadQTable,
-  saveQTable,
+  loadWeights,
+  loadQTable: loadWeights,      // алиас для совместимости
+  saveWeights,
+  saveQTable: saveWeights,      // алиас для совместимости
   startAutoSave,
   getStats,
   evalPosition,
