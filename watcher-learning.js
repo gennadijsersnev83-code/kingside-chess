@@ -16,7 +16,7 @@ const path = require('path');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const QTABLE_PATH = path.join(DATA_DIR, 'watcher-qtable.json');
-const CODE_VERSION = 10;
+const CODE_VERSION = 11; // Сброс старой деградировавшей таблицы обучения при первом запуске
 
 const MAX_STATES = 400000;
 const MAX_OPENINGS = 20000;
