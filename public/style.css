@@ -774,7 +774,8 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   .arenasHeader h1 { font-size:24px; }
   .arenasHeader .ahNow { font-size:13px; }
   .homeWrap { grid-template-columns:1fr; }
-  .rematchBanner { top: 52px; padding: 8px 10px; font-size: 12px; }
+  .rematchBanner { top: auto; bottom: 12px; padding: 8px 10px; font-size: 12px; }
+  .drawOfferBanner { top: auto; bottom: 12px; }
   .rematchBanner .rbText { max-width: 90vw; }
   .rematchBanner button { padding: 5px 10px; font-size: 11px; }
 }
