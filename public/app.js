@@ -506,6 +506,19 @@ const Router = {
   apply() {
     const { name, param } = this.current;
     if (!App.me && name !== 'login') { this.show('loginScreen'); return; }
+    // Экран активной партии перекрывает только зал ожидания, а не остальные разделы.
+    if (App.me && App.gameActive && !App.gameEnded && App.lobbyId && name === 'lobby') {
+      const opponent = document.getElementById('activeGameOpponent');
+      if (opponent) opponent.textContent = App.opponentName || 'соперником';
+      document.querySelectorAll('.screen').forEach(screen => screen.classList.remove('active'));
+      document.getElementById('lobbyScreen').classList.add('active');
+      document.getElementById('activeGameNoticeScreen').classList.add('active');
+      document.querySelectorAll('#mainNav a').forEach(a => a.classList.toggle('active', a.dataset.nav === 'lobby'));
+      return;
+    }
+    // При переходе в другую страницу скрываем оверлей зала ожидания.
+    const activeNotice = document.getElementById('activeGameNoticeScreen');
+    if (activeNotice) activeNotice.classList.remove('active');
 
     if (name !== 'watch' && Watch.autoRefreshHandle) {
       clearInterval(Watch.autoRefreshHandle);
@@ -934,16 +947,8 @@ const Watch = {
         <div class="wrPlayers"><span><span class="liveDot"></span>⚪ ${wBot}${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod, g.whiteIsBot)}${g.whiteRating ? ' <span class="prat">('+g.whiteRating+')</span>' : ''}</span><span>${Utils.formatTime(g.timeW)}</span></div>
         <div class="wrPlayers"><span>⚫ ${bBot}${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod, g.blackIsBot)}${g.blackRating ? ' <span class="prat">('+g.blackRating+')</span>' : ''}</span><span>${Utils.formatTime(g.timeB)}</span></div>
         <div class="wrMeta"><span>${g.timeControl}+${g.increment}${arenaTag}${botTag}</span><span>ход: <b>${g.turn === 'w' ? 'белые' : 'чёрные'}</b> ${Utils.watchersHtml(g.watchersCount)}</span></div>
-        <button class="watchShareBtn" onclick="event.stopPropagation(); Watch.copyGameLink('${g.id}')">↗ Ссылка на партию</button>
       </div>`;
     }).join('');
-  },
-
-  copyGameLink(id) {
-    const url = `${location.origin}/#/watch/${encodeURIComponent(id)}`;
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(url).then(() => Banners.showInfo ? Banners.showInfo('Ссылка на партию скопирована') : alert('Ссылка скопирована: ' + url)).catch(() => prompt('Ссылка на партию:', url));
-    } else prompt('Ссылка на партию:', url);
   },
 
   watch(id) {
@@ -2036,16 +2041,17 @@ const Game = {
   },
 
   updateBackToGameBtn() {
-    const btn = document.getElementById('backToGameBtn');
-    if (!btn) return;
-    if (App.gameActive && !App.gameEnded && App.lobbyId) btn.classList.add('show');
-    else btn.classList.remove('show');
+    // Кнопка из верхней панели удалена. Возврат теперь расположен на отдельном экране.
+    const opponent = document.getElementById('activeGameOpponent');
+    if (opponent) opponent.textContent = App.opponentName || 'соперником';
   },
 
   applyGameStateFromServer(s, lobbyId) {
     App.lobbyId = lobbyId;
     App.myColor = s.myColor;
     App.opponentName = s.opponent;
+    const activeGameOpponent = document.getElementById('activeGameOpponent');
+    if (activeGameOpponent) activeGameOpponent.textContent = s.opponent || 'соперником';
     App.opponentRating = s.opponentRating;
     App.opponentIsAdmin = s.opponentIsAdmin;
     App.opponentOnline = !!s.opponentOnline;
