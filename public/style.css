@@ -798,3 +798,95 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .watchRow .wrMeta { margin-top:8px; padding-top:7px; border-top:1px solid rgba(255,255,255,.055); }
 .watchShareBtn { min-height:27px; margin-top:8px; padding:4px 9px; border-radius:6px; font-size:11px; background:rgba(191,129,29,.1); border:1px solid rgba(191,129,29,.28); color:var(--accent-2); }
 .watchShareBtn:hover { background:rgba(191,129,29,.2); }
+
+/* ========= ACTIVE GAME PANEL (внутри зала ожидания) ========= */
+.activeGamePanel {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 480px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 24px;
+  box-sizing: border-box;
+  text-align: center;
+}
+.activeGamePanelWatermark {
+  position: absolute;
+  z-index: -1;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-12deg);
+  font-family: serif;
+  font-size: 420px;
+  line-height: 1;
+  color: rgba(180, 177, 168, .10);
+  pointer-events: none;
+  user-select: none;
+}
+.activeGamePanelInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 420px;
+}
+.activeGamePanel .agpTitle {
+  font-size: 34px;
+  font-weight: 300;
+  color: var(--text-bright);
+  line-height: 1.15;
+}
+.activeGamePanel .agpSub {
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--text);
+}
+.activeGamePanel .agpSub strong {
+  color: var(--text-bright);
+}
+.activeGamePanel .agpReturnBtn {
+  margin-top: 40px;
+  min-width: 260px;
+  min-height: 60px;
+  border: 0;
+  border-radius: 6px;
+  background: linear-gradient(#399be8, #2586d5);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, .16);
+  color: #fff;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  cursor: pointer;
+}
+.activeGamePanel .agpReturnBtn:hover { background: linear-gradient(#4aa8f0, #2f8ede); }
+.activeGamePanel .agpOr {
+  margin: 26px 0 16px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.activeGamePanel .agpAbortBtn {
+  min-width: 160px;
+  min-height: 40px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 6px;
+  background: linear-gradient(#e34444, #c82b2b);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.activeGamePanel .agpAbortBtn:hover { background: linear-gradient(#ef5a5a, #d63a3a); }
+.activeGamePanel .agpFoot {
+  margin-top: 22px;
+  font-size: 13px;
+  color: var(--muted);
+  max-width: 320px;
+}
+@media (max-width: 700px) {
+  .activeGamePanel { min-height: 360px; padding: 40px 16px; }
+  .activeGamePanelWatermark { font-size: 260px; }
+  .activeGamePanel .agpTitle { font-size: 26px; }
+  .activeGamePanel .agpReturnBtn { min-width: 220px; min-height: 52px; font-size: 16px; }
+}
