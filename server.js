@@ -53,7 +53,6 @@ const BOTS = [
 const BOT_NAMES = new Set(BOTS.filter(b => !b.hidden).map(b => b.name));
 const ALL_BOT_NAMES = new Set(BOTS.map(b => b.name));
 const WATCHER_NAME = 'Watcher';
-const HUMAN_BOT_NAMES = new Set(BOTS.filter(b => !b.hidden).map(b => b.name));
 
 // ======================= GLICKO-2 =======================
 const GLICKO2 = {
@@ -482,12 +481,9 @@ function cleanupStuckPlaying() {
 }
 setInterval(cleanupStuckPlaying, 10000);
 
-// Периодическая рассылка списка живых партий (для автообновления Watch)
-setInterval(() => {
-  try {
-    io.emit('liveGamesUpdate', buildGamesList());
-  } catch (e) { /* ignore */ }
-}, 3000);
+// ============================================================
+//  СПИСОК ЖИВЫХ ПАРТИЙ
+// ============================================================
 
 function buildGamesList() {
   const list = [];
@@ -497,21 +493,43 @@ function buildGamesList() {
     const blackName = l.hostColor === 'b' ? l.host : l.guest;
     const whiteU = db.users[whiteName];
     const blackU = db.users[blackName];
+    const whiteIsBot = !!(whiteU && whiteU.isBot);
+    const blackIsBot = !!(blackU && blackU.isBot);
+    const lastHist = (l.history && l.history.length) ? l.history[l.history.length - 1] : null;
     list.push({
       id, white: whiteName, black: blackName,
       whiteRating: whiteU ? whiteU.rating : null,
       blackRating: blackU ? blackU.rating : null,
       whiteIsAdmin: isAdmin(whiteName), blackIsAdmin: isAdmin(blackName),
       whiteIsMod: isMod(whiteName), blackIsMod: isMod(blackName),
+      whiteIsBot, blackIsBot,
+      isBotGame: whiteIsBot || blackIsBot,
       timeW: l.timeW, timeB: l.timeB, turn: l.turn,
       timeControl: l.time, increment: l.inc,
-      isArena: !!l.arenaId, arenaName: l.arenaName || null, fen: l.fen,
+      isArena: !!l.arenaId, arenaName: l.arenaName || null,
+      fen: l.fen,
+      lastMove: lastHist && lastHist.from && lastHist.to ? { from: lastHist.from, to: lastHist.to } : null,
       watchersCount: watchersCountOf(l)
     });
   }
-  list.sort((a, b) => (b.isArena ? 1 : 0) - (a.isArena ? 1 : 0));
+  // Сортировка: сначала партии людей, потом партии с ботами; внутри — турнирные выше обычных.
+  list.sort((a, b) => {
+    const aBot = a.isBotGame ? 1 : 0;
+    const bBot = b.isBotGame ? 1 : 0;
+    if (aBot !== bBot) return aBot - bBot;
+    return (b.isArena ? 1 : 0) - (a.isArena ? 1 : 0);
+  });
   return list;
 }
+
+function broadcastLiveGames() {
+  try {
+    io.emit('liveGamesUpdate', buildGamesList());
+  } catch (e) { /* ignore */ }
+}
+
+// Периодическая рассылка (страховка).
+setInterval(broadcastLiveGames, 3000);
 
 // ======================= ПРАВИЛА ШАХМАТ =======================
 function positionKey(fen) {
@@ -592,7 +610,7 @@ async function finishGame(lobbyId, result, reason) {
   const blackName = l.hostColor === 'b' ? l.host : l.guest;
   const whiteUser = db.users[whiteName];
   const blackUser = db.users[blackName];
-  if (!whiteUser || !blackUser) { lobbies.delete(lobbyId); return; }
+  if (!whiteUser || !blackUser) { lobbies.delete(lobbyId); broadcastLiveGames(); return; }
 
   finishedGamesInfo.set(lobbyId, {
     host: l.host, guest: l.guest,
@@ -638,8 +656,6 @@ async function finishGame(lobbyId, result, reason) {
 
   let whiteAfter = whiteRes.rating;
   let blackAfter = blackRes.rating;
-  if (whiteUser.isBot) whiteAfter = Math.max(800, Math.min(3000, whiteAfter));
-  if (blackUser.isBot) blackAfter = Math.max(800, Math.min(3000, blackAfter));
 
   const whiteIsWatcher = whiteName === WATCHER_NAME;
   const blackIsWatcher = blackName === WATCHER_NAME;
@@ -709,11 +725,13 @@ async function finishGame(lobbyId, result, reason) {
       io.to('watch:' + lobbyId).socketsLeave('watch:' + lobbyId);
       lobbies.delete(lobbyId);
       broadcastLobbies();
+      broadcastLiveGames();
     }
     setTimeout(() => finishedLobbyIds.delete(lobbyId), 10000);
   }, 2000);
 
   broadcastOnline();
+  broadcastLiveGames();
 }
 
 // ======================= АРЕНЫ =======================
@@ -817,7 +835,7 @@ function scheduleArena(state) {
 }
 
 const MAX_BOT_GAMES = 1;
-const MAX_BOT_GAMES_PER_ARENA = 2;
+const MAX_BOT_GAMES_PER_ARENA = 3;
 const MAX_WATCHER_ACTIVE_LOBBIES = 1;
 
 function botActiveGamesCount(botName) {
@@ -912,7 +930,7 @@ function botCloseOwnWaitingLobby(botName) {
   for (const [id, l] of lobbies.entries()) {
     if (!l.finished && !l.started && l.host === botName && l.isBot) { lobbies.delete(id); closed = true; }
   }
-  if (closed) broadcastLobbies();
+  if (closed) { broadcastLobbies(); broadcastLiveGames(); }
   return closed;
 }
 function botLeaveArena(botName, arenaId) {
@@ -950,7 +968,7 @@ function botJoinArena(botName, arenaId) {
 function botBehaviorTick() {
   const now = Date.now();
   for (const bot of BOTS) {
-    if (bot.name === WATCHER_NAME) continue; // Watcher обрабатывается в watcherTick
+    if (bot.name === WATCHER_NAME) continue;
     const beh = botInitBehavior(bot.name);
     if (now < beh.nextDecision) continue;
     beh.nextDecision = now + 3000 + Math.random() * 6000;
@@ -1004,7 +1022,7 @@ function botBehaviorTick() {
     }
 
     const r = Math.random();
-    if (r < 0.6) {
+    if (r < 0.7) {
       const candidates = [...arenas.values()].filter(s =>
         !s.finished && s.botFriendly && (s.phase === 'live' || s.phase === 'waiting') && !s.participants.has(bot.name)
       );
@@ -1032,11 +1050,9 @@ function watcherTick() {
   const now = Date.now();
   const beh = botInitBehavior(WATCHER_NAME);
 
-  // Если Watcher занят игрой — ничего не делаем.
   if (beh.state === 'playing' || watcherHasActiveLobby()) return;
   if (watcherInAnyArena()) return;
 
-  // Наблюдение за партиями
   if (Math.random() < 0.4 || !beh.watchingLobbyId) {
     const liveGames = [];
     for (const [id, l] of lobbies.entries()) {
@@ -1051,7 +1067,6 @@ function watcherTick() {
     }
   }
 
-  // Заход в арену
   if (beh.state !== 'in_arena' && Math.random() < 0.4) {
     const candidates = [...arenas.values()].filter(s =>
       !s.finished && s.botFriendly && (s.phase === 'live' || s.phase === 'waiting')
@@ -1083,8 +1098,8 @@ function watcherTick() {
     }
   }
 
-  // Создание вызова в зале ожидания
-  if (beh.state === 'idle' && Math.random() < 0.25) {
+  // Создание вызова в зале ожидания.
+  if (beh.state === 'idle' && Math.random() < 0.35) {
     let hasOwnLobby = false;
     for (const [id, l] of lobbies.entries()) {
       if (!l.finished && !l.started && l.host === WATCHER_NAME) { hasOwnLobby = true; break; }
@@ -1110,6 +1125,7 @@ function watcherTick() {
       registerPosition(lobby);
       beh.state = 'in_lobby'; beh.activityId = id; beh.lastChange = now;
       broadcastLobbies();
+      broadcastLiveGames();
       console.log(`[Watcher] Создал вызов ${pick.t}+${pick.i}`);
     }
   }
@@ -1121,8 +1137,9 @@ function tryPair(state) {
   if (state.finished || state.phase !== 'live') return;
   const hasViewers = state.chatViewers.size > 0;
   const hasHumans = [...state.participants.values()].some(p => !p.isBot);
+  // Без зрителей и людей — играем реже, но играем (чтобы всегда были партии для просмотра).
   if (!hasHumans && !hasViewers) {
-    if (Math.random() > 0.25) return;
+    if (Math.random() > 0.5) return;
   }
   const currentActive = state.activeLobbies.size;
   if (currentActive >= 6) return;
@@ -1164,8 +1181,9 @@ function tryPair(state) {
       }
 
       if (a.isBot && b.isBot) {
-        if (state.chatViewers.size === 0) continue;
         if (botGamesInArena(state.id) >= MAX_BOT_GAMES_PER_ARENA) continue;
+        // Без зрителей — играем реже.
+        if (state.chatViewers.size === 0 && Math.random() > 0.5) continue;
       }
       const diff = Math.abs((a.score || 0) - (b.score || 0));
       if (diff < bestDiff) { bestDiff = diff; best = b; }
@@ -1227,6 +1245,7 @@ function createArenaPairing(state, a, b) {
   }
   io.to('arena:' + state.id).emit('arenaUpdate', { arenaId: state.id });
   broadcastOnline();
+  broadcastLiveGames();
 
   if (isBotGame && lobbyId) setTimeout(() => scheduleBotMove(lobbyId), 500 + Math.random() * 500);
 }
@@ -1253,7 +1272,9 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   if (state.finished || !whiteP || !blackP) {
     if (whiteP) { whiteP.isPlaying = false; whiteP.lobbyId = null; }
     if (blackP) { blackP.isPlaying = false; blackP.lobbyId = null; }
-    io.to('arena:' + arenaId).emit('arenaUpdate', { arenaId }); return;
+    io.to('arena:' + arenaId).emit('arenaUpdate', { arenaId });
+    broadcastLiveGames();
+    return;
   }
   if (result === 'w') { whiteP.score += calcArenaPoints(whiteP, 'win'); whiteP.wins++; blackP.losses++; calcArenaPoints(blackP, 'loss'); }
   else if (result === 'b') { blackP.score += calcArenaPoints(blackP, 'win'); blackP.wins++; whiteP.losses++; calcArenaPoints(whiteP, 'loss'); }
@@ -1270,6 +1291,7 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   else if (blackName === WATCHER_NAME) { const bh = botInitBehavior(WATCHER_NAME); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = Date.now(); }
   setTimeout(() => tryPair(state), 300);
   io.to('arena:' + arenaId).emit('arenaUpdate', { arenaId });
+  broadcastLiveGames();
 }
 function finishArena(state) {
   if (state.finished) return;
@@ -1385,7 +1407,7 @@ function clearMute(username) {
 }
 
 // ============================================================
-//  ЛЁГКИЙ ШАХМАТНЫЙ ДВИЖОК (для проверки правил, не для игры)
+//  ЛЁГКИЙ ШАХМАТНЫЙ ДВИЖОК (для проверки правил)
 // ============================================================
 const PIECE_VALUES = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
 
@@ -1567,6 +1589,7 @@ function scheduleBotMove(lobbyId) {
 
       emitToGameAndWatchers(lobbyId, 'boardUpdate', { fen: cur.fen, turn: cur.turn, san: null, from, to });
       emitToGameAndWatchers(lobbyId, 'timeUpdate', { timeW: cur.timeW, timeB: cur.timeB, serverNow: now });
+      broadcastLiveGames();
 
       if (checkAutoDraw(lobbyId)) return;
 
@@ -1593,7 +1616,7 @@ function scheduleBotMove(lobbyId) {
     else if (baseTime <= 600) baseDelay = 350;
     else if (baseTime <= 900) baseDelay = 500;
     else                      baseDelay = 800;
-    if (isBotVsBot) baseDelay = Math.max(baseDelay, 300);
+    if (isBotVsBot) baseDelay = Math.max(baseDelay, 250);
   }
 
   let complexity = 1.0;
@@ -1805,6 +1828,7 @@ function scheduleBotMove(lobbyId) {
 
     emitToGameAndWatchers(lobbyId, 'boardUpdate', { fen: cur2.fen, turn: cur2.turn, san: null, from, to });
     emitToGameAndWatchers(lobbyId, 'timeUpdate', { timeW: cur2.timeW, timeB: cur2.timeB, serverNow: now });
+    broadcastLiveGames();
 
     if (checkAutoDraw(lobbyId)) return;
 
@@ -1825,6 +1849,8 @@ function scheduleBotMove(lobbyId) {
 // ============================================================
 io.on('connection', (socket) => {
   socket.emit('stats', { online: countOnline(), games: db.totalGames, activeGames: countActiveLobbies() });
+  // Мгновенно отправляем текущий список партий новому клиенту.
+  socket.emit('liveGamesUpdate', buildGamesList());
 
   socket.on('register', async ({ username, password }, cb) => {
     if (typeof cb !== 'function') return;
@@ -1947,8 +1973,10 @@ io.on('connection', (socket) => {
     l.watchers.add(socket.id);
     io.emit('lobbiesUpdate');
     broadcastWatchers(id);
+    broadcastLiveGames();
     const whiteName = l.hostColor === 'w' ? l.host : l.guest;
     const blackName = l.hostColor === 'b' ? l.host : l.guest;
+    const lastHist = (l.history && l.history.length) ? l.history[l.history.length - 1] : null;
     if (typeof cb === 'function') cb({
       ok: true,
       game: {
@@ -1957,8 +1985,11 @@ io.on('connection', (socket) => {
         blackRating: db.users[blackName] ? db.users[blackName].rating : null,
         whiteIsAdmin: isAdmin(whiteName), blackIsAdmin: isAdmin(blackName),
         whiteIsMod: isMod(whiteName), blackIsMod: isMod(blackName),
+        whiteIsBot: !!(db.users[whiteName] && db.users[whiteName].isBot),
+        blackIsBot: !!(db.users[blackName] && db.users[blackName].isBot),
         timeW: l.timeW, timeB: l.timeB, turn: l.turn,
         timeControl: l.time, increment: l.inc, fen: l.fen,
+        lastMove: lastHist && lastHist.from && lastHist.to ? { from: lastHist.from, to: lastHist.to } : null,
         isArena: !!l.arenaId, arenaName: l.arenaName || null,
         watchersCount: watchersCountOf(l)
       }
@@ -1968,7 +1999,7 @@ io.on('connection', (socket) => {
   socket.on('unwatchGame', ({ id }) => {
     socket.leave('watch:' + id);
     const l = lobbies.get(id);
-    if (l && l.watchers) { l.watchers.delete(socket.id); io.emit('lobbiesUpdate'); broadcastWatchers(id); }
+    if (l && l.watchers) { l.watchers.delete(socket.id); io.emit('lobbiesUpdate'); broadcastWatchers(id); broadcastLiveGames(); }
   });
 
   socket.on('getLobbies', (cb) => {
@@ -1976,8 +2007,9 @@ io.on('connection', (socket) => {
     const list = [];
     for (const [id, l] of lobbies.entries()) {
       if (l.finished || l.arenaId) continue;
+      // Показываем в зале ожидания всё, кроме скрытых ботов; Watcher показываем.
       if (l.isBot && !l.isWatcher) continue;
-      list.push({ id, host: l.host, time: l.time, inc: l.inc, hostIsAdmin: isAdmin(l.host), hostIsMod: isMod(l.host), status: l.guest ? 'playing' : 'waiting', isBot: false });
+      list.push({ id, host: l.host, time: l.time, inc: l.inc, hostIsAdmin: isAdmin(l.host), hostIsMod: isMod(l.host), status: l.guest ? 'playing' : 'waiting', isBot: l.isWatcher });
     }
     cb(list);
   });
@@ -2023,6 +2055,7 @@ io.on('connection', (socket) => {
       cb({ ok: true, id: matched.id, matched: true });
       broadcastLobbies();
       broadcastOnline();
+      broadcastLiveGames();
       return;
     }
     const id = genId();
@@ -2077,6 +2110,7 @@ io.on('connection', (socket) => {
     cb({ ok: true, id });
     broadcastLobbies();
     broadcastOnline();
+    broadcastLiveGames();
   });
 
   socket.on('cancelLobby', ({ id }, cb) => {
@@ -2137,6 +2171,7 @@ io.on('connection', (socket) => {
     cb({ ok: true, id });
     broadcastLobbies();
     broadcastOnline();
+    broadcastLiveGames();
   });
 
   socket.on('move', ({ lobbyId, fen, turn, san }) => {
@@ -2184,6 +2219,7 @@ io.on('connection', (socket) => {
 
     emitToGameAndWatchers(lobbyId, 'boardUpdate', { fen, turn: newTurn, san: san || null, from: fromSq, to: toSq });
     emitToGameAndWatchers(lobbyId, 'timeUpdate', { timeW: l.timeW, timeB: l.timeB, serverNow: now });
+    broadcastLiveGames();
 
     if (checkAutoDraw(lobbyId)) return;
 
@@ -2400,6 +2436,7 @@ io.on('connection', (socket) => {
         if (l) lobbies.delete(lobbyId);
         finishedGamesInfo.delete(lobbyId);
         broadcastLobbies();
+        broadcastLiveGames();
         cb({ ok: true, started: true, newLobbyId: newId });
       }, 300 + Math.random() * 1000);
       return;
@@ -2460,6 +2497,7 @@ io.on('connection', (socket) => {
       if (l) lobbies.delete(lobbyId);
       finishedGamesInfo.delete(lobbyId);
       broadcastLobbies();
+      broadcastLiveGames();
       cb({ ok: true, started: true, newLobbyId: newId });
       return;
     }
@@ -2718,6 +2756,7 @@ io.on('connection', (socket) => {
         io.to(lid).emit('opponentLeft');
         lobbies.delete(lid);
         io.emit('lobbiesUpdate');
+        broadcastLiveGames();
       }
     }
     broadcastOnline();
