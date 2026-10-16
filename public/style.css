@@ -889,7 +889,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   max-width: 320px;
 }
 @media (max-width: 700px) {
-  .activeGamePanel { min-height: 360px; padding: 40px 16px; }
+  .activeGamePanel { padding: 40px 16px; }
   .activeGamePanelWatermark { font-size: 260px; }
   .activeGamePanel .agpTitle { font-size: 26px; }
   .activeGamePanel .agpReturnBtn { min-width: 220px; min-height: 52px; font-size: 16px; }
