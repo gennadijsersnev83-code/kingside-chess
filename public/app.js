@@ -897,7 +897,14 @@ const Watch = {
   watchClockW: 0, watchClockB: 0, watchClockTurn: 'w',
   requestId: 0,
 
-  init() {},
+  init() {
+    // Список просмотра обновляется сам: новые начатые партии появляются без ручного F5.
+    if (this.refreshTimer) clearInterval(this.refreshTimer);
+    this.refreshTimer = setInterval(() => {
+      const screen = document.getElementById('watchScreen');
+      if (screen && screen.classList.contains('active')) this.refresh(false);
+    }, 2500);
+  },
   enter(gameId) {
     this.refresh(true);
     if (gameId) this.watch(gameId);
