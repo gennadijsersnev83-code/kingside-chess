@@ -237,8 +237,8 @@ function getBotParams(rating, baseTimeMin) {
   if (rating < 1100)      { depth = 1; noise = 60; }
   else if (rating < 1350) { depth = 2; noise = 25; }
   else if (rating < 1500) { depth = 2; noise = 12; }
-  else if (rating < 1700) { depth = 3; noise = 5; }
-  else if (rating < 1850) { depth = 3; noise = 2; }
+  else if (rating < 1700) { depth = 3; noise = 3; }
+  else if (rating < 1850) { depth = 4; noise = 1; }
   else if (rating < 2000) { depth = 4; noise = 0; }
   else if (rating < 2200) { depth = 5; noise = 0; }
   else                    { depth = 6; noise = 0; }
