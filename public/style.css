@@ -809,7 +809,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  min-height: 480px;
   display: flex;
   align-items: center;
   justify-content: center;
