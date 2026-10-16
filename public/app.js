@@ -896,27 +896,33 @@ const Watch = {
   watchClockSyncedAt: 0,
   watchClockW: 0, watchClockB: 0, watchClockTurn: 'w',
   requestId: 0,
+  pollHandle: null,
+  refreshPending: false,
 
   init() {
-    // Список просмотра обновляется сам: новые начатые партии появляются без ручного F5.
-    if (this.refreshTimer) clearInterval(this.refreshTimer);
-    this.refreshTimer = setInterval(() => {
+    // Список просмотра обновляется сам, даже если пользователь не заходил в турнир.
+    if (this.pollHandle) return;
+    this.pollHandle = setInterval(() => {
       const screen = document.getElementById('watchScreen');
       if (screen && screen.classList.contains('active')) this.refresh(false);
-    }, 2500);
+    }, 2000);
   },
   enter(gameId) {
     this.refresh(true);
     if (gameId) this.watch(gameId);
   },
   refresh(force) {
+    if (!App.socket || this.refreshPending) return;
+    this.refreshPending = true;
     App.socket.emit('getLiveGames', (list) => {
+      this.refreshPending = false;
       const box = document.getElementById('watchListBody');
       if (!box) return;
+      list = Array.isArray(list) ? list : [];
       const hash = JSON.stringify(list);
       if (hash === this.lastHash && !force) return;
       this.lastHash = hash;
-      if (!list || !list.length) {
+      if (!list.length) {
         box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>';
         return;
       }
