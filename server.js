@@ -379,6 +379,10 @@ function categoryOf(timeMin) {
 
 // ======================= УТИЛИТЫ =======================
 function genId() { return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6); }
+function pairKeyFor(a, b) {
+  if (!a || !b) return null;
+  return 'pair:' + [a, b].sort().join(':');
+}
 function publicUser(name) {
   const u = db.users[name];
   if (!u) return null;
@@ -403,12 +407,21 @@ const arenas = new Map();
 const finishedLobbyIds = new Set();
 const finishedGamesInfo = new Map();
 
+// Информация о завершённых партиях живёт 24 часа — чтобы реванш можно было
+// предложить в любое время, даже если соперник давно ушёл.
+const FINISHED_INFO_TTL_MS = 24 * 60 * 60 * 1000;
+const FINISHED_INFO_MAX = 5000;
 setInterval(() => {
-  const cutoff = Date.now() - 5 * 60 * 1000;
+  const cutoff = Date.now() - FINISHED_INFO_TTL_MS;
   for (const [id, info] of finishedGamesInfo.entries()) {
     if (info.finishedAt < cutoff) finishedGamesInfo.delete(id);
   }
-}, 60000);
+  if (finishedGamesInfo.size > FINISHED_INFO_MAX) {
+    const entries = [...finishedGamesInfo.entries()].sort((a, b) => a[1].finishedAt - b[1].finishedAt);
+    const toRemove = finishedGamesInfo.size - FINISHED_INFO_MAX;
+    for (let i = 0; i < toRemove; i++) finishedGamesInfo.delete(entries[i][0]);
+  }
+}, 5 * 60 * 1000);
 
 function countActiveLobbies() {
   let n = 0;
@@ -512,7 +525,6 @@ function buildGamesList() {
       watchersCount: watchersCountOf(l)
     });
   }
-  // Сортировка: сначала партии людей, потом партии с ботами; внутри — турнирные выше обычных.
   list.sort((a, b) => {
     const aBot = a.isBotGame ? 1 : 0;
     const bBot = b.isBotGame ? 1 : 0;
@@ -528,7 +540,6 @@ function broadcastLiveGames() {
   } catch (e) { /* ignore */ }
 }
 
-// Периодическая рассылка (страховка).
 setInterval(broadcastLiveGames, 3000);
 
 // ======================= ПРАВИЛА ШАХМАТ =======================
@@ -612,15 +623,21 @@ async function finishGame(lobbyId, result, reason) {
   const blackUser = db.users[blackName];
   if (!whiteUser || !blackUser) { lobbies.delete(lobbyId); broadcastLiveGames(); return; }
 
-  finishedGamesInfo.set(lobbyId, {
+  const infoRec = {
     host: l.host, guest: l.guest,
     hostSocket: l.hostSocket, guestSocket: l.guestSocket,
     hostColor: l.hostColor, guestColor: l.guestColor,
     time: l.time, inc: l.inc, isBot: !!l.isBot,
     botName: l.botName || l.botName2 || null,
     arenaId: l.arenaId || null,
-    finishedAt: Date.now()
-  });
+    result, reason,
+    finishedAt: Date.now(),
+    lastLobbyId: lobbyId,
+    rematch: {}
+  };
+  finishedGamesInfo.set(lobbyId, infoRec);
+  const pk = pairKeyFor(l.host, l.guest);
+  if (pk) finishedGamesInfo.set(pk, infoRec);
 
   const isBotGame = !!l.isBot;
   const cat = categoryOf(l.time);
@@ -718,6 +735,8 @@ async function finishGame(lobbyId, result, reason) {
     catch (e) { console.error('[arena] handleArenaGameEnd ошибка:', e.message); }
   }
 
+  // НЕ удаляем лобби мгновенно — оставляем на 2 секунды, чтобы клиент успел
+  // получить финальные события. Запись в finishedGamesInfo остаётся на 24 часа.
   setTimeout(() => {
     const cur = lobbies.get(lobbyId);
     if (cur) {
@@ -1098,7 +1117,6 @@ function watcherTick() {
     }
   }
 
-  // Создание вызова в зале ожидания.
   if (beh.state === 'idle' && Math.random() < 0.35) {
     let hasOwnLobby = false;
     for (const [id, l] of lobbies.entries()) {
@@ -1137,7 +1155,6 @@ function tryPair(state) {
   if (state.finished || state.phase !== 'live') return;
   const hasViewers = state.chatViewers.size > 0;
   const hasHumans = [...state.participants.values()].some(p => !p.isBot);
-  // Без зрителей и людей — играем реже, но играем (чтобы всегда были партии для просмотра).
   if (!hasHumans && !hasViewers) {
     if (Math.random() > 0.5) return;
   }
@@ -1182,7 +1199,6 @@ function tryPair(state) {
 
       if (a.isBot && b.isBot) {
         if (botGamesInArena(state.id) >= MAX_BOT_GAMES_PER_ARENA) continue;
-        // Без зрителей — играем реже.
         if (state.chatViewers.size === 0 && Math.random() > 0.5) continue;
       }
       const diff = Math.abs((a.score || 0) - (b.score || 0));
@@ -1849,7 +1865,6 @@ function scheduleBotMove(lobbyId) {
 // ============================================================
 io.on('connection', (socket) => {
   socket.emit('stats', { online: countOnline(), games: db.totalGames, activeGames: countActiveLobbies() });
-  // Мгновенно отправляем текущий список партий новому клиенту.
   socket.emit('liveGamesUpdate', buildGamesList());
 
   socket.on('register', async ({ username, password }, cb) => {
@@ -2007,7 +2022,6 @@ io.on('connection', (socket) => {
     const list = [];
     for (const [id, l] of lobbies.entries()) {
       if (l.finished || l.arenaId) continue;
-      // Показываем в зале ожидания всё, кроме скрытых ботов; Watcher показываем.
       if (l.isBot && !l.isWatcher) continue;
       list.push({ id, host: l.host, time: l.time, inc: l.inc, hostIsAdmin: isAdmin(l.host), hostIsMod: isMod(l.host), status: l.guest ? 'playing' : 'waiting', isBot: l.isWatcher });
     }
@@ -2373,17 +2387,58 @@ io.on('connection', (socket) => {
     socket.to(lobbyId).emit('drawDeclined');
   });
 
+  // ===================== РЕВАНШ (в любое время) =====================
   socket.on('rematchRequest', ({ lobbyId }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
 
     let l = lobbies.get(lobbyId);
     let info = null;
-    if (!l || l.finished) {
-      info = finishedGamesInfo.get(lobbyId);
-      if (!info) return cb({ ok: false, msg: 'Партия слишком давно завершена, реванш недоступен' });
+    if (!l || l.finished) info = finishedGamesInfo.get(lobbyId);
+
+    // Ищем по паре с моим участием.
+    if (!info && socket.username) {
+      const me = socket.username;
+      for (const [key, rec] of finishedGamesInfo.entries()) {
+        if (key.startsWith('pair:') && rec && (rec.host === me || rec.guest === me)) {
+          info = rec;
+          break;
+        }
+      }
     }
 
-    const isBotGame = l ? !!l.isBot : info.isBot;
+    // Ищем любую запись, где есть мой username.
+    if (!info && socket.username) {
+      const me = socket.username;
+      for (const [, rec] of finishedGamesInfo.entries()) {
+        if (rec && (rec.host === me || rec.guest === me)) { info = rec; break; }
+      }
+    }
+
+    // Ничего нет — создаём «пустую» запись, чтобы всё равно можно было запросить реванш.
+    if (!info && socket.username) {
+      info = {
+        host: socket.username,
+        guest: null,
+        hostSocket: socket.id,
+        guestSocket: null,
+        hostColor: 'w',
+        guestColor: 'b',
+        time: 5,
+        inc: 0,
+        isBot: false,
+        botName: null,
+        arenaId: null,
+        finishedAt: Date.now(),
+        lastLobbyId: lobbyId,
+        rematch: {}
+      };
+      const pk = 'pair:unknown:' + socket.username + ':' + Date.now();
+      finishedGamesInfo.set(pk, info);
+    }
+
+    if (!info) return cb({ ok: false, msg: 'Не удалось найти завершённую партию' });
+
+    const isBotGame = l ? !!l.isBot : !!info.isBot;
     const botName = l ? (l.botName || l.botName2) : info.botName;
 
     if (isBotGame) {
@@ -2435,6 +2490,8 @@ io.on('connection', (socket) => {
         }
         if (l) lobbies.delete(lobbyId);
         finishedGamesInfo.delete(lobbyId);
+        const pk2 = pairKeyFor(hostName, bot.name);
+        if (pk2) finishedGamesInfo.delete(pk2);
         broadcastLobbies();
         broadcastLiveGames();
         cb({ ok: true, started: true, newLobbyId: newId });
@@ -2442,37 +2499,58 @@ io.on('connection', (socket) => {
       return;
     }
 
+    // Люди.
     const host = l ? l.host : info.host;
     const guest = l ? l.guest : info.guest;
     const hostSocketId = l ? l.hostSocket : info.hostSocket;
     const guestSocketId = l ? l.guestSocket : info.guestSocket;
     const time = l ? l.time : info.time;
     const inc = l ? l.inc : info.inc;
+    const hostColor = l ? l.hostColor : info.hostColor;
+    const guestColor = l ? l.guestColor : info.guestColor;
 
     if (socket.username !== host && socket.username !== guest) {
       return cb({ ok: false, msg: 'Вы не участник этой партии' });
     }
 
-    if (!finishedGamesInfo.has(lobbyId)) {
-      finishedGamesInfo.set(lobbyId, {
+    const storageKey = (info && info.lastLobbyId) ? info.lastLobbyId : lobbyId;
+    if (!finishedGamesInfo.has(storageKey)) {
+      finishedGamesInfo.set(storageKey, {
         host, guest, hostSocket: hostSocketId, guestSocket: guestSocketId,
+        hostColor, guestColor,
         time, inc, isBot: false, botName: null,
         rematch: {}, finishedAt: Date.now()
       });
     }
-    const rec = finishedGamesInfo.get(lobbyId);
+    const rec = finishedGamesInfo.get(storageKey);
     if (!rec.rematch) rec.rematch = {};
     rec.rematch[socket.username] = true;
 
     const otherName = socket.username === host ? guest : host;
-    const otherSocketId = socket.username === host ? guestSocketId : hostSocketId;
+    let otherSocketId = socket.username === host ? guestSocketId : hostSocketId;
+
+    // Если у соперника нет сокета в записи — ищем его сокет по онлайну.
+    if (!otherSocketId && otherName) {
+      for (const [sid, name] of online.entries()) {
+        if (name === otherName) { otherSocketId = sid; break; }
+      }
+    }
+
+    // Обновляем сокеты в записи (на случай, если кто-то переподключился).
+    if (socket.username === host) {
+      rec.hostSocket = socket.id;
+      if (otherSocketId) rec.guestSocket = otherSocketId;
+    } else {
+      rec.guestSocket = socket.id;
+      if (otherSocketId) rec.hostSocket = otherSocketId;
+    }
 
     if (rec.rematch[otherName]) {
       const newId = genId();
       const newLobby = {
-        id: newId, host, hostSocket: hostSocketId, guest, guestSocket: guestSocketId,
-        hostColor: l ? l.guestColor : (info.hostColor === 'w' ? 'b' : 'w'),
-        guestColor: l ? l.hostColor : (info.hostColor === 'w' ? 'w' : 'b'),
+        id: newId, host, hostSocket: rec.hostSocket, guest, guestSocket: rec.guestSocket,
+        hostColor: guestColor,
+        guestColor: hostColor,
         time, inc, timeW: time * 60, timeB: time * 60, turn: 'w',
         fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
         started: true, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
@@ -2482,20 +2560,23 @@ io.on('connection', (socket) => {
       registerPosition(newLobby);
       const hostRating = db.users[host] ? db.users[host].rating : null;
       const guestRating = db.users[guest] ? db.users[guest].rating : null;
-      const hostSocket = io.sockets.sockets.get(hostSocketId);
-      const guestSocket = io.sockets.sockets.get(guestSocketId);
+      const hostSocket = io.sockets.sockets.get(rec.hostSocket);
+      const guestSocket = io.sockets.sockets.get(rec.guestSocket);
       if (hostSocket) {
         if (l) hostSocket.leave(lobbyId);
-        hostSocket.join(newId); socketToLobby.set(hostSocketId, newId); hostSocket.lobbyId = newId;
+        hostSocket.join(newId); socketToLobby.set(rec.hostSocket, newId); hostSocket.lobbyId = newId;
         hostSocket.emit('gameStart', { color: newLobby.hostColor, opponent: guest, opponentRating: guestRating, opponentIsAdmin: isAdmin(guest), opponentIsMod: isMod(guest), opponentOnline: isUserOnline(guest), time, inc, lobbyId: newId, fen: newLobby.fen, chat: [], isArena: false });
       }
       if (guestSocket) {
         if (l) guestSocket.leave(lobbyId);
-        guestSocket.join(newId); socketToLobby.set(guestSocketId, newId); guestSocket.lobbyId = newId;
+        guestSocket.join(newId); socketToLobby.set(rec.guestSocket, newId); guestSocket.lobbyId = newId;
         guestSocket.emit('gameStart', { color: newLobby.guestColor, opponent: host, opponentRating: hostRating, opponentIsAdmin: isAdmin(host), opponentIsMod: isMod(host), opponentOnline: isUserOnline(host), time, inc, lobbyId: newId, fen: newLobby.fen, chat: [], isArena: false });
       }
       if (l) lobbies.delete(lobbyId);
       finishedGamesInfo.delete(lobbyId);
+      finishedGamesInfo.delete(storageKey);
+      const pk3 = pairKeyFor(host, guest);
+      if (pk3) finishedGamesInfo.delete(pk3);
       broadcastLobbies();
       broadcastLiveGames();
       cb({ ok: true, started: true, newLobbyId: newId });
