@@ -701,7 +701,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 
 /* ========= REMATCH & DRAW BANNERS ========= */
 .rematchBanner {
-  position: fixed; top: auto; bottom: 84px; left: 50%; transform: translateX(-50%); z-index: 500;
+  position: fixed; top: auto; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 500;
   background: linear-gradient(180deg, #3a2f1c, #26200f);
   border: 1px solid var(--accent); border-radius: 8px;
   padding: 10px 14px; display: flex; align-items: center; gap: 10px;
