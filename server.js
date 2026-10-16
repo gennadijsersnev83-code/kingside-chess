@@ -146,8 +146,6 @@ async function initDB() {
   await pool.query(`ALTER TABLE games ADD COLUMN IF NOT EXISTS is_arena BOOLEAN DEFAULT FALSE;`);
   await pool.query(`ALTER TABLE games ADD COLUMN IF NOT EXISTS arena_name TEXT;`);
   await pool.query(`ALTER TABLE games ADD COLUMN IF NOT EXISTS is_bot BOOLEAN DEFAULT FALSE;`);
-
-  // Сообщения
   await pool.query(`CREATE TABLE IF NOT EXISTS messages (
     id SERIAL PRIMARY KEY,
     from_user TEXT NOT NULL,
@@ -159,7 +157,6 @@ async function initDB() {
   );`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_pair ON messages (from_user, to_user, created_at);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_to ON messages (to_user, read_at);`);
-
   const cnt = await pool.query('SELECT COUNT(*)::int AS n FROM games');
   db.totalGames = cnt.rows[0].n || 0;
 }
@@ -321,6 +318,9 @@ const arenas = new Map();
 const finishedLobbyIds = new Set();
 const finishedGamesInfo = new Map();
 
+// Максимум ожидающих лобби в зале ожидания
+const MAX_WAITING_LOBBIES = 11;
+
 const FINISHED_INFO_TTL_MS = 24 * 60 * 60 * 1000;
 const FINISHED_INFO_MAX = 5000;
 setInterval(() => {
@@ -337,6 +337,20 @@ function countActiveLobbies() {
   for (const l of lobbies.values()) { if (l.finished) continue; if (l.started) n++; }
   return n;
 }
+
+// Считаем только "зал ожидания" — не арены, не ботов, не started.
+function countWaitingLobbies() {
+  let n = 0;
+  for (const l of lobbies.values()) {
+    if (l.finished) continue;
+    if (l.arenaId) continue;
+    if (l.started) continue;
+    if (l.guest) continue;
+    n++;
+  }
+  return n;
+}
+
 function onlinePlayersList() {
   const byName = new Map();
   for (const username of online.values()) if (db.users[username]) byName.set(username, { ...publicUser(username), online: true });
@@ -347,7 +361,7 @@ function onlinePlayersList() {
 function countOnline() { return onlinePlayersList().length; }
 function broadcastOnline() {
   const players = onlinePlayersList();
-  io.emit('stats', { online: players.length, games: db.totalGames, activeGames: countActiveLobbies() });
+  io.emit('stats', { online: players.length, games: db.totalGames, activeGames: countActiveLobbies(), waitingLobbies: countWaitingLobbies() });
   io.emit('communityOnline', players);
 }
 function broadcastLobbies() { io.emit('lobbiesUpdate'); }
@@ -576,6 +590,13 @@ async function finishGame(lobbyId, result, reason) {
   if (!l || l.finished || finishedLobbyIds.has(lobbyId)) return;
   finishedLobbyIds.add(lobbyId);
   l.finished = true; l.started = false;
+
+  // Уменьшаем activeLobbies арены СРАЗУ, чтобы слот освободился.
+  if (l.arenaId) {
+    const st = arenas.get(l.arenaId);
+    if (st) st.activeLobbies.delete(lobbyId);
+  }
+
   const whiteName = l.hostColor === 'w' ? l.host : l.guest;
   const blackName = l.hostColor === 'b' ? l.host : l.guest;
   const whiteUser = db.users[whiteName]; const blackUser = db.users[blackName];
@@ -692,7 +713,7 @@ function getOrCreateArenaState(instance) {
     phase: 'waiting', participants: new Map(), finished: false, top3: null,
     pairingInterval: null, cleanupTimer: null, pairingNow: null,
     activeLobbies: new Set(), chat: [], chatViewers: new Set(), finishedGames: [],
-    botsJoined: false
+    botsJoined: false, tryPairRunning: false
   };
   arenas.set(instance.id, state);
   scheduleArena(state);
@@ -751,9 +772,11 @@ function scheduleArena(state) {
   else finishArena(state);
 }
 
-const MAX_BOT_GAMES = 1;
-const MAX_BOT_GAMES_PER_ARENA = 6;
-const MAX_WATCHER_ACTIVE_LOBBIES = 1;
+// Максимум одновременно идущих партий в одной арене. Не мешает играть людям.
+const MAX_BOT_GAMES = 1;              // один и тот же бот играет только одну партию
+const MAX_BOT_GAMES_PER_ARENA = 6;    // до 6 бот-партий одновременно в арене
+const MAX_HUMAN_GAMES_PER_ARENA = 20; // много людей одновременно
+const MAX_WATCHER_ACTIVE_LOBBIES = 1; // Watcher — только 1 партия
 
 function botActiveGamesCount(botName) {
   let n = 0;
@@ -775,6 +798,11 @@ function botGamesInArena(arenaId) {
   for (const l of lobbies.values()) if (!l.finished && l.isBot && l.arenaId === arenaId) n++;
   return n;
 }
+function humanGamesInArena(arenaId) {
+  let n = 0;
+  for (const l of lobbies.values()) if (!l.finished && !l.isBot && l.arenaId === arenaId) n++;
+  return n;
+}
 function watcherGamesInArena(arenaId) {
   let n = 0;
   for (const l of lobbies.values()) {
@@ -793,6 +821,8 @@ function watcherInAnyArena() {
 }
 function isAvailableForPairing(p, arenaId) {
   if (!p) return false;
+  // Жёсткая защита: если игрок уже в партии — не брать в пару.
+  if (p.isPlaying || p.lobbyId) return false;
   if (p.username === WATCHER_NAME) {
     if (p.paused) return false;
     if (watcherHasActiveLobby()) return false;
@@ -995,72 +1025,91 @@ function watcherTick() {
 setInterval(watcherTick, 15000);
 setTimeout(watcherTick, 5000);
 
+// Атомарный подбор: исключает гонки, когда два игрока одновременно в одной паре.
 function tryPair(state) {
   if (state.finished || state.phase !== 'live') return;
-  const hasViewers = state.chatViewers.size > 0;
-  const hasHumans = [...state.participants.values()].some(p => !p.isBot);
-  if (!hasHumans && !hasViewers) {
-    if (Math.random() > 0.5) return;
-  }
-  const currentActive = state.activeLobbies.size;
-  if (currentActive >= 6) return;
-  const available = [];
-  for (const [username, p] of state.participants.entries()) {
-    if (!isAvailableForPairing(p, state.id)) continue;
-    if (!p.waitingSince) p.waitingSince = Date.now();
-    available.push(p);
-  }
-  if (available.length < 2) {
-    state.pairingNow = available.length === 1 ? available[0].username : null;
-    return;
-  }
-  available.sort((a, b) => a.waitingSince - b.waitingSince);
-  const used = new Set();
-  let pairsCreated = 0;
-  const hasWatcher = available.some(p => p.username === WATCHER_NAME);
-  const MAX_PAIRS_PER_TICK = hasWatcher ? 1 : 2;
-  let watcherPairsThisTick = 0;
-  for (let i = 0; i < available.length && pairsCreated < MAX_PAIRS_PER_TICK; i++) {
-    const a = available[i];
-    if (used.has(a.username)) continue;
-    let best = null, bestDiff = Infinity;
-    for (let j = 0; j < available.length; j++) {
-      if (i === j) continue;
-      const b = available[j];
-      if (used.has(b.username)) continue;
-      if (a.username === b.username) continue;
-      if (a.username === WATCHER_NAME && b.username === WATCHER_NAME) continue;
-      const aWatcher = a.username === WATCHER_NAME;
-      const bWatcher = b.username === WATCHER_NAME;
-      if (aWatcher || bWatcher) {
-        if (watcherPairsThisTick >= 1) continue;
-        if (watcherHasActiveLobby()) continue;
-        if (watcherGamesInArena(state.id) >= MAX_WATCHER_ACTIVE_LOBBIES) continue;
-      }
-      if (a.isBot && b.isBot) {
-        if (botGamesInArena(state.id) >= MAX_BOT_GAMES_PER_ARENA) continue;
-        if (state.chatViewers.size === 0 && !hasHumans && Math.random() > 0.5) continue;
-      }
-      const diff = Math.abs((a.score || 0) - (b.score || 0));
-      if (diff < bestDiff) { bestDiff = diff; best = b; }
+  if (state.tryPairRunning) return; // защита от параллельных вызовов
+  state.tryPairRunning = true;
+  try {
+    const hasViewers = state.chatViewers.size > 0;
+    const hasHumans = [...state.participants.values()].some(p => !p.isBot);
+    if (!hasHumans && !hasViewers && Math.random() > 0.5) return;
+
+    const available = [];
+    for (const [, p] of state.participants.entries()) {
+      if (!isAvailableForPairing(p, state.id)) continue;
+      if (!p.waitingSince) p.waitingSince = Date.now();
+      available.push(p);
     }
-    if (!best) continue;
-    createArenaPairing(state, a, best);
-    used.add(a.username); used.add(best.username);
-    a.waitingSince = null; best.waitingSince = null;
-    pairsCreated++;
-    if (a.username === WATCHER_NAME || best.username === WATCHER_NAME) watcherPairsThisTick++;
-  }
-  if (pairsCreated === 0) {
-    const free = [...state.participants.values()].filter(p => isAvailableForPairing(p, state.id));
-    state.pairingNow = free.length === 1 ? free[0].username : null;
-  } else {
-    state.pairingNow = null;
+    if (available.length < 2) {
+      state.pairingNow = available.length === 1 ? available[0].username : null;
+      return;
+    }
+    available.sort((a, b) => a.waitingSince - b.waitingSince);
+
+    const used = new Set();
+    let pairsCreated = 0;
+    const hasWatcher = available.some(p => p.username === WATCHER_NAME);
+    const MAX_PAIRS_PER_TICK = hasWatcher ? 2 : 4; // увеличил, чтобы запускались все возможные пары сразу
+    let watcherPairsThisTick = 0;
+
+    for (let i = 0; i < available.length && pairsCreated < MAX_PAIRS_PER_TICK; i++) {
+      const a = available[i];
+      if (used.has(a.username) || a.isPlaying || a.lobbyId) continue;
+      let best = null, bestDiff = Infinity;
+      for (let j = 0; j < available.length; j++) {
+        if (i === j) continue;
+        const b = available[j];
+        if (used.has(b.username) || b.isPlaying || b.lobbyId) continue;
+        if (a.username === b.username) continue;
+        if (a.username === WATCHER_NAME && b.username === WATCHER_NAME) continue;
+
+        const aWatcher = a.username === WATCHER_NAME;
+        const bWatcher = b.username === WATCHER_NAME;
+        if (aWatcher || bWatcher) {
+          if (watcherPairsThisTick >= 1) continue;
+          if (watcherHasActiveLobby()) continue;
+          if (watcherGamesInArena(state.id) >= MAX_WATCHER_ACTIVE_LOBBIES) continue;
+        }
+
+        const aIsBot = !!a.isBot, bIsBot = !!b.isBot;
+        if (aIsBot && bIsBot) {
+          if (botGamesInArena(state.id) >= MAX_BOT_GAMES_PER_ARENA) continue;
+          if (state.chatViewers.size === 0 && !hasHumans && Math.random() > 0.5) continue;
+        }
+        if (!aIsBot && !bIsBot) {
+          // Пара людей — без ограничений по числу партий, но не больше MAX_HUMAN
+          if (humanGamesInArena(state.id) >= MAX_HUMAN_GAMES_PER_ARENA) continue;
+        }
+        const diff = Math.abs((a.score || 0) - (b.score || 0));
+        if (diff < bestDiff) { bestDiff = diff; best = b; }
+      }
+      if (!best) continue;
+
+      // Ещё раз проверяем, что оба свободны (защита от гонок между тиками)
+      if (a.isPlaying || a.lobbyId || best.isPlaying || best.lobbyId) continue;
+
+      createArenaPairing(state, a, best);
+      used.add(a.username); used.add(best.username);
+      a.waitingSince = null; best.waitingSince = null;
+      pairsCreated++;
+      if (a.username === WATCHER_NAME || best.username === WATCHER_NAME) watcherPairsThisTick++;
+    }
+
+    if (pairsCreated === 0) {
+      const free = [...state.participants.values()].filter(p => isAvailableForPairing(p, state.id));
+      state.pairingNow = free.length === 1 ? free[0].username : null;
+    } else {
+      state.pairingNow = null;
+    }
+  } finally {
+    state.tryPairRunning = false;
   }
 }
 
 function createArenaPairing(state, a, b) {
   if (a.username === WATCHER_NAME && b.username === WATCHER_NAME) return;
+  if (a.isPlaying || a.lobbyId || b.isPlaying || b.lobbyId) return; // защита
   const lobbyId = genId();
   const hostIsWhite = Math.random() < 0.5;
   const hostColor = hostIsWhite ? 'w' : 'b';
@@ -1261,20 +1310,17 @@ function scheduleBotMove(lobbyId) {
   const botColor = (l.botColor === currentTurn) ? l.botColor : (l.botColor2 === currentTurn ? l.botColor2 : null);
   const botName = (botColor === l.botColor) ? l.botName : (botColor === l.botColor2 ? l.botName2 : null);
   if (!botColor || !botName) return;
-
   const botTimeLeft = botColor === 'w' ? l.timeW : l.timeB;
   const inc = l.inc || 0;
   const state = botParseFen(l.fen);
   const botIsWhiteTurn = botColor === 'w';
   const botMoves = botAllLegalMoves(state, botIsWhiteTurn);
   const isBotVsBot = !!l.botName2;
-
   if (botMoves.length === 0) {
     if (botInCheck(state, botIsWhiteTurn)) finishGame(lobbyId, botIsWhiteTurn ? 'b' : 'w', 'Мат');
     else finishGame(lobbyId, 'draw', 'Пат');
     return;
   }
-
   if (botMoves.length === 1) {
     const delay = 150 + Math.random() * 200;
     setTimeout(() => {
@@ -1322,11 +1368,9 @@ function scheduleBotMove(lobbyId) {
     }, delay);
     return;
   }
-
   let delay;
-  if (botName === WATCHER_NAME) {
-    delay = 800 + Math.random() * 1200;
-  } else {
+  if (botName === WATCHER_NAME) { delay = 800 + Math.random() * 1200; }
+  else {
     const remainMs = botTimeLeft * 1000;
     let frac;
     if (remainMs < 3000)         frac = 0.02;
@@ -1351,9 +1395,7 @@ function scheduleBotMove(lobbyId) {
     if (delay < 60) delay = 60;
     if (isBotVsBot) delay = Math.max(delay, 250);
   }
-
   const botRating = BOT_STRENGTH[botName] || 1500;
-
   setTimeout(async () => {
     const cur = lobbies.get(lobbyId);
     if (!cur || cur.finished || cur.turn !== botColor) return;
@@ -1485,12 +1527,7 @@ function scheduleBotMove(lobbyId) {
   }, delay);
 }
 
-/* ============================================================
-   MESSENGER (серверная часть)
-   ============================================================ */
-
 async function getDialogs(username) {
-  // Возвращает список последних сообщений для каждого собеседника
   const rows = await pool.query(`
     WITH pairs AS (
       SELECT
@@ -1521,7 +1558,6 @@ async function getDialogs(username) {
   `, [username]);
   return rows.rows;
 }
-
 async function getHistory(username, other, markRead) {
   const res = await pool.query(`
     SELECT id, from_user, to_user, text, created_at, read_at
@@ -1531,26 +1567,17 @@ async function getHistory(username, other, markRead) {
     ORDER BY created_at ASC
     LIMIT 500;
   `, [username, other]);
-  if (markRead) {
-    await pool.query(`UPDATE messages SET read_at = $1
-      WHERE to_user = $2 AND from_user = $3 AND read_at = 0`, [Date.now(), username, other]);
-  }
+  if (markRead) await pool.query(`UPDATE messages SET read_at = $1 WHERE to_user = $2 AND from_user = $3 AND read_at = 0`, [Date.now(), username, other]);
   return res.rows;
 }
-
 async function unreadCount(username) {
   const r = await pool.query(`SELECT COUNT(*)::int AS n FROM messages WHERE to_user = $1 AND read_at = 0 AND NOT (hidden_for LIKE '%' || $1 || '%')`, [username]);
   return r.rows[0].n || 0;
 }
-
-function notifyUser(username, payload) {
-  for (const sid of socketsOfUser(username)) {
-    io.to(sid).emit('msgNotify', payload);
-  }
-}
+function notifyUser(username, payload) { for (const sid of socketsOfUser(username)) io.to(sid).emit('msgNotify', payload); }
 
 io.on('connection', (socket) => {
-  socket.emit('stats', { online: countOnline(), games: db.totalGames, activeGames: countActiveLobbies() });
+  socket.emit('stats', { online: countOnline(), games: db.totalGames, activeGames: countActiveLobbies(), waitingLobbies: countWaitingLobbies() });
   socket.emit('liveGamesUpdate', buildGamesList());
 
   socket.on('register', async ({ username, password }, cb) => {
@@ -1604,7 +1631,7 @@ io.on('connection', (socket) => {
     } catch (err) { cb({ ok: false, msg: 'Ошибка базы данных' }); }
   });
 
-  socket.on('getStats', (cb) => { if (typeof cb === 'function') cb({ online: countOnline(), games: db.totalGames, activeGames: countActiveLobbies() }); });
+  socket.on('getStats', (cb) => { if (typeof cb === 'function') cb({ online: countOnline(), games: db.totalGames, activeGames: countActiveLobbies(), waitingLobbies: countWaitingLobbies() }); });
   socket.on('getCommunityOnline', (cb) => { if (typeof cb === 'function') cb(onlinePlayersList()); });
   socket.on('getPlayerCard', ({ username }, cb) => {
     if (typeof cb !== 'function') return;
@@ -1701,6 +1728,21 @@ io.on('connection', (socket) => {
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
     time = Math.max(0.5, Math.min(60, +time || 5));
     inc = Math.max(0, Math.min(60, +inc || 0));
+
+    // Лимит зала ожидания — 11 запросов
+    const waitingCount = countWaitingLobbies();
+    // Проверим, есть ли у игрока уже ожидающее лобби
+    let myWaiting = null;
+    for (const [, l] of lobbies.entries()) {
+      if (l.finished || l.arenaId) continue;
+      if (l.started || l.guest) continue;
+      if (l.host === socket.username) { myWaiting = l; break; }
+    }
+    if (!myWaiting && waitingCount >= MAX_WAITING_LOBBIES) {
+      return cb({ ok: false, msg: `В зале ожидания уже ${MAX_WAITING_LOBBIES} запросов — максимум. Дождитесь, когда кто-то уйдёт, или сыграйте с уже созданным вызовом.` });
+    }
+
+    // Ищем чужое лобби для матча
     let matched = null;
     for (const [, l] of lobbies.entries()) {
       if (l.finished || l.arenaId || (l.isBot && !l.isWatcher) || l.guest) continue;
@@ -1740,6 +1782,7 @@ io.on('connection', (socket) => {
     socket.join(id); socketToLobby.set(socket.id, id); socket.lobbyId = id;
     cb({ ok: true, id });
     broadcastLobbies();
+    broadcastOnline();
   });
 
   socket.on('playWithBot', ({ time, inc, botName }, cb) => {
@@ -1796,6 +1839,13 @@ io.on('connection', (socket) => {
     if (l.guest) return cb({ ok: false, msg: 'Лобби занято' });
     if (l.host === socket.username) return cb({ ok: false, msg: 'Это ваше лобби' });
     if (socket.username === WATCHER_NAME && l.host === WATCHER_NAME) return cb({ ok: false, msg: 'Занято' });
+    // Нельзя вступать, если ты уже в лобби/партии
+    for (const [, other] of lobbies.entries()) {
+      if (other.finished) continue;
+      if ((other.host === socket.username || other.guest === socket.username) && other !== l) {
+        return cb({ ok: false, msg: 'Вы уже в другой партии/лобби' });
+      }
+    }
     l.guest = socket.username; l.guestSocket = socket.id;
     let hostIsWhite;
     if (l.isWatcher) hostIsWhite = true;
@@ -2253,10 +2303,7 @@ io.on('connection', (socket) => {
     const p = state.participants.get(socket.username);
     if (!p) return cb({ ok: false, msg: 'Вы не участвуете в этом турнире' });
     if (p.isPlaying) return cb({ ok: false, msg: 'Ваша партия ещё не завершена' });
-    if (!p.paused) {
-      p.awaitingNextPair = false;
-      p.waitingSince = Date.now();
-    }
+    if (!p.paused) { p.awaitingNextPair = false; p.waitingSince = Date.now(); }
     io.to('arena:' + arenaId).emit('arenaUpdate', { arenaId });
     if (state.phase === 'live' && !p.paused) setTimeout(() => tryPair(state), 100);
     cb({ ok: true });
@@ -2299,19 +2346,12 @@ io.on('connection', (socket) => {
     cb({ ok: true });
   });
 
-  // ============ MESSENGER ============
   socket.on('msgGetDialogs', async (cb) => {
     if (typeof cb !== 'function') return;
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
-    try {
-      const dialogs = await getDialogs(socket.username);
-      cb({ ok: true, dialogs });
-    } catch (e) {
-      console.error('[msg] dialogs error:', e.message);
-      cb({ ok: false, msg: 'Ошибка БД' });
-    }
+    try { cb({ ok: true, dialogs: await getDialogs(socket.username) }); }
+    catch (e) { cb({ ok: false, msg: 'Ошибка БД' }); }
   });
-
   socket.on('msgGetHistory', async ({ with: other, markRead }, cb) => {
     if (typeof cb !== 'function') return;
     if (!socket.username || !other) return cb({ ok: false, msg: 'Ошибка параметров' });
@@ -2322,12 +2362,8 @@ io.on('connection', (socket) => {
         const un = await unreadCount(socket.username);
         for (const sid of socketsOfUser(socket.username)) io.to(sid).emit('msgUnread', { count: un });
       }
-    } catch (e) {
-      console.error('[msg] history error:', e.message);
-      cb({ ok: false, msg: 'Ошибка БД' });
-    }
+    } catch (e) { cb({ ok: false, msg: 'Ошибка БД' }); }
   });
-
   socket.on('msgSend', async ({ to, text }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
@@ -2338,42 +2374,27 @@ io.on('connection', (socket) => {
     if (!db.users[to]) return cb({ ok: false, msg: 'Игрок не найден' });
     if (to === socket.username) return cb({ ok: false, msg: 'Нельзя писать самому себе' });
     const muteUntil = checkMute(socket.username);
-    if (muteUntil > 0) {
-      const mins = Math.ceil((muteUntil - Date.now()) / 60000);
-      return cb({ ok: false, msg: `Вы заглушены ещё ${mins} мин.` });
-    }
+    if (muteUntil > 0) { const mins = Math.ceil((muteUntil - Date.now()) / 60000); return cb({ ok: false, msg: `Вы заглушены ещё ${mins} мин.` }); }
     try {
       const now = Date.now();
       const r = await pool.query(
-        `INSERT INTO messages (from_user, to_user, text, created_at, read_at)
-         VALUES ($1, $2, $3, $4, 0)
+        `INSERT INTO messages (from_user, to_user, text, created_at, read_at) VALUES ($1, $2, $3, $4, 0)
          RETURNING id, from_user, to_user, text, created_at, read_at`,
         [socket.username, to, text, now]
       );
       const row = r.rows[0];
       const msgObj = { id: row.id, from: row.from_user, to: row.to_user, text: row.text, ts: Number(row.created_at), readAt: Number(row.read_at) };
-
-      // Отправить всем сокетам получателя
       for (const sid of socketsOfUser(to)) io.to(sid).emit('msgNew', msgObj);
-      // И отправителю (чтобы синхронизировать между вкладками)
       for (const sid of socketsOfUser(socket.username)) io.to(sid).emit('msgNew', msgObj);
-
-      // Обновить бейдж
       const un = await unreadCount(to);
       for (const sid of socketsOfUser(to)) io.to(sid).emit('msgUnread', { count: un });
-
       cb({ ok: true, msg: msgObj });
-    } catch (e) {
-      console.error('[msg] send error:', e.message);
-      cb({ ok: false, msg: 'Ошибка БД' });
-    }
+    } catch (e) { cb({ ok: false, msg: 'Ошибка БД' }); }
   });
-
   socket.on('msgDeleteDialog', async ({ with: other }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     if (!socket.username || !other) return cb({ ok: false, msg: 'Ошибка параметров' });
     try {
-      // Добавляем логин в hidden_for (через запятую, без дублей)
       await pool.query(`
         UPDATE messages
         SET hidden_for = CASE
@@ -2383,23 +2404,16 @@ io.on('connection', (socket) => {
         END
         WHERE (from_user = $2 AND to_user = $1) OR (from_user = $1 AND to_user = $2)
       `, [socket.username, other]);
-      for (const sid of socketsOfUser(socket.username)) {
-        io.to(sid).emit('msgDialogDeleted', { with: other });
-      }
+      for (const sid of socketsOfUser(socket.username)) io.to(sid).emit('msgDialogDeleted', { with: other });
       const un = await unreadCount(socket.username);
       for (const sid of socketsOfUser(socket.username)) io.to(sid).emit('msgUnread', { count: un });
       cb({ ok: true });
-    } catch (e) {
-      console.error('[msg] delete error:', e.message);
-      cb({ ok: false, msg: 'Ошибка БД' });
-    }
+    } catch (e) { cb({ ok: false, msg: 'Ошибка БД' }); }
   });
-
   socket.on('msgGetUnread', async (cb) => {
     if (typeof cb !== 'function') return;
     if (!socket.username) return cb({ count: 0 });
-    try { cb({ count: await unreadCount(socket.username) }); }
-    catch (e) { cb({ count: 0 }); }
+    try { cb({ count: await unreadCount(socket.username) }); } catch (e) { cb({ count: 0 }); }
   });
 
   socket.on('disconnect', () => {
