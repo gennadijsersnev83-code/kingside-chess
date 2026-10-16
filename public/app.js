@@ -1,23 +1,4 @@
-/* app.js — вся клиентская логика Kingside
- *
- * Структура:
- *   - Utils        — общие утилиты (escape, fmt, nickHtml, ...)
- *   - Sounds       — звуки
- *   - Chess        — клиентская шахматная логика (для отрисовки)
- *   - Router       — hash-роутинг (#/lobby, #/arena/xyz, #/profile/Ivan, #/game/id)
- *   - Socket       — обёртка
- *   - App          — общее состояние (me, lobbyId, ...)
- *   - TopArenas    — список «идут сейчас»
- *   - Stats        — статистика
- *   - Lobby        — лобби и зал ожидания
- *   - Bot          — диалог игры с ботом
- *   - Watch        — просмотр партий
- *   - Arena        — арены (список + страница)
- *   - Profile      — профиль
- *   - Community    — сообщество
- *   - Game         — партия
- *   - Banners      — плавающие баннеры реванша и ничьей
- */
+/* app.js — вся клиентская логика Kingside */
 
 'use strict';
 
@@ -496,6 +477,16 @@ const App = {
     s.on('arenaUpdate', ({ arenaId }) => Arena.onUpdate(arenaId));
     s.on('arenaStarted', ({ arenaId }) => Arena.onUpdate(arenaId));
     s.on('arenaFinished', ({ arenaId, top3 }) => Arena.onFinished(arenaId, top3));
+    // Автообновление списка живых партий для Watch
+    s.on('liveGamesUpdate', (list) => {
+      if (document.getElementById('watchScreen').classList.contains('active')) {
+        Watch.refreshFromList(list);
+      }
+      // Обновляем и список в лобби, если открыт зал ожидания
+      if (document.getElementById('lobbyScreen').classList.contains('active') && Lobby.currentTab === 'waiting') {
+        // Lobby использует отдельный запрос getLobbies, не трогаем
+      }
+    });
   },
 
   onModAction(info) {
@@ -534,6 +525,12 @@ const Router = {
   apply() {
     const { name, param } = this.current;
     if (!App.me && name !== 'login') { this.show('loginScreen'); return; }
+
+    // Останавливаем автообновление Watch, если уходим со страницы
+    if (name !== 'watch' && Watch.autoRefreshHandle) {
+      clearInterval(Watch.autoRefreshHandle);
+      Watch.autoRefreshHandle = null;
+    }
 
     // Если уходим со страницы арены — покидаем комнату.
     if (name !== 'arenaPage' && Arena.currentArenaId) {
@@ -896,34 +893,48 @@ const Watch = {
   watchClockSyncedAt: 0,
   watchClockW: 0, watchClockB: 0, watchClockTurn: 'w',
   requestId: 0,
+  autoRefreshHandle: null,
 
   init() {},
+
   enter(gameId) {
     this.refresh(true);
     if (gameId) this.watch(gameId);
+    if (this.autoRefreshHandle) clearInterval(this.autoRefreshHandle);
+    this.autoRefreshHandle = setInterval(() => {
+      if (document.getElementById('watchScreen').classList.contains('active')) {
+        this.refresh(false);
+      }
+    }, 3000);
   },
+
   refresh(force) {
     App.socket.emit('getLiveGames', (list) => {
-      const box = document.getElementById('watchListBody');
-      if (!box) return;
-      const hash = JSON.stringify(list);
-      if (hash === this.lastHash && !force) return;
-      this.lastHash = hash;
-      if (!list || !list.length) {
-        box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>';
-        return;
-      }
-      box.innerHTML = list.map(g => {
-        const cls = 'watchRow' + (g.isArena ? ' isArena' : '');
-        const arenaTag = g.isArena ? ` · ${Utils.escapeHtml(g.arenaName || 'турнир')}` : '';
-        return `<div class="${cls}" onclick="Watch.watch('${g.id}')">
-          <div class="wrPlayers"><span><span class="liveDot"></span>⚪ ${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${g.whiteRating ? ' <span class="prat">('+g.whiteRating+')</span>' : ''}</span><span>${Utils.formatTime(g.timeW)}</span></div>
-          <div class="wrPlayers"><span>⚫ ${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${g.blackRating ? ' <span class="prat">('+g.blackRating+')</span>' : ''}</span><span>${Utils.formatTime(g.timeB)}</span></div>
-          <div class="wrMeta"><span>${g.timeControl}+${g.increment}${arenaTag}</span><span>ход: <b>${g.turn === 'w' ? 'белые' : 'чёрные'}</b> ${Utils.watchersHtml(g.watchersCount)}</span></div>
-        </div>`;
-      }).join('');
+      this.refreshFromList(list);
     });
   },
+
+  refreshFromList(list) {
+    const box = document.getElementById('watchListBody');
+    if (!box) return;
+    const hash = JSON.stringify(list);
+    if (hash === this.lastHash) return;
+    this.lastHash = hash;
+    if (!list || !list.length) {
+      box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>';
+      return;
+    }
+    box.innerHTML = list.map(g => {
+      const cls = 'watchRow' + (g.isArena ? ' isArena' : '');
+      const arenaTag = g.isArena ? ` · ${Utils.escapeHtml(g.arenaName || 'турнир')}` : '';
+      return `<div class="${cls}" onclick="Watch.watch('${g.id}')">
+        <div class="wrPlayers"><span><span class="liveDot"></span>⚪ ${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${g.whiteRating ? ' <span class="prat">('+g.whiteRating+')</span>' : ''}</span><span>${Utils.formatTime(g.timeW)}</span></div>
+        <div class="wrPlayers"><span>⚫ ${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${g.blackRating ? ' <span class="prat">('+g.blackRating+')</span>' : ''}</span><span>${Utils.formatTime(g.timeB)}</span></div>
+        <div class="wrMeta"><span>${g.timeControl}+${g.increment}${arenaTag}</span><span>ход: <b>${g.turn === 'w' ? 'белые' : 'чёрные'}</b> ${Utils.watchersHtml(g.watchersCount)}</span></div>
+      </div>`;
+    }).join('');
+  },
+
   watch(id) {
     if (this.watchingGameId === id) {
       if (Router.current.name !== 'watch') Router.go('watch', id);
@@ -946,6 +957,7 @@ const Watch = {
       this.renderBoard();
     });
   },
+
   stop() {
     if (this.watchingGameId) App.socket.emit('unwatchGame', { id: this.watchingGameId });
     this.watchingGameId = null;
@@ -955,6 +967,7 @@ const Watch = {
     this.renderBoard();
     if (Router.current.name === 'watch') Router.go('watch');
   },
+
   renderBoard() {
     const box = document.getElementById('watchBoardBox');
     if (!box) return;
@@ -964,7 +977,6 @@ const Watch = {
     }
     const g = this.watchingGame;
     const state = Chess.parseFen(g.fen);
-    // Доска зрителя не переворачивается автоматически — всегда белые снизу.
     const flip = false;
     const lmHash = g.lastMove ? g.lastMove.from.join(',') + '>' + g.lastMove.to.join(',') : '';
     const hash = g.id + '|' + g.fen + '|' + g.turn + '|' + flip + '|' + (g.watchersCount || 0) + '|' + (g.finished ? 'F' : 'A') + '|' + lmHash;
@@ -1019,6 +1031,7 @@ const Watch = {
       </div>`;
     this.startClock();
   },
+
   startClock() {
     if (this.watchClockHandle) cancelAnimationFrame(this.watchClockHandle);
     this.watchClockSyncedAt = performance.now();
@@ -1042,6 +1055,7 @@ const Watch = {
     }
     this.watchClockHandle = requestAnimationFrame(tick);
   },
+
   onWatchersUpdate(lobbyId, count) {
     if (this.watchingGame && this.watchingGame.id === lobbyId) {
       this.watchingGame.watchersCount = count;
@@ -1050,6 +1064,7 @@ const Watch = {
     }
     if (document.getElementById('watchScreen').classList.contains('active')) this.refresh(false);
   },
+
   onBoardUpdate({ lobbyId, fen, turn, san, from, to }) {
     if (!this.watchingGame || this.watchingGame.id !== lobbyId) return;
     this.watchingGame.fen = fen;
@@ -1058,6 +1073,7 @@ const Watch = {
     this.lastBoardHash = '';
     this.renderBoard();
   },
+
   onTimeUpdate({ lobbyId, timeW, timeB, serverNow }) {
     if (!this.watchingGame || this.watchingGame.id !== lobbyId) return;
     this.watchingGame.timeW = timeW;
@@ -1065,8 +1081,8 @@ const Watch = {
     this.watchClockSyncedAt = performance.now();
     this.watchClockW = timeW;
     this.watchClockB = timeB;
-    // turn мог не прийти — оставляем текущий
   },
+
   onGameEnded({ lobbyId, result, reason }) {
     if (!this.watchingGame || this.watchingGame.id !== lobbyId) return;
     this.watchingGame.finished = true;
@@ -1076,8 +1092,8 @@ const Watch = {
     this.renderBoard();
     this.refresh(false);
   },
+
   onChatMessage(msg) {
-    // Чат зрителям сервер не рассылает в watch-комнату — заглушка на будущее.
     if (!this.watchingGame || this.watchingGame.id !== msg.lobbyId) return;
   }
 };
@@ -1101,9 +1117,11 @@ const Arena = {
   refreshHandle: null,
 
   init() {},
+
   enterList() {
     this.refresh(true);
   },
+
   enterPage(arenaId) {
     if (!arenaId) { Router.go('arenas'); return; }
     if (this.currentArenaId && this.currentArenaId !== arenaId) {
@@ -1131,6 +1149,7 @@ const Arena = {
       if (document.getElementById('arenaPageScreen').classList.contains('active')) this.renderGamesList();
     }, 3000);
   },
+
   leaveRoom() {
     if (this.currentArenaId) {
       App.socket.emit('leaveArenaRoom', { arenaId: this.currentArenaId });
@@ -1140,6 +1159,7 @@ const Arena = {
     if (this.statusTickHandle) { clearInterval(this.statusTickHandle); this.statusTickHandle = null; }
     if (this.gamesRefreshHandle) { clearInterval(this.gamesRefreshHandle); this.gamesRefreshHandle = null; }
   },
+
   refresh(force) {
     if (!force && !document.getElementById('arenasScreen').classList.contains('active')) return;
     App.socket.emit('getArenas', (res) => {
@@ -1174,6 +1194,7 @@ const Arena = {
       });
     }, 30000);
   },
+
   renderGrid() {
     const wrap = document.getElementById('arenasGridWrap');
     if (!wrap) return;
@@ -1245,6 +1266,7 @@ const Arena = {
     const scroller = wrap.querySelector('.arenasScroller');
     if (scroller) scroller.scrollLeft = Math.max(0, nowLeft - scroller.clientWidth / 4);
   },
+
   loadPage() {
     if (!this.currentArenaId || this.loadBusy) return;
     this.loadBusy = true;
@@ -1273,6 +1295,7 @@ const Arena = {
       this.tickStatus();
     });
   },
+
   tickStatus() {
     if (!this.currentArenaId) return;
     const row = document.getElementById('arenaStatusRow');
@@ -1300,6 +1323,7 @@ const Arena = {
       return;
     }
   },
+
   renderPage(arena, state) {
     document.getElementById('arenaPageName').textContent = arena.name;
     const phaseText = { 'waiting':'Начало в '+Utils.fmtMskHM(arena.startsAt)+' МСК', 'live':'Идёт сейчас', 'finished':'Завершена' }[state.phase] || '';
@@ -1310,6 +1334,7 @@ const Arena = {
     if (state.top3 && state.top3.length) this.showWinnerBanner(state.top3);
     else document.getElementById('arenaWinnerBanner').style.display = 'none';
   },
+
   updateJoinButton(state) {
     const wrap = document.getElementById('arenaJoinBtnWrap');
     if (state.phase === 'finished') {
@@ -1328,6 +1353,7 @@ const Arena = {
       wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button>`;
     }
   },
+
   renderPairingBox(state) {
     const box = document.getElementById('arenaPairingBox');
     if (!box) return;
@@ -1350,6 +1376,7 @@ const Arena = {
     box.style.display = 'flex'; box.classList.add('searching');
     box.innerHTML = `<div class="spinner"></div><span>Ожидайте, идёт жеребьёвка…</span>`;
   },
+
   renderParticipants(arena, state) {
     const body = document.getElementById('arenaTableBody');
     const list = state.participants || [];
@@ -1374,12 +1401,14 @@ const Arena = {
       return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''} ${botCls}"><span class="place ${placeCls}">${place}</span><span class="pname">${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
     }).join('');
   },
+
   filterParticipants() {
     if (this.currentArenaState && this.currentArenaId) {
       const arena = this.cache.find(a => a.id === this.currentArenaId);
       if (arena) this.renderParticipants(arena, this.currentArenaState);
     }
   },
+
   renderGamesList() {
     const topEl = document.getElementById('arenaTopGame');
     const listEl = document.getElementById('arenaGamesList');
@@ -1416,6 +1445,7 @@ const Arena = {
       }).join('');
     });
   },
+
   renderTopGame(g) {
     const state = Chess.parseFen(g.fen);
     let squares = '';
@@ -1431,6 +1461,7 @@ const Arena = {
     const bR = g.blackRating ? `<span class="prat">${g.blackRating}</span>` : '';
     return `<div class="arenaTopGamePlayers"><span class="playerRow">⚫ <span class="name">${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span><span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeB)}</span></div><div class="arenaTopGameBoard">${squares}</div><div class="arenaTopGamePlayers"><span class="playerRow">⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div><div class="arenaTopGameLink">▶ – Смотреть партию</div>`;
   },
+
   showWinnerBanner(top3) {
     const banner = document.getElementById('arenaWinnerBanner');
     const podium = document.getElementById('awbPodium');
@@ -1442,6 +1473,7 @@ const Arena = {
     }).join('');
     banner.style.display = 'block';
   },
+
   joinCurrent() {
     if (!this.currentArenaId) return;
     App.socket.emit('joinArena', { arenaId: this.currentArenaId }, (res) => {
@@ -1452,6 +1484,7 @@ const Arena = {
       this.renderGamesList();
     });
   },
+
   pauseCurrent() {
     if (!this.currentArenaId) return;
     App.socket.emit('pauseArena', { arenaId: this.currentArenaId }, (res) => {
@@ -1461,6 +1494,7 @@ const Arena = {
       this.refresh(true);
     });
   },
+
   leaveCurrent() {
     if (!this.currentArenaId) return;
     if (!confirm('Отменить участие?')) return;
@@ -1471,6 +1505,7 @@ const Arena = {
       this.refresh(true);
     });
   },
+
   sendChat(e) {
     e.preventDefault();
     const input = document.getElementById('arenaChatInput');
@@ -1479,9 +1514,11 @@ const Arena = {
     App.socket.emit('arenaChat', { arenaId: this.currentArenaId, text });
     input.value = '';
   },
+
   onChatMessage(msg) {
     if (this.currentArenaId && msg.arenaId === this.currentArenaId) this.renderChatMsg(msg);
   },
+
   renderChatMsg(msg) {
     const box = document.getElementById('arenaChatMessages');
     if (!box) return;
@@ -1506,6 +1543,7 @@ const Arena = {
     while (box.children.length > 200) box.removeChild(box.firstChild);
     box.scrollTop = box.scrollHeight;
   },
+
   onUpdate(arenaId) {
     if (this.currentArenaId === arenaId) {
       this.lastStateHash = ''; this.lastGamesHash = '';
@@ -1517,6 +1555,7 @@ const Arena = {
     if (document.getElementById('arenasScreen').classList.contains('active')) this.refresh();
     if (document.getElementById('lobbyScreen').classList.contains('active')) TopArenas.refresh();
   },
+
   onFinished(arenaId, top3) {
     if (this.currentArenaId === arenaId) {
       this.lastStateHash = ''; this.lastGamesHash = '';
@@ -1711,7 +1750,7 @@ const Community = {
 };
 
 // ============================================================
-// MOD MENU (общий для чата партии и чата арены)
+// MOD MENU
 // ============================================================
 const Mod = {
   el: null,
@@ -1761,11 +1800,7 @@ const Banners = {
     const dDecline = document.getElementById('drawOfferBannerDecline');
     if (rAccept) rAccept.onclick = () => {
       if (!App.lobbyId) return;
-      App.socket.emit('rematchRequest', { lobbyId: App.lobbyId }, (res) => {
-        if (res && res.ok && res.started) {
-          // сервер сам пришлёт gameStart
-        }
-      });
+      App.socket.emit('rematchRequest', { lobbyId: App.lobbyId }, (res) => {});
       this.hideRematch();
     };
     if (rDecline) rDecline.onclick = () => {
@@ -2554,7 +2589,6 @@ const Game = {
     this.viewIndex = -1;
     if (from && to) {
       this.lastMove = { from, to };
-      // Если san не пришёл с сервера (например, ход бота) — генерируем локально.
       if (!san) {
         try {
           const prevState = Chess.parseFen(prevFen);
