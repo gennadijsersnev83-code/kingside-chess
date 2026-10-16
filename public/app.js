@@ -966,14 +966,19 @@ const Watch = {
     const state = Chess.parseFen(g.fen);
     // Доска зрителя не переворачивается автоматически — всегда белые снизу.
     const flip = false;
-    const hash = g.id + '|' + g.fen + '|' + g.turn + '|' + flip + '|' + (g.watchersCount || 0) + '|' + (g.finished ? 'F' : 'A');
+    const lmHash = g.lastMove ? g.lastMove.from.join(',') + '>' + g.lastMove.to.join(',') : '';
+    const hash = g.id + '|' + g.fen + '|' + g.turn + '|' + flip + '|' + (g.watchersCount || 0) + '|' + (g.finished ? 'F' : 'A') + '|' + lmHash;
     if (hash === this.lastBoardHash) return;
     this.lastBoardHash = hash;
     const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
     let squares = '';
+    const lm = g.lastMove;
     for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) {
       const r = flip ? 7 - dr : dr, c = flip ? 7 - dc : dc;
-      const cls = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
+      let cls = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
+      if (lm && ((lm.from[0] === r && lm.from[1] === c) || (lm.to[0] === r && lm.to[1] === c))) {
+        cls += ' lastmove';
+      }
       const p = state.board[r][c];
       let inner = '';
       if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW?'w':'b'}">${Chess.EMOJI[p]}</span>`; }
@@ -1045,10 +1050,11 @@ const Watch = {
     }
     if (document.getElementById('watchScreen').classList.contains('active')) this.refresh(false);
   },
-  onBoardUpdate({ lobbyId, fen, turn, san }) {
+  onBoardUpdate({ lobbyId, fen, turn, san, from, to }) {
     if (!this.watchingGame || this.watchingGame.id !== lobbyId) return;
     this.watchingGame.fen = fen;
     if (turn) this.watchingGame.turn = turn;
+    if (from && to) this.watchingGame.lastMove = { from, to };
     this.lastBoardHash = '';
     this.renderBoard();
   },
@@ -1782,7 +1788,6 @@ const Banners = {
     if (!b || !t) return;
     t.textContent = `⚔ ${from} предлагает реванш`;
     b.style.display = 'flex';
-    // Меняем кнопку на странице партии
     const btn = document.getElementById('grRematchBtn');
     if (btn) {
       btn.classList.add('accept');
@@ -1852,7 +1857,6 @@ const Game = {
 
   enter(lobbyId) {
     if (lobbyId && (!App.lobbyId || App.lobbyId !== lobbyId)) {
-      // Открыли по прямой ссылке #/game/xyz — попробуем восстановить
       App.lobbyId = lobbyId;
       App.socket.emit('getGameState', { lobbyId }, (res) => {
         if (!res || !res.ok) { alert((res && res.msg) || 'Партия не найдена'); Router.go('lobby'); return; }
@@ -2541,12 +2545,23 @@ const Game = {
     Sounds.start();
   },
 
-  onBoardUpdate({ fen, san }) {
+  onBoardUpdate({ fen, san, from, to }) {
     if (!App.gameActive || App.gameEnded) return;
+    const prevFen = App.currentFen;
     App.currentFen = fen;
     this.selected = null;
     this.legalMoves = [];
     this.viewIndex = -1;
+    if (from && to) {
+      this.lastMove = { from, to };
+      // Если san не пришёл с сервера (например, ход бота) — генерируем локально.
+      if (!san) {
+        try {
+          const prevState = Chess.parseFen(prevFen);
+          san = Chess.toSAN(prevState, from, to);
+        } catch (e) {}
+      }
+    }
     if (san) { this.moveHistory.push(san); this.moveFens.push(fen); }
     this.renderMoves();
     this.lastBoardHash = '';
