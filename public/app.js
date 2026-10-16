@@ -106,7 +106,7 @@ const Sounds = (function() {
 })();
 
 // ============================================================
-// CHESS (клиентская логика — только для отрисовки/подсветки/валидации UI)
+// CHESS
 // ============================================================
 const Chess = {
   EMOJI: { 'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙','k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟' },
@@ -286,7 +286,7 @@ const Chess = {
 };
 
 // ============================================================
-// APP — общее состояние
+// APP
 // ============================================================
 const App = {
   socket: null,
@@ -477,14 +477,10 @@ const App = {
     s.on('arenaUpdate', ({ arenaId }) => Arena.onUpdate(arenaId));
     s.on('arenaStarted', ({ arenaId }) => Arena.onUpdate(arenaId));
     s.on('arenaFinished', ({ arenaId, top3 }) => Arena.onFinished(arenaId, top3));
-    // Автообновление списка живых партий для Watch
+    // Автообновление списка живых партий для Watch.
     s.on('liveGamesUpdate', (list) => {
       if (document.getElementById('watchScreen').classList.contains('active')) {
         Watch.refreshFromList(list);
-      }
-      // Обновляем и список в лобби, если открыт зал ожидания
-      if (document.getElementById('lobbyScreen').classList.contains('active') && Lobby.currentTab === 'waiting') {
-        // Lobby использует отдельный запрос getLobbies, не трогаем
       }
     });
   },
@@ -497,7 +493,7 @@ const App = {
 };
 
 // ============================================================
-// ROUTER — hash-роутинг
+// ROUTER
 // ============================================================
 const Router = {
   current: { name: 'lobby', param: null },
@@ -526,13 +522,11 @@ const Router = {
     const { name, param } = this.current;
     if (!App.me && name !== 'login') { this.show('loginScreen'); return; }
 
-    // Останавливаем автообновление Watch, если уходим со страницы
     if (name !== 'watch' && Watch.autoRefreshHandle) {
       clearInterval(Watch.autoRefreshHandle);
       Watch.autoRefreshHandle = null;
     }
 
-    // Если уходим со страницы арены — покидаем комнату.
     if (name !== 'arenaPage' && Arena.currentArenaId) {
       Arena.leaveRoom();
     }
@@ -925,12 +919,15 @@ const Watch = {
       return;
     }
     box.innerHTML = list.map(g => {
-      const cls = 'watchRow' + (g.isArena ? ' isArena' : '');
+      const cls = 'watchRow' + (g.isArena ? ' isArena' : '') + (g.isBotGame ? ' isBotGame' : '');
       const arenaTag = g.isArena ? ` · ${Utils.escapeHtml(g.arenaName || 'турнир')}` : '';
+      const botTag = g.isBotGame ? ' 🤖' : '';
+      const wBot = g.whiteIsBot ? '🤖' : '';
+      const bBot = g.blackIsBot ? '🤖' : '';
       return `<div class="${cls}" onclick="Watch.watch('${g.id}')">
-        <div class="wrPlayers"><span><span class="liveDot"></span>⚪ ${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${g.whiteRating ? ' <span class="prat">('+g.whiteRating+')</span>' : ''}</span><span>${Utils.formatTime(g.timeW)}</span></div>
-        <div class="wrPlayers"><span>⚫ ${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${g.blackRating ? ' <span class="prat">('+g.blackRating+')</span>' : ''}</span><span>${Utils.formatTime(g.timeB)}</span></div>
-        <div class="wrMeta"><span>${g.timeControl}+${g.increment}${arenaTag}</span><span>ход: <b>${g.turn === 'w' ? 'белые' : 'чёрные'}</b> ${Utils.watchersHtml(g.watchersCount)}</span></div>
+        <div class="wrPlayers"><span><span class="liveDot"></span>⚪ ${wBot}${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod, g.whiteIsBot)}${g.whiteRating ? ' <span class="prat">('+g.whiteRating+')</span>' : ''}</span><span>${Utils.formatTime(g.timeW)}</span></div>
+        <div class="wrPlayers"><span>⚫ ${bBot}${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod, g.blackIsBot)}${g.blackRating ? ' <span class="prat">('+g.blackRating+')</span>' : ''}</span><span>${Utils.formatTime(g.timeB)}</span></div>
+        <div class="wrMeta"><span>${g.timeControl}+${g.increment}${arenaTag}${botTag}</span><span>ход: <b>${g.turn === 'w' ? 'белые' : 'чёрные'}</b> ${Utils.watchersHtml(g.watchersCount)}</span></div>
       </div>`;
     }).join('');
   },
@@ -1002,10 +999,12 @@ const Watch = {
     const finishedLine = g.finished
       ? `<div style="text-align:center; margin-top:10px; padding:8px 12px; background:rgba(98,153,36,.12); border-left:3px solid var(--green); border-radius:4px; color:var(--text-bright); font-size:13px;">✅ Партия завершена${g.reason ? ' · ' + Utils.escapeHtml(g.reason) : ''}</div>`
       : '';
+    const wBot = g.whiteIsBot ? '🤖 ' : '';
+    const bBot = g.blackIsBot ? '🤖 ' : '';
     box.innerHTML = `
       <div class="wbHeader">
         <div style="min-width:0; flex:1">
-          <div class="wbTitle">Партия ${g.isArena ? 'турнира' : ''}</div>
+          <div class="wbTitle">Партия ${g.isArena ? 'турнира' : ''}${g.whiteIsBot || g.blackIsBot ? ' (с ботом)' : ''}</div>
           <div class="wbSub">${g.timeControl}+${g.increment}${g.arenaName ? ' · '+Utils.escapeHtml(g.arenaName) : ''}</div>
         </div>
         <button class="secondary" onclick="Watch.stop()" style="flex-shrink:0">✕ Выйти</button>
@@ -1013,13 +1012,13 @@ const Watch = {
       <div class="wbPlayers">
         <div class="wbPlayer ${blackActive?'active':''}">
           <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-            <span class="name">⚫ ${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}
+            <span class="name">⚫ ${bBot}${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod, g.blackIsBot)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}
           </span>
           <span class="time" id="watchTimeB">${Utils.formatTime(g.timeB)}</span>
         </div>
         <div class="wbPlayer ${whiteActive?'active':''}">
           <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-            <span class="name">⚪ ${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}
+            <span class="name">⚪ ${wBot}${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod, g.whiteIsBot)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}
           </span>
           <span class="time" id="watchTimeW">${Utils.formatTime(g.timeW)}</span>
         </div>
@@ -1788,7 +1787,7 @@ const Mod = {
 document.addEventListener('click', (e) => { if (Mod.el && !Mod.el.contains(e.target)) Mod.close(); });
 
 // ============================================================
-// BANNERS (rematch / draw)
+// BANNERS
 // ============================================================
 const Banners = {
   rematchFrom: null,
