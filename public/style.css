@@ -162,7 +162,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   background:var(--panel-2); border:1px solid var(--border); border-radius:6px;
   padding:18px 8px; color:var(--text-bright); cursor:pointer; transition:.15s;
   text-align:center; display:flex; flex-direction:column; align-items:center;
-  justify-content:center; gap:6px; height:92px; min-height:92px;
+  justify-content:center; gap:6px; min-height:92px; min-width:0;
 }
 .quickBtn:hover { background:var(--panel-hover); border-color:var(--accent); transform:translateY(-1px); }
 .quickBtn .qb-time { font-size:26px; font-weight:300; color:var(--text-bright); letter-spacing:.5px; }
