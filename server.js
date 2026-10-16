@@ -272,7 +272,6 @@ async function loadDB() {
         } catch (e) { console.error('[DB] Ошибка вставки бота:', e.message); }
       } else {
         existing.isBot = true;
-        // Не поднимаем рейтинг Watcher искусственно при запуске: результаты партий сохраняются как есть.
       }
     }
     console.log(`[DB] Загружено: ${Object.keys(db.users).length} игроков, ${db.totalGames} партий`);
@@ -1711,29 +1710,19 @@ function scheduleBotMove(lobbyId) {
       }
     }
 
-    const currentTimeLeft = botColor === 'w' ? cur.timeW : cur.timeB;
     let mv;
     if (botName === WATCHER_NAME) {
-      // Не даём сырой Q-таблице с испорченным опытом выбирать грубые зевки.
-      // Watcher получает сильный поисковый ход, а обучение по партиям и наблюдаемым
-      // ходам продолжает накапливаться через recordTransition/learnFromObservedMove.
+      const botIsWhiteMove = botColor === 'w';
+      const curState = botParseFen(cur.fen);
+      const availableMoves = botAllLegalMoves(curState, botIsWhiteMove);
       try {
-        mv = await botPool.getMove(cur.fen, botRating, cur.time, currentTimeLeft, cur.inc);
-      } catch (err) {
-        console.error('[Watcher] Ошибка поискового движка:', err.message);
-        // Безопасный запасной путь: выбрать легальный ход обучающим модулем.
-        const botIsWhiteMove = botColor === 'w';
-        const curState = botParseFen(cur.fen);
-        const availableMoves = botAllLegalMoves(curState, botIsWhiteMove);
-        try {
-          mv = watcherLearning.pickMove(cur.fen, botColor, { time: cur.time, inc: cur.inc }, availableMoves);
-        } catch (e) {
-          console.error('[Watcher] pickMove ошибка:', e.message);
-          mv = null;
-        }
+        mv = watcherLearning.pickMove(cur.fen, botColor, { time: cur.time, inc: cur.inc }, availableMoves);
+      } catch (e) {
+        console.error('[Watcher] pickMove ошибка:', e.message);
+        mv = null;
       }
     } else {
-      try { mv = await botPool.getMove(cur.fen, botRating, cur.time, currentTimeLeft, cur.inc); }
+      try { mv = await botPool.getMove(cur.fen, botRating, cur.time); }
       catch (err) { console.error('[bot-pool] ошибка получения хода:', err.message); return; }
     }
     if (!mv) return;
