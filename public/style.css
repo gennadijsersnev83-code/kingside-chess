@@ -320,9 +320,11 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 }
 .watchRow {
   background:var(--panel-2); border-radius:6px; padding:10px 12px; margin-bottom:6px;
-  cursor:pointer; border-left:3px solid var(--accent); transition:.15s;
+  cursor:pointer; border-left:3px solid var(--accent);
+  transition: background .12s ease, border-color .12s ease;
+  will-change: background-color;
 }
-.watchRow:hover { background:var(--panel-hover); transform:translateX(2px); }
+.watchRow:hover { background:var(--panel-hover); border-left-color:var(--accent-2); }
 .watchRow.isArena { border-left-color:var(--green-2); }
 .watchRow.isBotGame { border-left-color:#a56ce8; }
 .watchRow.isBotGame .wrMeta { color:#b39ddb; }
@@ -775,9 +777,9 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   .arenasHeader .ahNow { font-size:13px; }
   .homeWrap { grid-template-columns:1fr; }
   .rematchBanner { top: auto; bottom: 12px; padding: 8px 10px; font-size: 12px; }
-  .drawOfferBanner { top: auto; bottom: 12px; }
   .rematchBanner .rbText { max-width: 90vw; }
   .rematchBanner button { padding: 5px 10px; font-size: 11px; }
+  .drawOfferBanner { top: auto; bottom: 12px; }
 }
 @media (max-width: 380px) { .piece { font-size:min(10vw, 40px); } }
 @media (max-width:560px) {
@@ -796,14 +798,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   *, *::before, *::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
 }
 :focus-visible { outline:2px solid var(--accent-2); outline-offset:2px; }
-
-/* Улучшенная карточка партии в просмотре */
-.watchRow { position:relative; border-radius:10px; margin:7px 8px; padding:12px 12px 10px; border:1px solid rgba(255,255,255,.07); background:linear-gradient(145deg,rgba(255,255,255,.035),rgba(255,255,255,.012)); transition:border-color .16s,background .16s,transform .16s; }
-.watchRow:hover { border-color:rgba(191,129,29,.65); background:rgba(191,129,29,.07); transform:translateY(-1px); }
-.watchRow .wrPlayers { gap:10px; }
-.watchRow .wrMeta { margin-top:8px; padding-top:7px; border-top:1px solid rgba(255,255,255,.055); }
-.watchShareBtn { min-height:27px; margin-top:8px; padding:4px 9px; border-radius:6px; font-size:11px; background:rgba(191,129,29,.1); border:1px solid rgba(191,129,29,.28); color:var(--accent-2); }
-.watchShareBtn:hover { background:rgba(191,129,29,.2); }
 
 /* ========= ACTIVE GAME PANEL (внутри зала ожидания) ========= */
 .activeGamePanel {
@@ -895,3 +889,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   .activeGamePanel .agpTitle { font-size: 26px; }
   .activeGamePanel .agpReturnBtn { min-width: 220px; min-height: 52px; font-size: 16px; }
 }
+
+/* Плашка статуса партии больше не используется — полностью скрываем на случай, если где-то осталась ссылка. */
+#statusBar { display: none !important; }
