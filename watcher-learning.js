@@ -2,36 +2,35 @@
 // Q-learning для Watcher: Double Q + Replay + терминальная награда.
 // Watcher НЕ играет сам с собой — только с людьми и другими ботами.
 //
-// Вся логика Watcher'а здесь:
-//   - encodeState / encodeAction
-//   - evalPosition (простая оценка, O(64))
-//   - isHanging / filterBlunders (фильтр подстав, O(N))
-//   - computeReward (reward shaping)
-//   - pickMove (Q + эвристика + 1-ply lookahead для top-K)
-//   - recordTransition / startEpisode / finishEpisode
-//   - learnFromObservedMove
+// v9:
+//   - Ключ состояния — грубые бакеты (материал, фигуры, пешки, фаза, шах, время).
+//     Без Zobrist — состояния повторяются, Q-таблица может учиться.
+//   - Разделены таблицы: QA/QB — свои ходы, QObsA/QObsB — наблюдаемые.
+//   - isHanging проверяет атаку/защиту ПОСЛЕ хода.
+//   - Мягкий штраф за подставу вместо жёсткого фильтра.
+//   - Терминальная награда ±10, дисконт GAMMA без *0.6.
+//   - recordTransition(prevFen, newFen, from, to, botColor, timeControl, capturedPiece).
 
 const fs = require('fs');
 const path = require('path');
 
 const DATA_DIR = path.join(__dirname, 'data');
 const QTABLE_PATH = path.join(DATA_DIR, 'watcher-qtable.json');
-const MAX_STATES = 250000;
+const MAX_STATES = 200000;
 const SAVE_INTERVAL_MS = 5 * 60 * 1000;
 
-const ALPHA = 0.28;
-const GAMMA = 0.99;
-const EPSILON_START = 0.30;
-const EPSILON_END = 0.03;
-const EPSILON_DECAY_STEPS = 8000;
+const ALPHA = 0.30;
+const GAMMA = 0.97;
+const EPSILON_START = 0.25;
+const EPSILON_END = 0.02;
+const EPSILON_DECAY_STEPS = 20000;
 
-const REPLAY_MAX = 80000;
-const REPLAY_SAMPLE = 96;
-const REPLAY_INTERVAL_STEPS = 20;
+const REPLAY_MAX = 60000;
+const REPLAY_SAMPLE = 64;
+const REPLAY_INTERVAL_STEPS = 15;
 const REPLAY_PRIORITY_FRESH = 0.6;
 
-// Сколько лучших ходов просматриваем через 1-ply lookahead.
-const LOOKAHEAD_TOP_K = 8;
+const LOOKAHEAD_TOP_K = 10;
 
 const PIECE_VALUES = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
 
@@ -165,7 +164,6 @@ function allLegalMoves(state, white) {
   return res;
 }
 
-// Простая оценка: материал + пара слонов + бонус за атаку на короля.
 function evalPositionFromState(state) {
   let score = 0;
   let whiteBishops = 0, blackBishops = 0;
@@ -178,8 +176,8 @@ function evalPositionFromState(state) {
   }
   if (whiteBishops >= 2) score += 30;
   if (blackBishops >= 2) score -= 30;
-  if (inCheck(state, true))  score -= 25;
-  if (inCheck(state, false)) score += 25;
+  if (inCheck(state, true))  score -= 40;
+  if (inCheck(state, false)) score += 40;
   return score;
 }
 
@@ -188,47 +186,36 @@ function evalPosition(fen) {
   catch (e) { return 0; }
 }
 
-// Проверяем: если бот пойдёт from→to, потеряет ли он материал немедленно?
-function isHanging(stateBefore, from, to, botColor) {
+function isHangingAfter(stateBefore, from, to, botColor) {
   const botWhite = botColor === 'w';
   const movedPiece = stateBefore.board[from[0]][from[1]];
   if (!movedPiece) return false;
   const movedValue = PIECE_VALUES[movedPiece.toLowerCase()] || 0;
-
   const target = stateBefore.board[to[0]][to[1]];
   const capturedValue = target ? (PIECE_VALUES[target.toLowerCase()] || 0) : 0;
 
-  if (capturedValue >= movedValue) return false;
-
+  const next = applyMove(stateBefore, from, to);
   const oppWhite = !botWhite;
+
   let attackers = 0;
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = stateBefore.board[r][c];
+    const p = next.board[r][c];
     if (!p || isWhitePiece(p) !== oppWhite) continue;
-    if (pseudoMoves(stateBefore, r, c).some(([ar, ac]) => ar === to[0] && ac === to[1])) attackers++;
+    if (pseudoMoves(next, r, c).some(([ar, ac]) => ar === to[0] && ac === to[1])) attackers++;
   }
   if (attackers === 0) return false;
 
   let defenders = 0;
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     if (r === to[0] && c === to[1]) continue;
-    const p = stateBefore.board[r][c];
+    const p = next.board[r][c];
     if (!p || isWhitePiece(p) !== botWhite) continue;
-    if (pseudoMoves(stateBefore, r, c).some(([ar, ac]) => ar === to[0] && ac === to[1])) defenders++;
+    if (pseudoMoves(next, r, c).some(([ar, ac]) => ar === to[0] && ac === to[1])) defenders++;
   }
 
-  if (attackers > defenders && movedValue - capturedValue > 150) return true;
-  if (defenders === 0 && movedValue - capturedValue > 200) return true;
+  if (attackers > defenders && movedValue - capturedValue > 50) return true;
+  if (defenders === 0 && movedValue - capturedValue > 100) return true;
   return false;
-}
-
-function filterBlunders(stateBefore, normalizedMoves, botColor) {
-  const safe = [];
-  for (const mv of normalizedMoves) {
-    if (isHanging(stateBefore, mv.from, mv.to, botColor)) continue;
-    safe.push(mv);
-  }
-  return safe.length ? safe : normalizedMoves;
 }
 
 function rankMoves(stateBefore, normalizedMoves, botColor) {
@@ -253,12 +240,12 @@ function rankMoves(stateBefore, normalizedMoves, botColor) {
       if (from[0] === back) score += 8;
     }
 
+    if (isHangingAfter(stateBefore, from, to, botColor)) score -= 100;
+
     return { from, to, score };
   });
 }
 
-// 1-ply lookahead: для хода (from, to) смотрит лучший ответ соперника и
-// возвращает оценку с точки зрения бота.
 function lookahead1Score(stateBefore, from, to, botColor) {
   const next = applyMove(stateBefore, from, to);
   const oppColor = next.turn;
@@ -266,9 +253,8 @@ function lookahead1Score(stateBefore, from, to, botColor) {
   const botWhite = botColor === 'w';
 
   if (oppMoves.length === 0) {
-    // Мат или пат.
     if (inCheck(next, oppColor === 'w')) {
-      return botWhite ? 99999 : -99999;
+      return botWhite ? 100000 : -100000;
     }
     return 0;
   }
@@ -284,47 +270,8 @@ function lookahead1Score(stateBefore, from, to, botColor) {
 }
 
 // ============================================================
-//  ZOBRIST + STATE ENCODING
+//  STATE ENCODING (грубые бакеты, без Zobrist)
 // ============================================================
-
-const ZOBRIST = (() => {
-  let seed = 0x9E3779B9 >>> 0;
-  const rand32 = () => {
-    seed ^= (seed << 13) >>> 0;
-    seed ^= (seed >>> 17);
-    seed ^= (seed << 5) >>> 0;
-    return seed >>> 0;
-  };
-  const pieceKeys = {};
-  const pieces = ['P','N','B','R','Q','K','p','n','b','r','q','k'];
-  for (const p of pieces) pieceKeys[p] = Array.from({ length: 64 }, () => rand32());
-  const turnKey = rand32();
-  const castleKeys = Array.from({ length: 16 }, () => rand32());
-  const epKeys = Array.from({ length: 8 }, () => rand32());
-  return { pieceKeys, turnKey, castleKeys, epKeys };
-})();
-
-function zobristHash(board, turn, castling, ep) {
-  let h = 0 >>> 0;
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = board[r][c];
-    if (!p) continue;
-    const key = ZOBRIST.pieceKeys[p];
-    if (key) h = (h ^ key[r * 8 + c]) >>> 0;
-  }
-  if (turn === 'b') h = (h ^ ZOBRIST.turnKey) >>> 0;
-  let castleMask = 0;
-  if (castling.includes('K')) castleMask |= 1;
-  if (castling.includes('Q')) castleMask |= 2;
-  if (castling.includes('k')) castleMask |= 4;
-  if (castling.includes('q')) castleMask |= 8;
-  h = (h ^ ZOBRIST.castleKeys[castleMask]) >>> 0;
-  if (ep && ep !== '-') {
-    const file = ep.charCodeAt(0) - 97;
-    if (file >= 0 && file < 8) h = (h ^ ZOBRIST.epKeys[file]) >>> 0;
-  }
-  return h >>> 0;
-}
 
 function timeControlCode(timeMin, inc) {
   if (timeMin < 3) return 'B';
@@ -333,13 +280,28 @@ function timeControlCode(timeMin, inc) {
   return 'C';
 }
 
-// Расширенное состояние: Zobrist + материал + счётчики + пешечная структура +
-// король под шахом + сколько наших фигур под боем.
+function materialBucket(mat) {
+  if (mat >= 30) return 'A';
+  if (mat >= 20) return 'B';
+  if (mat >= 12) return 'C';
+  if (mat >= 6)  return 'D';
+  if (mat >= 3)  return 'E';
+  return 'F';
+}
+
+function countBucket(c) {
+  if (c >= 12) return 'a';
+  if (c >= 8)  return 'b';
+  if (c >= 5)  return 'c';
+  if (c >= 3)  return 'd';
+  return 'e';
+}
+
 function encodeState(fen, botColor, timeControl) {
   try {
     const parts = fen.split(' ');
     const boardStr = parts[0];
-    const turn = parts[1];
+    const turn = parts[1] || 'w';
     const castling = parts[2] || '-';
     const ep = parts[3] || '-';
     const fullmove = parseInt(parts[5] || '1', 10);
@@ -390,7 +352,6 @@ function encodeState(fen, botColor, timeControl) {
     const botInChk = inCheck(state, botWhite) ? 'K' : 'k';
     const oppInChk = inCheck(state, !botWhite) ? 'A' : 'a';
 
-    // Сколько наших фигур (кроме короля) под боем?
     let hangingCount = 0;
     for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
       const p = board[rr][cc];
@@ -400,14 +361,13 @@ function encodeState(fen, botColor, timeControl) {
     }
     const hangBucket = hangingCount >= 4 ? 'H' : (hangingCount >= 2 ? 'h' : (hangingCount >= 1 ? 'm' : 'n'));
 
-    const matBucket = (m) => m>=30?'A' : m>=20?'B' : m>=12?'C' : m>=6?'D' : m>=3?'E':'F';
-    const cntBucket = (c) => c>=12?'a' : c>=8?'b' : c>=5?'c' : c>=3?'d':'e';
     const phase = fullmove < 10 ? 'O' : (fullmove < 25 ? 'M' : 'E');
     const turnSign = turn === botColor ? 'T' : 't';
     const tc = timeControlCode(timeControl && timeControl.time ? timeControl.time : 5, timeControl ? timeControl.inc : 0);
-    const zh = zobristHash(board, turn, castling, ep).toString(36);
+    const doubled = (wDoubled + bDoubled) >= 3 ? 'D' : ((wDoubled + bDoubled) >= 1 ? 'd' : '-');
+    const isolated = (wIsolated + bIsolated) >= 3 ? 'I' : ((wIsolated + bIsolated) >= 1 ? 'i' : '-');
 
-    return `${tc}${zh}${matBucket(wMat)}${matBucket(bMat)}${cntBucket(wCount)}${cntBucket(bCount)}${turnSign}${phase}${botInChk}${oppInChk}${hangBucket}`;
+    return `${tc}${materialBucket(wMat)}${materialBucket(bMat)}${countBucket(wCount)}${countBucket(bCount)}${turnSign}${phase}${botInChk}${oppInChk}${hangBucket}${doubled}${isolated}${castling}`;
   } catch (e) { return 'ERR'; }
 }
 
@@ -421,6 +381,8 @@ function encodeAction(from, to) {
 
 let QA = new Map();
 let QB = new Map();
+let QObsA = new Map();
+let QObsB = new Map();
 let totalGames = 0;
 let totalSteps = 0;
 let saveHandle = null;
@@ -457,30 +419,28 @@ function loadQTable() {
     if (fs.existsSync(QTABLE_PATH)) {
       const raw = fs.readFileSync(QTABLE_PATH, 'utf8');
       const parsed = JSON.parse(raw);
-      QA = new Map(); QB = new Map();
-      if (parsed.qa) {
-        for (const [state, actions] of Object.entries(parsed.qa)) {
+      QA = new Map(); QB = new Map(); QObsA = new Map(); QObsB = new Map();
+      const loadInto = (target, src) => {
+        if (!src) return;
+        for (const [state, actions] of Object.entries(src)) {
           const m = new Map();
           for (const [act, val] of Object.entries(actions)) m.set(act, { q: val.q || 0, v: val.v || 0, ev: val.ev || 0, lastUsed: val.lastUsed || Date.now() });
-          QA.set(state, m);
+          target.set(state, m);
         }
-      }
-      if (parsed.qb) {
-        for (const [state, actions] of Object.entries(parsed.qb)) {
-          const m = new Map();
-          for (const [act, val] of Object.entries(actions)) m.set(act, { q: val.q || 0, v: val.v || 0, ev: val.ev || 0, lastUsed: val.lastUsed || Date.now() });
-          QB.set(state, m);
-        }
-      }
+      };
+      loadInto(QA, parsed.qa);
+      loadInto(QB, parsed.qb);
+      loadInto(QObsA, parsed.qObsA);
+      loadInto(QObsB, parsed.qObsB);
       totalGames = parsed.totalGames || 0;
       totalSteps = parsed.totalSteps || 0;
-      console.log(`[Watcher] Q-таблицы загружены: QA=${QA.size}, QB=${QB.size}, партий=${totalGames}, ходов=${totalSteps}`);
+      console.log(`[Watcher] Q-таблицы загружены: QA=${QA.size}, QB=${QB.size}, QObsA=${QObsA.size}, QObsB=${QObsB.size}, партий=${totalGames}, ходов=${totalSteps}`);
     } else {
       console.log('[Watcher] Q-таблицы пусты, начинаем с нуля');
     }
   } catch (e) {
     console.error('[Watcher] Ошибка загрузки Q-таблиц:', e.message);
-    QA = new Map(); QB = new Map();
+    QA = new Map(); QB = new Map(); QObsA = new Map(); QObsB = new Map();
     totalGames = 0; totalSteps = 0;
   }
 }
@@ -489,20 +449,21 @@ function saveQTable() {
   if (!dirty) return;
   ensureDataDir();
   try {
-    const obj = { qa: {}, qb: {}, totalGames, totalSteps, savedAt: Date.now(), version: 8 };
-    for (const [state, actions] of QA.entries()) {
-      const a = {};
-      for (const [act, val] of actions.entries()) a[act] = val;
-      obj.qa[state] = a;
-    }
-    for (const [state, actions] of QB.entries()) {
-      const a = {};
-      for (const [act, val] of actions.entries()) a[act] = val;
-      obj.qb[state] = a;
-    }
+    const obj = { qa: {}, qb: {}, qObsA: {}, qObsB: {}, totalGames, totalSteps, savedAt: Date.now(), version: 9 };
+    const dump = (table, target) => {
+      for (const [state, actions] of table.entries()) {
+        const a = {};
+        for (const [act, val] of actions.entries()) a[act] = val;
+        target[state] = a;
+      }
+    };
+    dump(QA, obj.qa);
+    dump(QB, obj.qb);
+    dump(QObsA, obj.qObsA);
+    dump(QObsB, obj.qObsB);
     fs.writeFileSync(QTABLE_PATH, JSON.stringify(obj));
     dirty = false;
-    console.log(`[Watcher] Q-таблицы сохранены: QA=${QA.size}, QB=${QB.size}, партий=${totalGames}`);
+    console.log(`[Watcher] Q-таблицы сохранены: QA=${QA.size}, QB=${QB.size}, QObsA=${QObsA.size}, QObsB=${QObsB.size}, партий=${totalGames}`);
   } catch (e) { console.error('[Watcher] Ошибка сохранения Q-таблиц:', e.message); }
 }
 
@@ -523,8 +484,7 @@ function evictIfNeeded() {
     const toRemove = table.size - MAX_STATES + Math.floor(MAX_STATES * 0.1);
     for (let i = 0; i < toRemove && i < entries.length; i++) table.delete(entries[i].state);
   };
-  cleanTable(QA);
-  cleanTable(QB);
+  cleanTable(QA); cleanTable(QB); cleanTable(QObsA); cleanTable(QObsB);
 }
 
 function getEpsilon() {
@@ -534,13 +494,9 @@ function getEpsilon() {
 }
 
 // ============================================================
-//  REWARD SHAPING
+//  REWARD
 // ============================================================
 
-// Считаем reward для хода Watcher'а:
-//   - дельта оценки с нашей точки зрения (нормализовано /400)
-//   - бонус за съеденную фигуру (/400)
-//   - штраф за подставу (если соперник бьёт нашу фигуру дороже, чем мы съели)
 function computeReward(prevFen, newFen, botColor, capturedPiece) {
   try {
     const evalBefore = evalPosition(prevFen);
@@ -561,8 +517,6 @@ function computeReward(prevFen, newFen, botColor, capturedPiece) {
 //  ВЫБОР ХОДА
 // ============================================================
 
-// moves — массив [[fromR,fromC],[toR,toC]] (как botAllLegalMoves в server.js).
-// Возвращаем всегда { from: [r,c], to: [r,c] } или null.
 function pickMove(fen, botColor, timeControl, moves) {
   if (!moves || moves.length === 0) return null;
 
@@ -579,42 +533,35 @@ function pickMove(fen, botColor, timeControl, moves) {
 
   const state = parseFen(fen);
 
-  // 1. Фильтр подстав (дешёвый, O(N)).
-  const filtered = filterBlunders(state, normalized, botColor);
-
-  // 2. Ранжирование по эвристике.
-  const ranked = rankMoves(state, filtered, botColor);
+  const ranked = rankMoves(state, normalized, botColor);
   ranked.sort((a, b) => b.score - a.score);
 
-  // 3. 1-ply lookahead для top-K ходов.
   const K = Math.min(LOOKAHEAD_TOP_K, ranked.length);
   for (let i = 0; i < K; i++) {
     const mv = ranked[i];
     mv.eval = lookahead1Score(state, mv.from, mv.to, botColor);
   }
-  // Ходы вне top-K получают оценку по эвристике (нормализованную).
   for (let i = K; i < ranked.length; i++) {
-    const mv = ranked[i];
-    mv.eval = mv.score / 200;
+    ranked[i].eval = ranked[i].score / 200;
   }
 
-  // Пересортируем top-K по реальной оценке (для исследования).
-  const topK = ranked.slice(0, K).sort((a, b) => (botColor === 'w' ? b.eval - a.eval : a.eval - b.eval));
+  const botWhite = botColor === 'w';
+  const topK = ranked.slice(0, K).sort((a, b) => botWhite ? b.eval - a.eval : a.eval - b.eval);
   const rest = ranked.slice(K);
 
   const encodedState = encodeState(fen, botColor, timeControl);
   const eps = getEpsilon();
 
-  // 4. Исследование: из top-3 лучших по eval.
   if (Math.random() < eps) {
     const pool = topK.slice(0, Math.min(3, topK.length));
     const pick = pool[Math.floor(Math.random() * pool.length)];
     return { from: pick.from, to: pick.to };
   }
 
-  // 5. Использование: Q-значение + нормализованная эвристика.
   const qActionsA = QA.get(encodedState);
   const qActionsB = QB.get(encodedState);
+  const qObsA = QObsA.get(encodedState);
+  const qObsB = QObsB.get(encodedState);
 
   let best = null, bestScore = -Infinity;
   const allMoves = topK.concat(rest);
@@ -623,8 +570,11 @@ function pickMove(fen, botColor, timeControl, moves) {
     const qa = qActionsA && qActionsA.get(act) ? qActionsA.get(act).q : 0;
     const qb = qActionsB && qActionsB.get(act) ? qActionsB.get(act).q : 0;
     const qAvg = (qa + qb) / 2;
+    const obsA = qObsA && qObsA.get(act) ? qObsA.get(act).q : 0;
+    const obsB = qObsB && qObsB.get(act) ? qObsB.get(act).q : 0;
+    const obsAvg = (obsA + obsB) / 2;
     const heuristic = Math.max(-2, Math.min(2, mv.eval / 400));
-    const score = qAvg * 0.6 + heuristic * 0.4;
+    const score = qAvg * 0.55 + obsAvg * 0.10 + heuristic * 0.35;
     if (score > bestScore) { bestScore = score; best = mv; }
   }
 
@@ -680,9 +630,6 @@ function startEpisode(botColor, timeControl) {
   console.log(`[Watcher] Эпизод начат: цвет=${botColor}, tc=${timeControl.time}+${timeControl.inc}`);
 }
 
-// prevFen, newFen — позиции до/после хода Watcher'а.
-// from, to — координаты хода Watcher'а.
-// captured — символ съеденной фигуры или null.
 function recordTransition(prevFen, newFen, from, to, botColor, timeControl, capturedPiece) {
   try {
     if (!from || !to || from.length !== 2 || to.length !== 2) return;
@@ -730,8 +677,8 @@ function finishEpisode(result, botColor) {
   if (!currentEpisode) return;
   let terminalReward = 0;
   if (result === 'draw' || !result) terminalReward = 0;
-  else if (result === botColor) terminalReward = 1.5;
-  else terminalReward = -1.5;
+  else if (result === botColor) terminalReward = 10;
+  else terminalReward = -10;
 
   const trans = currentEpisode.transitions;
   let discounted = terminalReward;
@@ -749,13 +696,13 @@ function finishEpisode(result, botColor) {
       if (oa && oa.has(bestAction)) maxNextQ = oa.get(bestAction).q;
     }
 
-    const combinedReward = t.reward + discounted * 0.6;
+    const combinedReward = t.reward + discounted;
     const target = combinedReward + GAMMA * maxNextQ;
     entry.q = entry.q + ALPHA * (target - entry.q);
     entry.v = (entry.v || 0) + 1;
     entry.lastUsed = Date.now();
 
-    discounted *= GAMMA * 0.6;
+    discounted *= GAMMA;
   }
 
   currentEpisode = null;
@@ -766,19 +713,19 @@ function finishEpisode(result, botColor) {
 
 function learnFromObservedMove(prevFen, move, newFen, moverColor, timeControl, evalAfter) {
   try {
+    if (!move || !move.from || !move.to) return;
     const stateBefore = encodeState(prevFen, moverColor, timeControl);
     const actionStr = encodeAction(move.from, move.to);
     const stateAfter = encodeState(newFen, moverColor, timeControl);
 
-    // Дельта оценки с точки зрения ходящего (а не абсолютное значение).
     const evalBefore = evalPosition(prevFen);
     const myBefore = moverColor === 'w' ? evalBefore : -evalBefore;
     const myAfter = moverColor === 'w' ? evalAfter : -evalAfter;
     const reward = (myAfter - myBefore) / 400;
 
     const updateA = Math.random() < 0.5;
-    const table = updateA ? QA : QB;
-    const otherTable = updateA ? QB : QA;
+    const table = updateA ? QObsA : QObsB;
+    const otherTable = updateA ? QObsB : QObsA;
     const entry = getQEntry(table, stateBefore, actionStr);
 
     const bestAction = getArgmaxQ(table, stateAfter);
@@ -788,7 +735,7 @@ function learnFromObservedMove(prevFen, move, newFen, moverColor, timeControl, e
       if (oa && oa.has(bestAction)) maxNextQ = oa.get(bestAction).q;
     }
     const target = reward + GAMMA * maxNextQ;
-    entry.q = entry.q + (ALPHA * 0.35) * (target - entry.q);
+    entry.q = entry.q + (ALPHA * 0.25) * (target - entry.q);
     entry.v = (entry.v || 0) + 1;
     entry.lastUsed = Date.now();
     totalSteps++;
@@ -802,6 +749,7 @@ function incrementGames() { /* для совместимости */ }
 function getStats() {
   return {
     qaStates: QA.size, qbStates: QB.size,
+    qObsStates: QObsA.size + QObsB.size,
     games: totalGames, steps: totalSteps,
     epsilon: +getEpsilon().toFixed(3),
     replaySize: replay.length,
