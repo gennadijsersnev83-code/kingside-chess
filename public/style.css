@@ -156,7 +156,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .lobbyContent > .lobbyHeader { flex:0 0 auto; }
 
 /* Быстрый старт — внутри свой padding */
-.quickGrid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); grid-auto-rows:1fr; gap:8px; padding:16px; flex:1 1 auto; align-content:stretch; }
+.quickGrid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); grid-auto-rows:1fr; gap:8px; padding:16px; flex:1 1 auto; min-height:0; align-content:stretch; box-sizing:border-box; }
 @media (max-width:560px) { .quickGrid { grid-template-columns:repeat(2,1fr); padding:10px; } }
 .quickBtn {
   background:var(--panel-2); border:1px solid var(--border); border-radius:6px;
