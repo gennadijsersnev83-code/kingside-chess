@@ -1757,18 +1757,15 @@ io.on('connection', (socket) => {
       break;
     }
     if (!myWaiting) {
-      // Чистим мёртвые лобби людей (ботские не трогаем — они живые).
+      // Чистим мёртвые лобби (хост отключился), чтобы зал не засорялся.
       for (const [id, l] of lobbies.entries()) {
         if (!l || l.finished || l.arenaId || l.started || l.guest) continue;
-        if (l.isBot) continue;
+        if (l.isWatcher) continue;
         if (l.hostSocket && !io.sockets.sockets.has(l.hostSocket)) {
           lobbies.delete(id);
         }
       }
-      const counts = countWaitingLobbies();
-      if (counts.human >= MAX_HUMAN_WAITING) {
-        return cb({ ok: false, msg: `В зале уже ${counts.human} вызовов от игроков (лимит ${MAX_HUMAN_WAITING}). Дождитесь свободного слота или присоединитесь к существующему.` });
-      }
+      // Лимит временно отключён — зал работает без ограничений.
     }
 
     let matched = null;
