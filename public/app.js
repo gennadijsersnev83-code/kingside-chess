@@ -459,10 +459,17 @@ const App = {
     const s = this.socket;
     s.on('connect', () => {
       s.emit('stats', () => {});
+      // После переподключения сразу запрашиваем актуальный список партий.
+      const watchScreen = document.getElementById('watchScreen');
+      if (watchScreen && watchScreen.classList.contains('active')) Watch.refresh(true);
     });
     s.on('stats', (st) => Stats.onStats(st));
     s.on('communityOnline', (players) => Community.render(players));
-    s.on('lobbiesUpdate', () => Lobby.refreshIfActive());
+    s.on('lobbiesUpdate', () => {
+      Lobby.refreshIfActive();
+      const watchScreen = document.getElementById('watchScreen');
+      if (watchScreen && watchScreen.classList.contains('active')) Watch.refresh(true);
+    });
     s.on('connect_error', () => console.warn('Не удалось подключиться'));
     s.on('gameStart', (payload) => Game.onGameStart(payload));
     s.on('boardUpdate', (payload) => {
@@ -898,6 +905,7 @@ const Watch = {
   requestId: 0,
   pollHandle: null,
   refreshPending: false,
+  refreshStartedAt: 0,
 
   init() {
     // Список просмотра обновляется сам, даже если пользователь не заходил в турнир.
@@ -912,10 +920,17 @@ const Watch = {
     if (gameId) this.watch(gameId);
   },
   refresh(force) {
-    if (!App.socket || this.refreshPending) return;
+    if (!App.socket || !App.socket.connected || this.refreshPending) return;
     this.refreshPending = true;
+    const requestStartedAt = Date.now();
+    this.refreshStartedAt = requestStartedAt;
+    // Не даём зависшему socket-ack навсегда заблокировать последующие обновления.
+    const unlockTimer = setTimeout(() => {
+      if (this.refreshStartedAt === requestStartedAt) this.refreshPending = false;
+    }, 3500);
     App.socket.emit('getLiveGames', (list) => {
-      this.refreshPending = false;
+      clearTimeout(unlockTimer);
+      if (this.refreshStartedAt === requestStartedAt) this.refreshPending = false;
       const box = document.getElementById('watchListBody');
       if (!box) return;
       list = Array.isArray(list) ? list : [];
