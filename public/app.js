@@ -27,7 +27,7 @@ const Utils = {
   nickHtml(username, isAdminFlag, isModFlag, isBotFlag) {
     if (!username) return '';
     const admin = (typeof isAdminFlag === 'boolean') ? isAdminFlag : (username === 'PeshkaSasha' || username === 'admin');
-    const mod = (typeof isModFlag === 'boolean') ? isModFlag : false;
+    const mod = (typeof isModFlag === 'boolean') ? isModFlag : (username === 'PeshkaSasha' || username === 'Debian');
     const bot = !!isBotFlag;
     const crown = admin ? '<span class="crown">👑</span>' : '';
     const mark = (!admin && mod) ? '<span class="modMark" title="Модератор">!</span>' : '';
@@ -35,9 +35,7 @@ const Utils = {
     return `<span class="playerNick" data-player="${this.escapeHtml(username)}">${botTag}${crown}${mark}${this.escapeHtml(username)}</span>`;
   },
   onlineDotHtml(online) {
-    return online
-      ? '<span class="onlineDot" title="В сети"></span>'
-      : '<span class="offlineDot" title="Не в сети"></span>';
+    return online ? '<span class="onlineDot" title="В сети"></span>' : '<span class="offlineDot" title="Не в сети"></span>';
   },
   watchersHtml(n) {
     if (!n || n <= 0) return '';
@@ -51,9 +49,7 @@ const Utils = {
     const t = Math.max(0, Math.floor(ms/1000));
     return String(Math.floor(t/60)).padStart(2,'0') + ':' + String(t%60).padStart(2,'0');
   },
-  genId() {
-    return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6);
-  }
+  genId() { return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6); }
 };
 
 // ============================================================
@@ -106,7 +102,7 @@ const Sounds = (function() {
 })();
 
 // ============================================================
-// CHESS
+// CHESS (без изменений)
 // ============================================================
 const Chess = {
   EMOJI: { 'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙','k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟' },
@@ -233,25 +229,14 @@ const Chess = {
 // APP
 // ============================================================
 const App = {
-  socket: null,
-  me: null,
-  lobbyId: null,
-  myColor: 'w',
+  socket: null, me: null, lobbyId: null, myColor: 'w',
   myTime: 0, oppTime: 0, inc: 0,
-  gameActive: false,
-  gameEnded: false,
-  opponentName: '—',
-  opponentRating: null,
-  opponentIsAdmin: false,
-  opponentOnline: true,
-  opponentIsBot: false,
-  isBotGame: false,
+  gameActive: false, gameEnded: false,
+  opponentName: '—', opponentRating: null, opponentIsAdmin: false,
+  opponentOnline: true, opponentIsBot: false, isBotGame: false,
   currentFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-  currentGameIsArena: false,
-  currentArenaId: null,
-  currentArenaName: null,
-  profileViewing: null,
-  botLevels: [],
+  currentGameIsArena: false, currentArenaId: null, currentArenaName: null,
+  profileViewing: null, botLevels: [],
   botDialogState: { level: 2, time: 5, inc: 0 },
   botTimes: [
     { t: 1,  i: 0,  label: '1+0' },
@@ -267,19 +252,9 @@ const App = {
     Sounds.initOnFirstClick();
     this.bindSocket();
     Router.init();
-    TopArenas.init();
-    Stats.init();
-    Lobby.init();
-    Bot.init();
-    Watch.init();
-    Arena.init();
-    Profile.init();
-    Community.init();
-    Game.init();
-    Banners.init();
-    UserMenu.init();
-    Messenger.init();
-    Ping.init();
+    TopArenas.init(); Stats.init(); Lobby.init(); Bot.init();
+    Watch.init(); Arena.init(); Profile.init(); Community.init();
+    Game.init(); Banners.init(); UserMenu.init(); Inbox.init(); Ping.init();
     this.tryAutoLogin();
     this.scheduleArenaClock();
   },
@@ -293,7 +268,7 @@ const App = {
     document.getElementById('userAvatar').textContent = this.me.username.charAt(0).toUpperCase();
     document.getElementById('umAvatar').textContent = this.me.username.charAt(0).toUpperCase();
     document.getElementById('umName').textContent = this.me.username;
-    if (this.socket) this.socket.emit('msgGetUnread', (r) => { if (r) Messenger.setUnread(r.count); });
+    if (this.socket) this.socket.emit('msgGetUnread', (r) => { if (r) Inbox.setUnread(r.count); });
   },
 
   doLogin() {
@@ -361,12 +336,9 @@ const App = {
       if (!document.getElementById('arenasScreen').classList.contains('active')) return;
       const scroller = document.querySelector('#arenasGridWrap .arenasScroller');
       if (!scroller) return;
-      const nowLine = scroller.querySelector('.nowLine');
-      if (!nowLine) return;
-      const timeRow = scroller.querySelector('.timeRow');
-      if (!timeRow) return;
-      const firstCell = timeRow.querySelector('.timeCell');
-      if (!firstCell) return;
+      const nowLine = scroller.querySelector('.nowLine'); if (!nowLine) return;
+      const timeRow = scroller.querySelector('.timeRow'); if (!timeRow) return;
+      const firstCell = timeRow.querySelector('.timeCell'); if (!firstCell) return;
       const SLOT_PX = (typeof window.__arenaSlotPx === 'number' && window.__arenaSlotPx > 0) ? window.__arenaSlotPx : (firstCell.getBoundingClientRect().width || 90);
       const SLOT_MS = 10 * 60 * 1000;
       const startMs = (typeof window.__arenaStartMs === 'number') ? window.__arenaStartMs : Math.floor(localNow / SLOT_MS) * SLOT_MS;
@@ -405,14 +377,10 @@ const App = {
     s.on('arenaUpdate', ({ arenaId }) => Arena.onUpdate(arenaId));
     s.on('arenaStarted', ({ arenaId }) => Arena.onUpdate(arenaId));
     s.on('arenaFinished', ({ arenaId, top3 }) => Arena.onFinished(arenaId, top3));
-    s.on('liveGamesUpdate', (list) => {
-      if (document.getElementById('watchScreen').classList.contains('active')) Watch.refreshFromList(list);
-    });
-
-    // Messenger
-    s.on('msgNew', (msg) => Messenger.onNew(msg));
-    s.on('msgUnread', ({ count }) => Messenger.setUnread(count));
-    s.on('msgDialogDeleted', ({ with: other }) => Messenger.onDialogDeleted(other));
+    s.on('liveGamesUpdate', (list) => { if (document.getElementById('watchScreen').classList.contains('active')) Watch.refreshFromList(list); });
+    s.on('msgNew', (msg) => Inbox.onNew(msg));
+    s.on('msgUnread', ({ count }) => Inbox.setUnread(count));
+    s.on('msgDialogDeleted', ({ with: other }) => Inbox.onDialogDeleted(other));
   },
 
   onModAction(info) {
@@ -436,53 +404,30 @@ const UserMenu = {
       this.close();
     });
   },
-  toggle(e) {
-    if (e) e.stopPropagation();
-    this.isOpen ? this.close() : this.open();
-  },
+  toggle(e) { if (e) e.stopPropagation(); this.isOpen ? this.close() : this.open(); },
   open() {
-    const m = document.getElementById('userMenu');
-    if (!m) return;
-    m.style.display = 'block';
-    this.isOpen = true;
+    const m = document.getElementById('userMenu'); if (!m) return;
+    m.style.display = 'block'; this.isOpen = true;
     Ping.refresh();
-    if (App.socket) App.socket.emit('msgGetUnread', (r) => { if (r) Messenger.setUnread(r.count); });
+    if (App.socket) App.socket.emit('msgGetUnread', (r) => { if (r) Inbox.setUnread(r.count); });
   },
-  close() {
-    const m = document.getElementById('userMenu');
-    if (!m) return;
-    m.style.display = 'none';
-    this.isOpen = false;
-  },
-  goProfile() {
-    this.close();
-    Router.go('profile');
-  },
-  togglePing() {
-    Ping.refresh();
-  }
+  close() { const m = document.getElementById('userMenu'); if (!m) return; m.style.display = 'none'; this.isOpen = false; },
+  goProfile() { this.close(); Router.go('profile'); },
+  goInbox() { this.close(); Router.go('inbox'); },
+  togglePing() { Ping.refresh(); }
 };
 
 // ============================================================
 // PING
 // ============================================================
 const Ping = {
-  timer: null,
-  lastPingMs: null,
-  init() {
-    this.timer = setInterval(() => {
-      const m = document.getElementById('userMenu');
-      if (m && m.style.display !== 'none') this.refresh();
-    }, 3000);
-  },
+  timer: null, lastPingMs: null,
+  init() { this.timer = setInterval(() => { const m = document.getElementById('userMenu'); if (m && m.style.display !== 'none') this.refresh(); }, 3000); },
   onReconnect() { this.refresh(); },
   refresh() {
     if (!App.socket) return;
     const t0 = performance.now();
-    App.socket.emit('getStats', () => {
-      const ms = Math.round(performance.now() - t0);
-      this.setPing(ms);
-    });
+    App.socket.emit('getStats', () => { const ms = Math.round(performance.now() - t0); this.setPing(ms); });
   },
   setPing(ms) {
     this.lastPingMs = ms;
@@ -492,19 +437,9 @@ const Ping = {
     const srv = document.getElementById('umServerValue');
     if (el) el.textContent = ms + ' ms';
     if (srv) srv.textContent = '—';
-    if (bars) {
-      bars.classList.remove('good', 'mid', 'bad');
-      if (ms < 80) bars.classList.add('good');
-      else if (ms < 250) bars.classList.add('mid');
-      else bars.classList.add('bad');
-    }
-    if (dot) {
-      dot.classList.remove('ok', 'bad');
-      if (App.socket && App.socket.connected) dot.classList.add('ok');
-      else dot.classList.add('bad');
-    }
-    const umPing = document.getElementById('umPing');
-    if (umPing) umPing.textContent = ms + ' ms';
+    if (bars) { bars.classList.remove('good', 'mid', 'bad'); if (ms < 80) bars.classList.add('good'); else if (ms < 250) bars.classList.add('mid'); else bars.classList.add('bad'); }
+    if (dot) { dot.classList.remove('ok', 'bad'); if (App.socket && App.socket.connected) dot.classList.add('ok'); else dot.classList.add('bad'); }
+    const umPing = document.getElementById('umPing'); if (umPing) umPing.textContent = ms + ' ms';
   }
 };
 
@@ -516,16 +451,14 @@ const Router = {
   init() { window.addEventListener('hashchange', () => this.handle()); this.handle(); },
   go(name, param) {
     const path = param ? `#/${name}/${encodeURIComponent(param)}` : `#/${name}`;
-    if (location.hash === path) this.handle();
-    else location.hash = path;
+    if (location.hash === path) this.handle(); else location.hash = path;
   },
   handle() {
     const hash = location.hash.replace(/^#\/?/, '');
     const parts = hash.split('/').filter(Boolean);
     const name = parts[0] || (App.me ? 'lobby' : 'login');
     const param = parts[1] ? decodeURIComponent(parts[1]) : null;
-    this.current = { name, param };
-    this.apply();
+    this.current = { name, param }; this.apply();
   },
   apply() {
     const { name, param } = this.current;
@@ -539,11 +472,9 @@ const Router = {
     }
     const activeNotice = document.getElementById('activeGameNoticeScreen');
     if (activeNotice) activeNotice.classList.remove('active');
-
     if (name !== 'watch' && Watch.autoRefreshHandle) { clearInterval(Watch.autoRefreshHandle); Watch.autoRefreshHandle = null; }
     if (name !== 'arenaPage' && Arena.currentArenaId) Arena.leaveRoom();
-
-    const map = { login: 'loginScreen', lobby: 'lobbyScreen', watch: 'watchScreen', arenas: 'arenasScreen', arenaPage: 'arenaPageScreen', profile: 'profileScreen', community: 'communityScreen', game: 'gameScreen' };
+    const map = { login: 'loginScreen', lobby: 'lobbyScreen', watch: 'watchScreen', arenas: 'arenasScreen', arenaPage: 'arenaPageScreen', profile: 'profileScreen', community: 'communityScreen', game: 'gameScreen', inbox: 'inboxScreen' };
     const screenId = map[name];
     if (!screenId) { this.show('loginScreen'); return; }
     this.show(screenId);
@@ -551,7 +482,6 @@ const Router = {
       const nav = a.dataset.nav;
       a.classList.toggle('active', nav === name || (name === 'arenaPage' && nav === 'arenas'));
     });
-
     switch (name) {
       case 'lobby': Lobby.enter(); break;
       case 'watch': Watch.enter(param); break;
@@ -560,12 +490,12 @@ const Router = {
       case 'profile': Profile.enter(param); break;
       case 'community': Community.enter(); break;
       case 'game': Game.enter(param); break;
+      case 'inbox': Inbox.enter(param); break;
     }
   },
   show(screenId) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    const el = document.getElementById(screenId);
-    if (el) el.classList.add('active');
+    const el = document.getElementById(screenId); if (el) el.classList.add('active');
   }
 };
 
@@ -573,31 +503,18 @@ const Router = {
 // TOP ARENAS
 // ============================================================
 const TopArenas = {
-  lastHash: '',
-  timer: null,
-  init() {
-    this.timer = setInterval(() => {
-      if (document.hidden) return;
-      if (!document.getElementById('lobbyScreen').classList.contains('active')) return;
-      this.refresh();
-    }, 5000);
-  },
+  lastHash: '', timer: null,
+  init() { this.timer = setInterval(() => { if (document.hidden) return; if (!document.getElementById('lobbyScreen').classList.contains('active')) return; this.refresh(); }, 5000); },
   refresh() {
     App.socket.emit('getTopArenas', (list) => {
-      const box = document.getElementById('topArenasBox');
-      if (!box) return;
-      const hash = JSON.stringify(list);
-      if (hash === this.lastHash) return;
-      this.lastHash = hash;
+      const box = document.getElementById('topArenasBox'); if (!box) return;
+      const hash = JSON.stringify(list); if (hash === this.lastHash) return; this.lastHash = hash;
       if (!list || !list.length) { box.innerHTML = '<div class="arenaEmpty" style="padding:20px 0">Сейчас активных арен нет</div>'; return; }
       box.innerHTML = list.map(a => {
         const cls = 'topArenaCard' + (a.phase === 'live' ? ' live' : '');
         const phaseText = a.phase === 'live' ? 'идёт сейчас' : 'ждёт старта';
         const botTag = a.botFriendly ? ' 🤖' : '';
-        return `<div class="${cls}" onclick="Router.go('arenaPage', '${Utils.escapeHtml(a.id)}')">
-          <div class="taName">${Utils.escapeHtml(a.name)}${botTag}</div>
-          <div class="taInfo"><span>${a.timeControl}+${a.increment}</span><span><b>${a.participantsCount}</b> 👥 · ${phaseText}</span></div>
-        </div>`;
+        return `<div class="${cls}" onclick="Router.go('arenaPage', '${Utils.escapeHtml(a.id)}')"><div class="taName">${Utils.escapeHtml(a.name)}${botTag}</div><div class="taInfo"><span>${a.timeControl}+${a.increment}</span><span><b>${a.participantsCount}</b> 👥 · ${phaseText}</span></div></div>`;
       }).join('');
     });
   }
@@ -624,62 +541,27 @@ const Stats = {
 // LOBBY
 // ============================================================
 const Lobby = {
-  currentTab: 'create',
-  known: new Map(),
-  disappeared: new Map(),
+  currentTab: 'create', known: new Map(), disappeared: new Map(),
   init() { document.querySelectorAll('[data-tab]').forEach(b => { b.onclick = () => this.switchTab(b.dataset.tab); }); },
   enter() { TopArenas.refresh(); Stats.refresh(); this.render(); },
-  switchTab(tab) {
-    this.currentTab = tab;
-    document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-    this.render();
-  },
-  refreshIfActive() {
-    if (document.getElementById('lobbyScreen').classList.contains('active') && this.currentTab === 'waiting') this.render();
-  },
+  switchTab(tab) { this.currentTab = tab; document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === tab)); this.render(); },
+  refreshIfActive() { if (document.getElementById('lobbyScreen').classList.contains('active') && this.currentTab === 'waiting') this.render(); },
   render() {
-    const el = document.getElementById('lobbyTabContent');
-    if (!el) return;
+    const el = document.getElementById('lobbyTabContent'); if (!el) return;
     if (App.me && App.gameActive && !App.gameEnded && App.lobbyId) {
       const oppName = App.opponentName || 'соперником';
-      const opponent = document.getElementById('activeGameOpponent');
-      if (opponent) opponent.textContent = oppName;
-      el.innerHTML = `
-        <div class="activeGamePanel">
-          <div class="activeGamePanelWatermark" aria-hidden="true">♞</div>
-          <div class="activeGamePanelInner">
-            <div class="agpTitle">Подождите!</div>
-            <div class="agpSub">У вас идёт игра с <strong>${Utils.escapeHtml(oppName)}</strong>.</div>
-            <button class="agpReturnBtn" onclick="App.returnToGame()">▶ ПРИНЯТЬ ВЫЗОВ</button>
-            <div class="agpOr">или</div>
-            <button class="agpAbortBtn" onclick="Game.resign(); if (App.gameEnded) Router.go('lobby')">✖ СДАТЬСЯ</button>
-            <div class="agpFoot">Вы не можете начать новую партию, пока текущая не завершена.</div>
-          </div>
-        </div>`;
+      const opponent = document.getElementById('activeGameOpponent'); if (opponent) opponent.textContent = oppName;
+      el.innerHTML = `<div class="activeGamePanel"><div class="activeGamePanelWatermark" aria-hidden="true">♞</div><div class="activeGamePanelInner"><div class="agpTitle">Подождите!</div><div class="agpSub">У вас идёт игра с <strong>${Utils.escapeHtml(oppName)}</strong>.</div><button class="agpReturnBtn" onclick="App.returnToGame()">▶ ПРИНЯТЬ ВЫЗОВ</button><div class="agpOr">или</div><button class="agpAbortBtn" onclick="Game.resign(); if (App.gameEnded) Router.go('lobby')">✖ СДАТЬСЯ</button><div class="agpFoot">Вы не можете начать новую партию, пока текущая не завершена.</div></div></div>`;
       return;
     }
     if (this.currentTab === 'create') {
-      el.innerHTML = `
-        <div class="quickGrid">
-          ${[
+      el.innerHTML = `<div class="quickGrid">${[
             {t:1,i:0,name:'Пуля'},{t:2,i:1,name:'Пуля'},
             {t:3,i:0,name:'Блиц'},{t:3,i:2,name:'Блиц'},{t:5,i:0,name:'Блиц'},{t:5,i:3,name:'Блиц'},
             {t:10,i:0,name:'Рапид'},{t:10,i:5,name:'Рапид'},{t:15,i:10,name:'Рапид'},
             {t:30,i:0,name:'Классика'},{t:30,i:20,name:'Классика'}
-          ].map(({t,i,name}) =>
-            `<button class="quickBtn" onclick="Lobby.quickStart(${t},${i})"><div class="qb-time">${t}+${i}</div><div class="qb-name">${name}</div></button>`
-          ).join('')}
-          <button class="quickBtn custom" onclick="Lobby.showCustom()"><div class="qb-time">Своя</div><div class="qb-name">игра</div></button>
-        </div>
-        <div id="customGamePanel" style="display:none; margin:0 16px 16px; padding:14px; background:var(--panel-2); border-radius:6px;">
-          <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-            <label style="color:var(--muted);font-size:13px;">Минуты:</label>
-            <input id="customMin" type="number" value="5" min="1" max="60" style="width:70px;">
-            <label style="color:var(--muted);font-size:13px;">Инкремент:</label>
-            <input id="customInc" type="number" value="0" min="0" max="60" style="width:70px;">
-            <button class="primary" onclick="Lobby.createCustom()" style="padding:8px 18px;">Создать</button>
-          </div>
-        </div>`;
+          ].map(({t,i,name}) => `<button class="quickBtn" onclick="Lobby.quickStart(${t},${i})"><div class="qb-time">${t}+${i}</div><div class="qb-name">${name}</div></button>`).join('')}<button class="quickBtn custom" onclick="Lobby.showCustom()"><div class="qb-time">Своя</div><div class="qb-name">игра</div></button></div>
+        <div id="customGamePanel" style="display:none; margin:0 16px 16px; padding:14px; background:var(--panel-2); border-radius:6px;"><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;"><label style="color:var(--muted);font-size:13px;">Минуты:</label><input id="customMin" type="number" value="5" min="1" max="60" style="width:70px;"><label style="color:var(--muted);font-size:13px;">Инкремент:</label><input id="customInc" type="number" value="0" min="0" max="60" style="width:70px;"><button class="primary" onclick="Lobby.createCustom()" style="padding:8px 18px;">Создать</button></div></div>`;
       return;
     }
     this.renderWaiting();
@@ -694,40 +576,22 @@ const Lobby = {
       for (const [id, data] of this.known) if (!current.has(id)) this.disappeared.set(id, { data, removedAt: now + 5000 });
       this.known = current;
       for (const [id, info] of this.disappeared) if (Date.now() > info.removedAt) this.disappeared.delete(id);
-
       const allItems = [];
       for (const [id, l] of current) allItems.push({ kind: 'waiting', id, data: l });
       for (const [id, info] of this.disappeared) allItems.push({ kind: 'started', id, data: info.data });
-
-      if (!allItems.length) {
-        el.innerHTML = `<div class="lobbyHeader"><div></div><div class="hRating">Рейтинг</div><div class="hPlayer">Игрок</div><div class="hTime">Время</div><div class="hMode">Режим</div></div>
-          <div class="arenaEmpty" style="padding:30px 20px;">Нет активных вызовов. Нажми «Создать запрос на игру» справа.</div>`;
-        return;
-      }
-      allItems.sort((a, b) => {
-        if (a.kind !== b.kind) return a.kind === 'started' ? -1 : 1;
-        return (b.data.time || 0) - (a.data.time || 0);
-      });
-      const header = document.createElement('div');
-      header.className = 'lobbyHeader';
+      if (!allItems.length) { el.innerHTML = `<div class="lobbyHeader"><div></div><div class="hRating">Рейтинг</div><div class="hPlayer">Игрок</div><div class="hTime">Время</div><div class="hMode">Режим</div></div><div class="arenaEmpty" style="padding:30px 20px;">Нет активных вызовов. Нажми «Создать запрос на игру» справа.</div>`; return; }
+      allItems.sort((a, b) => { if (a.kind !== b.kind) return a.kind === 'started' ? -1 : 1; return (b.data.time || 0) - (a.data.time || 0); });
+      const header = document.createElement('div'); header.className = 'lobbyHeader';
       header.innerHTML = `<div></div><div class="hRating">Рейтинг</div><div class="hPlayer">Игрок</div><div class="hTime">Время</div><div class="hMode">Режим</div>`;
       el.appendChild(header);
-      const wrap = document.createElement('div');
-      wrap.className = 'lobbyList';
+      const wrap = document.createElement('div'); wrap.className = 'lobbyList';
       for (const item of allItems) {
-        const l = item.data;
-        const isMine = App.me && l.host === App.me.username;
-        const isStarted = item.kind === 'started';
+        const l = item.data; const isMine = App.me && l.host === App.me.username; const isStarted = item.kind === 'started';
         const row = document.createElement('div');
         row.className = 'lobbyRow' + (isMine && !isStarted ? ' mine' : '') + (isStarted ? ' started' : '');
         const circleCls = isStarted ? 'white' : 'black';
         const rating = l.hostRating || '';
-        row.innerHTML = `
-          <div class="lColor ${circleCls}"></div>
-          <div class="lRating muted">${rating || '—'}</div>
-          <div class="lName">${Utils.nickHtml(l.host, l.hostIsAdmin, l.hostIsMod, l.isBot)}${isStarted ? '<span class="mineTag">(началась)</span>' : (isMine ? '<span class="mineTag">(ваш)</span>' : '')}</div>
-          <div class="lTime">${l.time}+${l.inc}</div>
-          <div class="lMode"><span class="modeIcon">⚔</span>Рейтинговая</div>`;
+        row.innerHTML = `<div class="lColor ${circleCls}"></div><div class="lRating muted">${rating || '—'}</div><div class="lName">${Utils.nickHtml(l.host, l.hostIsAdmin, l.hostIsMod, l.isBot)}${isStarted ? '<span class="mineTag">(началась)</span>' : (isMine ? '<span class="mineTag">(ваш)</span>' : '')}</div><div class="lTime">${l.time}+${l.inc}</div><div class="lMode"><span class="modeIcon">⚔</span>Рейтинговая</div>`;
         if (!isStarted) { row.title = isMine ? 'Нажми, чтобы отменить свой вызов' : 'Нажми, чтобы начать партию'; row.onclick = () => this.onRowClick(l, isMine); }
         wrap.appendChild(row);
       }
@@ -771,46 +635,25 @@ const Bot = {
   openDialog() {
     const dlg = document.getElementById('botDialog'); if (!dlg) return;
     App.socket.emit('getBots', (list) => {
-      if (Array.isArray(list)) {
-        App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.initialRating, games: b.games || 0, isMaster: b.level === 4 }));
-      }
-      this.render();
-      dlg.classList.add('show');
+      if (Array.isArray(list)) App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.initialRating, games: b.games || 0, isMaster: b.level === 4 }));
+      this.render(); dlg.classList.add('show');
     });
   },
   closeDialog() { const dlg = document.getElementById('botDialog'); if (dlg) dlg.classList.remove('show'); },
   render() {
     const levelsEl = document.getElementById('botLevels'); const timesEl = document.getElementById('botTimes');
     if (!levelsEl || !timesEl) return;
-    if (!App.botLevels.length) {
-      App.socket.emit('getBots', (list) => {
-        if (Array.isArray(list)) {
-          App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.initialRating, games: b.games || 0, isMaster: b.level === 4 }));
-          this.render();
-        }
-      });
-      return;
-    }
+    if (!App.botLevels.length) { App.socket.emit('getBots', (list) => { if (Array.isArray(list)) { App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.initialRating, games: b.games || 0, isMaster: b.level === 4 })); this.render(); } }); return; }
     const st = App.botDialogState;
-    levelsEl.innerHTML = App.botLevels.map(l => {
-      const active = st.level === l.level;
-      const cls = active ? 'active' : '';
-      const extra = l.isMaster ? 'masterBtn' : '';
-      return `<button data-level="${l.level}" class="${cls} ${extra}"><div class="btitle">${l.title}</div><div class="brating">${l.rating}</div></button>`;
-    }).join('');
-    timesEl.innerHTML = App.botTimes.map(t => {
-      const active = st.time === t.t && st.inc === t.i;
-      return `<button data-t="${t.t}" data-i="${t.i}" class="${active ? 'active' : ''}">${t.label}</button>`;
-    }).join('');
+    levelsEl.innerHTML = App.botLevels.map(l => { const active = st.level === l.level; const cls = active ? 'active' : ''; const extra = l.isMaster ? 'masterBtn' : ''; return `<button data-level="${l.level}" class="${cls} ${extra}"><div class="btitle">${l.title}</div><div class="brating">${l.rating}</div></button>`; }).join('');
+    timesEl.innerHTML = App.botTimes.map(t => { const active = st.time === t.t && st.inc === t.i; return `<button data-t="${t.t}" data-i="${t.i}" class="${active ? 'active' : ''}">${t.label}</button>`; }).join('');
     levelsEl.querySelectorAll('button').forEach(b => b.onclick = () => { App.botDialogState.level = +b.dataset.level; this.render(); });
     timesEl.querySelectorAll('button').forEach(b => b.onclick = () => { App.botDialogState.time = +b.dataset.t; App.botDialogState.inc = +b.dataset.i; this.render(); });
   },
   startGame() {
-    const bot = App.botLevels.find(b => b.level === App.botDialogState.level);
-    if (!bot) return;
+    const bot = App.botLevels.find(b => b.level === App.botDialogState.level); if (!bot) return;
     App.socket.emit('playWithBot', { time: App.botDialogState.time, inc: App.botDialogState.inc, botName: bot.name }, (res) => {
-      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      this.closeDialog();
+      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.closeDialog();
     });
   }
 };
@@ -831,11 +674,8 @@ const Watch = {
   },
   refresh(force) { App.socket.emit('getLiveGames', (list) => { this.refreshFromList(list); }); },
   refreshFromList(list) {
-    const box = document.getElementById('watchListBody');
-    if (!box) return;
-    const hash = JSON.stringify(list);
-    if (hash === this.lastHash) return;
-    this.lastHash = hash;
+    const box = document.getElementById('watchListBody'); if (!box) return;
+    const hash = JSON.stringify(list); if (hash === this.lastHash) return; this.lastHash = hash;
     if (!list || !list.length) { box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>'; return; }
     box.innerHTML = list.map(g => {
       const cls = 'watchRow' + (g.isArena ? ' isArena' : '') + (g.isBotGame ? ' isBotGame' : '');
@@ -869,8 +709,7 @@ const Watch = {
     if (Router.current.name === 'watch') Router.go('watch');
   },
   renderBoard() {
-    const box = document.getElementById('watchBoardBox');
-    if (!box) return;
+    const box = document.getElementById('watchBoardBox'); if (!box) return;
     if (!this.watchingGame) { box.innerHTML = '<div class="wbEmpty">Выбери партию слева</div>'; return; }
     const g = this.watchingGame;
     const state = Chess.parseFen(g.fen);
@@ -886,8 +725,7 @@ const Watch = {
       const r = flip ? 7 - dr : dr, c = flip ? 7 - dc : dc;
       let cls = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
       if (lm && ((lm.from[0] === r && lm.from[1] === c) || (lm.to[0] === r && lm.to[1] === c))) cls += ' lastmove';
-      const p = state.board[r][c];
-      let inner = '';
+      const p = state.board[r][c]; let inner = '';
       if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW?'w':'b'}">${Chess.EMOJI[p]}</span>`; }
       let coords = '';
       if (dr === 7) coords += `<span class="coord-f">${String.fromCharCode(97 + c)}</span>`;
@@ -896,26 +734,9 @@ const Watch = {
     }
     const finishedLine = g.finished ? `<div style="text-align:center; margin-top:10px; padding:8px 12px; background:rgba(98,153,36,.12); border-left:3px solid var(--green); border-radius:4px; color:var(--text-bright); font-size:13px;">✅ Партия завершена${g.reason ? ' · ' + Utils.escapeHtml(g.reason) : ''}</div>` : '';
     const wBot = g.whiteIsBot ? '🤖 ' : ''; const bBot = g.blackIsBot ? '🤖 ' : '';
-    box.innerHTML = `
-      <div class="wbHeader">
-        <div style="min-width:0; flex:1">
-          <div class="wbTitle">Партия ${g.isArena ? 'турнира' : ''}${g.whiteIsBot || g.blackIsBot ? ' (с ботом)' : ''}</div>
-          <div class="wbSub">${g.timeControl}+${g.increment}${g.arenaName ? ' · '+Utils.escapeHtml(g.arenaName) : ''}</div>
-        </div>
-        <button class="secondary" onclick="Watch.stop()" style="flex-shrink:0">✕ Выйти</button>
-      </div>
-      <div class="wbPlayers">
-        <div class="wbPlayer ${blackActive?'active':''}">
-          <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span class="name">⚫ ${bBot}${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod, g.blackIsBot)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}</span>
-          <span class="time" id="watchTimeB">${Utils.formatTime(g.timeB)}</span>
-        </div>
-        <div class="wbPlayer ${whiteActive?'active':''}">
-          <span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span class="name">⚪ ${wBot}${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod, g.whiteIsBot)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}</span>
-          <span class="time" id="watchTimeW">${Utils.formatTime(g.timeW)}</span>
-        </div>
-      </div>
-      <div class="wbBoardWrap"><div class="wbBoard">${squares}</div></div>
-      ${finishedLine}
+    box.innerHTML = `<div class="wbHeader"><div style="min-width:0; flex:1"><div class="wbTitle">Партия ${g.isArena ? 'турнира' : ''}${g.whiteIsBot || g.blackIsBot ? ' (с ботом)' : ''}</div><div class="wbSub">${g.timeControl}+${g.increment}${g.arenaName ? ' · '+Utils.escapeHtml(g.arenaName) : ''}</div></div><button class="secondary" onclick="Watch.stop()" style="flex-shrink:0">✕ Выйти</button></div>
+      <div class="wbPlayers"><div class="wbPlayer ${blackActive?'active':''}"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span class="name">⚫ ${bBot}${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod, g.blackIsBot)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}</span><span class="time" id="watchTimeB">${Utils.formatTime(g.timeB)}</span></div><div class="wbPlayer ${whiteActive?'active':''}"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span class="name">⚪ ${wBot}${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod, g.whiteIsBot)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}</span><span class="time" id="watchTimeW">${Utils.formatTime(g.timeW)}</span></div></div>
+      <div class="wbBoardWrap"><div class="wbBoard">${squares}</div></div>${finishedLine}
       <div style="text-align:center; margin-top:8px; font-size:12px; color:var(--muted); ${g.watchersCount > 0 ? '' : 'display:none;'}">👁 Зрителей: <b style="color:var(--accent)">${g.watchersCount || 0}</b></div>`;
     this.startClock();
   },
@@ -942,11 +763,8 @@ const Watch = {
   },
   onBoardUpdate({ lobbyId, fen, turn, san, from, to }) {
     if (!this.watchingGame || this.watchingGame.id !== lobbyId) return;
-    this.watchingGame.fen = fen;
-    if (turn) this.watchingGame.turn = turn;
-    if (from && to) this.watchingGame.lastMove = { from, to };
-    this.lastBoardHash = '';
-    this.renderBoard();
+    this.watchingGame.fen = fen; if (turn) this.watchingGame.turn = turn; if (from && to) this.watchingGame.lastMove = { from, to };
+    this.lastBoardHash = ''; this.renderBoard();
   },
   onTimeUpdate({ lobbyId, timeW, timeB, serverNow }) {
     if (!this.watchingGame || this.watchingGame.id !== lobbyId) return;
@@ -956,8 +774,7 @@ const Watch = {
   onGameEnded({ lobbyId, result, reason }) {
     if (!this.watchingGame || this.watchingGame.id !== lobbyId) return;
     this.watchingGame.finished = true; this.watchingGame.result = result; this.watchingGame.reason = reason;
-    this.lastBoardHash = ''; this.renderBoard();
-    this.refresh(false);
+    this.lastBoardHash = ''; this.renderBoard(); this.refresh(false);
   },
   onChatMessage(msg) { if (!this.watchingGame || this.watchingGame.id !== msg.lobbyId) return; }
 };
@@ -966,10 +783,9 @@ const Watch = {
 // ARENA
 // ============================================================
 const Arena = {
-  cache: [], statesCache: {}, serverOffsetMs: 0,
-  currentArenaId: null, currentArenaState: null,
-  lastListHash: '', lastStateHash: '', lastGamesHash: '',
-  loadBusy: false, pageRefreshHandle: null, statusTickHandle: null, gamesRefreshHandle: null, refreshHandle: null,
+  cache: [], statesCache: {}, serverOffsetMs: 0, currentArenaId: null, currentArenaState: null,
+  lastListHash: '', lastStateHash: '', lastGamesHash: '', loadBusy: false,
+  pageRefreshHandle: null, statusTickHandle: null, gamesRefreshHandle: null, refreshHandle: null,
   init() {},
   enterList() { this.refresh(true); },
   enterPage(arenaId) {
@@ -978,13 +794,7 @@ const Arena = {
     this.currentArenaId = arenaId;
     document.getElementById('arenaChatMessages').innerHTML = '';
     this.lastStateHash = ''; this.lastGamesHash = '';
-    App.socket.emit('joinArenaRoom', { arenaId }, (res) => {
-      if (res && res.ok && Array.isArray(res.chat)) {
-        const box = document.getElementById('arenaChatMessages');
-        box.innerHTML = '';
-        res.chat.forEach(m => this.renderChatMsg(m));
-      }
-    });
+    App.socket.emit('joinArenaRoom', { arenaId }, (res) => { if (res && res.ok && Array.isArray(res.chat)) { const box = document.getElementById('arenaChatMessages'); box.innerHTML = ''; res.chat.forEach(m => this.renderChatMsg(m)); } });
     this.loadPage();
     if (this.pageRefreshHandle) clearInterval(this.pageRefreshHandle);
     this.pageRefreshHandle = setInterval(() => { if (document.getElementById('arenaPageScreen').classList.contains('active')) this.loadPage(); }, 5000);
@@ -1002,83 +812,56 @@ const Arena = {
   refresh(force) {
     if (!force && !document.getElementById('arenasScreen').classList.contains('active')) return;
     App.socket.emit('getArenas', (res) => {
-      const list = (res && res.list) || [];
-      const serverNow = (res && res.serverNow) || Date.now();
-      this.serverOffsetMs = serverNow - Date.now();
-      this.cache = list;
+      const list = (res && res.list) || []; const serverNow = (res && res.serverNow) || Date.now();
+      this.serverOffsetMs = serverNow - Date.now(); this.cache = list;
       App.socket.emit('getMyArenaStates', (r2) => {
-        this.statesCache = (r2 && r2.states) || {};
-        if (r2 && r2.serverNow) this.serverOffsetMs = r2.serverNow - Date.now();
+        this.statesCache = (r2 && r2.states) || {}; if (r2 && r2.serverNow) this.serverOffsetMs = r2.serverNow - Date.now();
         const hash = JSON.stringify(this.cache) + '|' + JSON.stringify(this.statesCache);
-        if (hash === this.lastListHash && !force) return;
-        this.lastListHash = hash;
-        this.renderGrid();
+        if (hash === this.lastListHash && !force) return; this.lastListHash = hash; this.renderGrid();
       });
     });
     if (this.refreshHandle) clearInterval(this.refreshHandle);
     this.refreshHandle = setInterval(() => {
       if (!document.getElementById('arenasScreen').classList.contains('active')) return;
       App.socket.emit('getArenas', (res) => {
-        const list = (res && res.list) || [];
-        const serverNow = (res && res.serverNow) || Date.now();
-        this.serverOffsetMs = serverNow - Date.now();
-        this.cache = list;
+        const list = (res && res.list) || []; const serverNow = (res && res.serverNow) || Date.now();
+        this.serverOffsetMs = serverNow - Date.now(); this.cache = list;
         App.socket.emit('getMyArenaStates', (r2) => {
           this.statesCache = (r2 && r2.states) || {};
           const hash = JSON.stringify(this.cache) + '|' + JSON.stringify(this.statesCache);
-          if (hash === this.lastListHash) return;
-          this.lastListHash = hash; this.renderGrid();
+          if (hash === this.lastListHash) return; this.lastListHash = hash; this.renderGrid();
         });
       });
     }, 30000);
   },
   renderGrid() {
-    const wrap = document.getElementById('arenasGridWrap');
-    if (!wrap) return;
+    const wrap = document.getElementById('arenasGridWrap'); if (!wrap) return;
     if (!this.cache || !this.cache.length) { wrap.innerHTML = '<div class="arenasEmpty">Нет доступных арен</div>'; return; }
     const localNow = Date.now();
     const toClient = (ts) => ts - this.serverOffsetMs;
     const isMobile = window.matchMedia('(max-width: 700px)').matches;
-    const SLOT_PX = isMobile ? 60 : 90;
-    const SLOT_MS = 10 * 60 * 1000;
-    const COLS = isMobile ? 48 : 72;
-    const startMs = Math.floor(localNow / SLOT_MS) * SLOT_MS;
-    const endMs = startMs + COLS * SLOT_MS;
+    const SLOT_PX = isMobile ? 60 : 90; const SLOT_MS = 10 * 60 * 1000; const COLS = isMobile ? 48 : 72;
+    const startMs = Math.floor(localNow / SLOT_MS) * SLOT_MS; const endMs = startMs + COLS * SLOT_MS;
     window.__arenaStartMs = startMs; window.__arenaSlotPx = SLOT_PX;
     const toPx = (ts) => ((ts - startMs) / SLOT_MS) * SLOT_PX;
     const visible = this.cache.map(a => ({ ...a, clientStartsAt: toClient(a.startsAt), clientEndsAt: toClient(a.endsAt) })).filter(a => a.clientEndsAt > startMs && a.clientStartsAt < endMs).sort((a, b) => a.clientStartsAt - b.clientStartsAt);
     const rows = [];
-    for (const arena of visible) {
-      let placed = false;
-      for (const row of rows) {
-        const last = row[row.length - 1];
-        if (last.clientEndsAt <= arena.clientStartsAt) { row.push(arena); placed = true; break; }
-      }
-      if (!placed) rows.push([arena]);
-    }
+    for (const arena of visible) { let placed = false; for (const row of rows) { const last = row[row.length - 1]; if (last.clientEndsAt <= arena.clientStartsAt) { row.push(arena); placed = true; break; } } if (!placed) rows.push([arena]); }
     const rowWidth = COLS * SLOT_PX;
     let html = '<div class="arenasScroller"><div class="timeRow" style="width:' + rowWidth + 'px;">';
-    for (let i = 0; i < COLS; i++) {
-      const t = startMs + i * SLOT_MS;
-      const isNow = t <= localNow && localNow < t + SLOT_MS;
-      html += '<div class="timeCell' + (isNow ? ' now' : '') + '" style="width:' + SLOT_PX + 'px;min-width:' + SLOT_PX + 'px;">' + Utils.fmtMskHM(t) + '</div>';
-    }
+    for (let i = 0; i < COLS; i++) { const t = startMs + i * SLOT_MS; const isNow = t <= localNow && localNow < t + SLOT_MS; html += '<div class="timeCell' + (isNow ? ' now' : '') + '" style="width:' + SLOT_PX + 'px;min-width:' + SLOT_PX + 'px;">' + Utils.fmtMskHM(t) + '</div>'; }
     html += '</div>';
     for (const row of rows) {
       html += '<div class="arenaRowGrid" style="width:' + rowWidth + 'px;">';
       for (const arena of row) {
-        const left = toPx(arena.clientStartsAt);
-        const width = toPx(arena.clientEndsAt) - left;
-        const isPast = arena.clientEndsAt < localNow;
-        const isLive = arena.status === 'live';
+        const left = toPx(arena.clientStartsAt); const width = toPx(arena.clientEndsAt) - left;
+        const isPast = arena.clientEndsAt < localNow; const isLive = arena.status === 'live';
         const colorClass = arena.color || 'blitz';
-        const myState = this.statesCache[arena.id];
-        const joined = myState && myState.joined;
+        const myState = this.statesCache[arena.id]; const joined = myState && myState.joined;
         const cls = 'arenaBlock ' + colorClass + (isPast && !isLive ? ' past' : '') + (isLive ? ' live' : '') + (joined ? ' joined' : '') + (arena.botFriendly ? ' botFriendly' : '');
         const tinfo = arena.timeControl + '+' + arena.increment;
         const participantsCount = (myState && myState.participantsCount) || 0;
-        const showInfo = width >= 50;
-        const dur = Math.round((arena.clientEndsAt - arena.clientStartsAt) / 60000);
+        const showInfo = width >= 50; const dur = Math.round((arena.clientEndsAt - arena.clientStartsAt) / 60000);
         const botMark = arena.botFriendly ? '🤖 ' : '';
         html += '<div class="' + cls + '" style="left:' + left.toFixed(2) + 'px; width:' + width.toFixed(2) + 'px; cursor:pointer" onclick="Router.go(\'arenaPage\', \'' + Utils.escapeHtml(arena.id) + '\')" title="' + Utils.escapeHtml(botMark + arena.name) + ' · ' + tinfo + ' · ' + Utils.fmtMskHM(arena.clientStartsAt) + '–' + Utils.fmtMskHM(arena.clientEndsAt) + ' МСК (' + dur + ' мин)"><div class="tname">' + botMark + Utils.escapeHtml(arena.name) + '</div>' + (showInfo ? '<div class="tinfo"><span>' + tinfo + '</span><span>👥 ' + participantsCount + '</span></div>' : '') + '</div>';
       }
@@ -1087,29 +870,19 @@ const Arena = {
     const nowLeft = toPx(localNow);
     html += '<div class="nowLine" style="left:' + nowLeft.toFixed(2) + 'px;"></div></div>';
     wrap.innerHTML = html;
-    const scroller = wrap.querySelector('.arenasScroller');
-    if (scroller) scroller.scrollLeft = Math.max(0, nowLeft - scroller.clientWidth / 4);
+    const scroller = wrap.querySelector('.arenasScroller'); if (scroller) scroller.scrollLeft = Math.max(0, nowLeft - scroller.clientWidth / 4);
   },
   loadPage() {
-    if (!this.currentArenaId || this.loadBusy) return;
-    this.loadBusy = true;
+    if (!this.currentArenaId || this.loadBusy) return; this.loadBusy = true;
     const arena = this.cache.find(a => a.id === this.currentArenaId);
     if (!arena) {
-      App.socket.emit('getArenas', (res) => {
-        this.cache = (res && res.list) || [];
-        if (res && res.serverNow) this.serverOffsetMs = res.serverNow - Date.now();
-        this.loadBusy = false;
-        if (this.cache.find(x => x.id === this.currentArenaId)) this.loadPage();
-      });
+      App.socket.emit('getArenas', (res) => { this.cache = (res && res.list) || []; if (res && res.serverNow) this.serverOffsetMs = res.serverNow - Date.now(); this.loadBusy = false; if (this.cache.find(x => x.id === this.currentArenaId)) this.loadPage(); });
       return;
     }
     App.socket.emit('getArenaState', { arenaId: this.currentArenaId }, (state) => {
-      this.loadBusy = false;
-      this.currentArenaState = state;
+      this.loadBusy = false; this.currentArenaState = state;
       if (state.serverNow) this.serverOffsetMs = state.serverNow - Date.now();
-      this.renderPage(arena, state);
-      this.updateJoinButton(state);
-      this.renderPairingBox(state);
+      this.renderPage(arena, state); this.updateJoinButton(state); this.renderPairingBox(state);
       const stateHash = JSON.stringify(state.participants) + '|' + state.paused + '|' + state.phase;
       if (stateHash !== this.lastStateHash) { this.lastStateHash = stateHash; this.renderParticipants(arena, state); }
       this.tickStatus();
@@ -1117,11 +890,8 @@ const Arena = {
   },
   tickStatus() {
     if (!this.currentArenaId) return;
-    const row = document.getElementById('arenaStatusRow');
-    const lbl = document.getElementById('arenaStatusLabel');
-    const time = document.getElementById('arenaStatusTime');
-    if (!row || !lbl || !time) return;
-    const state = this.currentArenaState; if (!state) return;
+    const row = document.getElementById('arenaStatusRow'); const lbl = document.getElementById('arenaStatusLabel'); const time = document.getElementById('arenaStatusTime');
+    if (!row || !lbl || !time) return; const state = this.currentArenaState; if (!state) return;
     const serverNow = Date.now() + this.serverOffsetMs;
     row.classList.remove('live', 'finished');
     if (state.phase === 'finished') { row.classList.add('finished'); lbl.textContent = 'Завершена:'; time.textContent = '00:00'; return; }
@@ -1135,23 +905,14 @@ const Arena = {
     document.getElementById('aInfoTitle').textContent = arena.name;
     document.getElementById('aInfoTime').textContent = Utils.fmtMskHM(arena.startsAt) + ' – ' + Utils.fmtMskHM(arena.endsAt) + ' МСК';
     document.getElementById('aInfoDesc').textContent = arena.description;
-    if (state.top3 && state.top3.length) this.showWinnerBanner(state.top3);
-    else document.getElementById('arenaWinnerBanner').style.display = 'none';
+    if (state.top3 && state.top3.length) this.showWinnerBanner(state.top3); else document.getElementById('arenaWinnerBanner').style.display = 'none';
   },
   updateJoinButton(state) {
     const wrap = document.getElementById('arenaJoinBtnWrap');
     if (state.phase === 'finished') { wrap.innerHTML = `<button class="secondary" disabled style="width:180px;">ЗАВЕРШЕНА</button>`; return; }
-    if (state.phase === 'waiting') {
-      if (state.joined) wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.leaveCurrent()">ОТМЕНИТЬ</button>`;
-      else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button>`;
-      return;
-    }
-    if (state.joined) {
-      if (state.paused) wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.pauseCurrent()">▶ ПРОДОЛЖИТЬ</button>`;
-      else wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.pauseCurrent()">⏸ ПАУЗА</button>`;
-    } else {
-      wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button>`;
-    }
+    if (state.phase === 'waiting') { if (state.joined) wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.leaveCurrent()">ОТМЕНИТЬ</button>`; else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button>`; return; }
+    if (state.joined) { if (state.paused) wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.pauseCurrent()">▶ ПРОДОЛЖИТЬ</button>`; else wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.pauseCurrent()">⏸ ПАУЗА</button>`; }
+    else { wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button>`; }
   },
   renderPairingBox(state) {
     const box = document.getElementById('arenaPairingBox'); if (!box) return;
@@ -1159,12 +920,10 @@ const Arena = {
     if (!state.joined) { box.style.display = 'flex'; box.classList.remove('searching'); box.innerHTML = `<span>Нажмите «УЧАСТВОВАТЬ» для жеребьёвки.</span>`; return; }
     if (state.paused) { box.style.display = 'flex'; box.classList.remove('searching'); box.innerHTML = `<span>⏸ – Вы на паузе.</span>`; return; }
     if (state.pairingNow) { box.style.display = 'flex'; box.classList.add('searching'); box.innerHTML = `<div class="spinner"></div><span>Идёт жеребьёвка: <b>${Utils.escapeHtml(state.pairingNow)}</b></span>`; return; }
-    box.style.display = 'flex'; box.classList.add('searching');
-    box.innerHTML = `<div class="spinner"></div><span>Ожидайте, идёт жеребьёвка…</span>`;
+    box.style.display = 'flex'; box.classList.add('searching'); box.innerHTML = `<div class="spinner"></div><span>Ожидайте, идёт жеребьёвка…</span>`;
   },
   renderParticipants(arena, state) {
-    const body = document.getElementById('arenaTableBody');
-    const list = state.participants || [];
+    const body = document.getElementById('arenaTableBody'); const list = state.participants || [];
     if (!list.length) { body.innerHTML = '<div class="arenasEmpty" style="padding:20px;">Пока никто не зарегистрировался</div>'; return; }
     const myName = App.me ? App.me.username : null;
     const search = (document.getElementById('arenaSearchInput').value || '').trim().toLowerCase();
@@ -1183,25 +942,17 @@ const Arena = {
       return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''} ${botCls}"><span class="place ${placeCls}">${place}</span><span class="pname">${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
     }).join('');
   },
-  filterParticipants() {
-    if (this.currentArenaState && this.currentArenaId) {
-      const arena = this.cache.find(a => a.id === this.currentArenaId);
-      if (arena) this.renderParticipants(arena, this.currentArenaState);
-    }
-  },
+  filterParticipants() { if (this.currentArenaState && this.currentArenaId) { const arena = this.cache.find(a => a.id === this.currentArenaId); if (arena) this.renderParticipants(arena, this.currentArenaState); } },
   renderGamesList() {
     const topEl = document.getElementById('arenaTopGame'); const listEl = document.getElementById('arenaGamesList');
     if (!topEl || !listEl) return;
     App.socket.emit('getArenaGames', { arenaId: this.currentArenaId }, (res) => {
       if (!res || typeof res !== 'object') return;
       const live = res.live || [], done = res.done || [];
-      const pcEl = document.getElementById('arenaParticipantsCount');
-      const vcEl = document.getElementById('arenaViewersCount');
-      if (pcEl) pcEl.textContent = res.participantsCount || 0;
-      if (vcEl) vcEl.textContent = res.chatViewersCount || 0;
+      const pcEl = document.getElementById('arenaParticipantsCount'); const vcEl = document.getElementById('arenaViewersCount');
+      if (pcEl) pcEl.textContent = res.participantsCount || 0; if (vcEl) vcEl.textContent = res.chatViewersCount || 0;
       const hash = JSON.stringify({ live: live.map(g => [g.lobbyId, g.fen, g.timeW, g.timeB]), done: done.slice(0, 30).map(g => [g.white, g.black, g.result, g.finishedAt]) });
-      if (hash === this.lastGamesHash) return;
-      this.lastGamesHash = hash;
+      if (hash === this.lastGamesHash) return; this.lastGamesHash = hash;
       if (live.length) { const g = live[0]; topEl.innerHTML = this.renderTopGame(g); const link = topEl.querySelector('.arenaTopGameLink'); if (link) link.onclick = () => Watch.watch(g.lobbyId); }
       else topEl.innerHTML = '<div class="arenaTopGameEmpty">Сейчас никто не играет</div>';
       if (!done.length) { listEl.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>'; return; }
@@ -1209,68 +960,29 @@ const Arena = {
         const resChar = g.result === 'w' ? '1-0' : (g.result === 'b' ? '0-1' : '½-½');
         const resCls = g.result === 'draw' ? 'd' : 'w';
         const dateStr = Utils.fmtMskHM(g.finishedAt);
-        const wR = g.whiteRating ? `<span class="rating"> ${g.whiteRating}</span>` : '';
-        const bR = g.blackRating ? `<span class="rating"> ${g.blackRating}</span>` : '';
+        const wR = g.whiteRating ? `<span class="rating"> ${g.whiteRating}</span>` : ''; const bR = g.blackRating ? `<span class="rating"> ${g.blackRating}</span>` : '';
         return `<div class="arenaGameCard"><div class="row1"><span class="name">⚪ ${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${wR}</span><span class="res ${resCls}">${resChar}</span></div><div class="row1"><span class="name">⚫ ${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${bR}</span></div><div class="row2"><span>завершена</span><span>${dateStr}</span></div></div>`;
       }).join('');
     });
   },
   renderTopGame(g) {
-    const state = Chess.parseFen(g.fen);
-    let squares = '';
-    for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) {
-      const cls = 'sq ' + ((dr + dc) % 2 ? 'dark' : 'light');
-      const p = state.board[dr][dc];
-      let inner = '';
-      if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW ? 'w' : 'b'}">${Chess.EMOJI[p]}</span>`; }
-      squares += `<div class="${cls}">${inner}</div>`;
-    }
+    const state = Chess.parseFen(g.fen); let squares = '';
+    for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) { const cls = 'sq ' + ((dr + dc) % 2 ? 'dark' : 'light'); const p = state.board[dr][dc]; let inner = ''; if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW ? 'w' : 'b'}">${Chess.EMOJI[p]}</span>`; } squares += `<div class="${cls}">${inner}</div>`; }
     const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
-    const wR = g.whiteRating ? `<span class="prat">${g.whiteRating}</span>` : '';
-    const bR = g.blackRating ? `<span class="prat">${g.blackRating}</span>` : '';
+    const wR = g.whiteRating ? `<span class="prat">${g.whiteRating}</span>` : ''; const bR = g.blackRating ? `<span class="prat">${g.blackRating}</span>` : '';
     return `<div class="arenaTopGamePlayers"><span class="playerRow">⚫ <span class="name">${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span><span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeB)}</span></div><div class="arenaTopGameBoard">${squares}</div><div class="arenaTopGamePlayers"><span class="playerRow">⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div><div class="arenaTopGameLink">▶ – Смотреть партию</div>`;
   },
   showWinnerBanner(top3) {
     const banner = document.getElementById('arenaWinnerBanner'); const podium = document.getElementById('awbPodium');
     const medals = ['gold','silver','bronze'], places = ['🥇','🥈','🥉'];
     const order = top3.length >= 3 ? [1,0,2] : top3.map((_,i)=>i);
-    podium.innerHTML = order.map(i => {
-      const p = top3[i]; if (!p) return '';
-      return `<div class="awbItem ${medals[i]}"><div class="place">${places[i]}</div><div class="n">${Utils.nickHtml(p.username, p.username === 'PeshkaSasha')}</div><div class="s">${p.score}</div></div>`;
-    }).join('');
+    podium.innerHTML = order.map(i => { const p = top3[i]; if (!p) return ''; return `<div class="awbItem ${medals[i]}"><div class="place">${places[i]}</div><div class="n">${Utils.nickHtml(p.username, p.username === 'PeshkaSasha')}</div><div class="s">${p.score}</div></div>`; }).join('');
     banner.style.display = 'block';
   },
-  joinCurrent() {
-    if (!this.currentArenaId) return;
-    App.socket.emit('joinArena', { arenaId: this.currentArenaId }, (res) => {
-      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      this.lastStateHash = ''; this.lastGamesHash = '';
-      this.loadPage(); this.refresh(true); this.renderGamesList();
-    });
-  },
-  pauseCurrent() {
-    if (!this.currentArenaId) return;
-    App.socket.emit('pauseArena', { arenaId: this.currentArenaId }, (res) => {
-      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      this.lastStateHash = ''; this.loadPage(); this.refresh(true);
-    });
-  },
-  leaveCurrent() {
-    if (!this.currentArenaId) return;
-    if (!confirm('Отменить участие?')) return;
-    App.socket.emit('leaveArena', { arenaId: this.currentArenaId }, (res) => {
-      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      this.lastStateHash = ''; this.loadPage(); this.refresh(true);
-    });
-  },
-  sendChat(e) {
-    e.preventDefault();
-    const input = document.getElementById('arenaChatInput');
-    const text = input.value.trim();
-    if (!text || !this.currentArenaId) return;
-    App.socket.emit('arenaChat', { arenaId: this.currentArenaId, text });
-    input.value = '';
-  },
+  joinCurrent() { if (!this.currentArenaId) return; App.socket.emit('joinArena', { arenaId: this.currentArenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.lastStateHash = ''; this.lastGamesHash = ''; this.loadPage(); this.refresh(true); this.renderGamesList(); }); },
+  pauseCurrent() { if (!this.currentArenaId) return; App.socket.emit('pauseArena', { arenaId: this.currentArenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.lastStateHash = ''; this.loadPage(); this.refresh(true); }); },
+  leaveCurrent() { if (!this.currentArenaId) return; if (!confirm('Отменить участие?')) return; App.socket.emit('leaveArena', { arenaId: this.currentArenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.lastStateHash = ''; this.loadPage(); this.refresh(true); }); },
+  sendChat(e) { e.preventDefault(); const input = document.getElementById('arenaChatInput'); const text = input.value.trim(); if (!text || !this.currentArenaId) return; App.socket.emit('arenaChat', { arenaId: this.currentArenaId, text }); input.value = ''; },
   onChatMessage(msg) { if (this.currentArenaId && msg.arenaId === this.currentArenaId) this.renderChatMsg(msg); },
   renderChatMsg(msg) {
     const box = document.getElementById('arenaChatMessages'); if (!box) return;
@@ -1282,29 +994,19 @@ const Arena = {
       let modHtml = '';
       if (App.me && App.me.isMod) modHtml = `<span class="modBtn always" title="Модерация" style="cursor:pointer;color:var(--muted);margin-left:6px;">⚙</span>`;
       div.innerHTML = `<span class="u">${Utils.nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${Utils.escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
-      if (App.me && App.me.isMod) {
-        const btn = div.querySelector('.modBtn');
-        if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); Mod.openMenu(ev, msg.id, msg.user, 'arena', this.currentArenaId); });
-      }
+      if (App.me && App.me.isMod) { const btn = div.querySelector('.modBtn'); if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); Mod.openMenu(ev, msg.id, msg.user, 'arena', this.currentArenaId); }); }
     }
     box.appendChild(div);
     while (box.children.length > 200) box.removeChild(box.firstChild);
     box.scrollTop = box.scrollHeight;
   },
   onUpdate(arenaId) {
-    if (this.currentArenaId === arenaId) {
-      this.lastStateHash = ''; this.lastGamesHash = '';
-      if (document.getElementById('arenaPageScreen').classList.contains('active')) { this.loadPage(); this.renderGamesList(); }
-    }
+    if (this.currentArenaId === arenaId) { this.lastStateHash = ''; this.lastGamesHash = ''; if (document.getElementById('arenaPageScreen').classList.contains('active')) { this.loadPage(); this.renderGamesList(); } }
     if (document.getElementById('arenasScreen').classList.contains('active')) this.refresh();
     if (document.getElementById('lobbyScreen').classList.contains('active')) TopArenas.refresh();
   },
   onFinished(arenaId, top3) {
-    if (this.currentArenaId === arenaId) {
-      this.lastStateHash = ''; this.lastGamesHash = '';
-      if (document.getElementById('arenaPageScreen').classList.contains('active')) { this.loadPage(); this.renderGamesList(); }
-      if (top3 && top3.length) this.showWinnerBanner(top3);
-    }
+    if (this.currentArenaId === arenaId) { this.lastStateHash = ''; this.lastGamesHash = ''; if (document.getElementById('arenaPageScreen').classList.contains('active')) { this.loadPage(); this.renderGamesList(); } if (top3 && top3.length) this.showWinnerBanner(top3); }
     if (document.getElementById('arenasScreen').classList.contains('active')) this.refresh();
     if (document.getElementById('lobbyScreen').classList.contains('active')) TopArenas.refresh();
   }
@@ -1317,23 +1019,16 @@ const Profile = {
   gamesVisible: false,
   init() {},
   enter(username) {
-    const target = username || (App.me && App.me.username);
-    if (!target) return;
-    App.profileViewing = target;
-    this.gamesVisible = false;
+    const target = username || (App.me && App.me.username); if (!target) return;
+    App.profileViewing = target; this.gamesVisible = false;
     const wrap = document.getElementById('profileGamesWrap'); const btn = document.getElementById('showGamesBtn');
-    if (wrap) wrap.classList.add('profileGamesHidden');
-    if (btn) btn.textContent = '📜 Показать партии';
-    App.socket.emit('getProfile', { username: target }, (res) => {
-      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      this.render(res.user, res.games, res.history, res.categoryHistory);
-    });
+    if (wrap) wrap.classList.add('profileGamesHidden'); if (btn) btn.textContent = '📜 Показать партии';
+    App.socket.emit('getProfile', { username: target }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.render(res.user, res.games, res.history, res.categoryHistory); });
   },
   writeMessage() {
-    const target = App.profileViewing;
-    if (!target) return;
+    const target = App.profileViewing; if (!target) return;
     if (App.me && target === App.me.username) { alert('Это ваш профиль'); return; }
-    Messenger.openWith(target);
+    Inbox.openWith(target);
   },
   toggleGames() {
     this.gamesVisible = !this.gamesVisible;
@@ -1370,10 +1065,7 @@ const Profile = {
       }).join('');
     } else catEl.innerHTML = '';
     const writeBtn = document.getElementById('pWriteBtn');
-    if (writeBtn) {
-      if (App.me && user.username !== App.me.username && !user.isBot) writeBtn.style.display = '';
-      else writeBtn.style.display = 'none';
-    }
+    if (writeBtn) { if (App.me && user.username !== App.me.username && !user.isBot) writeBtn.style.display = ''; else writeBtn.style.display = 'none'; }
     this.renderChart(history, categoryHistory || games, user.username);
     this.renderGamesList(games, user.username);
   },
@@ -1386,41 +1078,29 @@ const Profile = {
       return { ...c, rows };
     }).filter(s => s.rows.length);
     if (!series.length) { wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Недостаточно данных для графика</div>'; return; }
-    const W = 900, H = 300, PL = 58, PR = 18, PT = 28, PB = 34;
-    const IW = W - PL - PR, IH = H - PT - PB;
+    const W = 900, H = 300, PL = 58, PR = 18, PT = 28, PB = 34; const IW = W - PL - PR, IH = H - PT - PB;
     const grid = [];
     for (let i=0; i<=4; i++) { const yy = PT + IH*i/4; grid.push(`<line x1="${PL}" y1="${yy}" x2="${W-PR}" y2="${yy}" stroke="#3a3833" stroke-width="1"/>`); }
     const paths = series.map(s => {
-      const vals = s.rows.map(p => p.rating);
-      const lo = Math.floor((Math.min(...vals)-30)/50)*50;
-      const hi = Math.ceil((Math.max(...vals)+30)/50)*50;
+      const vals = s.rows.map(p => p.rating); const lo = Math.floor((Math.min(...vals)-30)/50)*50; const hi = Math.ceil((Math.max(...vals)+30)/50)*50;
       const span = Math.max(100, hi-lo);
       const px = (p,i) => PL + (s.rows.length < 2 ? IW/2 : (i/(s.rows.length-1))*IW);
       const py = p => PT + IH - ((p.rating-lo)/span)*IH;
       const d = s.rows.map((p,i) => `${i?'L':'M'}${px(p,i).toFixed(1)},${py(p).toFixed(1)}`).join(' ');
       const dash = s.key === 'classical' ? '' : ' stroke-dasharray="7 4"';
-      const dots = s.rows.length === 1 ? `<circle cx="${px(s.rows[0],0)}" cy="${py(s.rows[0])}" r="3.5" fill="${s.color}"/>` : '';
-      const dateLabel = ts => ts ? new Date(ts).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'}) : '';
-      const first = dateLabel(s.rows[0].ts), last = dateLabel(s.rows[s.rows.length-1].ts);
-      return `<g><path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.2"${dash} stroke-linejoin="round" stroke-linecap="round"/>${dots}</g>`;
+      return `<g><path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.2"${dash} stroke-linejoin="round" stroke-linecap="round"/></g>`;
     }).join('');
-    const legend = categories.map(c => {
-      const found = series.find(s => s.key === c.key);
-      return `<span style="display:inline-flex;align-items:center;gap:5px;color:${found?c.color:'#777'};font-size:11px;opacity:${found?1:.45};white-space:nowrap"><i style="display:inline-block;width:18px;border-top:2px ${c.key==='classical'?'solid':'dashed'} ${c.color}"></i>${c.label}${found?' ('+found.rows.length+')':''}</span>`;
-    }).join('');
-    wrap.innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin:0 0 8px">${legend}</div>
-      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" role="img" style="width:100%;height:auto;max-height:320px;display:block">${grid.join('')}${paths}</svg>`;
+    const legend = categories.map(c => { const found = series.find(s => s.key === c.key); return `<span style="display:inline-flex;align-items:center;gap:5px;color:${found?c.color:'#777'};font-size:11px;opacity:${found?1:.45};white-space:nowrap"><i style="display:inline-block;width:18px;border-top:2px ${c.key==='classical'?'solid':'dashed'} ${c.color}"></i>${c.label}${found?' ('+found.rows.length+')':''}</span>`; }).join('');
+    wrap.innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin:0 0 8px">${legend}</div><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;max-height:320px;display:block">${grid.join('')}${paths}</svg>`;
   },
   renderGamesList(games, username) {
     const el = document.getElementById('gamesList');
     if (!games || !games.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px">Партий пока нет</div>'; return; }
-    el.innerHTML = '';
+    const frag = document.createDocumentFragment();
     games.forEach(g => {
       const iAmWhite = g.white === username;
-      const myBefore = iAmWhite ? g.whiteBefore : g.blackBefore;
-      const myAfter = iAmWhite ? g.whiteAfter : g.blackAfter;
-      const delta = myAfter - myBefore;
-      const opp = iAmWhite ? g.black : g.white;
+      const myBefore = iAmWhite ? g.whiteBefore : g.blackBefore; const myAfter = iAmWhite ? g.whiteAfter : g.blackAfter;
+      const delta = myAfter - myBefore; const opp = iAmWhite ? g.black : g.white;
       let resChar, resClass;
       if (g.result === 'draw') { resChar = 'Н'; resClass = 'd'; }
       else if ((g.result === 'w' && iAmWhite) || (g.result === 'b' && !iAmWhite)) { resChar = 'П'; resClass = 'w'; }
@@ -1431,11 +1111,11 @@ const Profile = {
       const deltaClass = delta > 0 ? 'up' : (delta < 0 ? 'down' : '');
       const catBadge = g.category ? `<span style="color:var(--muted);font-size:11px;margin-left:4px;">[${g.category}]</span>` : '';
       const botBadge = g.isBot ? '<span style="color:#a56ce8;font-size:11px;margin-left:4px;">🤖</span>' : '';
-      const row = document.createElement('div');
-      row.className = 'gameRow';
+      const row = document.createElement('div'); row.className = 'gameRow';
       row.innerHTML = `<span class="res ${resClass}">${resChar}</span><span class="opp">${iAmWhite?'⚪':'⚫'} против <b>${Utils.nickHtml(opp, opp==='PeshkaSasha')}</b>${catBadge}${botBadge}</span><span class="delta ${deltaClass}">${deltaStr} (${myAfter})</span><span class="date">${dateStr}</span>`;
-      el.appendChild(row);
+      frag.appendChild(row);
     });
+    el.innerHTML = ''; el.appendChild(frag);
   }
 };
 
@@ -1446,71 +1126,70 @@ const Community = {
   init() {},
   enter() { App.socket.emit('getCommunityOnline', (players) => this.render(players)); },
   render(players) {
-    const list = document.getElementById('communityOnlineList');
-    const count = document.getElementById('communityOnlineCount');
+    const list = document.getElementById('communityOnlineList'); const count = document.getElementById('communityOnlineCount');
     if (!list || !count) return;
     players = Array.isArray(players) ? players : [];
     count.textContent = `В сети: ${players.length}`;
-    list.innerHTML = players.map(u =>
-      `<div class="communityPlayer" data-player="${Utils.escapeHtml(u.username)}" onclick="Router.go('profile', '${Utils.escapeHtml(u.username)}')"><div class="communityAvatar">${u.isBot ? '🤖' : Utils.escapeHtml(u.username.charAt(0).toUpperCase())}</div><div style="min-width:0"><div class="cpName">${Utils.onlineDotHtml(true)}${Utils.nickHtml(u.username,u.isAdmin,u.isMod,u.isBot)}</div><div class="cpSub">${u.isBot ? 'Бот' : 'Игрок'} · ${Number(u.rating)||1200} рейтинга</div></div></div>`
-    ).join('') || '<div style="color:var(--muted)">Сейчас никого нет в сети.</div>';
+    list.innerHTML = players.map(u => `<div class="communityPlayer" data-player="${Utils.escapeHtml(u.username)}" onclick="Router.go('profile', '${Utils.escapeHtml(u.username)}')"><div class="communityAvatar">${u.isBot ? '🤖' : Utils.escapeHtml(u.username.charAt(0).toUpperCase())}</div><div style="min-width:0"><div class="cpName">${Utils.onlineDotHtml(true)}${Utils.nickHtml(u.username,u.isAdmin,u.isMod,u.isBot)}</div><div class="cpSub">${u.isBot ? 'Бот' : 'Игрок'} · ${Number(u.rating)||1200} рейтинга</div></div></div>`).join('') || '<div style="color:var(--muted)">Сейчас никого нет в сети.</div>';
   }
 };
 
 // ============================================================
-// MESSENGER (клиент)
+// INBOX (отдельная страница)
 // ============================================================
-const Messenger = {
-  open: false,
+const Inbox = {
   dialogs: [],
   activeWith: null,
   history: [],
   unread: 0,
   loaded: false,
 
-  init() {
-    const modal = document.getElementById('messengerModal');
-    if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) this.close(); });
+  init() {},
+  enter(param) {
+    if (param) this.selectDialog(param, true);
+    else if (!this.loaded) this.loadDialogs();
+    else this.renderDialogs();
   },
 
-  open_() { this.open = true; },
-
-  openPanel() {
-    this.open = true;
-    const modal = document.getElementById('messengerModal');
-    if (!modal) return;
-    modal.classList.add('show');
-    this.loadDialogs();
+  loadDialogs() {
+    App.socket.emit('msgGetDialogs', (res) => {
+      if (!res || !res.ok) return;
+      this.dialogs = res.dialogs || [];
+      this.loaded = true;
+      this.renderDialogs();
+    });
   },
 
-  openModal() { this.openPanel(); },
-
-  close() {
-    this.open = false;
-    const modal = document.getElementById('messengerModal');
-    if (modal) modal.classList.remove('show');
-    const box = document.querySelector('.messengerBox');
-    if (box) box.classList.remove('chatOpen');
-  },
-
-  openWith(username) {
-    this.openPanel();
-    this.selectDialog(username);
+  renderDialogs() {
+    const box = document.getElementById('msgDialogs'); if (!box) return;
+    if (!this.dialogs.length) { box.innerHTML = '<div class="msgEmpty">Диалогов пока нет</div>'; return; }
+    const frag = document.createDocumentFragment();
+    for (const d of this.dialogs) {
+      const other = d.other;
+      const lastText = (d.last_text || '').slice(0, 50);
+      const unread = d.unread || 0;
+      const row = document.createElement('div');
+      row.className = 'msgDialogRow' + (this.activeWith === other ? ' active' : '') + (unread ? ' unread' : '');
+      row.dataset.with = other;
+      const online = App.onlinePlayers && App.onlinePlayers.has && App.onlinePlayers.has(other);
+      row.innerHTML = `<div class="msgDialogAvatar">${Utils.escapeHtml(other.charAt(0).toUpperCase())}<span class="${online ? 'dotOnline' : 'dotOffline'}"></span></div><div class="msgDialogMeta"><div class="msgDialogName">${Utils.escapeHtml(other)}</div><div class="msgDialogPreview">${Utils.escapeHtml(lastText)}</div></div>${unread ? `<span class="msgDialogBadge">${unread}</span>` : ''}`;
+      row.addEventListener('click', () => this.selectDialog(other));
+      frag.appendChild(row);
+    }
+    box.innerHTML = '';
+    box.appendChild(frag);
   },
 
   newDialog() {
-    const row = document.getElementById('msgNewRow');
-    if (!row) return;
+    const row = document.getElementById('msgNewRow'); if (!row) return;
     row.style.display = row.style.display === 'none' ? 'flex' : 'none';
     const inp = document.getElementById('msgNewInput');
     if (inp && row.style.display !== 'none') { inp.value = ''; inp.focus(); }
   },
 
   startWithInput() {
-    const inp = document.getElementById('msgNewInput');
-    if (!inp) return;
-    const name = inp.value.trim();
-    if (!name) return;
+    const inp = document.getElementById('msgNewInput'); if (!inp) return;
+    const name = inp.value.trim(); if (!name) return;
     if (App.me && name === App.me.username) { alert('Нельзя написать самому себе'); return; }
     App.socket.emit('getPlayerCard', { username: name }, (res) => {
       if (!res || !res.ok) { alert('Игрок не найден'); return; }
@@ -1520,46 +1199,22 @@ const Messenger = {
     });
   },
 
-  selectDialog(other) {
+  selectDialog(other, open) {
     this.activeWith = other;
-    const nameEl = document.getElementById('msgChatName');
-    const openBtn = document.getElementById('msgChatOpenProfile');
-    const delBtn = document.getElementById('msgChatDelete');
+    const nameEl = document.getElementById('inboxChatName');
+    const openBtn = document.getElementById('inboxOpenProfile');
+    const delBtn = document.getElementById('inboxDelete');
     if (nameEl) nameEl.textContent = other;
     if (openBtn) openBtn.style.display = '';
     if (delBtn) delBtn.style.display = '';
     this.loadHistory(other);
     document.querySelectorAll('.msgDialogRow').forEach(r => r.classList.toggle('active', r.dataset.with === other));
-    const box = document.querySelector('.messengerBox');
-    if (box) box.classList.add('chatOpen');
+    const wrap = document.querySelector('.inboxWrap'); if (wrap) wrap.classList.add('chatOpen');
   },
 
-  loadDialogs() {
-    App.socket.emit('msgGetDialogs', (res) => {
-      if (!res || !res.ok) return;
-      this.dialogs = res.dialogs || [];
-      this.renderDialogs();
-    });
-  },
-
-  renderDialogs() {
-    const box = document.getElementById('msgDialogs');
-    if (!box) return;
-    if (!this.dialogs.length) { box.innerHTML = '<div class="msgEmpty">Диалогов пока нет</div>'; return; }
-    box.innerHTML = this.dialogs.map(d => {
-      const other = d.other;
-      const lastText = (d.last_text || '').slice(0, 40);
-      const unread = d.unread || 0;
-      const cls = 'msgDialogRow' + (this.activeWith === other ? ' active' : '') + (unread ? ' unread' : '');
-      return `<div class="${cls}" data-with="${Utils.escapeHtml(other)}" onclick="Messenger.selectDialog('${Utils.escapeHtml(other)}')">
-        <div class="msgDialogAvatar">${Utils.escapeHtml(other.charAt(0).toUpperCase())}<span class="${App.onlinePlayers && App.onlinePlayers.has && App.onlinePlayers.has(other) ? 'dotOnline' : 'dotOffline'}"></span></div>
-        <div class="msgDialogMeta">
-          <div class="msgDialogName">${Utils.escapeHtml(other)}</div>
-          <div class="msgDialogPreview">${Utils.escapeHtml(lastText)}</div>
-        </div>
-        ${unread ? `<span class="msgDialogBadge">${unread}</span>` : ''}
-      </div>`;
-    }).join('');
+  openWith(username) {
+    Router.go('inbox');
+    setTimeout(() => this.selectDialog(username), 50);
   },
 
   loadHistory(other) {
@@ -1571,29 +1226,36 @@ const Messenger = {
   },
 
   renderHistory() {
-    const box = document.getElementById('msgChatBody');
-    if (!box) return;
+    const box = document.getElementById('inboxChatBody'); if (!box) return;
     if (!this.activeWith) { box.innerHTML = '<div class="msgEmpty">Выберите диалог</div>'; return; }
     if (!this.history.length) { box.innerHTML = '<div class="msgEmpty">Нет сообщений. Начните первым!</div>'; return; }
+    const frag = document.createDocumentFragment();
     let lastDate = '';
-    box.innerHTML = this.history.map(m => {
-      const dateStr = Utils.fmtDate(m.created_at || m.createdAt || m.ts);
-      let divider = '';
-      if (dateStr !== lastDate) { divider = `<div class="msgDateDivider">${dateStr}</div>`; lastDate = dateStr; }
+    for (const m of this.history) {
+      const ts = Number(m.created_at || m.createdAt || m.ts);
+      const dateStr = Utils.fmtDate(ts);
+      if (dateStr !== lastDate) {
+        const div = document.createElement('div'); div.className = 'msgDateDivider'; div.textContent = dateStr;
+        frag.appendChild(div); lastDate = dateStr;
+      }
       const mine = (m.from_user === App.me.username);
-      const cls = 'msgBubble ' + (mine ? 'me' : 'them');
-      const time = Utils.fmtTimeHM(Number(m.created_at || m.createdAt || m.ts));
-      return divider + `<div class="${cls}">${Utils.escapeHtml(m.text)}<span class="msgTime">${time}</span></div>`;
-    }).join('');
+      const div = document.createElement('div');
+      div.className = 'msgBubble ' + (mine ? 'me' : 'them');
+      div.textContent = m.text;
+      const time = document.createElement('span'); time.className = 'msgTime'; time.textContent = Utils.fmtTimeHM(ts);
+      div.appendChild(time);
+      frag.appendChild(div);
+    }
+    box.innerHTML = '';
+    box.appendChild(frag);
     box.scrollTop = box.scrollHeight;
   },
 
   send(e) {
     e.preventDefault();
-    const inp = document.getElementById('msgChatInput');
+    const inp = document.getElementById('inboxChatInput');
     if (!inp || !this.activeWith) return;
-    const text = inp.value.trim();
-    if (!text) return;
+    const text = inp.value.trim(); if (!text) return;
     App.socket.emit('msgSend', { to: this.activeWith, text }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
       inp.value = '';
@@ -1602,11 +1264,8 @@ const Messenger = {
 
   onNew(msg) {
     const other = (msg.from === App.me.username) ? msg.to : msg.from;
-    if (this.open && this.activeWith === other) {
-      this.history.push({
-        id: msg.id, from_user: msg.from, to_user: msg.to,
-        text: msg.text, created_at: msg.ts, read_at: msg.readAt
-      });
+    if (Router.current.name === 'inbox' && this.activeWith === other) {
+      this.history.push({ id: msg.id, from_user: msg.from, to_user: msg.to, text: msg.text, created_at: msg.ts, read_at: msg.readAt });
       this.renderHistory();
       if (msg.from !== App.me.username) {
         App.socket.emit('msgGetHistory', { with: other, markRead: true }, (res) => {
@@ -1623,10 +1282,10 @@ const Messenger = {
     this.dialogs = this.dialogs.filter(d => d.other !== other);
     this.renderDialogs();
     if (this.activeWith === other) {
-      this.activeWith = null;
-      this.history = [];
+      this.activeWith = null; this.history = [];
       this.renderHistory();
-      document.getElementById('msgChatName').textContent = 'Выберите диалог';
+      document.getElementById('inboxChatName').textContent = 'Выберите диалог';
+      const wrap = document.querySelector('.inboxWrap'); if (wrap) wrap.classList.remove('chatOpen');
     }
   },
 
@@ -1640,26 +1299,15 @@ const Messenger = {
     });
   },
 
-  openProfile() {
-    if (!this.activeWith) return;
-    const other = this.activeWith;
-    this.close();
-    Router.go('profile', other);
-  },
+  openProfile() { if (!this.activeWith) return; const other = this.activeWith; Router.go('profile', other); },
 
   setUnread(count) {
     this.unread = count || 0;
-    const badge = document.getElementById('msgBadge');
-    const um = document.getElementById('umInboxCount');
+    const badge = document.getElementById('msgBadge'); const um = document.getElementById('umInboxCount');
     if (badge) { badge.textContent = this.unread > 99 ? '99+' : this.unread; badge.style.display = this.unread > 0 ? 'flex' : 'none'; }
     if (um) um.textContent = this.unread > 0 ? this.unread : '';
-  },
-
-  // Совместимость со старым вызовом
-  open2() { this.openPanel(); }
+  }
 };
-// Финальный алиас на open — перезапишем корректную функцию
-Messenger.open = function() { Messenger.openPanel(); };
 
 // ============================================================
 // MOD MENU
@@ -1680,8 +1328,7 @@ const Mod = {
       <button data-act="mute" data-min="60">🔇 – Мут 1 час</button>
       <button data-act="mute" data-min="1440">🔇 – Мут 1 сутки</button>
       <button data-act="unmute">🔊 – Снять мут</button>`;
-    document.body.appendChild(menu);
-    this.el = menu;
+    document.body.appendChild(menu); this.el = menu;
     menu.addEventListener('click', (e) => {
       const act = e.target.dataset.act;
       if (act === 'del') {
@@ -1709,7 +1356,7 @@ const Banners = {
     const rDecline = document.getElementById('rematchBannerDecline');
     const dAccept = document.getElementById('drawOfferBannerAccept');
     const dDecline = document.getElementById('drawOfferBannerDecline');
-    if (rAccept) rAccept.onclick = () => { if (!App.lobbyId) return; App.socket.emit('rematchRequest', { lobbyId: App.lobbyId }, (res) => {}); this.hideRematch(); };
+    if (rAccept) rAccept.onclick = () => { if (!App.lobbyId) return; App.socket.emit('rematchRequest', { lobbyId: App.lobbyId }, () => {}); this.hideRematch(); };
     if (rDecline) rDecline.onclick = () => { if (App.lobbyId) App.socket.emit('rematchDecline', { lobbyId: App.lobbyId }); this.hideRematch(); };
     if (dAccept) dAccept.onclick = () => { if (App.lobbyId) App.socket.emit('drawAccept', { lobbyId: App.lobbyId }); this.hideDraw(); };
     if (dDecline) dDecline.onclick = () => { if (App.lobbyId) App.socket.emit('drawDecline', { lobbyId: App.lobbyId }); this.hideDraw(); };
@@ -1718,24 +1365,20 @@ const Banners = {
     this.rematchFrom = from;
     const b = document.getElementById('rematchBanner'); const t = document.getElementById('rematchBannerText');
     if (!b || !t) return;
-    t.textContent = `⚔ ${from} предлагает реванш`;
-    b.style.display = 'flex';
-    const btn = document.getElementById('grRematchBtn');
-    if (btn) { btn.classList.add('accept'); btn.textContent = 'ПРИНЯТЬ РЕВАНШ'; }
+    t.textContent = `⚔ ${from} предлагает реванш`; b.style.display = 'flex';
+    const btn = document.getElementById('grRematchBtn'); if (btn) { btn.classList.add('accept'); btn.textContent = 'ПРИНЯТЬ РЕВАНШ'; }
   },
   hideRematch() { this.rematchFrom = null; const b = document.getElementById('rematchBanner'); if (b) b.style.display = 'none'; },
   showDrawOffer(from) {
     this.drawFrom = from;
     const b = document.getElementById('drawOfferBanner'); const t = document.getElementById('drawOfferBannerText');
-    if (!b || !t) return;
-    t.textContent = `½ ${from} предлагает ничью`;
-    b.style.display = 'flex';
+    if (!b || !t) return; t.textContent = `½ ${from} предлагает ничью`; b.style.display = 'flex';
   },
   hideDraw() { this.drawFrom = null; const b = document.getElementById('drawOfferBanner'); if (b) b.style.display = 'none'; }
 };
 
 // ============================================================
-// GAME
+// GAME (без изменений, только правка Banners.hideDraw в endGame)
 // ============================================================
 const Game = {
   selected: null, legalMoves: [], moveHistory: [], moveFens: [], viewIndex: -1,
@@ -1745,8 +1388,7 @@ const Game = {
   chatMsgIds: new Set(), rematchSpinnerTimer: null,
 
   init() {
-    const board = document.getElementById('board');
-    if (!board) return;
+    const board = document.getElementById('board'); if (!board) return;
     board.addEventListener('click', (ev) => {
       if (this.dragStartPos && (Math.abs(ev.clientX - this.dragStartPos.x) > 6 || Math.abs(ev.clientY - this.dragStartPos.y) > 6)) { this.dragStartPos = null; return; }
       this.dragStartPos = null;
@@ -1756,17 +1398,13 @@ const Game = {
     board.addEventListener('mousedown', (ev) => this.onMouseDown(ev));
     document.addEventListener('mousemove', (ev) => this.onMouseMove(ev));
     document.addEventListener('mouseup', (ev) => this.onMouseUp(ev));
-    const pw = document.getElementById('password');
-    if (pw) pw.addEventListener('keydown', (e) => { if (e.key === 'Enter') App.doLogin(); });
+    const pw = document.getElementById('password'); if (pw) pw.addEventListener('keydown', (e) => { if (e.key === 'Enter') App.doLogin(); });
   },
 
   enter(lobbyId) {
     if (lobbyId && (!App.lobbyId || App.lobbyId !== lobbyId)) {
       App.lobbyId = lobbyId;
-      App.socket.emit('getGameState', { lobbyId }, (res) => {
-        if (!res || !res.ok) { alert((res && res.msg) || 'Партия не найдена'); Router.go('lobby'); return; }
-        this.applyGameStateFromServer(res.state, lobbyId);
-      });
+      App.socket.emit('getGameState', { lobbyId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Партия не найдена'); Router.go('lobby'); return; } this.applyGameStateFromServer(res.state, lobbyId); });
       return;
     }
     this.renderBoard(); this.renderMoves(); this.updateTimers();
@@ -1780,14 +1418,11 @@ const Game = {
     const box = document.getElementById('chatMessages'); if (box) box.innerHTML = '';
   },
   resetUI() {
-    document.getElementById('topName').textContent = '—';
-    document.getElementById('topRating').textContent = '';
-    document.getElementById('topDot').className = 'dot';
-    document.getElementById('topTime').textContent = '--:--';
+    document.getElementById('topName').textContent = '—'; document.getElementById('topRating').textContent = '';
+    document.getElementById('topDot').className = 'dot'; document.getElementById('topTime').textContent = '--:--';
     document.getElementById('bottomName').innerHTML = App.me ? Utils.nickHtml(App.me.username, App.me.isAdmin, App.me.isMod, App.me.isBot) : '—';
     document.getElementById('bottomRating').textContent = App.me ? App.me.rating : '';
-    document.getElementById('bottomDot').className = 'dot';
-    document.getElementById('bottomTime').textContent = '--:--';
+    document.getElementById('bottomDot').className = 'dot'; document.getElementById('bottomTime').textContent = '--:--';
   },
   hideResultBar() {
     document.getElementById('gameResultCompact').classList.remove('show');
@@ -1806,12 +1441,9 @@ const Game = {
     else { text = (App.myColor === 'w' ? '0-1' : '1-0') + ' – Поражение'; cls = 'lose'; }
     title.textContent = text; title.className = 'grTitle ' + cls;
     sub.textContent = reason || '';
-    const rematchBtn = document.getElementById('grRematchBtn');
-    const pauseBtn = document.getElementById('grPauseBtn');
-    const findBtn = document.getElementById('grFindBtn');
+    const rematchBtn = document.getElementById('grRematchBtn'); const pauseBtn = document.getElementById('grPauseBtn'); const findBtn = document.getElementById('grFindBtn');
     if (App.currentGameIsArena) {
-      rematchBtn.style.display = 'none';
-      pauseBtn.style.display = 'block';
+      rematchBtn.style.display = 'none'; pauseBtn.style.display = 'block';
       pauseBtn.textContent = (Arena.currentArenaState && Arena.currentArenaState.paused) ? '▶ ПРОДОЛЖИТЬ' : '⏸ ПАУЗА';
       findBtn.textContent = 'ПЕРЕЙТИ В ТУРНИР';
       findBtn.onclick = () => {
@@ -1819,8 +1451,7 @@ const Game = {
         if (!arenaId) { this.hideResultBar(); Router.go('arenas'); return; }
         App.socket.emit('continueArenaPairing', { arenaId }, (res) => {
           if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось вернуться в турнир'); return; }
-          this.hideResultBar();
-          Router.go('arenaPage', arenaId);
+          this.hideResultBar(); Router.go('arenaPage', arenaId);
         });
       };
     } else {
@@ -1843,8 +1474,7 @@ const Game = {
   startRematchSpinner() {
     const btn = document.getElementById('grRematchBtn'); if (!btn) return;
     this.stopRematchSpinner();
-    const frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏'];
-    let i = 0;
+    const frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']; let i = 0;
     btn.disabled = true; btn.classList.remove('accept'); btn.textContent = frames[0] + ' ОЖИДАНИЕ';
     this.rematchSpinnerTimer = setInterval(() => { i = (i + 1) % frames.length; btn.textContent = frames[i] + ' ОЖИДАНИЕ'; }, 80);
   },
@@ -1854,20 +1484,16 @@ const Game = {
     App.lobbyId = null; App.gameActive = false; App.gameEnded = false;
     App.currentGameIsArena = false; App.currentArenaId = null; App.currentArenaName = null;
     try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
-    this.updateBackToGameBtn();
-    Router.go('lobby');
-    Lobby.switchTab('create');
+    this.updateBackToGameBtn(); Router.go('lobby'); Lobby.switchTab('create');
   },
   updateBackToGameBtn() { const opponent = document.getElementById('activeGameOpponent'); if (opponent) opponent.textContent = App.opponentName || 'соперником'; },
   applyGameStateFromServer(s, lobbyId) {
     App.lobbyId = lobbyId; App.myColor = s.myColor; App.opponentName = s.opponent;
-    const activeGameOpponent = document.getElementById('activeGameOpponent');
-    if (activeGameOpponent) activeGameOpponent.textContent = s.opponent || 'соперником';
+    const activeGameOpponent = document.getElementById('activeGameOpponent'); if (activeGameOpponent) activeGameOpponent.textContent = s.opponent || 'соперником';
     App.opponentRating = s.opponentRating; App.opponentIsAdmin = s.opponentIsAdmin;
     App.opponentOnline = !!s.opponentOnline; App.opponentIsBot = !!s.isBot; App.isBotGame = !!s.isBot;
     App.inc = s.inc;
-    App.myTime = App.myColor === 'w' ? s.timeW : s.timeB;
-    App.oppTime = App.myColor === 'w' ? s.timeB : s.timeW;
+    App.myTime = App.myColor === 'w' ? s.timeW : s.timeB; App.oppTime = App.myColor === 'w' ? s.timeB : s.timeW;
     App.currentFen = s.fen;
     this.moveHistory = []; this.moveFens = []; this.viewIndex = -1; this.lastMove = null;
     App.gameEnded = !!s.finished; App.gameActive = !s.finished;
@@ -1901,38 +1527,28 @@ const Game = {
     boardEl.innerHTML = '';
     const flip = (App.myColor === 'b') !== this.boardFlipped;
     const interactive = App.gameActive && !App.gameEnded && this.viewIndex === -1;
-    for (let dr = 0; dr < 8; dr++) {
-      for (let dc = 0; dc < 8; dc++) {
-        const r = flip ? 7 - dr : dr; const c = flip ? 7 - dc : dc;
-        const sq = document.createElement('div');
-        sq.className = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
-        sq.dataset.r = r; sq.dataset.c = c;
-        if (this.lastMove && this.viewIndex === -1) {
-          if ((this.lastMove.from[0] === r && this.lastMove.from[1] === c) || (this.lastMove.to[0] === r && this.lastMove.to[1] === c)) sq.classList.add('lastmove');
-        }
-        const isWhiteTurn = state.turn === 'w';
-        if (Chess.inCheck(state, isWhiteTurn)) { const k = Chess.findKing(state, isWhiteTurn); if (k && k[0] === r && k[1] === c) sq.classList.add('check'); }
-        if (this.selected && this.selected[0] === r && this.selected[1] === c) sq.classList.add('sel');
-        if (interactive) {
-          const isLegal = this.legalMoves.some(([mr, mc]) => mr === r && mc === c);
-          if (isLegal) { sq.classList.add('hint'); if (state.board[r][c]) sq.classList.add('capture'); }
-        }
-        if (this.premove) {
-          if (this.premove.to[0] === r && this.premove.to[1] === c) sq.classList.add('premove-target');
-          if (this.premove.from[0] === r && this.premove.from[1] === c) sq.classList.add('premove-from');
-        }
-        const p = state.board[r][c];
-        if (p) {
-          const piece = document.createElement('span');
-          piece.className = 'piece ' + (Chess.isWhite(p) ? 'w' : 'b');
-          piece.textContent = Chess.EMOJI[p];
-          if (this.dragging && this.dragging.from[0] === r && this.dragging.from[1] === c) piece.classList.add('dragging');
-          sq.appendChild(piece);
-        }
-        if (dr === 7) { const e = document.createElement('span'); e.className='coord-f'; e.textContent = String.fromCharCode(97 + c); sq.appendChild(e); }
-        if (dc === 0) { const e = document.createElement('span'); e.className='coord-r'; e.textContent = 8 - r; sq.appendChild(e); }
-        boardEl.appendChild(sq);
+    for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) {
+      const r = flip ? 7 - dr : dr; const c = flip ? 7 - dc : dc;
+      const sq = document.createElement('div');
+      sq.className = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
+      sq.dataset.r = r; sq.dataset.c = c;
+      if (this.lastMove && this.viewIndex === -1) { if ((this.lastMove.from[0] === r && this.lastMove.from[1] === c) || (this.lastMove.to[0] === r && this.lastMove.to[1] === c)) sq.classList.add('lastmove'); }
+      const isWhiteTurn = state.turn === 'w';
+      if (Chess.inCheck(state, isWhiteTurn)) { const k = Chess.findKing(state, isWhiteTurn); if (k && k[0] === r && k[1] === c) sq.classList.add('check'); }
+      if (this.selected && this.selected[0] === r && this.selected[1] === c) sq.classList.add('sel');
+      if (interactive) { const isLegal = this.legalMoves.some(([mr, mc]) => mr === r && mc === c); if (isLegal) { sq.classList.add('hint'); if (state.board[r][c]) sq.classList.add('capture'); } }
+      if (this.premove) { if (this.premove.to[0] === r && this.premove.to[1] === c) sq.classList.add('premove-target'); if (this.premove.from[0] === r && this.premove.from[1] === c) sq.classList.add('premove-from'); }
+      const p = state.board[r][c];
+      if (p) {
+        const piece = document.createElement('span');
+        piece.className = 'piece ' + (Chess.isWhite(p) ? 'w' : 'b');
+        piece.textContent = Chess.EMOJI[p];
+        if (this.dragging && this.dragging.from[0] === r && this.dragging.from[1] === c) piece.classList.add('dragging');
+        sq.appendChild(piece);
       }
+      if (dr === 7) { const e = document.createElement('span'); e.className='coord-f'; e.textContent = String.fromCharCode(97 + c); sq.appendChild(e); }
+      if (dc === 0) { const e = document.createElement('span'); e.className='coord-r'; e.textContent = 8 - r; sq.appendChild(e); }
+      boardEl.appendChild(sq);
     }
     this.updateTurnIndicator(state);
   },
@@ -1961,29 +1577,17 @@ const Game = {
     if (!state) state = Chess.parseFen(App.currentFen);
     const isMy = state.turn === App.myColor;
     this.clockTurn = state.turn;
-    if (App.gameActive && !App.gameEnded) {
-      this.clockSyncedAt = performance.now();
-      this.clockMyAtSync = App.myTime; this.clockOppAtSync = App.oppTime;
-      if (!this.clockLoopRunning) this.startClockLoop();
-    }
+    if (App.gameActive && !App.gameEnded) { this.clockSyncedAt = performance.now(); this.clockMyAtSync = App.myTime; this.clockOppAtSync = App.oppTime; if (!this.clockLoopRunning) this.startClockLoop(); }
     document.getElementById('topStrip').classList.toggle('active', App.gameActive && !App.gameEnded && state.turn !== App.myColor);
     document.getElementById('bottomStrip').classList.toggle('active', App.gameActive && !App.gameEnded && state.turn === App.myColor);
     document.getElementById('topClock').classList.toggle('active', App.gameActive && !App.gameEnded && state.turn !== App.myColor);
     document.getElementById('bottomClock').classList.toggle('active', App.gameActive && !App.gameEnded && state.turn === App.myColor);
-    const bar = document.getElementById('statusBar');
-    if (!bar) return;
+    const bar = document.getElementById('statusBar'); if (!bar) return;
     if (App.gameEnded) { bar.className = 'statusYellow'; bar.textContent = 'Партия завершена'; }
-    else if (App.gameActive) {
-      const who = state.turn === 'w' ? 'Белые' : 'Чёрные';
-      bar.className = 'statusGreen';
-      let txt = `${who} — ${isMy ? 'ваш ход' : 'ход соперника'}`;
-      if (this.premove) txt += ' · премьов';
-      bar.textContent = txt;
-    }
+    else if (App.gameActive) { const who = state.turn === 'w' ? 'Белые' : 'Чёрные'; bar.className = 'statusGreen'; let txt = `${who} — ${isMy ? 'ваш ход' : 'ход соперника'}`; if (this.premove) txt += ' · премьов'; bar.textContent = txt; }
   },
   startClockLoop() {
-    if (this.clockLoopRunning) return;
-    this.clockLoopRunning = true;
+    if (this.clockLoopRunning) return; this.clockLoopRunning = true;
     const self = this;
     function tick() {
       if (!App.gameActive || App.gameEnded) { self.clockLoopRunning = false; return; }
@@ -2020,22 +1624,13 @@ const Game = {
     const myTurn = state.turn === App.myColor;
     if (!myTurn) {
       const p = state.board[r][c]; const isMyPiece = p && Chess.isWhite(p) === (App.myColor === 'w');
-      if (this.selected) {
-        const from = this.selected;
-        if (from[0] === r && from[1] === c) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); return; }
-        const piece = state.board[from[0]][from[1]];
-        if (piece && Chess.isWhite(piece) === (App.myColor === 'w')) { this.premove = { from, to: [r, c], san: '' }; this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); return; }
-        else { this.selected = null; this.legalMoves = []; }
-      }
+      if (this.selected) { const from = this.selected; if (from[0] === r && from[1] === c) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); return; } const piece = state.board[from[0]][from[1]]; if (piece && Chess.isWhite(piece) === (App.myColor === 'w')) { this.premove = { from, to: [r, c], san: '' }; this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); return; } else { this.selected = null; this.legalMoves = []; } }
       if (isMyPiece) { this.selected = [r, c]; this.legalMoves = Chess.legalMovesFor(state, r, c); this.lastBoardHash = ''; this.renderBoard(); }
       else { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); }
       return;
     }
     if (this.premove) { if (this.premove.to[0] === r && this.premove.to[1] === c) { this.premove = null; this.lastBoardHash = ''; this.renderBoard(); return; } }
-    if (this.selected) {
-      const isLegal = this.legalMoves.some(([mr, mc]) => mr === r && mc === c);
-      if (isLegal) { const from = this.selected; this.selected = null; this.legalMoves = []; this.applyUserMove(from, [r, c], false); return; }
-    }
+    if (this.selected) { const isLegal = this.legalMoves.some(([mr, mc]) => mr === r && mc === c); if (isLegal) { const from = this.selected; this.selected = null; this.legalMoves = []; this.applyUserMove(from, [r, c], false); return; } }
     const p = state.board[r][c];
     if (p && Chess.isWhite(p) === (App.myColor === 'w')) { this.selected = [r, c]; this.legalMoves = Chess.legalMovesFor(state, r, c); }
     else { this.selected = null; this.legalMoves = []; }
@@ -2050,12 +1645,9 @@ const Game = {
     if (isPremove) { this.premove = { from, to, san }; this.lastBoardHash = ''; this.renderBoard(); return true; }
     const nextState = Chess.applyMove(state, from, to);
     const newFen = Chess.toFen(nextState);
-    App.currentFen = newFen;
-    this.lastMove = { from, to };
-    this.moveHistory.push(san); this.moveFens.push(newFen);
-    this.premove = null;
-    this.renderMoves();
-    this.lastBoardHash = ''; this.renderBoard();
+    App.currentFen = newFen; this.lastMove = { from, to };
+    this.moveHistory.push(san); this.moveFens.push(newFen); this.premove = null;
+    this.renderMoves(); this.lastBoardHash = ''; this.renderBoard();
     App.socket.emit('move', { lobbyId: App.lobbyId, fen: newFen, turn: nextState.turn, san });
     Sounds.moveBySan(san);
     this.checkGameEnd(nextState);
@@ -2077,8 +1669,7 @@ const Game = {
     const leg = Chess.legalMovesFor(state, this.premove.from[0], this.premove.from[1]);
     const ok = leg.some(([r, c]) => r === this.premove.to[0] && c === this.premove.to[1]);
     if (!ok) { this.premove = null; this.lastBoardHash = ''; this.renderBoard(); return; }
-    const mv = this.premove;
-    this.premove = null;
+    const mv = this.premove; this.premove = null;
     setTimeout(() => { this.applyUserMove(mv.from, mv.to, false); }, 50);
   },
   onMouseDown(ev) {
@@ -2088,51 +1679,23 @@ const Game = {
     const state = Chess.parseFen(App.currentFen);
     const p = state.board[r][c]; if (!p) return;
     const myTurn = state.turn === App.myColor, sameColor = Chess.isWhite(p) === (App.myColor === 'w');
-    if (myTurn && sameColor) {
-      const leg = Chess.legalMovesFor(state, r, c); if (!leg.length) return;
-      this.selected = [r, c]; this.legalMoves = leg;
-      this.dragging = { from: [r, c], active: false };
-      this.dragStartPos = { x: ev.clientX, y: ev.clientY };
-      this.lastBoardHash = ''; this.renderBoard();
-      this.startDragGhost(p, ev.clientX, ev.clientY);
-      ev.preventDefault();
-      return;
-    }
-    if (!myTurn && sameColor) {
-      const leg = Chess.legalMovesFor(state, r, c); if (!leg.length) return;
-      this.selected = [r, c]; this.legalMoves = leg;
-      this.dragging = { from: [r, c], active: false, premoveDrag: true };
-      this.dragStartPos = { x: ev.clientX, y: ev.clientY };
-      this.lastBoardHash = ''; this.renderBoard();
-      this.startDragGhost(p, ev.clientX, ev.clientY);
-      ev.preventDefault();
-    }
+    if (myTurn && sameColor) { const leg = Chess.legalMovesFor(state, r, c); if (!leg.length) return; this.selected = [r, c]; this.legalMoves = leg; this.dragging = { from: [r, c], active: false }; this.dragStartPos = { x: ev.clientX, y: ev.clientY }; this.lastBoardHash = ''; this.renderBoard(); this.startDragGhost(p, ev.clientX, ev.clientY); ev.preventDefault(); return; }
+    if (!myTurn && sameColor) { const leg = Chess.legalMovesFor(state, r, c); if (!leg.length) return; this.selected = [r, c]; this.legalMoves = leg; this.dragging = { from: [r, c], active: false, premoveDrag: true }; this.dragStartPos = { x: ev.clientX, y: ev.clientY }; this.lastBoardHash = ''; this.renderBoard(); this.startDragGhost(p, ev.clientX, ev.clientY); ev.preventDefault(); }
   },
   startDragGhost(piece, x, y) {
     if (this.ghostEl) { this.ghostEl.remove(); this.ghostEl = null; }
     this.ghostEl = document.createElement('div');
     this.ghostEl.className = 'dragGhost ' + (Chess.isWhite(piece) ? 'w' : 'b');
     this.ghostEl.textContent = Chess.EMOJI[piece];
-    this.ghostEl.style.left = x + 'px'; this.ghostEl.style.top = y + 'px';
-    this.ghostEl.style.display = 'none';
+    this.ghostEl.style.left = x + 'px'; this.ghostEl.style.top = y + 'px'; this.ghostEl.style.display = 'none';
     document.body.appendChild(this.ghostEl);
   },
   moveGhost(x, y) { if (!this.ghostEl) return; this.ghostEl.style.display = ''; this.ghostEl.style.left = x + 'px'; this.ghostEl.style.top = y + 'px'; },
   clearGhost() { if (this.ghostEl) { this.ghostEl.remove(); this.ghostEl = null; } },
-  boardSquareFromEvent(ev) {
-    const el = document.elementFromPoint(ev.clientX, ev.clientY);
-    if (!el) return null;
-    const sq = el.closest ? el.closest('.sq') : null;
-    if (!sq || sq.dataset.r == null) return null;
-    return [+sq.dataset.r, +sq.dataset.c];
-  },
+  boardSquareFromEvent(ev) { const el = document.elementFromPoint(ev.clientX, ev.clientY); if (!el) return null; const sq = el.closest ? el.closest('.sq') : null; if (!sq || sq.dataset.r == null) return null; return [+sq.dataset.r, +sq.dataset.c]; },
   onMouseMove(ev) {
     if (!this.dragging) return;
-    if (!this.dragging.active) {
-      if (Math.abs(ev.clientX - this.dragStartPos.x) < 5 && Math.abs(ev.clientY - this.dragStartPos.y) < 5) return;
-      this.dragging.active = true;
-      this.lastBoardHash = ''; this.renderBoard();
-    }
+    if (!this.dragging.active) { if (Math.abs(ev.clientX - this.dragStartPos.x) < 5 && Math.abs(ev.clientY - this.dragStartPos.y) < 5) return; this.dragging.active = true; this.lastBoardHash = ''; this.renderBoard(); }
     this.moveGhost(ev.clientX, ev.clientY);
   },
   onMouseUp(ev) {
@@ -2149,19 +1712,13 @@ const Game = {
     if (!ok) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); }
   },
   flipBoard() { this.boardFlipped = !this.boardFlipped; this.lastBoardHash = ''; this.renderBoard(); },
-  resign() {
-    if (!App.gameActive || App.gameEnded) return;
-    if (!confirm('Точно сдаться?')) return;
-    App.socket.emit('resign', { lobbyId: App.lobbyId });
-    this.endGame(App.myColor === 'w' ? 'b' : 'w', 'Сдача', true, App.currentGameIsArena);
-  },
+  resign() { if (!App.gameActive || App.gameEnded) return; if (!confirm('Точно сдаться?')) return; App.socket.emit('resign', { lobbyId: App.lobbyId }); this.endGame(App.myColor === 'w' ? 'b' : 'w', 'Сдача', true, App.currentGameIsArena); },
   offerDraw() {
     if (!App.gameActive || App.gameEnded) return;
     if (this.pendingDrawOffer) { alert('Ничья уже предложена'); return; }
     App.socket.emit('drawOffer', { lobbyId: App.lobbyId });
     this.pendingDrawOffer = true;
-    const bar = document.getElementById('statusBar');
-    if (bar) { bar.className = 'statusYellow'; bar.textContent = 'Ничья предложена. Ожидание соперника...'; }
+    const bar = document.getElementById('statusBar'); if (bar) { bar.className = 'statusYellow'; bar.textContent = 'Ничья предложена. Ожидание соперника...'; }
   },
   endGame(winner, reason, fromServer, isArena) {
     if (App.gameEnded) return;
@@ -2177,31 +1734,12 @@ const Game = {
   },
   requestRematch() {
     if (!App.lobbyId) { const saved = localStorage.getItem('kingside_last_lobby'); if (saved) App.lobbyId = saved; }
-    if (Banners.rematchFrom) {
-      App.socket.emit('rematchRequest', { lobbyId: App.lobbyId }, (res) => { if (res && res.ok && res.started) Banners.hideRematch(); });
-      Banners.hideRematch();
-      return;
-    }
+    if (Banners.rematchFrom) { App.socket.emit('rematchRequest', { lobbyId: App.lobbyId }, (res) => { if (res && res.ok && res.started) Banners.hideRematch(); }); Banners.hideRematch(); return; }
     if (this.rematchRequested) { alert('Реванш уже предложен'); return; }
-    this.rematchRequested = true;
-    this.startRematchSpinner();
+    this.rematchRequested = true; this.startRematchSpinner();
     App.socket.emit('rematchRequest', { lobbyId: App.lobbyId }, (res) => {
-      if (!res || !res.ok) {
-        this.stopRematchSpinner(); this.rematchRequested = false;
-        const bar = document.getElementById('statusBar');
-        if (bar) { bar.className = 'statusYellow'; bar.textContent = (res && res.msg) || 'Ошибка реванша'; }
-        const btn = document.getElementById('grRematchBtn');
-        if (btn) { btn.disabled = false; btn.textContent = 'РЕВАНШ'; }
-        return;
-      }
-      if (res.declined) {
-        this.stopRematchSpinner(); this.rematchRequested = false;
-        const bar = document.getElementById('statusBar');
-        if (bar) { bar.className = 'statusYellow'; bar.textContent = 'Бот отклонил реванш'; }
-        const btn = document.getElementById('grRematchBtn');
-        if (btn) { btn.disabled = false; btn.textContent = 'РЕВАНШ'; }
-        return;
-      }
+      if (!res || !res.ok) { this.stopRematchSpinner(); this.rematchRequested = false; const bar = document.getElementById('statusBar'); if (bar) { bar.className = 'statusYellow'; bar.textContent = (res && res.msg) || 'Ошибка реванша'; } const btn = document.getElementById('grRematchBtn'); if (btn) { btn.disabled = false; btn.textContent = 'РЕВАНШ'; } return; }
+      if (res.declined) { this.stopRematchSpinner(); this.rematchRequested = false; const bar = document.getElementById('statusBar'); if (bar) { bar.className = 'statusYellow'; bar.textContent = 'Бот отклонил реванш'; } const btn = document.getElementById('grRematchBtn'); if (btn) { btn.disabled = false; btn.textContent = 'РЕВАНШ'; } return; }
       if (res.started) { this.stopRematchSpinner(); this.rematchRequested = false; return; }
     });
   },
@@ -2209,8 +1747,7 @@ const Game = {
     if (!App.currentArenaId) return;
     App.socket.emit('pauseArena', { arenaId: App.currentArenaId }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      const pauseBtn = document.getElementById('grPauseBtn');
-      if (pauseBtn) pauseBtn.textContent = res.paused ? '▶ ПРОДОЛЖИТЬ' : '⏸ ПАУЗА';
+      const pauseBtn = document.getElementById('grPauseBtn'); if (pauseBtn) pauseBtn.textContent = res.paused ? '▶ ПРОДОЛЖИТЬ' : '⏸ ПАУЗА';
       Arena.lastStateHash = ''; Arena.loadPage();
     });
   },
@@ -2218,26 +1755,21 @@ const Game = {
   openOpponentProfile() { if (App.opponentName && App.opponentName !== '—') Router.go('profile', App.opponentName); },
   sendChat(e) {
     e.preventDefault();
-    const input = document.getElementById('chatInput');
-    const text = input.value.trim();
+    const input = document.getElementById('chatInput'); const text = input.value.trim();
     if (!text || !App.lobbyId) return;
     App.socket.emit('chatMessage', { lobbyId: App.lobbyId, text });
     input.value = '';
   },
   onChatMessage(msg) {
     const box = document.getElementById('chatMessages'); if (!box) return;
-    if (msg.id && this.chatMsgIds.has(msg.id)) return;
-    if (msg.id) this.chatMsgIds.add(msg.id);
+    if (msg.id && this.chatMsgIds.has(msg.id)) return; if (msg.id) this.chatMsgIds.add(msg.id);
     const div = document.createElement('div');
     div.className = 'msg'; div.dataset.msgId = msg.id || '';
     const time = Utils.fmtMskHM(msg.ts);
     let modHtml = '';
     if (App.me && App.me.isMod) modHtml = `<span class="modBtn" title="Модерация">⚙</span>`;
     div.innerHTML = `<span class="u">${Utils.nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${Utils.escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
-    if (App.me && App.me.isMod) {
-      const btn = div.querySelector('.modBtn');
-      if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); Mod.openMenu(ev, msg.id, msg.user, 'game', App.lobbyId); });
-    }
+    if (App.me && App.me.isMod) { const btn = div.querySelector('.modBtn'); if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); Mod.openMenu(ev, msg.id, msg.user, 'game', App.lobbyId); }); }
     box.appendChild(div);
     while (box.children.length > 50) box.removeChild(box.firstChild);
     box.scrollTop = box.scrollHeight;
@@ -2246,40 +1778,24 @@ const Game = {
     const el = document.querySelector(`#chatMessages .msg[data-msg-id="${msgId}"]`); if (el) el.remove();
     const el2 = document.querySelector(`#arenaChatMessages .msg[data-msg-id="${msgId}"]`); if (el2) el2.remove();
   },
-  onDrawDeclined() {
-    const bar = document.getElementById('statusBar');
-    if (bar) { bar.className = 'statusYellow'; bar.textContent = 'Соперник отклонил ничью'; }
-    this.pendingDrawOffer = false;
-  },
+  onDrawDeclined() { const bar = document.getElementById('statusBar'); if (bar) { bar.className = 'statusYellow'; bar.textContent = 'Соперник отклонил ничью'; } this.pendingDrawOffer = false; },
   onRematchDeclined() {
     this.rematchRequested = false; this.stopRematchSpinner();
-    const btn = document.getElementById('grRematchBtn');
-    if (btn) { btn.disabled = false; btn.classList.remove('accept'); btn.textContent = 'РЕВАНШ'; }
-    const bar = document.getElementById('statusBar');
-    if (bar) { bar.className = 'statusYellow'; bar.textContent = 'Соперник отклонил реванш'; }
+    const btn = document.getElementById('grRematchBtn'); if (btn) { btn.disabled = false; btn.classList.remove('accept'); btn.textContent = 'РЕВАНШ'; }
+    const bar = document.getElementById('statusBar'); if (bar) { bar.className = 'statusYellow'; bar.textContent = 'Соперник отклонил реванш'; }
   },
   onOpponentOnline(username) {
-    if (username === App.opponentName) {
-      App.opponentOnline = true;
-      const strip = document.getElementById('topName');
-      if (strip) strip.innerHTML = Utils.onlineDotHtml(true) + Utils.nickHtml(App.opponentName, App.opponentIsAdmin, false, App.opponentIsBot);
-    }
+    if (username === App.opponentName) { App.opponentOnline = true; const strip = document.getElementById('topName'); if (strip) strip.innerHTML = Utils.onlineDotHtml(true) + Utils.nickHtml(App.opponentName, App.opponentIsAdmin, false, App.opponentIsBot); }
   },
   onOpponentOffline(username) {
-    if (username === App.opponentName) {
-      App.opponentOnline = false;
-      const strip = document.getElementById('topName');
-      if (strip) strip.innerHTML = Utils.onlineDotHtml(false) + Utils.nickHtml(App.opponentName, App.opponentIsAdmin, false, App.opponentIsBot);
-    }
+    if (username === App.opponentName) { App.opponentOnline = false; const strip = document.getElementById('topName'); if (strip) strip.innerHTML = Utils.onlineDotHtml(false) + Utils.nickHtml(App.opponentName, App.opponentIsAdmin, false, App.opponentIsBot); }
   },
   onOpponentLeft() { if (!App.gameActive) return; alert('Соперник отключился'); this.updateBackToGameBtn(); },
   onGameStart(payload) {
-    const { color, opponent, opponentRating, time, inc, lobbyId, fen, chat, arenaId, arenaName,
-            opponentIsAdmin, opponentIsMod, opponentOnline, opponentIsBot, isBot: isBotFlag } = payload;
+    const { color, opponent, opponentRating, time, inc, lobbyId, fen, chat, arenaId, arenaName, opponentIsAdmin, opponentIsMod, opponentOnline, opponentIsBot, isBot: isBotFlag } = payload;
     if (lobbyId) App.lobbyId = lobbyId;
     App.myColor = color || 'w'; App.inc = inc || 0;
-    App.opponentName = opponent || 'Соперник';
-    App.opponentRating = opponentRating || null;
+    App.opponentName = opponent || 'Соперник'; App.opponentRating = opponentRating || null;
     App.opponentIsAdmin = (typeof opponentIsAdmin === 'boolean') ? opponentIsAdmin : (App.opponentName === 'PeshkaSasha');
     App.opponentOnline = (typeof opponentOnline === 'boolean') ? opponentOnline : true;
     App.opponentIsBot = !!(opponentIsBot || isBotFlag);
@@ -2298,34 +1814,24 @@ const Game = {
     document.getElementById('topDot').className = 'dot ' + (App.myColor === 'w' ? 'b' : 'w');
     document.getElementById('topTime').textContent = Utils.formatTime(time * 60);
     const bar = document.getElementById('statusBar');
-    if (bar) {
-      bar.className = 'statusGreen';
-      bar.textContent = App.isBotGame ? `Игра с ботом ${Utils.escapeHtml(App.opponentName)}. Вы — ${App.myColor === 'w' ? 'белые' : 'чёрные'}` : `Игра началась. Вы — ${App.myColor === 'w' ? 'белые' : 'чёрные'}`;
-    }
+    if (bar) { bar.className = 'statusGreen'; bar.textContent = App.isBotGame ? `Игра с ботом ${Utils.escapeHtml(App.opponentName)}. Вы — ${App.myColor === 'w' ? 'белые' : 'чёрные'}` : `Игра началась. Вы — ${App.myColor === 'w' ? 'белые' : 'чёрные'}`; }
     document.getElementById('chatMessages').innerHTML = '';
     if (Array.isArray(chat)) chat.forEach(m => this.onChatMessage(m));
-    Router.go('game');
-    this.renderBoard(); this.renderMoves(); this.updateTimers(); this.updateBackToGameBtn();
+    Router.go('game'); this.renderBoard(); this.renderMoves(); this.updateTimers(); this.updateBackToGameBtn();
     if (Router.current && Router.current.name === 'lobby') Lobby.render();
     try { localStorage.setItem('kingside_active_lobby', App.lobbyId); localStorage.setItem('kingside_last_lobby', App.lobbyId); } catch (e) {}
     Sounds.start();
   },
   onBoardUpdate({ fen, san, from, to }) {
     if (!App.gameActive || App.gameEnded) return;
-    const prevFen = App.currentFen;
-    App.currentFen = fen;
+    const prevFen = App.currentFen; App.currentFen = fen;
     this.selected = null; this.legalMoves = []; this.viewIndex = -1;
-    if (from && to) {
-      this.lastMove = { from, to };
-      if (!san) { try { const prevState = Chess.parseFen(prevFen); san = Chess.toSAN(prevState, from, to); } catch (e) {} }
-    }
+    if (from && to) { this.lastMove = { from, to }; if (!san) { try { const prevState = Chess.parseFen(prevFen); san = Chess.toSAN(prevState, from, to); } catch (e) {} } }
     if (san) { this.moveHistory.push(san); this.moveFens.push(fen); }
-    this.renderMoves();
-    this.lastBoardHash = ''; this.renderBoard();
+    this.renderMoves(); this.lastBoardHash = ''; this.renderBoard();
     const state = Chess.parseFen(App.currentFen);
     if (san) Sounds.moveBySan(san);
-    this.checkGameEnd(state);
-    this.tryApplyPremove();
+    this.checkGameEnd(state); this.tryApplyPremove();
   },
   onTimeUpdate({ timeW, timeB, serverNow }) {
     if (!App.gameActive || App.gameEnded) return;
@@ -2336,9 +1842,7 @@ const Game = {
     if (App.gameEnded) return;
     let winner = null;
     if (result === 'w') winner = 'w'; else if (result === 'b') winner = 'b';
-    if (reason !== 'Мат' && reason !== 'Пат') {
-      if (!winner) Sounds.draw(); else if (winner === App.myColor) Sounds.win(); else Sounds.lose();
-    }
+    if (reason !== 'Мат' && reason !== 'Пат') { if (!winner) Sounds.draw(); else if (winner === App.myColor) Sounds.win(); else Sounds.lose(); }
     if (typeof isArena === 'boolean') App.currentGameIsArena = isArena;
     if (typeof isBot === 'boolean') App.isBotGame = isBot;
     if (arenaId) App.currentArenaId = arenaId;
@@ -2353,64 +1857,32 @@ document.addEventListener('DOMContentLoaded', () => {
   window.App = App; window.Router = Router; window.Lobby = Lobby; window.Bot = Bot;
   window.Watch = Watch; window.Arena = Arena; window.Profile = Profile; window.Community = Community;
   window.Game = Game; window.Banners = Banners; window.Mod = Mod; window.Utils = Utils;
-  window.UserMenu = UserMenu; window.Messenger = Messenger; window.Ping = Ping;
+  window.UserMenu = UserMenu; window.Inbox = Inbox; window.Ping = Ping;
   App.init();
 });
 
 // Hover card
 (function() {
   let hoverTimer = null, hoverName = '';
-  function ensureCard() {
-    let card = document.getElementById('playerHoverCard');
-    if (!card) { card = document.createElement('div'); card.id = 'playerHoverCard'; document.body.appendChild(card); }
-    return card;
-  }
+  function ensureCard() { let card = document.getElementById('playerHoverCard'); if (!card) { card = document.createElement('div'); card.id = 'playerHoverCard'; document.body.appendChild(card); } return card; }
   function show(target) {
-    const username = target && target.dataset ? target.dataset.player : '';
-    if (!username) return;
-    hoverName = username;
-    clearTimeout(hoverTimer);
+    const username = target && target.dataset ? target.dataset.player : ''; if (!username) return;
+    hoverName = username; clearTimeout(hoverTimer);
     hoverTimer = setTimeout(() => {
-      const card = ensureCard();
-      const r = target.getBoundingClientRect();
-      const cardW = 300;
-      let left = r.left;
-      if (left + cardW + 8 > window.innerWidth) left = window.innerWidth - cardW - 8;
-      if (left < 8) left = 8;
-      card.style.left = left + 'px';
-      card.style.top = Math.min(window.innerHeight - 180, r.bottom + 7) + 'px';
+      const card = ensureCard(); const r = target.getBoundingClientRect(); const cardW = 300;
+      let left = r.left; if (left + cardW + 8 > window.innerWidth) left = window.innerWidth - cardW - 8; if (left < 8) left = 8;
+      card.style.left = left + 'px'; card.style.top = Math.min(window.innerHeight - 180, r.bottom + 7) + 'px';
       card.style.display = 'block';
       card.innerHTML = `<div class="phName">${Utils.escapeHtml(username)}</div><div style="color:var(--muted)">Загрузка статистики…</div>`;
       App.socket.emit('getPlayerCard', { username }, (res) => {
         if (hoverName !== username || !res || !res.ok) return;
         const u = res.user;
-        card.innerHTML = `
-          <div class="phName">${u.online ? '🟢' : '⚪'} ${Utils.nickHtml(u.username,u.isAdmin,u.isMod,u.isBot)}</div>
-          <div class="phMeta">
-            <span>♟ ${Number(u.rating)||1200}</span>
-            <span>🏆 ${Number(u.games)||0} партий</span>
-            <span>${u.online ? '● В сети' : '○ Не в сети'}</span>
-          </div>
-          <div class="phStats">
-            <div class="phStat">♔ ${Number(u.wins)||0} побед</div>
-            <div class="phStat">½ ${Number(u.draws)||0} ничьих</div>
-            <div class="phStat">♚ ${Number(u.losses)||0} пораж.</div>
-            <div class="phStat">${u.games ? Math.round((u.wins/u.games)*100) : 0}% побед</div>
-          </div>`;
+        card.innerHTML = `<div class="phName">${u.online ? '🟢' : '⚪'} ${Utils.nickHtml(u.username,u.isAdmin,u.isMod,u.isBot)}</div>
+          <div class="phMeta"><span>♟ ${Number(u.rating)||1200}</span><span>🏆 ${Number(u.games)||0} партий</span><span>${u.online ? '● В сети' : '○ Не в сети'}</span></div>
+          <div class="phStats"><div class="phStat">♔ ${Number(u.wins)||0} побед</div><div class="phStat">½ ${Number(u.draws)||0} ничьих</div><div class="phStat">♚ ${Number(u.losses)||0} пораж.</div><div class="phStat">${u.games ? Math.round((u.wins/u.games)*100) : 0}% побед</div></div>`;
       });
     }, 250);
   }
-  document.addEventListener('mouseover', e => {
-    const n = e.target.closest && e.target.closest('[data-player]');
-    if (n) show(n);
-  });
-  document.addEventListener('mouseout', e => {
-    const n = e.target.closest && e.target.closest('[data-player]');
-    if (n && !n.contains(e.relatedTarget)) {
-      clearTimeout(hoverTimer);
-      hoverName = '';
-      const c = document.getElementById('playerHoverCard');
-      if (c) c.style.display = 'none';
-    }
-  });
+  document.addEventListener('mouseover', e => { const n = e.target.closest && e.target.closest('[data-player]'); if (n) show(n); });
+  document.addEventListener('mouseout', e => { const n = e.target.closest && e.target.closest('[data-player]'); if (n && !n.contains(e.relatedTarget)) { clearTimeout(hoverTimer); hoverName = ''; const c = document.getElementById('playerHoverCard'); if (c) c.style.display = 'none'; } });
 })();
