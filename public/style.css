@@ -577,6 +577,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .bigActionsRow button.danger:hover { color:#ff8080; }
 .statusGreen { background:var(--green); color:#0b0b0b; text-align:center; font-weight:600; padding:6px 10px; border-radius:4px; font-size:13px; min-height:32px; line-height:20px; }
 .statusYellow { background:var(--panel); border-left:3px solid var(--accent); color:var(--text); padding:8px 12px; border-radius:4px; font-size:13px; min-height:32px; }
+#statusBar { text-align:center; font-weight:600; padding:8px 12px; border-radius:4px; font-size:13px; min-height:34px; line-height:20px; word-break:break-word; }
 .gameResultCompact { display: none; flex-direction: column; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 10px; text-align: center; gap: 8px; width: 100%; box-sizing: border-box; overflow: hidden; }
 .gameResultCompact.show { display: flex; }
 .gameResultCompact .grTitle { font-size: 15px; font-weight: 700; color: var(--text-bright); line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -889,6 +890,3 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   .activeGamePanel .agpTitle { font-size: 26px; }
   .activeGamePanel .agpReturnBtn { min-width: 220px; min-height: 52px; font-size: 16px; }
 }
-
-/* Плашка статуса партии больше не используется — полностью скрываем на случай, если где-то осталась ссылка. */
-#statusBar { display: none !important; }
