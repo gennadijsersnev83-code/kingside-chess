@@ -316,7 +316,17 @@ setInterval(() => {
 function countActiveLobbies() { let n = 0; for (const l of lobbies.values()) { if (l.finished) continue; if (l.started) n++; } return n; }
 function countWaitingLobbies() {
   let n = 0;
-  for (const l of lobbies.values()) { if (l.finished || l.arenaId || l.started || l.guest) continue; n++; }
+  const now = Date.now();
+  for (const [id, l] of lobbies.entries()) {
+    if (!l || l.finished || l.arenaId || l.started || l.guest) continue;
+    // Считаем только «живые» лобби: у которых хост ещё онлайн или это Watcher.
+    const isWatcher = !!l.isWatcher;
+    const hostOnline = isWatcher || (l.hostSocket && io.sockets.sockets.has(l.hostSocket));
+    if (!hostOnline) continue;
+    // Если лобби висит больше 2 часов без активности — не считаем.
+    if (l.createdAt && now - l.createdAt > 2 * 60 * 60 * 1000) continue;
+    n++;
+  }
   return n;
 }
 function onlinePlayersList() {
