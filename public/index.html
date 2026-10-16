@@ -6,6 +6,24 @@
 <title>Kingside — Шахматы онлайн</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23161512'/%3E%3Ctext x='50%25' y='56%25' font-size='46' text-anchor='middle' dominant-baseline='middle' fill='%23bf811d' font-family='serif'%3E%E2%99%94%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="/style.css">
+
+<style>
+.activeGameNoticeScreen { position:fixed; z-index:1000; inset:64px 0 0; min-height:0; padding:16px; box-sizing:border-box; overflow:auto; background:rgba(0,0,0,.72); align-items:center; justify-content:center; }
+.activeGameNoticeScreen.active { display:flex; }
+.activeGameNoticeCard { position:relative; isolation:isolate; overflow:hidden; width:min(660px, 100%); min-height:550px; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; box-sizing:border-box; padding:118px 20px 44px; text-align:center; background:#262522; border:1px solid #302e2a; border-radius:7px; color:#dedbd5; }
+.activeGameWatermark { position:absolute; z-index:-1; inset:-70px 0 auto; font-family:serif; font-size:500px; line-height:1; color:rgba(180,177,168,.12); transform:rotate(-12deg); pointer-events:none; }
+.activeGameNoticeTitle { font-size:38px; line-height:1.15; font-weight:300; color:#e3e0d9; }
+.activeGameNoticeSub { margin-top:4px; font-size:14px; color:#c8c5be; }
+.activeGameNoticeSub strong { color:#e5e2dc; }
+.activeGameReturnBtn { margin-top:52px; width:min(267px, 100%); min-height:65px; border:0; border-radius:7px; background:linear-gradient(#399be8,#2586d5); box-shadow:0 3px 0 rgba(0,0,0,.16); color:white; font-size:21px; font-weight:700; cursor:pointer; }
+.activeGameReturnBtn span { margin-right:8px; font-size:23px; }
+.activeGameOr { margin:39px 0 20px; font-size:14px; color:#d5d1ca; }
+.activeGameAbortBtn { min-width:161px; min-height:40px; padding:0 15px; border:0; border-radius:6px; background:linear-gradient(#e34444,#c82b2b); color:#fff; font-size:13px; font-weight:700; cursor:pointer; }
+.activeGameAbortBtn span { margin-right:5px; }
+.activeGameNoticeFoot { margin-top:21px; font-size:14px; color:#c7c3bc; }
+@media(max-width:600px) { .activeGameNoticeScreen { inset:56px 0 0; padding:10px; } .activeGameNoticeCard { min-height:calc(100vh - 90px); padding:90px 16px 32px; } .activeGameNoticeTitle { font-size:32px; } .activeGameWatermark { font-size:350px; } .activeGameReturnBtn { margin-top:42px; } }
+</style>
+
 </head>
 <body>
 
@@ -13,12 +31,11 @@
   <div class="logo" onclick="Router.go('lobby')"><span class="mark">♔</span> Kingside</div>
   <nav id="mainNav">
     <a data-nav="lobby" onclick="Router.go('lobby')">Игра</a>
-    <a data-nav="watch" onclick="Router.go('watch')">Просмотр</a>
+    <a data-nav="watch" onclick="Router.go('watch')">Смотреть</a>
     <a data-nav="arenas" onclick="Router.go('arenas')">Арены</a>
     <a data-nav="community" onclick="Router.go('community')">Сообщество</a>
   </nav>
   <div class="right">
-    <button class="backToGameBtn" id="backToGameBtn" onclick="App.returnToGame()">⚔ Вернуться к партии</button>
     <button class="userBtn" id="userBtn" onclick="Router.go('profile')" style="display:none">
       <span class="avatar" id="userAvatar">?</span>
       <span id="userName">—</span>
@@ -229,6 +246,19 @@
     </div>
   </section>
 
+  <!-- ACTIVE GAME NOTICE: показывается вместо других разделов, пока партия продолжается -->
+  <section id="activeGameNoticeScreen" class="screen activeGameNoticeScreen">
+    <div class="activeGameNoticeCard">
+      <div class="activeGameWatermark" aria-hidden="true">♞</div>
+      <div class="activeGameNoticeTitle">Подождите!</div>
+      <div class="activeGameNoticeSub">У вас идёт игра с <strong id="activeGameOpponent">соперником</strong>.</div>
+      <button class="activeGameReturnBtn" onclick="App.returnToGame()"><span aria-hidden="true">▶</span> ПРИНЯТЬ ВЫЗОВ</button>
+      <div class="activeGameOr">или</div>
+      <button class="activeGameAbortBtn" onclick="Game.resign(); if (App.gameEnded) Router.go('lobby')"><span aria-hidden="true">✖</span> СДАТЬСЯ</button>
+      <div class="activeGameNoticeFoot">Вы не можете начать новую партию, пока текущая не завершена.</div>
+    </div>
+  </section>
+
   <!-- GAME -->
   <section id="gameScreen" class="screen">
     <div class="gameWrap">
@@ -318,4 +348,3 @@
 <script src="/app.js"></script>
 </body>
 </html>
-
