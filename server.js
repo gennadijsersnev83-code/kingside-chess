@@ -146,6 +146,20 @@ async function initDB() {
   await pool.query(`ALTER TABLE games ADD COLUMN IF NOT EXISTS is_arena BOOLEAN DEFAULT FALSE;`);
   await pool.query(`ALTER TABLE games ADD COLUMN IF NOT EXISTS arena_name TEXT;`);
   await pool.query(`ALTER TABLE games ADD COLUMN IF NOT EXISTS is_bot BOOLEAN DEFAULT FALSE;`);
+
+  // Сообщения
+  await pool.query(`CREATE TABLE IF NOT EXISTS messages (
+    id SERIAL PRIMARY KEY,
+    from_user TEXT NOT NULL,
+    to_user TEXT NOT NULL,
+    text TEXT NOT NULL,
+    created_at BIGINT NOT NULL,
+    read_at BIGINT DEFAULT 0,
+    hidden_for TEXT DEFAULT ''
+  );`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_pair ON messages (from_user, to_user, created_at);`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_to ON messages (to_user, read_at);`);
+
   const cnt = await pool.query('SELECT COUNT(*)::int AS n FROM games');
   db.totalGames = cnt.rows[0].n || 0;
 }
@@ -293,6 +307,11 @@ function publicUser(name) {
 function isUserOnline(username) {
   for (const [, name] of online.entries()) if (name === username) return true;
   return false;
+}
+function socketsOfUser(username) {
+  const list = [];
+  for (const [sid, name] of online.entries()) if (name === username) list.push(sid);
+  return list;
 }
 
 const online = new Map();
@@ -739,8 +758,7 @@ const MAX_WATCHER_ACTIVE_LOBBIES = 1;
 function botActiveGamesCount(botName) {
   let n = 0;
   for (const l of lobbies.values()) {
-    if (l.finished) continue;
-    if (!l.isBot) continue;
+    if (l.finished || !l.isBot) continue;
     if (l.botName === botName || l.botName2 === botName) n++;
   }
   return n;
@@ -986,26 +1004,22 @@ function tryPair(state) {
   }
   const currentActive = state.activeLobbies.size;
   if (currentActive >= 6) return;
-
   const available = [];
   for (const [username, p] of state.participants.entries()) {
     if (!isAvailableForPairing(p, state.id)) continue;
     if (!p.waitingSince) p.waitingSince = Date.now();
     available.push(p);
   }
-
   if (available.length < 2) {
     state.pairingNow = available.length === 1 ? available[0].username : null;
     return;
   }
-
   available.sort((a, b) => a.waitingSince - b.waitingSince);
   const used = new Set();
   let pairsCreated = 0;
   const hasWatcher = available.some(p => p.username === WATCHER_NAME);
   const MAX_PAIRS_PER_TICK = hasWatcher ? 1 : 2;
   let watcherPairsThisTick = 0;
-
   for (let i = 0; i < available.length && pairsCreated < MAX_PAIRS_PER_TICK; i++) {
     const a = available[i];
     if (used.has(a.username)) continue;
@@ -1037,9 +1051,6 @@ function tryPair(state) {
     pairsCreated++;
     if (a.username === WATCHER_NAME || best.username === WATCHER_NAME) watcherPairsThisTick++;
   }
-
-  // ВАЖНО: если ни одной пары не создали, но есть ровно 1 свободный — ставим его в pairingNow.
-  // Если пар не создали и свободных больше — обнуляем pairingNow, чтобы UI не залипал.
   if (pairsCreated === 0) {
     const free = [...state.participants.values()].filter(p => isAvailableForPairing(p, state.id));
     state.pairingNow = free.length === 1 ? free[0].username : null;
@@ -1058,7 +1069,6 @@ function createArenaPairing(state, a, b) {
   const inc = state.increment;
   const aIsBot = !!a.isBot; const bIsBot = !!b.isBot;
   const isBotGame = aIsBot || bIsBot;
-
   lobbies.set(lobbyId, {
     id: lobbyId, host: a.username, hostSocket: a.socketId, guest: b.username, guestSocket: b.socketId,
     hostColor, guestColor, time, inc, timeW: time * 60, timeB: time * 60, turn: 'w',
@@ -1073,14 +1083,11 @@ function createArenaPairing(state, a, b) {
     history: [], positionCounts: new Map()
   });
   registerPosition(lobbies.get(lobbyId));
-
   state.activeLobbies.add(lobbyId);
   a.isPlaying = true; a.lobbyId = lobbyId;
   b.isPlaying = true; b.lobbyId = lobbyId;
-
   if (aIsBot) { const bh = botInitBehavior(a.username); bh.state = 'playing'; bh.lastChange = Date.now(); }
   if (bIsBot) { const bh = botInitBehavior(b.username); bh.state = 'playing'; bh.lastChange = Date.now(); }
-
   const aSocket = a.isBot ? null : io.sockets.sockets.get(a.socketId);
   const bSocket = b.isBot ? null : io.sockets.sockets.get(b.socketId);
   const aUser = db.users[a.username]; const bUser = db.users[b.username];
@@ -1316,7 +1323,6 @@ function scheduleBotMove(lobbyId) {
     return;
   }
 
-  // Time management: опираемся на ОСТАТОК времени бота и его инкремент (как Stockfish).
   let delay;
   if (botName === WATCHER_NAME) {
     delay = 800 + Math.random() * 1200;
@@ -1353,10 +1359,8 @@ function scheduleBotMove(lobbyId) {
     if (!cur || cur.finished || cur.turn !== botColor) return;
     const stillBot = (cur.botColor === botColor && cur.botName === botName) || (cur.botColor2 === botColor && cur.botName2 === botName);
     if (!stillBot) return;
-
     const st = botParseFen(cur.fen);
     const myEval = evaluateCurrentPosition(cur.fen) * (botColor === 'w' ? 1 : -1);
-
     let resignThreshold;
     if (botName === WATCHER_NAME) resignThreshold = -3000;
     else if (botRating < 1100) resignThreshold = -2500;
@@ -1371,7 +1375,6 @@ function scheduleBotMove(lobbyId) {
     const materialDiff = myMaterial - oppMaterial;
     const myQueen = (() => { const q = botColor === 'w' ? 'Q' : 'q'; for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (st.board[r][c] === q) return true; return false; })();
     const oppQueen = (() => { const q = botColor === 'w' ? 'q' : 'Q'; for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (st.board[r][c] === q) return true; return false; })();
-
     if (myEval < resignThreshold && st.full > minMovesBeforeResign && materialDiff < -900 && !myQueen && oppQueen) {
       const myMoves = botAllLegalMoves(st, botColor === 'w');
       let hasMateIn1 = false, hasAnyCounterplay = false;
@@ -1396,7 +1399,6 @@ function scheduleBotMove(lobbyId) {
         return;
       }
     }
-
     if (Math.abs(myEval) < 15 && st.full > 60 && !cur.drawOffer && !cur.botDrawOffered && Math.abs(materialDiff) < 100) {
       const myMoves = botAllLegalMoves(st, botColor === 'w');
       let hasMateIn1 = false;
@@ -1423,7 +1425,6 @@ function scheduleBotMove(lobbyId) {
         }
       }
     }
-
     let mv;
     if (botName === WATCHER_NAME) {
       const availableMoves = botAllLegalMoves(st, botColor === 'w');
@@ -1438,34 +1439,28 @@ function scheduleBotMove(lobbyId) {
       catch (err) { return; }
     }
     if (!mv) return;
-
     const from = Array.isArray(mv.from) ? mv.from : (Array.isArray(mv[0]) ? mv[0] : null);
     const to = Array.isArray(mv.to) ? mv.to : (Array.isArray(mv[1]) ? mv[1] : null);
     if (!from || !to || from.length !== 2 || to.length !== 2) return;
-
     const cur2 = lobbies.get(lobbyId);
     if (!cur2 || cur2.finished || cur2.turn !== botColor) return;
     const stillBot2 = (cur2.botColor === botColor && cur2.botName === botName) || (cur2.botColor2 === botColor && cur2.botName2 === botName);
     if (!stillBot2 || cur2.fen !== cur.fen) return;
-
     const st2 = botParseFen(cur2.fen);
     const legal = botLegalMovesFor(st2, from[0], from[1]);
     if (!legal.some(([r, c]) => r === to[0] && c === to[1])) return;
-
     const captured = st2.board[to[0]][to[1]];
     const prevFen = cur2.fen;
     const nextState = botApplyMove(st2, from, to);
     if (!cur2.history) cur2.history = [];
     cur2.history.push({ from, to, captured: captured || null, byColor: botColor, ts: Date.now() });
     if (cur2.history.length > 10) cur2.history.shift();
-
     if (botName === WATCHER_NAME) {
       try {
         if (!watcherLearning.getStats().episodeActive) watcherLearning.startEpisode(botColor, { time: cur2.time, inc: cur2.inc });
         watcherLearning.recordTransition(prevFen, botToFen(nextState), from, to, botColor, { time: cur2.time, inc: cur2.inc }, captured || null);
       } catch (e) {}
     }
-
     const now = Date.now();
     const elapsed = Math.floor((now - cur2.lastTick) / 1000);
     if (botColor === 'w') cur2.timeW = Math.max(0, cur2.timeW - elapsed) + cur2.inc;
@@ -1488,6 +1483,70 @@ function scheduleBotMove(lobbyId) {
       setTimeout(() => scheduleBotMove(lobbyId), nextDelay);
     }
   }, delay);
+}
+
+/* ============================================================
+   MESSENGER (серверная часть)
+   ============================================================ */
+
+async function getDialogs(username) {
+  // Возвращает список последних сообщений для каждого собеседника
+  const rows = await pool.query(`
+    WITH pairs AS (
+      SELECT
+        CASE WHEN from_user = $1 THEN to_user ELSE from_user END AS other,
+        GREATEST(from_user, to_user) AS a,
+        LEAST(from_user, to_user) AS b,
+        MAX(created_at) AS last_at
+      FROM messages
+      WHERE (from_user = $1 OR to_user = $1)
+        AND NOT (hidden_for LIKE '%' || $1 || '%')
+      GROUP BY other, a, b
+    )
+    SELECT
+      p.other AS other,
+      p.last_at AS last_at,
+      m.text AS last_text,
+      m.from_user AS last_from,
+      (SELECT COUNT(*) FROM messages
+        WHERE to_user = $1 AND from_user = p.other AND read_at = 0
+          AND NOT (hidden_for LIKE '%' || $1 || '%')
+      )::int AS unread
+    FROM pairs p
+    LEFT JOIN messages m ON (
+      (m.from_user = p.a AND m.to_user = p.b) OR (m.from_user = p.b AND m.to_user = p.a)
+    ) AND m.created_at = p.last_at
+    ORDER BY p.last_at DESC
+    LIMIT 100;
+  `, [username]);
+  return rows.rows;
+}
+
+async function getHistory(username, other, markRead) {
+  const res = await pool.query(`
+    SELECT id, from_user, to_user, text, created_at, read_at
+    FROM messages
+    WHERE ((from_user = $1 AND to_user = $2) OR (from_user = $2 AND to_user = $1))
+      AND NOT (hidden_for LIKE '%' || $1 || '%')
+    ORDER BY created_at ASC
+    LIMIT 500;
+  `, [username, other]);
+  if (markRead) {
+    await pool.query(`UPDATE messages SET read_at = $1
+      WHERE to_user = $2 AND from_user = $3 AND read_at = 0`, [Date.now(), username, other]);
+  }
+  return res.rows;
+}
+
+async function unreadCount(username) {
+  const r = await pool.query(`SELECT COUNT(*)::int AS n FROM messages WHERE to_user = $1 AND read_at = 0 AND NOT (hidden_for LIKE '%' || $1 || '%')`, [username]);
+  return r.rows[0].n || 0;
+}
+
+function notifyUser(username, payload) {
+  for (const sid of socketsOfUser(username)) {
+    io.to(sid).emit('msgNotify', payload);
+  }
 }
 
 io.on('connection', (socket) => {
@@ -1520,6 +1579,8 @@ io.on('connection', (socket) => {
     socket.username = username;
     cb({ ok: true, user: publicUser(username) });
     broadcastOnline();
+    const un = await unreadCount(username);
+    socket.emit('msgUnread', { count: un });
   });
 
   socket.on('getProfile', async ({ username }, cb) => {
@@ -2192,11 +2253,12 @@ io.on('connection', (socket) => {
     const p = state.participants.get(socket.username);
     if (!p) return cb({ ok: false, msg: 'Вы не участвуете в этом турнире' });
     if (p.isPlaying) return cb({ ok: false, msg: 'Ваша партия ещё не завершена' });
-    if (p.paused) return cb({ ok: false, msg: 'Сначала нажмите «Продолжить» в турнире' });
-    p.awaitingNextPair = false;
-    p.waitingSince = Date.now();
+    if (!p.paused) {
+      p.awaitingNextPair = false;
+      p.waitingSince = Date.now();
+    }
     io.to('arena:' + arenaId).emit('arenaUpdate', { arenaId });
-    if (state.phase === 'live') setTimeout(() => tryPair(state), 100);
+    if (state.phase === 'live' && !p.paused) setTimeout(() => tryPair(state), 100);
     cb({ ok: true });
   });
 
@@ -2235,6 +2297,109 @@ io.on('connection', (socket) => {
     state.chat.splice(idx, 1);
     io.to('arena:' + arenaId).emit('chatMessageDeleted', { msgId, scope: 'arena', arenaId });
     cb({ ok: true });
+  });
+
+  // ============ MESSENGER ============
+  socket.on('msgGetDialogs', async (cb) => {
+    if (typeof cb !== 'function') return;
+    if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
+    try {
+      const dialogs = await getDialogs(socket.username);
+      cb({ ok: true, dialogs });
+    } catch (e) {
+      console.error('[msg] dialogs error:', e.message);
+      cb({ ok: false, msg: 'Ошибка БД' });
+    }
+  });
+
+  socket.on('msgGetHistory', async ({ with: other, markRead }, cb) => {
+    if (typeof cb !== 'function') return;
+    if (!socket.username || !other) return cb({ ok: false, msg: 'Ошибка параметров' });
+    try {
+      const history = await getHistory(socket.username, other, markRead !== false);
+      cb({ ok: true, history, other });
+      if (markRead !== false) {
+        const un = await unreadCount(socket.username);
+        for (const sid of socketsOfUser(socket.username)) io.to(sid).emit('msgUnread', { count: un });
+      }
+    } catch (e) {
+      console.error('[msg] history error:', e.message);
+      cb({ ok: false, msg: 'Ошибка БД' });
+    }
+  });
+
+  socket.on('msgSend', async ({ to, text }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
+    if (!to || typeof to !== 'string') return cb({ ok: false, msg: 'Не указан получатель' });
+    if (typeof text !== 'string') return cb({ ok: false, msg: 'Пустое сообщение' });
+    text = text.trim().slice(0, 2000);
+    if (!text) return cb({ ok: false, msg: 'Пустое сообщение' });
+    if (!db.users[to]) return cb({ ok: false, msg: 'Игрок не найден' });
+    if (to === socket.username) return cb({ ok: false, msg: 'Нельзя писать самому себе' });
+    const muteUntil = checkMute(socket.username);
+    if (muteUntil > 0) {
+      const mins = Math.ceil((muteUntil - Date.now()) / 60000);
+      return cb({ ok: false, msg: `Вы заглушены ещё ${mins} мин.` });
+    }
+    try {
+      const now = Date.now();
+      const r = await pool.query(
+        `INSERT INTO messages (from_user, to_user, text, created_at, read_at)
+         VALUES ($1, $2, $3, $4, 0)
+         RETURNING id, from_user, to_user, text, created_at, read_at`,
+        [socket.username, to, text, now]
+      );
+      const row = r.rows[0];
+      const msgObj = { id: row.id, from: row.from_user, to: row.to_user, text: row.text, ts: Number(row.created_at), readAt: Number(row.read_at) };
+
+      // Отправить всем сокетам получателя
+      for (const sid of socketsOfUser(to)) io.to(sid).emit('msgNew', msgObj);
+      // И отправителю (чтобы синхронизировать между вкладками)
+      for (const sid of socketsOfUser(socket.username)) io.to(sid).emit('msgNew', msgObj);
+
+      // Обновить бейдж
+      const un = await unreadCount(to);
+      for (const sid of socketsOfUser(to)) io.to(sid).emit('msgUnread', { count: un });
+
+      cb({ ok: true, msg: msgObj });
+    } catch (e) {
+      console.error('[msg] send error:', e.message);
+      cb({ ok: false, msg: 'Ошибка БД' });
+    }
+  });
+
+  socket.on('msgDeleteDialog', async ({ with: other }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!socket.username || !other) return cb({ ok: false, msg: 'Ошибка параметров' });
+    try {
+      // Добавляем логин в hidden_for (через запятую, без дублей)
+      await pool.query(`
+        UPDATE messages
+        SET hidden_for = CASE
+          WHEN hidden_for = '' OR hidden_for IS NULL THEN $1
+          WHEN hidden_for LIKE '%' || $1 || '%' THEN hidden_for
+          ELSE hidden_for || ',' || $1
+        END
+        WHERE (from_user = $2 AND to_user = $1) OR (from_user = $1 AND to_user = $2)
+      `, [socket.username, other]);
+      for (const sid of socketsOfUser(socket.username)) {
+        io.to(sid).emit('msgDialogDeleted', { with: other });
+      }
+      const un = await unreadCount(socket.username);
+      for (const sid of socketsOfUser(socket.username)) io.to(sid).emit('msgUnread', { count: un });
+      cb({ ok: true });
+    } catch (e) {
+      console.error('[msg] delete error:', e.message);
+      cb({ ok: false, msg: 'Ошибка БД' });
+    }
+  });
+
+  socket.on('msgGetUnread', async (cb) => {
+    if (typeof cb !== 'function') return;
+    if (!socket.username) return cb({ count: 0 });
+    try { cb({ count: await unreadCount(socket.username) }); }
+    catch (e) { cb({ count: 0 }); }
   });
 
   socket.on('disconnect', () => {
