@@ -299,7 +299,11 @@ const arenas = new Map();
 const finishedLobbyIds = new Set();
 const finishedGamesInfo = new Map();
 
-const MAX_WAITING_LOBBIES = 11;
+// ============================================================
+// ЛИМИТЫ ЗАЛА ОЖИДАНИЯ
+// ============================================================
+const MAX_HUMAN_WAITING = 15;   // сколько живых вызовов от игроков
+const MAX_BOT_WAITING   = 3;    // сколько вызовов от Watcher (для «оживления» зала)
 const ARENA_COOLDOWN_MS = 10 * 1000;
 
 const FINISHED_INFO_TTL_MS = 24 * 60 * 60 * 1000;
@@ -314,21 +318,23 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 function countActiveLobbies() { let n = 0; for (const l of lobbies.values()) { if (l.finished) continue; if (l.started) n++; } return n; }
+
+// Считает отдельно живые вызовы людей и ботов.
 function countWaitingLobbies() {
-  let n = 0;
+  let human = 0, bot = 0;
   const now = Date.now();
   for (const [id, l] of lobbies.entries()) {
     if (!l || l.finished || l.arenaId || l.started || l.guest) continue;
-    // Считаем только «живые» лобби: у которых хост ещё онлайн или это Watcher.
-    const isWatcher = !!l.isWatcher;
-    const hostOnline = isWatcher || (l.hostSocket && io.sockets.sockets.has(l.hostSocket));
+    const isBotLobby = !!l.isBot;
+    // Для ботских лобби хост — Watcher, его socket всегда «онлайн».
+    const hostOnline = isBotLobby || (l.hostSocket && io.sockets.sockets.has(l.hostSocket));
     if (!hostOnline) continue;
-    // Если лобби висит больше 2 часов без активности — не считаем.
     if (l.createdAt && now - l.createdAt > 2 * 60 * 60 * 1000) continue;
-    n++;
+    if (isBotLobby) bot++; else human++;
   }
-  return n;
+  return { human, bot, total: human + bot };
 }
+
 function onlinePlayersList() {
   const byName = new Map();
   for (const username of online.values()) if (db.users[username]) byName.set(username, { ...publicUser(username), online: true });
@@ -339,7 +345,15 @@ function onlinePlayersList() {
 function countOnline() { return onlinePlayersList().length; }
 function broadcastOnline() {
   const players = onlinePlayersList();
-  io.emit('stats', { online: players.length, games: db.totalGames, activeGames: countActiveLobbies(), waitingLobbies: countWaitingLobbies(), waitingMax: MAX_WAITING_LOBBIES });
+  const counts = countWaitingLobbies();
+  io.emit('stats', {
+    online: players.length,
+    games: db.totalGames,
+    activeGames: countActiveLobbies(),
+    waitingLobbies: counts.human,
+    waitingBotLobbies: counts.bot,
+    waitingMax: MAX_HUMAN_WAITING
+  });
   io.emit('communityOnline', players);
 }
 function broadcastLobbies() { io.emit('lobbiesUpdate'); }
@@ -573,8 +587,6 @@ async function finishGame(lobbyId, result, reason) {
     const st = arenas.get(l.arenaId);
     if (st) {
       st.activeLobbies.delete(lobbyId);
-      // ставим cooldown обоим участникам и awaitingNextPair
-      const stWhite = db.users[l.hostColor === 'w' ? l.host : l.guest];
       const whiteName = l.hostColor === 'w' ? l.host : l.guest;
       const blackName = l.hostColor === 'b' ? l.host : l.guest;
       const wP = st.participants.get(whiteName);
@@ -810,10 +822,9 @@ function watcherInAnyArena() {
 
 function isAvailableForPairing(p, arenaId) {
   if (!p) return false;
-  // Жёсткие защиты
   if (p.isPlaying || p.lobbyId) return false;
-  if (!p.inArenaRoom) return false;                // НЕ в комнате арены — не парим
-  if (p.cooldownUntil && Date.now() < p.cooldownUntil) return false; // 10 сек отдыха
+  if (!p.inArenaRoom) return false;
+  if (p.cooldownUntil && Date.now() < p.cooldownUntil) return false;
   if (p.username === WATCHER_NAME) {
     if (p.paused) return false;
     if (watcherHasActiveLobby()) return false;
@@ -994,6 +1005,10 @@ function watcherTick() {
     let hasOwnLobby = false;
     for (const [id, l] of lobbies.entries()) if (!l.finished && !l.started && l.host === WATCHER_NAME) { hasOwnLobby = true; break; }
     if (!hasOwnLobby) {
+      // Проверяем лимиты ДО создания ботского лобби.
+      const counts = countWaitingLobbies();
+      if (counts.bot >= MAX_BOT_WAITING) return;
+      if (counts.human >= MAX_HUMAN_WAITING) return; // не лезем, если у людей и так полно
       const times = [{t:1,i:0},{t:3,i:0},{t:3,i:2},{t:5,i:0},{t:10,i:0}];
       const pick = times[Math.floor(Math.random() * times.length)];
       const id = genId();
@@ -1116,7 +1131,6 @@ function createArenaPairing(state, a, b) {
   const aIsBot = !!a.isBot; const bIsBot = !!b.isBot;
   const isBotGame = aIsBot || bIsBot;
 
-  // Снимем socketId прямо сейчас — чтобы потом слать именно им
   const aSocketId = a.isBot ? null : a.socketId;
   const bSocketId = b.isBot ? null : b.socketId;
 
@@ -1574,7 +1588,12 @@ async function unreadCount(username) {
 }
 
 io.on('connection', (socket) => {
-  socket.emit('stats', { online: countOnline(), games: db.totalGames, activeGames: countActiveLobbies(), waitingLobbies: countWaitingLobbies(), waitingMax: MAX_WAITING_LOBBIES });
+  socket.emit('stats', {
+    online: countOnline(), games: db.totalGames, activeGames: countActiveLobbies(),
+    waitingLobbies: countWaitingLobbies().human,
+    waitingBotLobbies: countWaitingLobbies().bot,
+    waitingMax: MAX_HUMAN_WAITING
+  });
   socket.emit('liveGamesUpdate', buildGamesList());
 
   socket.on('register', async ({ username, password }, cb) => {
@@ -1628,7 +1647,11 @@ io.on('connection', (socket) => {
     } catch (err) { cb({ ok: false, msg: 'Ошибка базы данных' }); }
   });
 
-  socket.on('getStats', (cb) => { if (typeof cb === 'function') cb({ online: countOnline(), games: db.totalGames, activeGames: countActiveLobbies(), waitingLobbies: countWaitingLobbies(), waitingMax: MAX_WAITING_LOBBIES }); });
+  socket.on('getStats', (cb) => {
+    if (typeof cb !== 'function') return;
+    const counts = countWaitingLobbies();
+    cb({ online: countOnline(), games: db.totalGames, activeGames: countActiveLobbies(), waitingLobbies: counts.human, waitingBotLobbies: counts.bot, waitingMax: MAX_HUMAN_WAITING });
+  });
   socket.on('getCommunityOnline', (cb) => { if (typeof cb === 'function') cb(onlinePlayersList()); });
   socket.on('getPlayerCard', ({ username }, cb) => {
     if (typeof cb !== 'function') return;
@@ -1711,7 +1734,8 @@ io.on('connection', (socket) => {
       if (l.isBot && !l.isWatcher) continue;
       list.push({ id, host: l.host, time: l.time, inc: l.inc, hostIsAdmin: isAdmin(l.host), hostIsMod: isMod(l.host), status: l.guest ? 'playing' : 'waiting', isBot: l.isWatcher });
     }
-    cb({ list, max: MAX_WAITING_LOBBIES, current: countWaitingLobbies() });
+    const counts = countWaitingLobbies();
+    cb({ list, max: MAX_HUMAN_WAITING, current: counts.human, botCurrent: counts.bot, botMax: MAX_BOT_WAITING });
   });
 
   socket.on('createLobby', ({ time, inc }, cb) => {
@@ -1720,13 +1744,11 @@ io.on('connection', (socket) => {
     time = Math.max(0.5, Math.min(60, +time || 5));
     inc = Math.max(0, Math.min(60, +inc || 0));
 
-    // Если у игрока уже есть своё ожидающее лобби — переиспользуем его.
     let myWaiting = null;
     for (const [, l] of lobbies.entries()) {
       if (l.finished || l.arenaId) continue;
       if (l.started || l.guest) continue;
       if (l.host !== socket.username) continue;
-      // Переиспользуем только живое лобби, старше пары минут не берём.
       if (l.hostSocket && !io.sockets.sockets.has(l.hostSocket)) {
         lobbies.delete(l.id);
         continue;
@@ -1734,18 +1756,18 @@ io.on('connection', (socket) => {
       myWaiting = l;
       break;
     }
-    // Лимит применяем ТОЛЬКО к новым лобби (не к переиспользованию своего).
     if (!myWaiting) {
-      // Сначала подчистим мёртвые, чтобы счётчик был честным.
+      // Чистим мёртвые лобби людей (ботские не трогаем — они живые).
       for (const [id, l] of lobbies.entries()) {
         if (!l || l.finished || l.arenaId || l.started || l.guest) continue;
-        if (l.isWatcher) continue;
+        if (l.isBot) continue;
         if (l.hostSocket && !io.sockets.sockets.has(l.hostSocket)) {
           lobbies.delete(id);
         }
       }
-      if (countWaitingLobbies() >= MAX_WAITING_LOBBIES) {
-        return cb({ ok: false, msg: `В зале ожидания уже максимум ${MAX_WAITING_LOBBIES} запросов. Дождитесь освобождения или присоединитесь к существующему.` });
+      const counts = countWaitingLobbies();
+      if (counts.human >= MAX_HUMAN_WAITING) {
+        return cb({ ok: false, msg: `В зале уже ${counts.human} вызовов от игроков (лимит ${MAX_HUMAN_WAITING}). Дождитесь свободного слота или присоединитесь к существующему.` });
       }
     }
 
