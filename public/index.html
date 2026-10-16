@@ -35,7 +35,7 @@
     <a data-nav="community" onclick="Router.go('community')">Сообщество</a>
   </nav>
   <div class="right">
-    <button class="iconBtn" id="msgBellBtn" onclick="Messenger.open()" title="Сообщения" style="display:none">
+    <button class="iconBtn" id="msgBellBtn" onclick="Router.go('inbox')" title="Сообщения" style="display:none">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
       <span class="badge" id="msgBadge" style="display:none">0</span>
     </button>
@@ -54,34 +54,14 @@
     <div class="umName" id="umName">—</div>
   </div>
   <div class="umDivider"></div>
-  <a class="umItem" onclick="UserMenu.goProfile()">
-    <span class="umIcon">👤</span>
-    <span class="umLabel">Профиль</span>
-  </a>
-  <a class="umItem" onclick="Messenger.open()">
-    <span class="umIcon">✉</span>
-    <span class="umLabel">Входящие</span>
-    <span class="umCount" id="umInboxCount"></span>
-  </a>
-  <a class="umItem" onclick="UserMenu.togglePing()">
-    <span class="umIcon">📡</span>
-    <span class="umLabel">Соединение</span>
-    <span class="umCount" id="umPing"></span>
-  </a>
+  <a class="umItem" onclick="UserMenu.goProfile()"><span class="umIcon">👤</span><span class="umLabel">Профиль</span></a>
+  <a class="umItem" onclick="UserMenu.goInbox()"><span class="umIcon">✉</span><span class="umLabel">Входящие</span><span class="umCount" id="umInboxCount"></span></a>
+  <a class="umItem" onclick="UserMenu.togglePing()"><span class="umIcon">📡</span><span class="umLabel">Соединение</span><span class="umCount" id="umPing"></span></a>
   <div class="umDivider"></div>
-  <a class="umItem" onclick="App.logout()">
-    <span class="umIcon">⏻</span>
-    <span class="umLabel">Выйти</span>
-  </a>
+  <a class="umItem" onclick="App.logout()"><span class="umIcon">⏻</span><span class="umLabel">Выйти</span></a>
   <div class="umFooter" id="umFooter">
-    <div class="umPingRow">
-      <span>PING <b id="umPingValue">—</b></span>
-      <div class="pingBars" id="umPingBars"><i></i><i></i><i></i><i></i></div>
-    </div>
-    <div class="umPingRow">
-      <span>SERVER <b id="umServerValue">—</b></span>
-      <span class="umServerDot" id="umServerDot"></span>
-    </div>
+    <div class="umPingRow"><span>PING <b id="umPingValue">—</b></span><div class="pingBars" id="umPingBars"><i></i><i></i><i></i><i></i></div></div>
+    <div class="umPingRow"><span>SERVER <b id="umServerValue">—</b></span><span class="umServerDot" id="umServerDot"></span></div>
   </div>
 </div>
 
@@ -105,9 +85,7 @@
     <div class="homeWrap">
       <aside class="homeLeft">
         <div class="sideTitle">🔥 Идут сейчас</div>
-        <div id="topArenasBox">
-          <div class="arenaEmpty" style="padding:20px 0">Загрузка...</div>
-        </div>
+        <div id="topArenasBox"><div class="arenaEmpty" style="padding:20px 0">Загрузка...</div></div>
       </aside>
       <div class="lobbyCenter">
         <div class="tabs">
@@ -119,14 +97,8 @@
       <aside class="homeRight">
         <div class="sideTitle">Действия</div>
         <div class="lobbyActions">
-          <button class="lobbyActionBtn challengeBtn" onclick="Lobby.switchTab('create')">
-            <span class="laIcon">⚔</span>
-            <span class="laTitle">Создать запрос на игру</span>
-          </button>
-          <button class="lobbyActionBtn botBtn" onclick="Bot.openDialog()">
-            <span class="laIcon">🤖</span>
-            <span class="laTitle">Сыграть с компьютером</span>
-          </button>
+          <button class="lobbyActionBtn challengeBtn" onclick="Lobby.switchTab('create')"><span class="laIcon">⚔</span><span class="laTitle">Создать запрос на игру</span></button>
+          <button class="lobbyActionBtn botBtn" onclick="Bot.openDialog()"><span class="laIcon">🤖</span><span class="laTitle">Сыграть с компьютером</span></button>
         </div>
         <div class="sideTitle" style="margin-top:16px">📊 Статистика</div>
         <div class="statsBox">
@@ -142,17 +114,10 @@
   <section id="watchScreen" class="screen">
     <div class="watchWrap">
       <div class="watchList">
-        <div class="watchListHeader">
-          <span>👁 Текущие партии</span>
-          <button class="secondary" style="padding:4px 10px;font-size:12px;min-width:auto;" onclick="Watch.refresh(true)">↻</button>
-        </div>
-        <div class="watchListBody" id="watchListBody">
-          <div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>
-        </div>
+        <div class="watchListHeader"><span>👁 Текущие партии</span><button class="secondary" style="padding:4px 10px;font-size:12px;min-width:auto;" onclick="Watch.refresh(true)">↻</button></div>
+        <div class="watchListBody" id="watchListBody"><div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div></div>
       </div>
-      <div class="watchBoard" id="watchBoardBox">
-        <div class="wbEmpty">Выбери партию слева, чтобы посмотреть её в реальном времени</div>
-      </div>
+      <div class="watchBoard" id="watchBoardBox"><div class="wbEmpty">Выбери партию слева, чтобы посмотреть её в реальном времени</div></div>
     </div>
   </section>
 
@@ -160,15 +125,10 @@
   <section id="arenasScreen" class="screen">
     <div style="max-width:1100px; margin:0 auto;">
       <div class="arenasHeader">
-        <div class="ahLeft">
-          <h1>Турниры</h1>
-          <span class="ahNow"><span class="ahLabel">Сейчас:</span><span id="arenasNowClock">--:--</span> МСК</span>
-        </div>
+        <div class="ahLeft"><h1>Турниры</h1><span class="ahNow"><span class="ahLabel">Сейчас:</span><span id="arenasNowClock">--:--</span> МСК</span></div>
         <button class="primary" onclick="Arena.refresh(true)">↻ Обновить</button>
       </div>
-      <div class="arenasGridWrap" id="arenasGridWrap">
-        <div class="arenasEmpty">Загрузка расписания...</div>
-      </div>
+      <div class="arenasGridWrap" id="arenasGridWrap"><div class="arenasEmpty">Загрузка расписания...</div></div>
     </div>
   </section>
 
@@ -181,34 +141,17 @@
           <div class="aInfoTitle" id="aInfoTitle">—</div>
           <div class="aInfoTime" id="aInfoTime">—</div>
           <div class="aInfoDesc" id="aInfoDesc">—</div>
-          <div class="aInfoRules">
-            <div class="aInfoRulesLabel">Очки:</div>
-            <div class="aInfoRulesText">победа 2 · победа в серии 3+ = 4 · ничья 1 · ничья в серии 2+ = 2 · поражение 0</div>
-          </div>
+          <div class="aInfoRules"><div class="aInfoRulesLabel">Очки:</div><div class="aInfoRulesText">победа 2 · победа в серии 3+ = 4 · ничья 1 · ничья в серии 2+ = 2 · поражение 0</div></div>
         </div>
         <div class="arenaChatBox">
           <div class="arenaChatHeader">💬 Чат арены</div>
           <div class="arenaChatMessages" id="arenaChatMessages"></div>
-          <form class="arenaChatForm" onsubmit="Arena.sendChat(event)">
-            <input id="arenaChatInput" placeholder="Написать в чат..." maxlength="300" autocomplete="off">
-            <button type="submit">→</button>
-          </form>
+          <form class="arenaChatForm" onsubmit="Arena.sendChat(event)"><input id="arenaChatInput" placeholder="Написать в чат..." maxlength="300" autocomplete="off"><button type="submit">→</button></form>
         </div>
       </aside>
       <main class="arenaCenter">
-        <div class="arenaTopBar">
-          <div class="arenaTopLeft">
-            <div class="arenaTrophy">🏆</div>
-            <div style="min-width:0; flex:1;">
-              <h2 class="arenaPageName" id="arenaPageName">—</h2>
-              <div class="arenaPageSub" id="arenaPageSub">—</div>
-            </div>
-          </div>
-        </div>
-        <div class="arenaStatusRow" id="arenaStatusRow">
-          <span class="arenaStatusLabel" id="arenaStatusLabel">До начала:</span>
-          <span class="arenaStatusTime" id="arenaStatusTime">--:--</span>
-        </div>
+        <div class="arenaTopBar"><div class="arenaTopLeft"><div class="arenaTrophy">🏆</div><div style="min-width:0; flex:1;"><h2 class="arenaPageName" id="arenaPageName">—</h2><div class="arenaPageSub" id="arenaPageSub">—</div></div></div></div>
+        <div class="arenaStatusRow" id="arenaStatusRow"><span class="arenaStatusLabel" id="arenaStatusLabel">До начала:</span><span class="arenaStatusTime" id="arenaStatusTime">--:--</span></div>
         <div class="arenaPairingBox" id="arenaPairingBox" style="display:none;"></div>
         <div class="arenaParticipantsHeader">
           <div class="arenaSearch"><input id="arenaSearchInput" placeholder="🔍 Поиск игрока" oninput="Arena.filterParticipants()"></div>
@@ -218,25 +161,15 @@
           <div class="arenaTableHeader"><span>#</span><span>Игрок</span><span>Очки</span><span>В / Н / П</span><span>Партий</span></div>
           <div class="arenaTableBody" id="arenaTableBody"><div class="arenasEmpty">Загрузка участников...</div></div>
         </div>
-        <div class="arenaWinnerBanner" id="arenaWinnerBanner" style="display:none;">
-          <div class="awbTitle">🏆 Арена завершена!</div>
-          <div class="awbPodium" id="awbPodium"></div>
-        </div>
+        <div class="arenaWinnerBanner" id="arenaWinnerBanner" style="display:none;"><div class="awbTitle">🏆 Арена завершена!</div><div class="awbPodium" id="awbPodium"></div></div>
       </main>
       <aside class="arenaRight">
         <div class="arenaRightCol">
           <div class="arenaGamesHeader">🎯 ПАРТИЯ ЛИДЕРОВ</div>
-          <div class="arenaTopGame" id="arenaTopGame">
-            <div class="arenaTopGameEmpty">Сейчас никто не играет</div>
-          </div>
+          <div class="arenaTopGame" id="arenaTopGame"><div class="arenaTopGameEmpty">Сейчас никто не играет</div></div>
           <div class="arenaGamesHeader" style="border-top:1px solid var(--border);">🏆 ПРОШЛЫЕ ПАРТИИ ЛИДЕРОВ</div>
-          <div class="arenaGamesList" id="arenaGamesList">
-            <div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>
-          </div>
-          <div class="arenaStatsBox" id="arenaStatsBox">
-            <span>👥 Участников: <b id="arenaParticipantsCount">0</b></span>
-            <span>👁 Зрителей: <b id="arenaViewersCount">0</b></span>
-          </div>
+          <div class="arenaGamesList" id="arenaGamesList"><div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div></div>
+          <div class="arenaStatsBox" id="arenaStatsBox"><span>👥 Участников: <b id="arenaParticipantsCount">0</b></span><span>👁 Зрителей: <b id="arenaViewersCount">0</b></span></div>
         </div>
       </aside>
     </div>
@@ -248,10 +181,7 @@
       <div class="profileHead">
         <div class="profileAvatar" id="pAvatarBig">?</div>
         <div class="nameBlock">
-          <h2>
-            <span id="pName">—</span>
-            <span id="pRoleBadges"></span>
-          </h2>
+          <h2><span id="pName">—</span><span id="pRoleBadges"></span></h2>
           <div class="sub" id="pSub">—</div>
         </div>
         <div style="margin-left:auto; display:flex; gap:8px;">
@@ -266,10 +196,7 @@
         <div class="statBox"><div class="v" id="pWins">—</div><div class="l">Побед</div></div>
         <div class="statBox"><div class="v" id="pWinrate">—</div><div class="l">Winrate</div></div>
       </div>
-      <div class="ratingChart">
-        <div style="color:var(--muted);font-size:12px;margin-bottom:8px">📈 Динамика рейтинга по дням</div>
-        <div id="ratingChartWrap"></div>
-      </div>
+      <div class="ratingChart"><div style="color:var(--muted);font-size:12px;margin-bottom:8px">📈 Динамика рейтинга по дням</div><div id="ratingChartWrap"></div></div>
       <button class="profileShowGamesBtn" id="showGamesBtn" onclick="Profile.toggleGames()">📜 Показать партии</button>
       <div class="profileGamesHidden" id="profileGamesWrap">
         <h3 style="margin:16px 0 8px; color:var(--text-bright); font-weight:500">Последние партии</h3>
@@ -285,6 +212,37 @@
       <p style="color:var(--muted);margin:6px 0 0">Игроки, которые сейчас на сайте, включая ботов.</p>
       <div id="communityOnlineCount" style="margin-top:14px;color:var(--muted)">Загрузка списка…</div>
       <div id="communityOnlineList" class="communityGrid"></div>
+    </div>
+  </section>
+
+  <!-- INBOX (отдельная страница) -->
+  <section id="inboxScreen" class="screen">
+    <div class="inboxWrap">
+      <aside class="inboxSidebar">
+        <div class="inboxSidebarHead">
+          <span>Сообщения</span>
+          <button class="msgNewBtn" onclick="Inbox.newDialog()" title="Написать игроку">＋</button>
+        </div>
+        <div class="msgNewRow" id="msgNewRow" style="display:none;">
+          <input id="msgNewInput" placeholder="Логин игрока…" autocomplete="off">
+          <button onclick="Inbox.startWithInput()">→</button>
+        </div>
+        <div class="msgDialogs" id="msgDialogs"></div>
+      </aside>
+      <section class="inboxChat">
+        <div class="inboxChatHead" id="inboxChatHead">
+          <span class="inboxChatName" id="inboxChatName">Выберите диалог</span>
+          <div class="inboxChatActions">
+            <button id="inboxOpenProfile" onclick="Inbox.openProfile()" title="Профиль" style="display:none">👤</button>
+            <button id="inboxDelete" onclick="Inbox.deleteCurrent()" title="Удалить чат" style="display:none">🗑</button>
+          </div>
+        </div>
+        <div class="inboxChatBody" id="inboxChatBody"><div class="msgEmpty">Выберите диалог слева или начните новый</div></div>
+        <form class="inboxChatForm" id="inboxChatForm" onsubmit="Inbox.send(event)">
+          <input id="inboxChatInput" placeholder="Сообщение…" maxlength="2000" autocomplete="off">
+          <button type="submit">→</button>
+        </form>
+      </section>
     </div>
   </section>
 
@@ -308,22 +266,14 @@
         <div id="chatBox">
           <div id="chatTabs"><button class="tabBtn active">Чат</button></div>
           <div id="chatMessages"></div>
-          <form id="chatForm" onsubmit="Game.sendChat(event)">
-            <input id="chatInput" placeholder="Написать сообщение..." maxlength="300" autocomplete="off">
-            <button type="submit">→</button>
-          </form>
+          <form id="chatForm" onsubmit="Game.sendChat(event)"><input id="chatInput" placeholder="Написать сообщение..." maxlength="300" autocomplete="off"><button type="submit">→</button></form>
         </div>
         <div id="statusBar" class="statusGreen">Ожидание соперника...</div>
       </div>
-      <div class="col-board">
-        <div id="boardWrap"><div id="board"></div></div>
-      </div>
+      <div class="col-board"><div id="boardWrap"><div id="board"></div></div></div>
       <div class="col-info">
         <div class="clockBox" id="topClock"><div class="clockTime" id="topTime">--:--</div></div>
-        <div class="playerStrip" id="topStrip">
-          <div class="side"><span class="dot" id="topDot"></span><span class="nm" id="topName" onclick="Game.openOpponentProfile()">—</span></div>
-          <span class="rt" id="topRating"></span>
-        </div>
+        <div class="playerStrip" id="topStrip"><div class="side"><span class="dot" id="topDot"></span><span class="nm" id="topName" onclick="Game.openOpponentProfile()">—</span></div><span class="rt" id="topRating"></span></div>
         <div class="movesPanel" id="movesPanel">
           <div class="movesToolbar">
             <button title="В начало" onclick="Game.gotoMove('first')">⏮</button>
@@ -347,10 +297,7 @@
           </div>
           <button class="grBtn findOpp" id="grFindBtn" onclick="Game.findNewOpponent()">НАЙТИ ДРУГОГО СОПЕРНИКА</button>
         </div>
-        <div class="playerStrip" id="bottomStrip">
-          <div class="side"><span class="dot" id="bottomDot"></span><span class="nm" id="bottomName" onclick="Router.go('profile')">—</span></div>
-          <span class="rt" id="bottomRating"></span>
-        </div>
+        <div class="playerStrip" id="bottomStrip"><div class="side"><span class="dot" id="bottomDot"></span><span class="nm" id="bottomName" onclick="Router.go('profile')">—</span></div><span class="rt" id="bottomRating"></span></div>
         <div class="clockBox" id="bottomClock"><div class="clockTime" id="bottomTime">--:--</div></div>
       </div>
     </div>
@@ -384,38 +331,6 @@
   <span class="rbText" id="drawOfferBannerText">½ Соперник предлагает ничью</span>
   <button class="rbAccept" id="drawOfferBannerAccept">Принять</button>
   <button class="rbDecline" id="drawOfferBannerDecline">Отклонить</button>
-</div>
-
-<!-- MESSENGER MODAL -->
-<div id="messengerModal" class="messengerModal">
-  <div class="messengerBox">
-    <aside class="msgSidebar">
-      <div class="msgSidebarHead">
-        <span>Сообщения</span>
-        <button class="msgNewBtn" onclick="Messenger.newDialog()" title="Написать игроку">＋</button>
-      </div>
-      <div class="msgNewRow" id="msgNewRow" style="display:none;">
-        <input id="msgNewInput" placeholder="Логин игрока…" autocomplete="off">
-        <button onclick="Messenger.startWithInput()">→</button>
-      </div>
-      <div class="msgDialogs" id="msgDialogs"></div>
-    </aside>
-    <section class="msgChat">
-      <div class="msgChatHead" id="msgChatHead">
-        <span class="msgChatName" id="msgChatName">Выберите диалог</span>
-        <div class="msgChatActions">
-          <button id="msgChatOpenProfile" onclick="Messenger.openProfile()" title="Профиль" style="display:none">👤</button>
-          <button id="msgChatDelete" onclick="Messenger.deleteCurrent()" title="Удалить чат" style="display:none">🗑</button>
-          <button onclick="Messenger.close()" title="Закрыть">✕</button>
-        </div>
-      </div>
-      <div class="msgChatBody" id="msgChatBody"></div>
-      <form class="msgChatForm" id="msgChatForm" onsubmit="Messenger.send(event)">
-        <input id="msgChatInput" placeholder="Сообщение…" maxlength="2000" autocomplete="off">
-        <button type="submit">→</button>
-      </form>
-    </section>
-  </div>
 </div>
 
 <script src="/socket.io/socket.io.js"></script>
