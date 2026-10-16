@@ -139,7 +139,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .statsBox .statRow .val { color:var(--accent); font-weight:700; font-size:16px; }
 .statsBox .statRow.live .val { color:var(--green-2); }
 
-.lobbyCenter { background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+.lobbyCenter { background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden; display:flex; flex-direction:column; }
 .lobbyCenter .tabs { display:flex; background:var(--panel-2); border-bottom:1px solid var(--border); }
 .lobbyCenter .tabs button {
   flex:1; background:transparent; border:none; border-radius:0; color:var(--muted);
