@@ -148,7 +148,12 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 }
 .lobbyCenter .tabs button:hover { color:var(--text-bright); background:transparent; }
 .lobbyCenter .tabs button.active { color:var(--accent); border-bottom-color:var(--accent); background:transparent; }
-.lobbyContent { padding:0; min-height:400px; }
+.lobbyContent { padding:0; min-height:480px; display:flex; flex-direction:column; }
+.lobbyContent > .activeGamePanel { flex:1 1 auto; min-height:0; }
+.lobbyContent > .quickGrid,
+.lobbyContent > #customGamePanel { flex:0 0 auto; }
+.lobbyContent > .lobbyList,
+.lobbyContent > .lobbyHeader { flex:0 0 auto; }
 
 /* Быстрый старт — внутри свой padding */
 .quickGrid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:16px; }
