@@ -690,53 +690,65 @@ const Lobby = {
       const allItems = [];
       for (const [id, l] of current) allItems.push({ kind: 'waiting', id, data: l });
       for (const [id, info] of this.disappeared) allItems.push({ kind: 'started', id, data: info.data });
+  
       if (!allItems.length) {
         el.innerHTML = `
           <div class="lobbyHeader">
-            <div></div><div class="hRating">Рейтинг</div><div>Игрок</div><div class="hTime">Время</div><div class="hMode">Режим</div>
+            <div></div>
+            <div class="hRating">Рейтинг</div>
+            <div class="hPlayer">Игрок</div>
+            <div class="hTime">Время</div>
+            <div class="hMode">Режим</div>
           </div>
           <div class="arenaEmpty" style="padding:30px 20px;">Нет активных вызовов. Нажми «Создать запрос на игру» справа.</div>`;
         return;
       }
+  
       allItems.sort((a, b) => {
         if (a.kind !== b.kind) return a.kind === 'started' ? -1 : 1;
         return (b.data.time || 0) - (a.data.time || 0);
       });
+  
       const header = document.createElement('div');
       header.className = 'lobbyHeader';
-      header.innerHTML = `<div></div><div class="hRating">Рейтинг</div><div>Игрок</div><div class="hTime">Время</div><div class="hMode">Режим</div>`;
+      header.innerHTML = `
+        <div></div>
+        <div class="hRating">Рейтинг</div>
+        <div class="hPlayer">Игрок</div>
+        <div class="hTime">Время</div>
+        <div class="hMode">Режим</div>`;
       el.appendChild(header);
-      const wrap = document.createElement('div'); wrap.className = 'lobbyList';
+  
+      const wrap = document.createElement('div');
+      wrap.className = 'lobbyList';
+  
       for (const item of allItems) {
         const l = item.data;
         const isMine = App.me && l.host === App.me.username;
-        const row = document.createElement('div');
         const isStarted = item.kind === 'started';
+        const row = document.createElement('div');
         row.className = 'lobbyRow' + (isMine && !isStarted ? ' mine' : '') + (isStarted ? ' started' : '');
+  
         const circleCls = isStarted ? 'white' : 'black';
         const rating = l.hostRating || '';
         const modeName = 'Рейтинговая';
-        const modeIcon = '♟';
-        if (isStarted) {
-          row.innerHTML = `
-            <div class="lColor ${circleCls}"></div>
-            <div class="lRating muted">—</div>
-            <div class="lName">${Utils.nickHtml(l.host, l.hostIsAdmin, l.hostIsMod)}<span class="mineTag">(началась)</span></div>
-            <div class="lTime">${l.time}+${l.inc}</div>
-            <div class="lMode"><span class="modeIcon">${modeIcon}</span>${modeName}</div>`;
-        } else {
+        const modeIcon = '⚔';
+  
+        row.innerHTML = `
+          <div class="lColor ${circleCls}"></div>
+          <div class="lRating muted">${rating || '—'}</div>
+          <div class="lName">${Utils.nickHtml(l.host, l.hostIsAdmin, l.hostIsMod, l.isBot)}${isStarted ? '<span class="mineTag">(началась)</span>' : (isMine ? '<span class="mineTag">(ваш)</span>' : '')}</div>
+          <div class="lTime">${l.time}+${l.inc}</div>
+          <div class="lMode"><span class="modeIcon">${modeIcon}</span>${modeName}</div>`;
+  
+        if (!isStarted) {
           row.title = isMine ? 'Нажми, чтобы отменить свой вызов' : 'Нажми, чтобы начать партию';
-          row.innerHTML = `
-            <div class="lColor ${circleCls}"></div>
-            <div class="lRating muted">${rating || '—'}</div>
-            <div class="lName">${Utils.nickHtml(l.host, l.hostIsAdmin, l.hostIsMod, l.isBot)}${isMine ? '<span class="mineTag">(ваш)</span>' : ''}</div>
-            <div class="lTime">${l.time}+${l.inc}</div>
-            <div class="lMode"><span class="modeIcon">${modeIcon}</span>${modeName}</div>`;
           row.onclick = () => this.onRowClick(l, isMine);
         }
         wrap.appendChild(row);
       }
       el.appendChild(wrap);
+  
       if (this.disappeared.size) setTimeout(() => { if (this.currentTab === 'waiting') this.render(); }, 5200);
     });
   },
