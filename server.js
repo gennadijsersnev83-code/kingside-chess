@@ -272,24 +272,7 @@ async function loadDB() {
         } catch (e) { console.error('[DB] Ошибка вставки бота:', e.message); }
       } else {
         existing.isBot = true;
-        // Восстанавливаем минимальный стартовый рейтинг Watcher после старой деградации.
-        // Дальше рейтинг снова изменяется по результатам партий, без искусственного буста до 2000.
-        if (bot.name === WATCHER_NAME && existing.rating < 1200) {
-          existing.rating = 1200;
-          existing.rd = GLICKO2.DEFAULT_RD;
-          existing.vol = GLICKO2.DEFAULT_VOL;
-          for (const category of ['classical', 'rapid', 'blitz', 'bullet']) {
-            if (!existing.categories) existing.categories = {};
-            if (!existing.categories[category]) existing.categories[category] = emptyRatingBlock(1200);
-            else {
-              existing.categories[category].rating = Math.max(1200, existing.categories[category].rating || 1200);
-              existing.categories[category].rd = GLICKO2.DEFAULT_RD;
-              existing.categories[category].vol = GLICKO2.DEFAULT_VOL;
-            }
-          }
-          try { await saveUser(bot.name); }
-          catch (e) { console.error('[Watcher] Не удалось сохранить восстановленный рейтинг:', e.message); }
-        }
+        // Не поднимаем рейтинг Watcher искусственно при запуске: результаты партий сохраняются как есть.
       }
     }
     console.log(`[DB] Загружено: ${Object.keys(db.users).length} игроков, ${db.totalGames} партий`);
@@ -1728,13 +1711,14 @@ function scheduleBotMove(lobbyId) {
       }
     }
 
+    const currentTimeLeft = botColor === 'w' ? cur.timeW : cur.timeB;
     let mv;
     if (botName === WATCHER_NAME) {
       // Не даём сырой Q-таблице с испорченным опытом выбирать грубые зевки.
       // Watcher получает сильный поисковый ход, а обучение по партиям и наблюдаемым
       // ходам продолжает накапливаться через recordTransition/learnFromObservedMove.
       try {
-        mv = await botPool.getMove(cur.fen, 1900, cur.time);
+        mv = await botPool.getMove(cur.fen, botRating, cur.time, currentTimeLeft, cur.inc);
       } catch (err) {
         console.error('[Watcher] Ошибка поискового движка:', err.message);
         // Безопасный запасной путь: выбрать легальный ход обучающим модулем.
@@ -1749,7 +1733,7 @@ function scheduleBotMove(lobbyId) {
         }
       }
     } else {
-      try { mv = await botPool.getMove(cur.fen, botRating, cur.time); }
+      try { mv = await botPool.getMove(cur.fen, botRating, cur.time, currentTimeLeft, cur.inc); }
       catch (err) { console.error('[bot-pool] ошибка получения хода:', err.message); return; }
     }
     if (!mv) return;
