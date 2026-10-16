@@ -506,29 +506,30 @@ const Router = {
   apply() {
     const { name, param } = this.current;
     if (!App.me && name !== 'login') { this.show('loginScreen'); return; }
-    // Экран активной партии перекрывает только зал ожидания, а не остальные разделы.
+  
+    // Экран активной партии полностью заменяет зал ожидания,
+    // чтобы игрок не мог создать новую партию, пока идёт текущая.
+    // По размеру он такой же, как лобби (на всю ширину main).
     if (App.me && App.gameActive && !App.gameEnded && App.lobbyId && name === 'lobby') {
       const opponent = document.getElementById('activeGameOpponent');
       if (opponent) opponent.textContent = App.opponentName || 'соперником';
-      document.querySelectorAll('.screen').forEach(screen => screen.classList.remove('active'));
-      document.getElementById('lobbyScreen').classList.add('active');
-      document.getElementById('activeGameNoticeScreen').classList.add('active');
+      this.show('activeGameNoticeScreen');
       document.querySelectorAll('#mainNav a').forEach(a => a.classList.toggle('active', a.dataset.nav === 'lobby'));
       return;
     }
     // При переходе в другую страницу скрываем оверлей зала ожидания.
     const activeNotice = document.getElementById('activeGameNoticeScreen');
     if (activeNotice) activeNotice.classList.remove('active');
-
+  
     if (name !== 'watch' && Watch.autoRefreshHandle) {
       clearInterval(Watch.autoRefreshHandle);
       Watch.autoRefreshHandle = null;
     }
-
+  
     if (name !== 'arenaPage' && Arena.currentArenaId) {
       Arena.leaveRoom();
     }
-
+  
     const map = {
       login: 'loginScreen',
       lobby: 'lobbyScreen',
@@ -546,7 +547,7 @@ const Router = {
       const nav = a.dataset.nav;
       a.classList.toggle('active', nav === name || (name === 'arenaPage' && nav === 'arenas'));
     });
-
+  
     switch (name) {
       case 'lobby': Lobby.enter(); break;
       case 'watch': Watch.enter(param); break;
@@ -556,7 +557,7 @@ const Router = {
       case 'community': Community.enter(); break;
       case 'game': Game.enter(param); break;
     }
-  },
+  }
 
   show(screenId) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
