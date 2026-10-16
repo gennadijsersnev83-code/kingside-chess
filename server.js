@@ -1720,14 +1720,33 @@ io.on('connection', (socket) => {
     time = Math.max(0.5, Math.min(60, +time || 5));
     inc = Math.max(0, Math.min(60, +inc || 0));
 
+    // Если у игрока уже есть своё ожидающее лобби — переиспользуем его.
     let myWaiting = null;
     for (const [, l] of lobbies.entries()) {
       if (l.finished || l.arenaId) continue;
       if (l.started || l.guest) continue;
-      if (l.host === socket.username) { myWaiting = l; break; }
+      if (l.host !== socket.username) continue;
+      // Переиспользуем только живое лобби, старше пары минут не берём.
+      if (l.hostSocket && !io.sockets.sockets.has(l.hostSocket)) {
+        lobbies.delete(l.id);
+        continue;
+      }
+      myWaiting = l;
+      break;
     }
-    if (!myWaiting && countWaitingLobbies() >= MAX_WAITING_LOBBIES) {
-      return cb({ ok: false, msg: `В зале ожидания уже максимум ${MAX_WAITING_LOBBIES} запросов. Дождитесь освобождения или присоединитесь к существующему.` });
+    // Лимит применяем ТОЛЬКО к новым лобби (не к переиспользованию своего).
+    if (!myWaiting) {
+      // Сначала подчистим мёртвые, чтобы счётчик был честным.
+      for (const [id, l] of lobbies.entries()) {
+        if (!l || l.finished || l.arenaId || l.started || l.guest) continue;
+        if (l.isWatcher) continue;
+        if (l.hostSocket && !io.sockets.sockets.has(l.hostSocket)) {
+          lobbies.delete(id);
+        }
+      }
+      if (countWaitingLobbies() >= MAX_WAITING_LOBBIES) {
+        return cb({ ok: false, msg: `В зале ожидания уже максимум ${MAX_WAITING_LOBBIES} запросов. Дождитесь освобождения или присоединитесь к существующему.` });
+      }
     }
 
     let matched = null;
