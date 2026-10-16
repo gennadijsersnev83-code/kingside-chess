@@ -232,30 +232,44 @@ function botMinimax(state, depth, alpha, beta, maximizing) {
   ttSet(key, depth, best);
   return best;
 }
-function getBotParams(rating, baseTimeMin) {
+function getBotParams(rating, baseTimeMin, timeLeftSec = baseTimeMin * 60, incrementSec = 0) {
   let depth, noise;
   if (rating < 1100)      { depth = 1; noise = 60; }
   else if (rating < 1350) { depth = 2; noise = 25; }
   else if (rating < 1500) { depth = 2; noise = 12; }
-  else if (rating < 1700) { depth = 3; noise = 3; }
+  else if (rating < 1700) { depth = 3; noise = 5; }
   else if (rating < 1850) { depth = 4; noise = 1; }
   else if (rating < 2000) { depth = 4; noise = 0; }
   else if (rating < 2200) { depth = 5; noise = 0; }
   else                    { depth = 6; noise = 0; }
+
+  // Базовый контроль ограничивает глубину: пуля должна играть быстрее классики.
   if (baseTimeMin <= 1) depth = Math.min(depth, 1);
   else if (baseTimeMin <= 2) depth = Math.min(depth, 2);
   else if (baseTimeMin <= 3) depth = Math.min(depth, 3);
   else if (baseTimeMin <= 5) depth = Math.min(depth, 3);
   else if (baseTimeMin <= 10) depth = Math.min(depth, 4);
   else if (baseTimeMin <= 15) depth = Math.min(depth, 5);
+
+  // Адаптация к реальному остатку времени. При добавлении за ход можно
+  // сохранять чуть более глубокий поиск, если на часах ещё есть запас.
+  const left = Math.max(0, Number(timeLeftSec) || 0);
+  const inc = Math.max(0, Number(incrementSec) || 0);
+  if (left <= 3) depth = 1;
+  else if (left <= 8) depth = Math.min(depth, 1);
+  else if (left <= 18) depth = Math.min(depth, 2);
+  else if (left <= 35 && inc < 2) depth = Math.min(depth, 2);
+  else if (left <= 60 && inc === 0) depth = Math.min(depth, 3);
+  if (left <= 8 && rating >= 1500) noise = Math.max(noise, 3);
   return { depth, noise };
 }
-function pickBotMoveByRating(fen, rating, baseTimeMin) {
+
+function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec) {
   const state = botParseFen(fen);
   const white = state.turn === 'w';
   const moves = botAllLegalMoves(state, white);
   if (!moves.length) return null;
-  const { depth, noise } = getBotParams(rating, baseTimeMin);
+  const { depth, noise } = getBotParams(rating, baseTimeMin, timeLeftSec, incrementSec);
   if (moves.length === 1) return moves[0];
   moves.sort((a, b) => moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]));
   const scored = moves.map(([from, to]) => {
@@ -272,9 +286,9 @@ function pickBotMoveByRating(fen, rating, baseTimeMin) {
 }
 
 parentPort.on('message', (msg) => {
-  const { id, fen, rating, timeMin } = msg;
+  const { id, fen, rating, timeMin, timeLeftSec, incrementSec } = msg;
   try {
-    const move = pickBotMoveByRating(fen, rating, timeMin);
+    const move = pickBotMoveByRating(fen, rating, timeMin, timeLeftSec, incrementSec);
     parentPort.postMessage({ id, ok: true, move });
   } catch (err) {
     parentPort.postMessage({ id, ok: false, error: err.message });
