@@ -48,7 +48,7 @@ const BOTS = [
   { name: 'BotMedium', rating: 1300, level: 2, title: 'Средний',  desc: 'подумает' },
   { name: 'BotHard',   rating: 1600, level: 3, title: 'Сложный',  desc: 'тактика' },
   { name: 'BotMaster', rating: 2000, level: 4, title: 'Мастер',   desc: 'сильный соперник' },
-  { name: 'Watcher',   rating: 1200, level: 0, title: 'Наблюдатель', desc: 'обучаемый', hidden: true }
+  { name: 'Watcher',   rating: 1500, level: 0, title: 'Наблюдатель', desc: 'обучаемый', hidden: true }
 ];
 const BOT_NAMES = new Set(BOTS.filter(b => !b.hidden).map(b => b.name));
 const ALL_BOT_NAMES = new Set(BOTS.map(b => b.name));
@@ -246,14 +246,15 @@ async function loadDB() {
     for (const bot of BOTS) {
       const existing = db.users[bot.name];
       if (!existing) {
+        const startRating = bot.name === WATCHER_NAME ? 1500 : bot.rating;
         db.users[bot.name] = {
-          passwordHash: '', salt: '', rating: bot.rating,
+          passwordHash: '', salt: '', rating: startRating,
           rd: GLICKO2.DEFAULT_RD, vol: GLICKO2.DEFAULT_VOL,
           wins: 0, losses: 0, draws: 0, games: 0,
           createdAt: Date.now(), mutedUntil: 0, isBot: true,
           categories: {
-            classical: emptyRatingBlock(bot.rating), rapid: emptyRatingBlock(bot.rating),
-            blitz: emptyRatingBlock(bot.rating), bullet: emptyRatingBlock(bot.rating)
+            classical: emptyRatingBlock(startRating), rapid: emptyRatingBlock(startRating),
+            blitz: emptyRatingBlock(startRating), bullet: emptyRatingBlock(startRating)
           }
         };
         try {
@@ -267,7 +268,7 @@ async function loadDB() {
                                 games_classical, games_rapid, games_blitz, games_bullet,
                                 muted_until, is_bot)
              VALUES ($1,$2,$3,$4,$5,$6,0,0,0,0,$7,$4,$4,$4,$4,$5,$5,$5,$5,$6,$6,$6,$6,0,0,0,0,0,0,0,0,0,0,0,0,0,TRUE)`,
-            [bot.name, '', '', bot.rating, GLICKO2.DEFAULT_RD, GLICKO2.DEFAULT_VOL, Date.now()]
+            [bot.name, '', '', startRating, GLICKO2.DEFAULT_RD, GLICKO2.DEFAULT_VOL, Date.now()]
           );
         } catch (e) { console.error('[DB] Ошибка вставки бота:', e.message); }
       } else {
@@ -481,6 +482,13 @@ function cleanupStuckPlaying() {
 }
 setInterval(cleanupStuckPlaying, 10000);
 
+// Периодическая рассылка списка живых партий (для автообновления Watch)
+setInterval(() => {
+  try {
+    io.emit('liveGamesUpdate', buildGamesList());
+  } catch (e) { /* ignore */ }
+}, 3000);
+
 function buildGamesList() {
   const list = [];
   for (const [id, l] of lobbies.entries()) {
@@ -506,14 +514,11 @@ function buildGamesList() {
 }
 
 // ======================= ПРАВИЛА ШАХМАТ =======================
-// Ключ позиции для правила троекратного повторения:
-// board + turn + castling + ep (без счётчиков ходов).
 function positionKey(fen) {
   const parts = fen.split(' ');
   return parts.slice(0, 4).join(' ');
 }
 
-// Проверяем недостаточность материала для мата.
 function isInsufficientMaterial(state) {
   const pieces = [];
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
@@ -523,15 +528,13 @@ function isInsufficientMaterial(state) {
     if (t === 'k') continue;
     pieces.push({ type: t, color: botIsWhite(p) ? 'w' : 'b', r, c });
   }
-  if (pieces.length === 0) return true; // K vs K
+  if (pieces.length === 0) return true;
   if (pieces.length === 1) {
-    // K + one piece vs K
     const t = pieces[0].type;
     if (t === 'n' || t === 'b') return true;
     return false;
   }
   if (pieces.length === 2) {
-    // K+B vs K+B (однопольные) или K+N vs K+N — считаем ничьей только K+B vs K+B одного цвета
     const [a, b] = pieces;
     if (a.type === 'b' && b.type === 'b' && a.color !== b.color) {
       const aColor = (a.r + a.c) % 2;
@@ -555,7 +558,6 @@ function checkAutoDraw(lobbyId) {
   const l = lobbies.get(lobbyId);
   if (!l || l.finished) return false;
 
-  // Троекратное повторение позиции.
   const key = positionKey(l.fen);
   const cnt = l.positionCounts ? (l.positionCounts.get(key) || 0) : 0;
   if (cnt >= 3) {
@@ -563,14 +565,12 @@ function checkAutoDraw(lobbyId) {
     return true;
   }
 
-  // Недостаточный материал.
   const state = botParseFen(l.fen);
   if (isInsufficientMaterial(state)) {
     finishGame(lobbyId, 'draw', 'Недостаточно материала');
     return true;
   }
 
-  // 50 ходов без взятий и ходов пешкой.
   if (state.half >= 100) {
     finishGame(lobbyId, 'draw', '50 ходов без прогресса');
     return true;
@@ -594,7 +594,6 @@ async function finishGame(lobbyId, result, reason) {
   const blackUser = db.users[blackName];
   if (!whiteUser || !blackUser) { lobbies.delete(lobbyId); return; }
 
-  // Запоминаем данные для реванша.
   finishedGamesInfo.set(lobbyId, {
     host: l.host, guest: l.guest,
     hostSocket: l.hostSocket, guestSocket: l.guestSocket,
@@ -676,7 +675,7 @@ async function finishGame(lobbyId, result, reason) {
     try {
       const watcherColor = whiteIsWatcher ? 'w' : 'b';
       watcherLearning.finishEpisode(result, watcherColor);
-      watcherLearning.saveQTable();
+      watcherLearning.saveWeights();
     } catch (e) { console.error('[Watcher] Ошибка завершения эпизода:', e.message); }
     try {
       const beh = botInitBehavior(WATCHER_NAME);
@@ -947,12 +946,11 @@ function botJoinArena(botName, arenaId) {
   io.emit('arenaUpdate', { arenaId });
   return true;
 }
-const BOT_WAITING_TIMES = [{ t: 1, i: 0 }, { t: 3, i: 0 }, { t: 5, i: 0 }, { t: 10, i: 0 }];
 
 function botBehaviorTick() {
   const now = Date.now();
   for (const bot of BOTS) {
-    if (bot.name === WATCHER_NAME) continue;
+    if (bot.name === WATCHER_NAME) continue; // Watcher обрабатывается в watcherTick
     const beh = botInitBehavior(bot.name);
     if (now < beh.nextDecision) continue;
     beh.nextDecision = now + 3000 + Math.random() * 6000;
@@ -1005,8 +1003,6 @@ function botBehaviorTick() {
       continue;
     }
 
-    // Боты НЕ создают лобби в зале ожидания — только арены.
-    // Это убирает матчинг бот-с-ботом в зале ожидания.
     const r = Math.random();
     if (r < 0.6) {
       const candidates = [...arenas.values()].filter(s =>
@@ -1036,6 +1032,11 @@ function watcherTick() {
   const now = Date.now();
   const beh = botInitBehavior(WATCHER_NAME);
 
+  // Если Watcher занят игрой — ничего не делаем.
+  if (beh.state === 'playing' || watcherHasActiveLobby()) return;
+  if (watcherInAnyArena()) return;
+
+  // Наблюдение за партиями
   if (Math.random() < 0.4 || !beh.watchingLobbyId) {
     const liveGames = [];
     for (const [id, l] of lobbies.entries()) {
@@ -1050,10 +1051,8 @@ function watcherTick() {
     }
   }
 
-  if (watcherHasActiveLobby()) return;
-  if (watcherInAnyArena()) return;
-
-  if (beh.state !== 'in_arena' && Math.random() < 0.5) {
+  // Заход в арену
+  if (beh.state !== 'in_arena' && Math.random() < 0.4) {
     const candidates = [...arenas.values()].filter(s =>
       !s.finished && s.botFriendly && (s.phase === 'live' || s.phase === 'waiting')
       && !s.participants.has(WATCHER_NAME)
@@ -1068,7 +1067,7 @@ function watcherTick() {
       const wu = db.users[WATCHER_NAME];
       chosen.participants.set(WATCHER_NAME, {
         username: WATCHER_NAME,
-        rating: wu ? wu.rating : 1200,
+        rating: wu ? wu.rating : 1500,
         score: 0, wins: 0, draws: 0, losses: 0, winStreak: 0, drawStreak: 0,
         socketId: 'BOT:' + WATCHER_NAME,
         lobbyId: null, isPlaying: false, paused: false,
@@ -1084,7 +1083,36 @@ function watcherTick() {
     }
   }
 
-  // Watcher тоже не создаёт лобби в зале ожидания.
+  // Создание вызова в зале ожидания
+  if (beh.state === 'idle' && Math.random() < 0.25) {
+    let hasOwnLobby = false;
+    for (const [id, l] of lobbies.entries()) {
+      if (!l.finished && !l.started && l.host === WATCHER_NAME) { hasOwnLobby = true; break; }
+    }
+    if (!hasOwnLobby) {
+      const times = [{t:1,i:0},{t:3,i:0},{t:3,i:2},{t:5,i:0},{t:10,i:0}];
+      const pick = times[Math.floor(Math.random() * times.length)];
+      const id = genId();
+      const lobby = {
+        id, host: WATCHER_NAME, hostSocket: 'BOT:' + WATCHER_NAME,
+        guest: null, guestSocket: null,
+        hostColor: null, guestColor: null,
+        time: pick.t, inc: pick.i,
+        timeW: pick.t * 60, timeB: pick.t * 60,
+        turn: 'w', fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+        started: false, finished: false, lastTick: Date.now(),
+        chat: [], drawOffer: null, createdAt: Date.now(),
+        rematch: null, isBot: true, isWatcher: true,
+        botName: WATCHER_NAME, botColor: null,
+        history: [], positionCounts: new Map()
+      };
+      lobbies.set(id, lobby);
+      registerPosition(lobby);
+      beh.state = 'in_lobby'; beh.activityId = id; beh.lastChange = now;
+      broadcastLobbies();
+      console.log(`[Watcher] Создал вызов ${pick.t}+${pick.i}`);
+    }
+  }
 }
 setInterval(watcherTick, 15000);
 setTimeout(watcherTick, 5000);
@@ -1135,7 +1163,6 @@ function tryPair(state) {
         if (watcherGamesInArena(state.id) >= MAX_WATCHER_ACTIVE_LOBBIES) continue;
       }
 
-      // Бот-с-ботом — только если в арене есть живые зрители.
       if (a.isBot && b.isBot) {
         if (state.chatViewers.size === 0) continue;
         if (botGamesInArena(state.id) >= MAX_BOT_GAMES_PER_ARENA) continue;
@@ -1177,7 +1204,6 @@ function createArenaPairing(state, a, b) {
     botName2: bIsBot && aIsBot ? b.username : null,
     history: [], positionCounts: new Map()
   });
-  // Регистрируем начальную позицию.
   registerPosition(lobbies.get(lobbyId));
 
   state.activeLobbies.add(lobbyId);
@@ -1359,7 +1385,7 @@ function clearMute(username) {
 }
 
 // ============================================================
-//  ЛЁГКИЙ ШАХМАТНЫЙ ДВИЖОК
+//  ЛЁГКИЙ ШАХМАТНЫЙ ДВИЖОК (для проверки правил, не для игры)
 // ============================================================
 const PIECE_VALUES = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
 
@@ -1428,7 +1454,6 @@ function botApplyMove(state, from, to) {
   if (type === 'r') { if (fr === 7 && fc === 0) cast = cast.replace('Q', ''); if (fr === 7 && fc === 7) cast = cast.replace('K', ''); if (fr === 0 && fc === 0) cast = cast.replace('q', ''); if (fr === 0 && fc === 7) cast = cast.replace('k', ''); }
   if (!cast) cast = '-';
   let ep = '-'; if (type === 'p' && Math.abs(tr - fr) === 2) ep = String.fromCharCode(97 + fc) + (8 - (fr + (tr - fr) / 2));
-  // Счётчик полуходов: сброс при взятии или ходе пешкой.
   const wasCapture = !!state.board[tr][tc] || (type === 'p' && fc !== tc);
   const half = (type === 'p' || wasCapture) ? 0 : (state.half + 1);
   copy.castling = cast; copy.ep = ep; copy.turn = white ? 'b' : 'w'; copy.half = half;
@@ -1715,8 +1740,12 @@ function scheduleBotMove(lobbyId) {
       const botIsWhiteMove = botColor === 'w';
       const curState = botParseFen(cur.fen);
       const availableMoves = botAllLegalMoves(curState, botIsWhiteMove);
+      const line = (cur.history || []).slice(-12).map(h => {
+        if (!h.from || !h.to) return '';
+        return String.fromCharCode(97 + h.from[1]) + (8 - h.from[0]) + String.fromCharCode(97 + h.to[1]) + (8 - h.to[0]);
+      }).join('');
       try {
-        mv = watcherLearning.pickMove(cur.fen, botColor, { time: cur.time, inc: cur.inc }, availableMoves);
+        mv = watcherLearning.pickMove(cur.fen, botColor, { time: cur.time, inc: cur.inc }, availableMoves, line);
       } catch (e) {
         console.error('[Watcher] pickMove ошибка:', e.message);
         mv = null;
@@ -1947,8 +1976,7 @@ io.on('connection', (socket) => {
     const list = [];
     for (const [id, l] of lobbies.entries()) {
       if (l.finished || l.arenaId) continue;
-      // Скрываем лобби, созданные ботами, из зала ожидания.
-      if (l.isBot) continue;
+      if (l.isBot && !l.isWatcher) continue;
       list.push({ id, host: l.host, time: l.time, inc: l.inc, hostIsAdmin: isAdmin(l.host), hostIsMod: isMod(l.host), status: l.guest ? 'playing' : 'waiting', isBot: false });
     }
     cb(list);
@@ -1961,7 +1989,7 @@ io.on('connection', (socket) => {
     inc  = Math.max(0, Math.min(60, +inc || 0));
     let matched = null;
     for (const [, l] of lobbies.entries()) {
-      if (l.finished || l.arenaId || l.isBot || l.guest) continue;
+      if (l.finished || l.arenaId || (l.isBot && !l.isWatcher) || l.guest) continue;
       if (l.host === socket.username || l.hostSocket === socket.id) continue;
       if (Number(l.time) !== time || Number(l.inc) !== inc) continue;
       matched = l;
@@ -1977,13 +2005,21 @@ io.on('connection', (socket) => {
       matched.lastTick = Date.now();
       if (!matched.positionCounts) matched.positionCounts = new Map();
       registerPosition(matched);
+      if (matched.isWatcher) {
+        matched.botColor = matched.hostColor;
+        matched.botColor2 = null;
+        matched.botName = WATCHER_NAME;
+        matched.botName2 = null;
+      }
       socket.join(matched.id);
       socketToLobby.set(socket.id, matched.id);
       socket.lobbyId = matched.id;
       const hostRating = db.users[matched.host] ? db.users[matched.host].rating : null;
       const guestRating = db.users[socket.username] ? db.users[socket.username].rating : null;
-      io.to(matched.hostSocket).emit('gameStart', { color: matched.hostColor, opponent: matched.guest, opponentRating: guestRating, opponentIsAdmin: isAdmin(matched.guest), opponentIsMod: isMod(matched.guest), opponentOnline: true, time: matched.time, inc: matched.inc, lobbyId: matched.id, fen: matched.fen, chat: matched.chat, isArena: false });
-      io.to(matched.guestSocket).emit('gameStart', { color: matched.guestColor, opponent: matched.host, opponentRating: hostRating, opponentIsAdmin: isAdmin(matched.host), opponentIsMod: isMod(matched.host), opponentOnline: true, time: matched.time, inc: matched.inc, lobbyId: matched.id, fen: matched.fen, chat: matched.chat, isArena: false });
+      const hostIsWatcher = matched.host === WATCHER_NAME;
+      io.to(matched.hostSocket).emit('gameStart', { color: matched.hostColor, opponent: matched.guest, opponentRating: guestRating, opponentIsAdmin: isAdmin(matched.guest), opponentIsMod: isMod(matched.guest), opponentOnline: true, time: matched.time, inc: matched.inc, lobbyId: matched.id, fen: matched.fen, chat: matched.chat, isArena: false, isBot: matched.isBot && !hostIsWatcher });
+      io.to(matched.guestSocket).emit('gameStart', { color: matched.guestColor, opponent: matched.host, opponentRating: hostRating, opponentIsAdmin: isAdmin(matched.host), opponentIsMod: isMod(matched.host), opponentOnline: true, time: matched.time, inc: matched.inc, lobbyId: matched.id, fen: matched.fen, chat: matched.chat, isArena: false, isBot: matched.isBot && !hostIsWatcher });
+      if (matched.isBot) setTimeout(() => scheduleBotMove(matched.id), 800);
       cb({ ok: true, id: matched.id, matched: true });
       broadcastLobbies();
       broadcastOnline();
@@ -2151,7 +2187,6 @@ io.on('connection', (socket) => {
 
     if (checkAutoDraw(lobbyId)) return;
 
-    // Проверяем, есть ли ходы у соперника. Если нет — мат или пат.
     {
       const oppWhite = l.turn === 'w';
       const oppState = botParseFen(l.fen);
@@ -2305,7 +2340,6 @@ io.on('connection', (socket) => {
   socket.on('rematchRequest', ({ lobbyId }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
 
-    // Ищем сначала активное лобби, потом — завершённую партию.
     let l = lobbies.get(lobbyId);
     let info = null;
     if (!l || l.finished) {
@@ -2313,7 +2347,6 @@ io.on('connection', (socket) => {
       if (!info) return cb({ ok: false, msg: 'Партия слишком давно завершена, реванш недоступен' });
     }
 
-    // Если это бот-игра — отдельная логика.
     const isBotGame = l ? !!l.isBot : info.isBot;
     const botName = l ? (l.botName || l.botName2) : info.botName;
 
@@ -2372,7 +2405,6 @@ io.on('connection', (socket) => {
       return;
     }
 
-    // Обычный реванш между людьми.
     const host = l ? l.host : info.host;
     const guest = l ? l.guest : info.guest;
     const hostSocketId = l ? l.hostSocket : info.hostSocket;
@@ -2384,7 +2416,6 @@ io.on('connection', (socket) => {
       return cb({ ok: false, msg: 'Вы не участник этой партии' });
     }
 
-    // Хранилище заявок на реванш для завершённой партии.
     if (!finishedGamesInfo.has(lobbyId)) {
       finishedGamesInfo.set(lobbyId, {
         host, guest, hostSocket: hostSocketId, guestSocket: guestSocketId,
@@ -2698,7 +2729,7 @@ io.on('connection', (socket) => {
   try { await initDB(); await loadDB(); }
   catch (err) { console.error('[DB] Не удалось инициализировать базу данных:', err.message || err.code || err); }
 
-  watcherLearning.loadQTable();
+  watcherLearning.loadWeights();
   watcherLearning.startAutoSave();
 
   getArenaSchedule(48);
@@ -2710,12 +2741,11 @@ io.on('connection', (socket) => {
     console.log(`  Порт: ${PORT}`);
     console.log(`  CPU ядер доступно: ${require('os').cpus().length}`);
     console.log('  Боты работают в отдельных потоках (worker_threads)');
-    console.log('  Watcher: обучаемый бот-наблюдатель (Double Q + Replay)');
+    console.log('  Watcher: обучаемый бот-наблюдатель (нейросеть + negamax)');
     console.log('==================================================');
   });
 })();
 
-process.on('SIGINT', async () => { try { await botPool.terminate(); watcherLearning.saveQTable(); } catch (e) {} process.exit(0); });
-process.on('SIGTERM', async () => { try { await botPool.terminate(); watcherLearning.saveQTable(); } catch (e) {} process.exit(0); });
+process.on('SIGINT', async () => { try { await botPool.terminate(); watcherLearning.saveWeights(); } catch (e) {} process.exit(0); });
+process.on('SIGTERM', async () => { try { await botPool.terminate(); watcherLearning.saveWeights(); } catch (e) {} process.exit(0); });
 process.on('uncaughtException', (err) => { console.error('[Server] Ошибка:', err); });
-
