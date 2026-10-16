@@ -714,7 +714,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .rematchBanner .rbAccept:hover { background: var(--green-2); }
 .rematchBanner .rbDecline { background: transparent; color: var(--muted); border: 1px solid var(--border); }
 .rematchBanner .rbDecline:hover { background: var(--panel-hover); color: var(--text-bright); }
-.drawOfferBanner { top: 120px; background: linear-gradient(180deg, #1c2a3a, #0f1a26); border-color: #4a9ce8; }
+.drawOfferBanner { top: auto; bottom: 24px; background: linear-gradient(180deg, #1c2a3a, #0f1a26); border-color: #4a9ce8; }
 
 /* ========= SIMPLE MODAL ========= */
 .simpleModal {
