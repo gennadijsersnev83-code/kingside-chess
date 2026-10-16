@@ -934,8 +934,16 @@ const Watch = {
         <div class="wrPlayers"><span><span class="liveDot"></span>⚪ ${wBot}${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod, g.whiteIsBot)}${g.whiteRating ? ' <span class="prat">('+g.whiteRating+')</span>' : ''}</span><span>${Utils.formatTime(g.timeW)}</span></div>
         <div class="wrPlayers"><span>⚫ ${bBot}${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod, g.blackIsBot)}${g.blackRating ? ' <span class="prat">('+g.blackRating+')</span>' : ''}</span><span>${Utils.formatTime(g.timeB)}</span></div>
         <div class="wrMeta"><span>${g.timeControl}+${g.increment}${arenaTag}${botTag}</span><span>ход: <b>${g.turn === 'w' ? 'белые' : 'чёрные'}</b> ${Utils.watchersHtml(g.watchersCount)}</span></div>
+        <button class="watchShareBtn" onclick="event.stopPropagation(); Watch.copyGameLink('${g.id}')">↗ Ссылка на партию</button>
       </div>`;
     }).join('');
+  },
+
+  copyGameLink(id) {
+    const url = `${location.origin}/#/watch/${encodeURIComponent(id)}`;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(() => Banners.showInfo ? Banners.showInfo('Ссылка на партию скопирована') : alert('Ссылка скопирована: ' + url)).catch(() => prompt('Ссылка на партию:', url));
+    } else prompt('Ссылка на партию:', url);
   },
 
   watch(id) {
