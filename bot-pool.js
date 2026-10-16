@@ -58,12 +58,12 @@ class BotPool {
       const worker = this.idle.shift();
       const id = ++this.taskId;
       this.pending.set(id, task);
-      worker.postMessage({ id, fen: task.fen, rating: task.rating, timeMin: task.timeMin });
+      worker.postMessage({ id, fen: task.fen, rating: task.rating, timeMin: task.timeMin, timeLeftSec: task.timeLeftSec, incrementSec: task.incrementSec });
     }
   }
-  getMove(fen, rating, timeMin) {
+  getMove(fen, rating, timeMin, timeLeftSec = timeMin * 60, incrementSec = 0) {
     return new Promise((resolve, reject) => {
-      this.queue.push({ fen, rating, timeMin, resolve, reject });
+      this.queue.push({ fen, rating, timeMin, timeLeftSec, incrementSec, resolve, reject });
       this._processQueue();
     });
   }
