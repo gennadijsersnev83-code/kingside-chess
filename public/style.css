@@ -8,8 +8,6 @@
   --light-sq:#e8d9b8; --dark-sq:#8b6f47; --yellow-sq:#f7ec74;
   --gold:#ffd54f;
   --role-admin:#e5484d; --role-mod:#4a9ce8; --role-dev:#a56ce8;
-  --row-alt:rgba(255,255,255,0.02);
-  --row-hover:rgba(255,255,255,0.04);
 }
 html,body { height:100%; margin:0; }
 body {
@@ -150,10 +148,11 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 }
 .lobbyCenter .tabs button:hover { color:var(--text-bright); background:transparent; }
 .lobbyCenter .tabs button.active { color:var(--accent); border-bottom-color:var(--accent); background:transparent; }
-.lobbyContent { padding:16px; min-height:400px; }
+.lobbyContent { padding:0; min-height:400px; }
 
-.quickGrid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
-@media (max-width:560px) { .quickGrid { grid-template-columns:repeat(2,1fr); } }
+/* Быстрый старт — внутри свой padding */
+.quickGrid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; padding:16px; }
+@media (max-width:560px) { .quickGrid { grid-template-columns:repeat(2,1fr); padding:10px; } }
 .quickBtn {
   background:var(--panel-2); border:1px solid var(--border); border-radius:6px;
   padding:18px 8px; color:var(--text-bright); cursor:pointer; transition:.15s;
@@ -165,8 +164,31 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .quickBtn .qb-name { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
 .quickBtn.custom .qb-time { font-size:20px; color:var(--accent); }
 
-/* COMPACT LOBBY LIST — Lichess style */
-.lobbyHeader,
+/* ========== ЗАЛ ОЖИДАНИЯ — LICHESS STYLE ========== */
+.lobbyHeader {
+  display: grid;
+  grid-template-columns: 22px 78px minmax(0,1fr) 72px 130px;
+  align-items: center;
+  gap: 14px;
+  padding: 0 16px;
+  height: 30px;
+  min-height: 30px;
+  box-sizing: border-box;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .7px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+}
+.lobbyHeader .hRating { text-align: right; }
+.lobbyHeader .hPlayer { text-align: left; }
+.lobbyHeader .hTime   { text-align: center; }
+.lobbyHeader .hMode   { text-align: left; }
+
+.lobbyList { display: flex; flex-direction: column; }
+
 .lobbyRow {
   display: grid;
   grid-template-columns: 22px 78px minmax(0,1fr) 72px 130px;
@@ -176,27 +198,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   height: 40px;
   min-height: 40px;
   box-sizing: border-box;
-}
-
-.lobbyHeader {
-  font-size: 10px;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: .7px;
-  font-weight: 600;
-  border-bottom: 1px solid var(--border);
-  background: transparent;
-  height: 32px;
-  min-height: 32px;
-}
-.lobbyHeader .hRating { text-align: right; }
-.lobbyHeader .hTime   { text-align: center; }
-.lobbyHeader .hMode   { text-align: left; }
-.lobbyHeader .hPlayer { text-align: left; }
-
-.lobbyList { display: flex; flex-direction: column; }
-
-.lobbyRow {
   font-size: 13.5px;
   border-bottom: 1px solid rgba(255,255,255,0.03);
   cursor: pointer;
@@ -212,20 +213,15 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .lobbyRow.started { opacity: .4; cursor: default; }
 .lobbyRow.started:hover { background: transparent; }
 
-/* Цветовая точка */
 .lobbyRow .lColor {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
+  width: 10px; height: 10px; border-radius: 50%;
   border: 1px solid rgba(0,0,0,.6);
-  justify-self: center;
-  flex-shrink: 0;
+  justify-self: center; flex-shrink: 0;
   box-shadow: 0 0 0 1px rgba(255,255,255,.06);
 }
 .lobbyRow .lColor.white { background: #e8e6e3; }
 .lobbyRow .lColor.black { background: #2b2a27; }
 
-/* Рейтинг */
 .lobbyRow .lRating {
   color: var(--text-bright);
   font-weight: 500;
@@ -236,7 +232,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 }
 .lobbyRow .lRating.muted { color: var(--muted); font-weight: 400; }
 
-/* Имя */
 .lobbyRow .lName {
   color: var(--text-bright);
   font-weight: 400;
@@ -250,22 +245,15 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   font-size: 13.5px;
 }
 .lobbyRow .lName .playerNick {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-  font-weight: 400;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0; font-weight: 400;
 }
 .lobbyRow .lName .mineTag {
-  color: var(--accent);
-  font-size: 11px;
-  flex-shrink: 0;
-  font-weight: 500;
+  color: var(--accent); font-size: 11px; flex-shrink: 0; font-weight: 500;
 }
 .lobbyRow .lName .crown,
 .lobbyRow .lName .modMark { font-size: 12px; }
 
-/* Время */
 .lobbyRow .lTime {
   color: var(--text-bright);
   font-family: 'Roboto Mono','Menlo',monospace;
@@ -275,7 +263,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   letter-spacing: .3px;
 }
 
-/* Режим */
 .lobbyRow .lMode {
   color: var(--muted);
   font-size: 12.5px;
@@ -289,18 +276,9 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   min-width: 0;
 }
 .lobbyRow .lMode .modeIcon {
-  font-size: 13px;
-  opacity: .75;
-  flex-shrink: 0;
-  filter: grayscale(.15);
+  font-size: 13px; opacity: .75; flex-shrink: 0;
 }
 
-/* Заголовок — лёгкая подсветка как в личессе */
-.lobbyHeader .hRating::after {
-  content: '';
-}
-
-/* Мобильная версия — прячем режим */
 @media (max-width: 560px) {
   .lobbyHeader,
   .lobbyRow {
@@ -311,9 +289,16 @@ button:disabled { opacity:.5; cursor:not-allowed; }
     min-height: 36px;
     font-size: 13px;
   }
-  .lobbyHeader { height: 28px; min-height: 28px; }
+  .lobbyHeader { height: 26px; min-height: 26px; }
   .lobbyRow .lMode,
   .lobbyHeader .hMode { display: none; }
+}
+
+.arenaEmpty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
 }
 
 /* ========= WATCH ========= */
