@@ -507,17 +507,16 @@ const Router = {
     const { name, param } = this.current;
     if (!App.me && name !== 'login') { this.show('loginScreen'); return; }
 
-    // Экран активной партии полностью заменяет зал ожидания,
-    // чтобы игрок не мог создать новую партию, пока идёт текущая.
-    // По размеру он такой же, как лобби — на всю ширину main.
+    // Пока идёт партия и игрок открывает «Игру» — показываем обычный lobbyScreen,
+    // а Lobby.render() сам подменит центральную колонку на плашку «Подождите!».
     if (App.me && App.gameActive && !App.gameEnded && App.lobbyId && name === 'lobby') {
       const opponent = document.getElementById('activeGameOpponent');
       if (opponent) opponent.textContent = App.opponentName || 'соперником';
-      this.show('activeGameNoticeScreen');
+      this.show('lobbyScreen');
       document.querySelectorAll('#mainNav a').forEach(a => a.classList.toggle('active', a.dataset.nav === 'lobby'));
       return;
     }
-    // При переходе в другую страницу скрываем оверлей зала ожидания.
+    // При переходе в другую страницу скрываем оверлей активной партии (он больше не используется, но пусть будет).
     const activeNotice = document.getElementById('activeGameNoticeScreen');
     if (activeNotice) activeNotice.classList.remove('active');
 
@@ -653,6 +652,27 @@ const Lobby = {
   render() {
     const el = document.getElementById('lobbyTabContent');
     if (!el) return;
+
+    // Если у игрока идёт активная партия — вместо зала ожидания показываем плашку.
+    if (App.me && App.gameActive && !App.gameEnded && App.lobbyId) {
+      const oppName = App.opponentName || 'соперником';
+      const opponent = document.getElementById('activeGameOpponent');
+      if (opponent) opponent.textContent = oppName;
+      el.innerHTML = `
+        <div class="activeGamePanel">
+          <div class="activeGamePanelWatermark" aria-hidden="true">♞</div>
+          <div class="activeGamePanelInner">
+            <div class="agpTitle">Подождите!</div>
+            <div class="agpSub">У вас идёт игра с <strong>${Utils.escapeHtml(oppName)}</strong>.</div>
+            <button class="agpReturnBtn" onclick="App.returnToGame()">▶ ПРИНЯТЬ ВЫЗОВ</button>
+            <div class="agpOr">или</div>
+            <button class="agpAbortBtn" onclick="Game.resign(); if (App.gameEnded) Router.go('lobby')">✖ СДАТЬСЯ</button>
+            <div class="agpFoot">Вы не можете начать новую партию, пока текущая не завершена.</div>
+          </div>
+        </div>`;
+      return;
+    }
+
     if (this.currentTab === 'create') {
       el.innerHTML = `
         <div class="quickGrid">
