@@ -2718,3 +2718,4 @@ io.on('connection', (socket) => {
 process.on('SIGINT', async () => { try { await botPool.terminate(); watcherLearning.saveQTable(); } catch (e) {} process.exit(0); });
 process.on('SIGTERM', async () => { try { await botPool.terminate(); watcherLearning.saveQTable(); } catch (e) {} process.exit(0); });
 process.on('uncaughtException', (err) => { console.error('[Server] Ошибка:', err); });
+
