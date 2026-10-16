@@ -452,6 +452,7 @@ const App = {
     s.on('chatError', ({ msg }) => alert(msg));
     s.on('drawOffered', ({ from }) => Banners.showDrawOffer(from));
     s.on('drawDeclined', () => Game.onDrawDeclined());
+    s.on('rematchOffered', ({ from }) => { Banners.rematchFrom = from; Game.refreshResultBar(); });
     s.on('rematchDeclined', () => Game.onRematchDeclined());
     s.on('opponentOnline', ({ username }) => Game.onOpponentOnline(username));
     s.on('opponentOffline', ({ username }) => Game.onOpponentOffline(username));
