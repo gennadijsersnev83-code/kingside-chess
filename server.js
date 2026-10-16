@@ -378,23 +378,7 @@ function categoryOf(timeMin) {
 }
 
 // ======================= УТИЛИТЫ =======================
-function genId() { return crypto.randomBytes(12).toString('hex'); }
-
-// Не допускаем несколько незавершённых вызовов/партий у одного участника.
-function findUserOpenLobby(username) {
-  if (!username) return null;
-  for (const l of lobbies.values()) {
-    if (!l.finished && (l.host === username || l.guest === username)) return l;
-  }
-  return null;
-}
-function userBusyMessage(username) {
-  const l = findUserOpenLobby(username);
-  if (!l) return null;
-  return l.started
-    ? 'У вас уже идёт партия. Завершите её, прежде чем начинать новую.'
-    : 'У вас уже есть вызов в зале ожидания. Отмените его, прежде чем создавать новый.';
-}
+function genId() { return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6); }
 function pairKeyFor(a, b) {
   if (!a || !b) return null;
   return 'pair:' + [a, b].sort().join(':');
@@ -2047,8 +2031,6 @@ io.on('connection', (socket) => {
   socket.on('createLobby', ({ time, inc }, cb) => {
     if (typeof cb !== 'function') return;
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
-    const busyMessage = userBusyMessage(socket.username);
-    if (busyMessage) return cb({ ok: false, msg: busyMessage });
     time = Math.max(0.5, Math.min(60, +time || 5));
     inc  = Math.max(0, Math.min(60, +inc || 0));
     let matched = null;
@@ -2110,8 +2092,6 @@ io.on('connection', (socket) => {
   socket.on('playWithBot', ({ time, inc, botName }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
-    const busyMessage = userBusyMessage(socket.username);
-    if (busyMessage) return cb({ ok: false, msg: busyMessage });
     time = Math.max(0.5, Math.min(60, +time || 5));
     inc = Math.max(0, Math.min(60, +inc || 0));
     const bot = BOTS.find(b => b.name === botName && !b.hidden);
@@ -2165,8 +2145,6 @@ io.on('connection', (socket) => {
   socket.on('joinLobby', ({ id }, cb) => {
     if (typeof cb !== 'function') return;
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
-    const busyMessage = userBusyMessage(socket.username);
-    if (busyMessage) return cb({ ok: false, msg: busyMessage });
     const l = lobbies.get(id);
     if (!l) return cb({ ok: false, msg: 'Лобби не найдено' });
     if (l.finished) return cb({ ok: false, msg: 'Партия завершена' });
