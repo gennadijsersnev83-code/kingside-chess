@@ -459,17 +459,10 @@ const App = {
     const s = this.socket;
     s.on('connect', () => {
       s.emit('stats', () => {});
-      // После переподключения сразу запрашиваем актуальный список партий.
-      const watchScreen = document.getElementById('watchScreen');
-      if (watchScreen && watchScreen.classList.contains('active')) Watch.refresh(true);
     });
     s.on('stats', (st) => Stats.onStats(st));
     s.on('communityOnline', (players) => Community.render(players));
-    s.on('lobbiesUpdate', () => {
-      Lobby.refreshIfActive();
-      const watchScreen = document.getElementById('watchScreen');
-      if (watchScreen && watchScreen.classList.contains('active')) Watch.refresh(true);
-    });
+    s.on('lobbiesUpdate', () => Lobby.refreshIfActive());
     s.on('connect_error', () => console.warn('Не удалось подключиться'));
     s.on('gameStart', (payload) => Game.onGameStart(payload));
     s.on('boardUpdate', (payload) => {
@@ -624,7 +617,14 @@ const TopArenas = {
 // STATS
 // ============================================================
 const Stats = {
-  init() {},
+  pollHandle: null,
+  init() {
+    // Сервер может не прислать stats при каждом старте/завершении партии.
+    // Периодический запрос держит счётчик активных партий синхронизированным.
+    if (this.pollHandle) clearInterval(this.pollHandle);
+    this.refresh();
+    this.pollHandle = setInterval(() => this.refresh(), 2500);
+  },
   refresh() {
     App.socket.emit('getStats', (s) => this.onStats(s));
   },
@@ -903,41 +903,36 @@ const Watch = {
   watchClockSyncedAt: 0,
   watchClockW: 0, watchClockB: 0, watchClockTurn: 'w',
   requestId: 0,
-  pollHandle: null,
-  refreshPending: false,
-  refreshStartedAt: 0,
 
+  pollHandle: null,
   init() {
-    // Список просмотра обновляется сам, даже если пользователь не заходил в турнир.
-    if (this.pollHandle) return;
+    // Обновляем список, даже если пользователь не открывал партию из турнира.
+    if (this.pollHandle) clearInterval(this.pollHandle);
     this.pollHandle = setInterval(() => {
       const screen = document.getElementById('watchScreen');
       if (screen && screen.classList.contains('active')) this.refresh(false);
     }, 2000);
+    App.socket.on('lobbiesUpdate', () => {
+      const screen = document.getElementById('watchScreen');
+      if (screen && screen.classList.contains('active')) this.refresh(true);
+    });
+    App.socket.on('connect', () => {
+      const screen = document.getElementById('watchScreen');
+      if (screen && screen.classList.contains('active')) this.refresh(true);
+    });
   },
   enter(gameId) {
     this.refresh(true);
     if (gameId) this.watch(gameId);
   },
   refresh(force) {
-    if (!App.socket || !App.socket.connected || this.refreshPending) return;
-    this.refreshPending = true;
-    const requestStartedAt = Date.now();
-    this.refreshStartedAt = requestStartedAt;
-    // Не даём зависшему socket-ack навсегда заблокировать последующие обновления.
-    const unlockTimer = setTimeout(() => {
-      if (this.refreshStartedAt === requestStartedAt) this.refreshPending = false;
-    }, 3500);
     App.socket.emit('getLiveGames', (list) => {
-      clearTimeout(unlockTimer);
-      if (this.refreshStartedAt === requestStartedAt) this.refreshPending = false;
       const box = document.getElementById('watchListBody');
       if (!box) return;
-      list = Array.isArray(list) ? list : [];
       const hash = JSON.stringify(list);
       if (hash === this.lastHash && !force) return;
       this.lastHash = hash;
-      if (!list.length) {
+      if (!list || !list.length) {
         box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>';
         return;
       }
@@ -2699,3 +2694,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 })();
+
