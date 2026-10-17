@@ -344,19 +344,29 @@ const App = {
   doLogin() {
     const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
+    const email = document.getElementById('email').value.trim();
     const msgEl = document.getElementById('loginMsg');
 
     if (!username || !password) { msgEl.textContent = 'Введите логин и пароль'; return; }
-    
-    // Если выбран режим регистрации, проверяем капчу
-    if (Auth.mode === 'register') {
-      const userAnswer = parseInt(document.getElementById('captchaAnswer').value);
-      if (isNaN(userAnswer) || userAnswer !== Auth.captchaAnswer) {
-        msgEl.textContent = 'Неверный ответ. Попробуйте снова.';
-        Auth.generateCaptcha();
+    if (Auth.mode === 'register' && !email) { msgEl.textContent = 'Введите email'; return; }
+
+    msgEl.textContent = 'Загрузка...';
+    msgEl.style.color = 'var(--text)';
+
+    App.socket.emit('register', { username, password, email: Auth.mode === 'register' ? email : undefined }, (res) => {
+      if (!res || !res.ok) {
+        msgEl.style.color = '#ff6b6b';
+        msgEl.textContent = (res && res.msg) || 'Ошибка';
+        if (res && res.pending) msgEl.style.color = '#7dbe30'; // Зеленый цвет для "проверьте почту"
         return;
       }
-    }
+      this.me = res.user;
+      try { localStorage.setItem('kingside_login', JSON.stringify({ username, password })); } catch (e) {}
+      this.updateTopbarUser();
+      Router.go('lobby');
+      this.tryResumeGame();
+    });
+  },
 
     const payload = { username, password };
     msgEl.textContent = 'Загрузка...';
