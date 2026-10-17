@@ -308,8 +308,22 @@ const App = {
     let saved = null;
     try { saved = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
     if (!saved) return;
+    
+    // 🔥 ЗАЩИТА: если это self-play лобби, не восстанавливаем
+    if (saved.startsWith('sp_')) {
+      try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
+      Game.updateBackToGameBtn();
+      return;
+    }
+    
     this.socket.emit('getGameState', { lobbyId: saved }, (res) => {
       if (!res || !res.ok) {
+        try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
+        Game.updateBackToGameBtn();
+        return;
+      }
+      // 🔥 ЗАЩИТА: если сервер вернул self-play (на всякий случай)
+      if (res.state && res.state.isSelfPlay) {
         try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
         Game.updateBackToGameBtn();
         return;
@@ -324,6 +338,7 @@ const App = {
     if (this.gameActive && !this.gameEnded) { Router.go('game'); Game.renderBoard(); Game.renderMoves(); return; }
     this.socket.emit('getGameState', { lobbyId: this.lobbyId }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось вернуться к партии'); return; }
+      if (res.state && res.state.isSelfPlay) { alert('Это self-play партия'); return; }
       Game.applyGameStateFromServer(res.state, this.lobbyId);
     });
   },
@@ -463,6 +478,13 @@ const Router = {
   apply() {
     const { name, param } = this.current;
     if (!App.me && name !== 'login') { this.show('loginScreen'); return; }
+    
+    // 🔥 ЗАЩИТА: если в URL self-play лобби — перекидываем в лобби
+    if (name === 'game' && param && param.startsWith('sp_')) {
+      Router.go('lobby');
+      return;
+    }
+    
     if (App.me && App.gameActive && !App.gameEnded && App.lobbyId && name === 'lobby') {
       const opponent = document.getElementById('activeGameOpponent');
       if (opponent) opponent.textContent = App.opponentName || 'соперником';
@@ -569,7 +591,10 @@ const Lobby = {
   renderWaiting() {
     const el = document.getElementById('lobbyTabContent');
     App.socket.emit('getLobbies', (res) => {
-      const list = Array.isArray(res) ? res : ((res && Array.isArray(res.list)) ? res.list : []);
+      // 🔥 ФИЛЬТР: убираем self-play
+      let list = Array.isArray(res) ? res : ((res && Array.isArray(res.list)) ? res.list : []);
+      list = list.filter(l => !l.isSelfPlay);
+      
       el.innerHTML = '';
       const current = new Map();
       if (list.length) for (const l of list) if (l.status === 'waiting') current.set(l.id, l);
@@ -668,6 +693,8 @@ const Watch = {
   requestId: 0, autoRefreshHandle: null,
   init() {},
   enter(gameId) {
+    // 🔥 ЗАЩИТА: если self-play, не входим
+    if (gameId && gameId.startsWith('sp_')) { Router.go('watch'); return; }
     this.refresh(true);
     if (gameId) this.watch(gameId);
     if (this.autoRefreshHandle) clearInterval(this.autoRefreshHandle);
@@ -676,8 +703,12 @@ const Watch = {
   refresh(force) { App.socket.emit('getLiveGames', (list) => { this.refreshFromList(list); }); },
   refreshFromList(list) {
     const box = document.getElementById('watchListBody'); if (!box) return;
+    
+    // 🔥 ФИЛЬТР: убираем self-play
+    list = (list || []).filter(g => !g.isSelfPlay && !(g.id && g.id.startsWith('sp_')));
+    
     const hash = JSON.stringify(list); if (hash === this.lastHash) return; this.lastHash = hash;
-    if (!list || !list.length) { box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>'; return; }
+    if (!list.length) { box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>'; return; }
     box.innerHTML = list.map(g => {
       const cls = 'watchRow' + (g.isArena ? ' isArena' : '') + (g.isBotGame ? ' isBotGame' : '');
       const arenaTag = g.isArena ? ` · ${Utils.escapeHtml(g.arenaName || 'турнир')}` : '';
@@ -691,6 +722,8 @@ const Watch = {
     }).join('');
   },
   watch(id) {
+    // 🔥 ЗАЩИТА: self-play не смотрим
+    if (!id || id.startsWith('sp_')) { alert('Self-play партии недоступны для просмотра'); return; }
     if (this.watchingGameId === id) { if (Router.current.name !== 'watch') Router.go('watch', id); return; }
     if (this.watchingGameId) App.socket.emit('unwatchGame', { id: this.watchingGameId });
     this.watchingGameId = id; this.watchingGame = null; this.lastBoardHash = '';
@@ -699,6 +732,7 @@ const Watch = {
     App.socket.emit('watchGame', { id }, (res) => {
       if (reqId !== this.requestId) return;
       if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось начать просмотр'); this.watchingGameId = null; return; }
+      if (res.game && res.game.isSelfPlay) { alert('Self-play партии недоступны'); this.watchingGameId = null; return; }
       this.watchingGame = res.game; this.lastBoardHash = ''; this.renderBoard();
     });
   },
@@ -1403,9 +1437,18 @@ const Game = {
   },
 
   enter(lobbyId) {
+    // 🔥 ЗАЩИТА: если это self-play, не входим
+    if (lobbyId && lobbyId.startsWith('sp_')) {
+      Router.go('lobby');
+      return;
+    }
     if (lobbyId && (!App.lobbyId || App.lobbyId !== lobbyId)) {
       App.lobbyId = lobbyId;
-      App.socket.emit('getGameState', { lobbyId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Партия не найдена'); Router.go('lobby'); return; } this.applyGameStateFromServer(res.state, lobbyId); });
+      App.socket.emit('getGameState', { lobbyId }, (res) => { 
+        if (!res || !res.ok) { alert((res && res.msg) || 'Партия не найдена'); Router.go('lobby'); return; }
+        if (res.state && res.state.isSelfPlay) { Router.go('lobby'); return; }
+        this.applyGameStateFromServer(res.state, lobbyId); 
+      });
       return;
     }
     this.renderBoard(); this.renderMoves(); this.updateTimers();
@@ -1489,6 +1532,8 @@ const Game = {
   },
   updateBackToGameBtn() { const opponent = document.getElementById('activeGameOpponent'); if (opponent) opponent.textContent = App.opponentName || 'соперником'; },
   applyGameStateFromServer(s, lobbyId) {
+    // 🔥 ЗАЩИТА: если self-play — игнорируем
+    if (s && s.isSelfPlay) { console.warn('Попытка применить self-play state'); return; }
     App.lobbyId = lobbyId; App.myColor = s.myColor; App.opponentName = s.opponent;
     const activeGameOpponent = document.getElementById('activeGameOpponent'); if (activeGameOpponent) activeGameOpponent.textContent = s.opponent || 'соперником';
     App.opponentRating = s.opponentRating; App.opponentIsAdmin = s.opponentIsAdmin;
@@ -1793,6 +1838,16 @@ const Game = {
   },
   onOpponentLeft() { if (!App.gameActive) return; alert('Соперник отключился'); this.updateBackToGameBtn(); },
   onGameStart(payload) {
+    // 🔥 ЗАЩИТА: self-play игнорируем
+    if (payload.lobbyId && payload.lobbyId.startsWith('sp_')) {
+      console.warn('[Game] Получен gameStart для self-play, игнорируем');
+      return;
+    }
+    if (payload.isSelfPlay) {
+      console.warn('[Game] Получен gameStart с isSelfPlay, игнорируем');
+      return;
+    }
+    
     const { color, opponent, opponentRating, time, inc, lobbyId, fen, chat, arenaId, arenaName, opponentIsAdmin, opponentIsMod, opponentOnline, opponentIsBot, isBot: isBotFlag } = payload;
     if (lobbyId) App.lobbyId = lobbyId;
     App.myColor = color || 'w'; App.inc = inc || 0;
