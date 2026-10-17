@@ -1,10 +1,11 @@
 'use strict';
 
 /**
- * watcher-learning.js — простой RL-бот.
- * - Линейная модель: 768 весов (12 фигур × 64 клетки)
- * - Обучение: self-play + reward по итогу партии
- * - Не учится у людей и ботов
+ * watcher-learning.js — простой RL-бот Watcher.
+ * - Линейная модель: 12 фигур × 64 клетки = 768 весов
+ * - Стартовые веса — разумные (не нули)
+ * - Атомарное сохранение
+ * - Защита от битого JSON
  */
 
 const fs = require('fs');
@@ -17,19 +18,91 @@ const DATA_FILE = path.join(__dirname, 'watcher-data.json');
 // ============================================================
 let DATA = {
   version: 3,
-  weights: {},          // 'P_e4': 0.5, 'N_f3': 1.2, ...
-  games: 0,             // сколько self-play партий сыграно
-  wins: 0, losses: 0, draws: 0,
+  weights: {},
+  games: 0,
+  wins: 0,
+  losses: 0,
+  draws: 0,
   lastUpdate: 0,
 };
 
+// Начальные веса (не нули!) — бот с первого запуска играет осмысленно.
+const PST_START = {
+  P: [ // пешки
+     0,  0,  0,  0,  0,  0,  0,  0,
+    50, 50, 50, 50, 50, 50, 50, 50,
+    10, 10, 20, 30, 30, 20, 10, 10,
+     5,  5, 10, 25, 25, 10,  5,  5,
+     0,  0,  0, 20, 20,  0,  0,  0,
+     5, -5,-10,  0,  0,-10, -5,  5,
+     5, 10, 10,-20,-20, 10, 10,  5,
+     0,  0,  0,  0,  0,  0,  0,  0,
+  ],
+  N: [
+    -50,-40,-30,-30,-30,-30,-40,-50,
+    -40,-20,  0,  0,  0,  0,-20,-40,
+    -30,  0, 10, 15, 15, 10,  0,-30,
+    -30,  5, 15, 20, 20, 15,  5,-30,
+    -30,  0, 15, 20, 20, 15,  0,-30,
+    -30,  5, 10, 15, 15, 10,  5,-30,
+    -40,-20,  0,  5,  5,  0,-20,-40,
+    -50,-40,-30,-30,-30,-30,-40,-50,
+  ],
+  B: [
+    -20,-10,-10,-10,-10,-10,-10,-20,
+    -10,  0,  0,  0,  0,  0,  0,-10,
+    -10,  0,  5, 10, 10,  5,  0,-10,
+    -10,  5,  5, 10, 10,  5,  5,-10,
+    -10,  0, 10, 10, 10, 10,  0,-10,
+    -10, 10, 10, 10, 10, 10, 10,-10,
+    -10,  5,  0,  0,  0,  0,  5,-10,
+    -20,-10,-10,-10,-10,-10,-10,-20,
+  ],
+  R: [
+     0,  0,  0,  0,  0,  0,  0,  0,
+     5, 10, 10, 10, 10, 10, 10,  5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+     0,  0,  0,  5,  5,  0,  0,  0,
+  ],
+  Q: [
+    -20,-10,-10, -5, -5,-10,-10,-20,
+    -10,  0,  0,  0,  0,  0,  0,-10,
+    -10,  0,  5,  5,  5,  5,  0,-10,
+     -5,  0,  5,  5,  5,  5,  0, -5,
+      0,  0,  5,  5,  5,  5,  0, -5,
+    -10,  5,  5,  5,  5,  5,  0,-10,
+    -10,  0,  5,  0,  0,  0,  0,-10,
+    -20,-10,-10, -5, -5,-10,-10,-20,
+  ],
+  K: [
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -20,-30,-30,-40,-40,-30,-30,-20,
+    -10,-20,-20,-20,-20,-20,-20,-10,
+     20, 20,  0,  0,  0,  0, 20, 20,
+     20, 30, 10,  0,  0, 10, 30, 20,
+  ],
+};
+
 function initWeights() {
-  const pieces = ['P','N','B','R','Q','K','p','n','b','r','q','k'];
   const files = 'abcdefgh';
+  const pieces = ['P','N','B','R','Q','K','p','n','b','r','q','k'];
+  DATA.weights = {};
   for (const p of pieces) {
+    const upper = p.toUpperCase();
+    const table = PST_START[upper];
+    const isWhitePiece = p === upper;
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
       const sq = `${files[c]}${8 - r}`;
-      DATA.weights[`${p}_${sq}`] = 0;
+      // Для чёрных зеркалим вертикаль
+      const idx = isWhitePiece ? r * 8 + c : (7 - r) * 8 + c;
+      DATA.weights[`${p}_${sq}`] = (table[idx] || 0) / 100; // в "пешках"
     }
   }
 }
@@ -37,42 +110,54 @@ function initWeights() {
 function loadData() {
   try {
     if (fs.existsSync(DATA_FILE)) {
-      const parsed = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
-      // Если версия не та — пересоздаём
+      const raw = fs.readFileSync(DATA_FILE, 'utf8');
+      if (!raw.trim()) throw new Error('Пустой файл');
+      const parsed = JSON.parse(raw);
       if (parsed.version !== 3) {
-        console.log('[Watcher] Старая версия, создаю новую базу v3');
-        DATA = { version: 3, weights: {}, games: 0, wins: 0, losses: 0, draws: 0, lastUpdate: 0 };
+        console.log('[Watcher] Старая версия базы, пересоздаю');
         initWeights();
         saveData();
       } else {
         DATA = parsed;
-        // Проверка, что все веса на месте
+        if (!DATA.weights) DATA.weights = {};
+        // Восстановить отсутствующие веса
+        let restored = 0;
         for (const p of ['P','N','B','R','Q','K','p','n','b','r','q','k']) {
           for (const f of 'abcdefgh') {
             for (let n = 1; n <= 8; n++) {
-              if (typeof DATA.weights[`${p}_${f}${n}`] !== 'number') DATA.weights[`${p}_${f}${n}`] = 0;
+              const key = `${p}_${f}${n}`;
+              if (typeof DATA.weights[key] !== 'number') {
+                DATA.weights[key] = 0;
+                restored++;
+              }
             }
           }
         }
-        console.log(`[Watcher] База загружена: ${DATA.games} партий, W/L/D = ${DATA.wins}/${DATA.losses}/${DATA.draws}`);
+        if (restored) console.log(`[Watcher] Восстановлено ${restored} весов`);
+        console.log(`[Watcher] Загружено: ${DATA.games} партий, W/L/D = ${DATA.wins}/${DATA.losses}/${DATA.draws}`);
       }
     } else {
-      DATA = { version: 3, weights: {}, games: 0, wins: 0, losses: 0, draws: 0, lastUpdate: 0 };
       initWeights();
       saveData();
-      console.log('[Watcher] Создал новую базу v3');
+      console.log('[Watcher] Создал новую базу watcher-data.json');
     }
   } catch (e) {
-    console.error('[Watcher] Ошибка загрузки:', e.message);
+    console.error('[Watcher] Файл повреждён, создаю новый. Ошибка:', e.message);
+    // Сохранить сломанный файл для анализа
+    try { fs.copyFileSync(DATA_FILE, DATA_FILE + '.broken'); } catch (_) {}
     DATA = { version: 3, weights: {}, games: 0, wins: 0, losses: 0, draws: 0, lastUpdate: 0 };
     initWeights();
+    saveData();
   }
 }
 
 function saveData() {
   try {
     DATA.lastUpdate = Date.now();
-    fs.writeFileSync(DATA_FILE, JSON.stringify(DATA, null, 2));
+    const json = JSON.stringify(DATA, null, 2);
+    const tmp = DATA_FILE + '.tmp';
+    fs.writeFileSync(tmp, json);
+    fs.renameSync(tmp, DATA_FILE); // атомарно: либо старый, либо новый, не обрывок
   } catch (e) {
     console.error('[Watcher] Ошибка сохранения:', e.message);
   }
@@ -230,11 +315,9 @@ function allLegalMoves(state, white) {
 }
 
 // ============================================================
-// ОЦЕНКА ПОЗИЦИИ (по весам)
+// ОЦЕНКА ПОЗИЦИИ
 // ============================================================
-function sqName(r, c) {
-  return String.fromCharCode(97 + c) + (8 - r);
-}
+function sqName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
 
 function evaluate(state, forWhite) {
   let score = 0;
@@ -243,6 +326,7 @@ function evaluate(state, forWhite) {
     const isW = isWhite(p);
     const material = PIECE_VALUES[p.toLowerCase()] || 0;
     const w = DATA.weights[`${p}_${sqName(r, c)}`] || 0;
+    // Вес — в "пешках" (1.0 = пешка). Материал — в сотнях, поэтому умножаем на 100
     const total = material + w * 100;
     score += isW ? total : -total;
   }
@@ -252,7 +336,7 @@ function evaluate(state, forWhite) {
 // ============================================================
 // ВЫБОР ХОДА
 // ============================================================
-function pickMove(state, isWhiteTurn, epsilon = 0.2) {
+function pickMove(state, isWhiteTurn, epsilon = 0.1) {
   const legal = allLegalMoves(state, isWhiteTurn);
   if (legal.length === 0) return null;
   if (legal.length === 1) return legal[0];
@@ -287,24 +371,17 @@ function playSelfPlayGame() {
     if (state.half >= 100) { result = 0; break; }
 
     const isW = state.turn === 'w';
-    const mv = pickMove(state, isW, 0.3);
+    const mv = pickMove(state, isW, 0.2);
     if (!mv) break;
 
     const pieceMoved = state.board[mv[0][0]][mv[0][1]];
     const sqFrom = sqName(mv[0][0], mv[0][1]);
     const sqTo = sqName(mv[1][0], mv[1][1]);
 
-    history.push({
-      white: isW,
-      pieceMoved,
-      sqFrom,
-      sqTo,
-    });
-
+    history.push({ white: isW, pieceMoved, sqFrom, sqTo });
     state = applyMove(state, mv[0], mv[1]);
   }
 
-  // Обучение
   trainOnHistory(history, result);
 
   DATA.games++;
@@ -318,12 +395,10 @@ function playSelfPlayGame() {
 function trainOnHistory(history, result) {
   if (history.length === 0) return;
 
-  // Если белые выиграли (result=1) — бонус всем ходам белых, штраф чёрным
-  // Если ничья — маленький бонус за «сложные» ходы (взятия)
-  const lr = 0.01;
+  // Если белые выиграли — поощряем ходы белых и наказываем чёрных, и наоборот
+  const lr = 0.005;
 
   for (const move of history) {
-    // Знак: белые → +1, чёрные → -1
     const side = move.white ? 1 : -1;
 
     let reward;
@@ -331,21 +406,15 @@ function trainOnHistory(history, result) {
     else if (result === -1) reward = move.white ? -1 : 1;
     else reward = 0;
 
-    // Обновляем веса "откуда" и "куда"
+    if (reward === 0) continue;
+
     const keyFrom = `${move.pieceMoved}_${move.sqFrom}`;
     const keyTo = `${move.pieceMoved}_${move.sqTo}`;
-
-    // Если ход хороший — ценим клетку "куда"
-    // Если плохой — ценим клетку "откуда" (хотели уйти, но не помогло)
     if (typeof DATA.weights[keyTo] !== 'number') DATA.weights[keyTo] = 0;
     if (typeof DATA.weights[keyFrom] !== 'number') DATA.weights[keyFrom] = 0;
 
-    DATA.weights[keyTo] += lr * side * reward;
-    DATA.weights[keyFrom] -= lr * side * reward * 0.5;
-
-    // Ограничим веса, чтобы не разлетались
-    DATA.weights[keyTo] = Math.max(-1, Math.min(1, DATA.weights[keyTo]));
-    DATA.weights[keyFrom] = Math.max(-1, Math.min(1, DATA.weights[keyFrom]));
+    DATA.weights[keyTo] = Math.max(-2, Math.min(2, DATA.weights[keyTo] + lr * side * reward));
+    DATA.weights[keyFrom] = Math.max(-2, Math.min(2, DATA.weights[keyFrom] - lr * side * reward * 0.3));
   }
 }
 
@@ -362,10 +431,6 @@ function getStats() {
   };
 }
 
-/**
- * Используется сервером, когда Watcher играет с человеком/ботом.
- * НЕ обновляет веса.
- */
 function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
   const state = parseFen(fen);
   const isWhiteTurn = color === 'w';
@@ -377,8 +442,8 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
 // Заглушки для совместимости с server.js
 function startEpisode() {}
 function recordTransition() {}
-function learnFromObservedMove() {} // ← не учимся у людей и ботов!
-function finishEpisode() {}          // ← не записываем партии из сервера
+function learnFromObservedMove() {}
+function finishEpisode() {}
 function loadWeights() { loadData(); }
 function saveWeights() { saveData(); }
 
@@ -392,7 +457,6 @@ module.exports = {
   loadWeights,
   saveWeights,
   startAutoSave,
-  // для тренера:
   playSelfPlayGame,
   saveData,
 };
