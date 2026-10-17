@@ -1,10 +1,5 @@
 'use strict';
 
-/**
- * watcher-worker.js — worker thread для self-play тренера.
- * Не блокирует основной поток сервера.
- */
-
 const { parentPort } = require('worker_threads');
 
 let watcher = null;
@@ -28,18 +23,25 @@ parentPort.on('message', (msg) => {
     if (msg.type === 'playGames') {
       const n = msg.count || 10;
       let w = 0, b = 0, d = 0;
+      let lastGame = null;
+
       for (let i = 0; i < n; i++) {
-        const r = watcher.playSelfPlayGame();
+        const game = watcher.playSelfPlayGame();
+        const r = game.result;
         if (r === 1) w++;
         else if (r === -1) b++;
         else d++;
+        lastGame = game;
       }
       watcher.saveData();
+
       parentPort.postMessage({
         type: 'gamesDone',
         played: n,
         results: { w, b, d },
         stats: watcher.getStats(),
+        gameLog: lastGame ? lastGame.moveLog : [],
+        gameResult: lastGame ? lastGame.result : 0
       });
 
     } else if (msg.type === 'getStats') {
