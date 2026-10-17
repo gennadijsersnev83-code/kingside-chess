@@ -1,22 +1,10 @@
 'use strict';
 
-/**
- * watcher-learning.js — мозг обучаемого бота Watcher.
- * - Линейная модель: 12 фигур × 64 клетки = 768 весов
- * - Стартовые веса — PST (позиционные бонусы), не нули
- * - Атомарное сохранение (без обрыва JSON)
- * - Защита от повреждённого файла
- * - Обучение через self-play (вызывается из watcher-worker.js)
- */
-
 const fs = require('fs');
 const path = require('path');
 
 const DATA_FILE = path.join(__dirname, 'watcher-data.json');
 
-// ============================================================
-// ДАННЫЕ
-// ============================================================
 let DATA = {
   version: 3,
   weights: {},
@@ -27,7 +15,6 @@ let DATA = {
   lastUpdate: 0,
 };
 
-// Стартовые веса (PST): бот с первого запуска играет осмысленно.
 const PST_START = {
   P: [
      0,  0,  0,  0,  0,  0,  0,  0,
@@ -114,7 +101,7 @@ function loadData() {
       if (!raw.trim()) throw new Error('Пустой файл');
       const parsed = JSON.parse(raw);
       if (parsed.version !== 3) {
-        console.log('[Watcher] Старая версия базы, пересоздаю');
+        console.log('[Watcher] Старая версия, пересоздаю');
         initWeights();
         saveData();
       } else {
@@ -122,11 +109,9 @@ function loadData() {
         if (!DATA.weights) DATA.weights = {};
         let restored = 0;
         for (const p of ['P','N','B','R','Q','K','p','n','b','r','q','k']) {
-          for (const f of 'abcdefgh') {
-            for (let n = 1; n <= 8; n++) {
-              const key = `${p}_${f}${n}`;
-              if (typeof DATA.weights[key] !== 'number') { DATA.weights[key] = 0; restored++; }
-            }
+          for (const f of 'abcdefgh') for (let n = 1; n <= 8; n++) {
+            const key = `${p}_${f}${n}`;
+            if (typeof DATA.weights[key] !== 'number') { DATA.weights[key] = 0; restored++; }
           }
         }
         if (restored) console.log(`[Watcher] Восстановлено ${restored} весов`);
@@ -138,7 +123,7 @@ function loadData() {
       console.log('[Watcher] Создал новую базу watcher-data.json');
     }
   } catch (e) {
-    console.error('[Watcher] Файл повреждён, создаю новый. Ошибка:', e.message);
+    console.error('[Watcher] Файл повреждён, создаю новый:', e.message);
     try { fs.copyFileSync(DATA_FILE, DATA_FILE + '.broken'); } catch (_) {}
     DATA = { version: 3, weights: {}, games: 0, wins: 0, losses: 0, draws: 0, lastUpdate: 0 };
     initWeights();
@@ -164,9 +149,6 @@ function startAutoSave() {
   autoSaveTimer = setInterval(saveData, 2 * 60 * 1000);
 }
 
-// ============================================================
-// ШАХМАТНЫЕ ХЕЛПЕРЫ
-// ============================================================
 const PIECE_VALUES = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
 const isWhite = p => !!p && p === p.toUpperCase();
 const inBoard = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
@@ -179,6 +161,16 @@ function parseFen(fen) {
     for (const ch of row) { if (/\d/.test(ch)) f += +ch; else board[r][f++] = ch; }
   });
   return { board, turn: parts[1], castling: parts[2], ep: parts[3], half: +parts[4] || 0, full: +parts[5] || 1 };
+}
+
+function toFen(state) {
+  const rows = state.board.map(r => {
+    let s = '', e = 0;
+    for (const c of r) { if (c) { if (e) { s += e; e = 0; } s += c; } else e++; }
+    if (e) s += e;
+    return s;
+  }).join('/');
+  return [rows, state.turn, state.castling, state.ep, state.half, state.full].join(' ');
 }
 
 function pseudoMoves(state, r, c) {
@@ -299,9 +291,6 @@ function allLegalMoves(state, white) {
   return res;
 }
 
-// ============================================================
-// ОЦЕНКА
-// ============================================================
 function sqName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
 
 function evaluate(state, forWhite) {
@@ -331,12 +320,11 @@ function pickMove(state, isWhiteTurn, epsilon = 0.1) {
   return best;
 }
 
-// ============================================================
-// SELF-PLAY
-// ============================================================
+// 🔥 Возвращает { result, moveLog } — лог ходов с FEN после каждого
 function playSelfPlayGame() {
   let state = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
   const history = [];
+  const moveLog = [];
   let result = 0;
   const maxMoves = 200;
 
@@ -359,6 +347,13 @@ function playSelfPlayGame() {
 
     history.push({ white: isW, pieceMoved, sqFrom, sqTo });
     state = applyMove(state, mv[0], mv[1]);
+
+    moveLog.push({
+      from: mv[0],
+      to: mv[1],
+      byColor: isW ? 'w' : 'b',
+      fenAfter: toFen(state)
+    });
   }
 
   trainOnHistory(history, result);
@@ -368,7 +363,7 @@ function playSelfPlayGame() {
   else if (result === -1) DATA.losses++;
   else DATA.draws++;
 
-  return result;
+  return { result, moveLog };
 }
 
 function trainOnHistory(history, result) {
@@ -381,20 +376,15 @@ function trainOnHistory(history, result) {
     else if (result === -1) reward = move.white ? -1 : 1;
     else reward = 0;
     if (reward === 0) continue;
-
     const keyFrom = `${move.pieceMoved}_${move.sqFrom}`;
     const keyTo = `${move.pieceMoved}_${move.sqTo}`;
     if (typeof DATA.weights[keyTo] !== 'number') DATA.weights[keyTo] = 0;
     if (typeof DATA.weights[keyFrom] !== 'number') DATA.weights[keyFrom] = 0;
-
     DATA.weights[keyTo] = Math.max(-2, Math.min(2, DATA.weights[keyTo] + lr * side * reward));
     DATA.weights[keyFrom] = Math.max(-2, Math.min(2, DATA.weights[keyFrom] - lr * side * reward * 0.3));
   }
 }
 
-// ============================================================
-// ПУБЛИЧНЫЙ API
-// ============================================================
 function getStats() {
   return {
     games: DATA.games,
@@ -412,7 +402,6 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
   return { from: move[0], to: move[1] };
 }
 
-// Заглушки для совместимости с server.js
 function startEpisode() {}
 function recordTransition() {}
 function learnFromObservedMove() {}
