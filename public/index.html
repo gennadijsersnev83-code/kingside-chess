@@ -73,15 +73,11 @@
       <input id="username" placeholder="Логин" autocomplete="off">
       <input id="password" type="password" placeholder="Пароль" autocomplete="off">
     </div>
-    <div class="row">
-      <input id="email" type="email" placeholder="Email (только при регистрации)" autocomplete="email" style="flex:1">
-    </div>
     <div class="row" style="justify-content:center">
-      <button class="primary" onclick="App.doLogin()" style="padding:10px 40px">Войти / Зарегистрироваться</button>
+      <button class="primary" onclick="App.doLogin()" style="padding:10px 40px">Войти</button>
     </div>
-    <button class="secondary" id="resendBtn" onclick="App.resendVerification()" style="display:none;width:100%;margin-top:8px">Отправить письмо повторно</button>
     <p id="loginMsg"></p>
-    <p class="hint-text">При регистрации заполни email. При входе — оставь email пустым.</p>
+    <p class="hint-text">Одинаковый логин — тот же аккаунт. Данные сохраняются.</p>
   </section>
 
   <!-- LOBBY -->
