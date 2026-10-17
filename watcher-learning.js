@@ -73,17 +73,28 @@ const PST_START = {
   ],
 };
 
+// ============================================================
+// ДЕБЮТНАЯ КНИГА
+// ============================================================
 const OPENING_BOOK = {
   'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1': [
     { from: [6, 4], to: [4, 4] }, { from: [6, 3], to: [4, 3] },
-    { from: [7, 6], to: [5, 5] }, { from: [6, 2], to: [4, 2] }
+    { from: [7, 6], to: [5, 5] }, { from: [6, 2], to: [4, 2] },
+    { from: [7, 1], to: [5, 2] }
   ],
   'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1': [
     { from: [1, 4], to: [3, 4] }, { from: [1, 2], to: [3, 2] },
-    { from: [1, 3], to: [3, 3] }, { from: [1, 5], to: [2, 5] }
+    { from: [1, 3], to: [3, 3] }, { from: [1, 5], to: [2, 5] },
+    { from: [1, 6], to: [2, 6] }
   ],
   'rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1': [
     { from: [1, 3], to: [3, 3] }, { from: [1, 6], to: [2, 6] }, { from: [1, 2], to: [3, 2] }
+  ],
+  'rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 1 1': [
+    { from: [1, 3], to: [3, 3] }, { from: [1, 4], to: [3, 4] }, { from: [1, 6], to: [2, 6] }
+  ],
+  'rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1': [
+    { from: [1, 4], to: [3, 4] }, { from: [1, 2], to: [3, 2] }, { from: [1, 6], to: [2, 6] }
   ],
   'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2': [
     { from: [7, 6], to: [5, 5] }, { from: [7, 5], to: [4, 2] }, { from: [6, 3], to: [4, 3] }
@@ -99,9 +110,6 @@ const OPENING_BOOK = {
   ],
   'rnbqkb1r/pppppppp/5n2/8/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 1 2': [
     { from: [7, 2], to: [5, 2] }, { from: [7, 6], to: [5, 5] }, { from: [6, 2], to: [4, 2] }
-  ],
-  'rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1': [
-    { from: [1, 4], to: [3, 4] }, { from: [1, 2], to: [3, 2] }, { from: [1, 6], to: [2, 6] }
   ],
   'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3': [
     { from: [7, 5], to: [4, 2] }, { from: [6, 3], to: [4, 3] }, { from: [7, 1], to: [5, 2] }
@@ -364,7 +372,7 @@ function allLegalMoves(state, white) {
 function sqName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
 
 // ============================================================
-// ОЦЕНКА (с защитой фигур)
+// ОЦЕНКА
 // ============================================================
 function evaluate(state, forWhite) {
   let score = 0;
@@ -411,13 +419,11 @@ function evaluate(state, forWhite) {
     }
   }
   
-  // 🔥 ЗАЩИТА ФИГУР
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     const isW = isWhite(p);
     const val = PIECE_VALUES[p.toLowerCase()] || 0;
     if (val < 300) continue;
-    
     if (isAttacked(state, r, c, !isW)) {
       let defended = false;
       for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
@@ -425,11 +431,8 @@ function evaluate(state, forWhite) {
         const q = state.board[rr][cc]; if (!q || isWhite(q) !== isW) continue;
         if (pseudoMoves(state, rr, cc).some(([mr, mc]) => mr === r && mc === c)) { defended = true; break; }
       }
-      if (!defended) {
-        score += isW ? -val : val;
-      } else {
-        score += isW ? -val * 0.1 : val * 0.1;
-      }
+      if (!defended) score += isW ? -val : val;
+      else score += isW ? -val * 0.1 : val * 0.1;
     }
   }
   
@@ -563,13 +566,12 @@ function getBookMove(fen) {
 }
 
 function pickMoveSearch(state, isWhiteTurn, timeMs, fenForBook) {
+  // 🔥 Книга (100%)
   if (fenForBook) {
     try {
       const bookMoves = getBookMove(fenForBook);
       if (bookMoves && bookMoves.length > 0) {
-        if (Math.random() < 0.85) {
-          return bookMoves[Math.floor(Math.random() * bookMoves.length)];
-        }
+        return bookMoves[Math.floor(Math.random() * bookMoves.length)];
       }
     } catch (e) {}
   }
