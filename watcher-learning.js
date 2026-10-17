@@ -78,44 +78,60 @@ const PST_START = {
 // ============================================================
 const OPENING_BOOK = {
   'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1': [
-    { from: [6, 4], to: [4, 4] }, { from: [6, 3], to: [4, 3] },
-    { from: [7, 6], to: [5, 5] }, { from: [6, 2], to: [4, 2] },
-    { from: [7, 1], to: [5, 2] }
+    { from: [6, 4], to: [4, 4] }, // e4
+    { from: [6, 3], to: [4, 3] }, // d4
+    { from: [7, 6], to: [5, 5] }, // Nf3
+    { from: [6, 2], to: [4, 2] }  // c4
   ],
   'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1': [
-    { from: [1, 4], to: [3, 4] }, { from: [1, 2], to: [3, 2] },
-    { from: [1, 3], to: [3, 3] }, { from: [1, 5], to: [2, 5] },
-    { from: [1, 6], to: [2, 6] }
+    { from: [1, 4], to: [3, 4] }, // e5
+    { from: [1, 2], to: [3, 2] }, // c5
+    { from: [1, 3], to: [3, 3] }, // d5
+    { from: [1, 5], to: [2, 5] }  // f6
   ],
   'rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1': [
-    { from: [1, 3], to: [3, 3] }, { from: [1, 6], to: [2, 6] }, { from: [1, 2], to: [3, 2] }
-  ],
-  'rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 1 1': [
-    { from: [1, 3], to: [3, 3] }, { from: [1, 4], to: [3, 4] }, { from: [1, 6], to: [2, 6] }
-  ],
-  'rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1': [
-    { from: [1, 4], to: [3, 4] }, { from: [1, 2], to: [3, 2] }, { from: [1, 6], to: [2, 6] }
+    { from: [1, 3], to: [3, 3] }, // d5
+    { from: [1, 6], to: [2, 6] }, // Nf6
+    { from: [1, 2], to: [3, 2] }  // c5
   ],
   'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2': [
-    { from: [7, 6], to: [5, 5] }, { from: [7, 5], to: [4, 2] }, { from: [6, 3], to: [4, 3] }
+    { from: [7, 6], to: [5, 5] }, // Nf3
+    { from: [7, 5], to: [4, 2] }, // Bc4
+    { from: [6, 3], to: [4, 3] }  // d4
   ],
   'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2': [
-    { from: [7, 6], to: [5, 5] }, { from: [6, 3], to: [4, 3] }, { from: [7, 2], to: [5, 2] }
+    { from: [7, 6], to: [5, 5] }, // Nf3
+    { from: [6, 3], to: [4, 3] }, // d4
+    { from: [7, 2], to: [5, 2] }  // c3
   ],
   'rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq d6 0 2': [
-    { from: [7, 2], to: [5, 2] }, { from: [7, 6], to: [5, 5] }, { from: [7, 3], to: [5, 3] }
+    { from: [7, 2], to: [5, 2] }, // c4
+    { from: [7, 6], to: [5, 5] }, // Nf3
+    { from: [7, 3], to: [5, 3] }  // Qd3
   ],
   'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2': [
-    { from: [0, 1], to: [2, 2] }, { from: [1, 3], to: [3, 3] }
+    { from: [0, 1], to: [2, 2] }, // Nc6
+    { from: [1, 3], to: [3, 3] }  // d6
   ],
   'rnbqkb1r/pppppppp/5n2/8/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 1 2': [
-    { from: [7, 2], to: [5, 2] }, { from: [7, 6], to: [5, 5] }, { from: [6, 2], to: [4, 2] }
+    { from: [7, 2], to: [5, 2] }, // c4
+    { from: [7, 6], to: [5, 5] }, // Nf3
+    { from: [6, 2], to: [4, 2] }  // e4
+  ],
+  'rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1': [
+    { from: [1, 4], to: [3, 4] }, // e5
+    { from: [1, 2], to: [3, 2] }, // c5
+    { from: [1, 6], to: [2, 6] }  // Nf6
   ],
   'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3': [
-    { from: [7, 5], to: [4, 2] }, { from: [6, 3], to: [4, 3] }, { from: [7, 1], to: [5, 2] }
+    { from: [7, 5], to: [4, 2] }, // Bc4
+    { from: [6, 3], to: [4, 3] }, // d4
+    { from: [7, 1], to: [5, 2] }  // Nc3
   ],
   'rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2': [
-    { from: [1, 3], to: [3, 3] }, { from: [0, 1], to: [2, 2] }, { from: [1, 4], to: [2, 4] }
+    { from: [1, 3], to: [3, 3] }, // d6
+    { from: [0, 1], to: [2, 2] }, // Nc6
+    { from: [1, 4], to: [2, 4] }  // e6
   ]
 };
 
@@ -399,6 +415,7 @@ function evaluate(state, forWhite) {
     if (whitePawnsByFile[f] > 1) score -= 10 * (whitePawnsByFile[f] - 1);
     if (blackPawnsByFile[f] > 1) score += 10 * (blackPawnsByFile[f] - 1);
   }
+  
   for (let f = 0; f < 8; f++) {
     if (whitePawnsByFile[f] > 0) {
       const left = f > 0 ? whitePawnsByFile[f-1] : 0;
@@ -419,28 +436,6 @@ function evaluate(state, forWhite) {
     }
   }
   
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = state.board[r][c]; if (!p) continue;
-    const isW = isWhite(p);
-    const val = PIECE_VALUES[p.toLowerCase()] || 0;
-    if (val < 300) continue;
-    if (isAttacked(state, r, c, !isW)) {
-      let defended = false;
-      for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
-        if (rr === r && cc === c) continue;
-        const q = state.board[rr][cc]; if (!q || isWhite(q) !== isW) continue;
-        if (pseudoMoves(state, rr, cc).some(([mr, mc]) => mr === r && mc === c)) { defended = true; break; }
-      }
-      if (!defended) score += isW ? -val : val;
-      else score += isW ? -val * 0.1 : val * 0.1;
-    }
-  }
-  
-  if (whitePieces + blackPieces > 10) {
-    if (whiteKing && whiteKing[1] === 4 && whiteKing[0] === 7) score -= 30;
-    if (blackKing && blackKing[1] === 4 && blackKing[0] === 0) score += 30;
-  }
-  
   if (whitePieces + blackPieces <= 5) {
     if (whiteKing && blackKing) {
       const dist = Math.abs(whiteKing[0] - blackKing[0]) + Math.abs(whiteKing[1] - blackKing[1]);
@@ -450,6 +445,11 @@ function evaluate(state, forWhite) {
       const edgeDistW = Math.min(whiteKing[0], 7 - whiteKing[0], whiteKing[1], 7 - whiteKing[1]);
       score += edgeDistW * 10;
     }
+  }
+  
+  if (whitePieces + blackPieces > 10) {
+    if (whiteKing && whiteKing[1] === 4 && whiteKing[0] === 7) score -= 30;
+    if (blackKing && blackKing[1] === 4 && blackKing[0] === 0) score += 30;
   }
   
   return forWhite ? score : -score;
@@ -467,10 +467,12 @@ function quiescence(state, alpha, beta, color) {
   }
 
   const captures = legal.filter(([from, to]) => state.board[to[0]][to[1]]);
+  
   captures.sort((a, b) => {
     const attackerA = state.board[a[0][0]][a[0][1]].toLowerCase();
     const victimA = state.board[a[1][0]][a[1][1]].toLowerCase();
     const scoreA = (PIECE_VALUES[victimA] || 0) * 10 - (PIECE_VALUES[attackerA] || 0);
+    
     const attackerB = state.board[b[0][0]][b[0][1]].toLowerCase();
     const victimB = state.board[b[1][0]][b[1][1]].toLowerCase();
     const scoreB = (PIECE_VALUES[victimB] || 0) * 10 - (PIECE_VALUES[attackerB] || 0);
@@ -553,10 +555,15 @@ function moveScore(state, from, to) {
   return score;
 }
 
+// 🔥 УСТОЙЧИВАЯ ФУНКЦИЯ ПОИСКА В КНИГЕ
 function getBookMove(fen) {
   if (!fen || typeof fen !== 'string') return null;
   const key = fen.split(' ').slice(0, 4).join(' ');
+  
+  // Сначала пробуем точное совпадение
   if (OPENING_BOOK[fen]) return OPENING_BOOK[fen];
+  
+  // Потом по ключу без счетчиков
   for (const bookFen in OPENING_BOOK) {
     if (bookFen.split(' ').slice(0, 4).join(' ') === key) {
       return OPENING_BOOK[bookFen];
@@ -566,14 +573,19 @@ function getBookMove(fen) {
 }
 
 function pickMoveSearch(state, isWhiteTurn, timeMs, fenForBook) {
-  // 🔥 Книга (100%)
+  // 🔥 Проверяем дебютную книгу (только если ходов < 10)
+  // Безопасно: если fenForBook нет, просто пропускаем
   if (fenForBook) {
     try {
       const bookMoves = getBookMove(fenForBook);
       if (bookMoves && bookMoves.length > 0) {
-        return bookMoves[Math.floor(Math.random() * bookMoves.length)];
+        if (Math.random() < 0.85) {
+          return bookMoves[Math.floor(Math.random() * bookMoves.length)];
+        }
       }
-    } catch (e) {}
+    } catch (e) {
+      // Если книга сломалась — просто идем дальше, без падения
+    }
   }
 
   const legal = allLegalMoves(state, isWhiteTurn);
@@ -695,7 +707,11 @@ function playSelfPlayGame() {
 
   let adjustedResult = result;
   if (result === 0 && Math.abs(finalEval) > 300) {
-    adjustedResult = finalEval > 0 ? 1 : -1;
+    if (finalEval > 0) {
+      adjustedResult = 1;
+    } else {
+      adjustedResult = -1;
+    }
   }
 
   trainOnHistory(history, adjustedResult);
@@ -756,13 +772,11 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
     const myTime = timeInfo && timeInfo.time ? timeInfo.time : 5;
 
     let thinkMs;
-    if (myTime < 2) thinkMs = 50;
-    else if (myTime < 5) thinkMs = 100;
-    else if (myTime < 10) thinkMs = 200;
-    else if (myTime < 30) thinkMs = 400;
-    else thinkMs = 800;
-    
-    thinkMs = Math.min(thinkMs, myTime * 1000 * 0.15);
+    if (myTime < 2) thinkMs = 30;
+    else if (myTime < 10) thinkMs = Math.min(150, myTime * 1000 * 0.05);
+    else if (myTime < 30) thinkMs = Math.min(500, myTime * 1000 * 0.08);
+    else thinkMs = Math.min(1500, myTime * 1000 * 0.1);
+    thinkMs = Math.min(thinkMs, myTime * 1000 * 0.3);
     thinkMs = Math.max(50, thinkMs);
 
     const move = pickMoveSearch(state, color === 'w', thinkMs, fen);
