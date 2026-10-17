@@ -1,12 +1,7 @@
 'use strict';
 
-const fs = require('fs');
-const path = require('path');
-
-const DATA_FILE = path.join(__dirname, 'watcher-data.json');
-
 let DATA = {
-  version: 3,
+  version: 4,
   weights: {},
   games: 0,
   wins: 0,
@@ -94,61 +89,122 @@ function initWeights() {
   }
 }
 
-function loadData() {
+// ==================== POSTGRES ====================
+let _pool = null;
+function setPool(pool) { _pool = pool; }
+
+async function ensureTables() {
+  if (!_pool) return;
+  await _pool.query(`
+    CREATE TABLE IF NOT EXISTS watcher_weights (
+      key TEXT PRIMARY KEY,
+      value REAL NOT NULL DEFAULT 0
+    );
+  `);
+  await _pool.query(`
+    CREATE TABLE IF NOT EXISTS watcher_stats (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      games INTEGER NOT NULL DEFAULT 0,
+      wins INTEGER NOT NULL DEFAULT 0,
+      losses INTEGER NOT NULL DEFAULT 0,
+      draws INTEGER NOT NULL DEFAULT 0,
+      last_update BIGINT NOT NULL DEFAULT 0
+    );
+  `);
+  await _pool.query(`
+    INSERT INTO watcher_stats (id, games, wins, losses, draws, last_update)
+    VALUES (1, 0, 0, 0, 0, 0)
+    ON CONFLICT (id) DO NOTHING;
+  `);
+}
+
+async function loadFromDB() {
+  if (!_pool) { initWeights(); return; }
   try {
-    if (fs.existsSync(DATA_FILE)) {
-      const raw = fs.readFileSync(DATA_FILE, 'utf8');
-      if (!raw.trim()) throw new Error('Пустой файл');
-      const parsed = JSON.parse(raw);
-      if (parsed.version !== 3) {
-        console.log('[Watcher] Старая версия, пересоздаю');
-        initWeights();
-        saveData();
-      } else {
-        DATA = parsed;
-        if (!DATA.weights) DATA.weights = {};
-        let restored = 0;
-        for (const p of ['P','N','B','R','Q','K','p','n','b','r','q','k']) {
-          for (const f of 'abcdefgh') for (let n = 1; n <= 8; n++) {
-            const key = `${p}_${f}${n}`;
-            if (typeof DATA.weights[key] !== 'number') { DATA.weights[key] = 0; restored++; }
-          }
-        }
-        if (restored) console.log(`[Watcher] Восстановлено ${restored} весов`);
-        console.log(`[Watcher] Загружено: ${DATA.games} партий, W/L/D = ${DATA.wins}/${DATA.losses}/${DATA.draws}`);
-      }
-    } else {
+    await ensureTables();
+    const wRes = await _pool.query('SELECT key, value FROM watcher_weights');
+    if (wRes.rows.length === 0) {
       initWeights();
-      saveData();
-      console.log('[Watcher] Создал новую базу watcher-data.json');
+      await saveToDB();
+      console.log('[Watcher] Создал PST-веса в БД');
+    } else {
+      DATA.weights = {};
+      for (const row of wRes.rows) DATA.weights[row.key] = Number(row.value);
+      let restored = 0;
+      for (const p of ['P','N','B','R','Q','K','p','n','b','r','q','k']) {
+        for (const f of 'abcdefgh') for (let n = 1; n <= 8; n++) {
+          const key = `${p}_${f}${n}`;
+          if (typeof DATA.weights[key] !== 'number') { DATA.weights[key] = 0; restored++; }
+        }
+      }
+      if (restored) await saveToDB();
     }
+    const sRes = await _pool.query('SELECT games, wins, losses, draws FROM watcher_stats WHERE id = 1');
+    if (sRes.rows.length) {
+      const r = sRes.rows[0];
+      DATA.games = r.games; DATA.wins = r.wins; DATA.losses = r.losses; DATA.draws = r.draws;
+    }
+    console.log(`[Watcher] Загружено из БД: ${DATA.games} партий, W/L/D = ${DATA.wins}/${DATA.losses}/${DATA.draws}`);
   } catch (e) {
-    console.error('[Watcher] Файл повреждён, создаю новый:', e.message);
-    try { fs.copyFileSync(DATA_FILE, DATA_FILE + '.broken'); } catch (_) {}
-    DATA = { version: 3, weights: {}, games: 0, wins: 0, losses: 0, draws: 0, lastUpdate: 0 };
+    console.error('[Watcher] Ошибка загрузки из БД:', e.message);
     initWeights();
-    saveData();
   }
 }
 
-function saveData() {
+async function saveToDB() {
+  if (!_pool) return;
   try {
+    const entries = Object.entries(DATA.weights);
+    if (entries.length) {
+      const BATCH = 100;
+      for (let i = 0; i < entries.length; i += BATCH) {
+        const chunk = entries.slice(i, i + BATCH);
+        const values = [];
+        const params = [];
+        chunk.forEach(([k, v], idx) => {
+          params.push(`($${idx * 2 + 1}, $${idx * 2 + 2})`);
+          values.push(k, Number(v));
+        });
+        await _pool.query(
+          `INSERT INTO watcher_weights (key, value) VALUES ${params.join(',')}
+           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+          values
+        );
+      }
+    }
+    await _pool.query(
+      `UPDATE watcher_stats SET games = $1, wins = $2, losses = $3, draws = $4, last_update = $5 WHERE id = 1`,
+      [DATA.games, DATA.wins, DATA.losses, DATA.draws, Date.now()]
+    );
     DATA.lastUpdate = Date.now();
-    const json = JSON.stringify(DATA, null, 2);
-    const tmp = DATA_FILE + '.tmp';
-    fs.writeFileSync(tmp, json);
-    fs.renameSync(tmp, DATA_FILE);
   } catch (e) {
-    console.error('[Watcher] Ошибка сохранения:', e.message);
+    console.error('[Watcher] Ошибка сохранения в БД:', e.message);
   }
+}
+
+async function reloadFromDB() {
+  if (!_pool) return;
+  try {
+    const wRes = await _pool.query('SELECT key, value FROM watcher_weights');
+    if (wRes.rows.length) {
+      DATA.weights = {};
+      for (const row of wRes.rows) DATA.weights[row.key] = Number(row.value);
+    }
+    const sRes = await _pool.query('SELECT games, wins, losses, draws FROM watcher_stats WHERE id = 1');
+    if (sRes.rows.length) {
+      const r = sRes.rows[0];
+      DATA.games = r.games; DATA.wins = r.wins; DATA.losses = r.losses; DATA.draws = r.draws;
+    }
+  } catch (e) {}
 }
 
 let autoSaveTimer = null;
 function startAutoSave() {
   if (autoSaveTimer) return;
-  autoSaveTimer = setInterval(saveData, 2 * 60 * 1000);
+  autoSaveTimer = setInterval(() => { saveToDB().catch(() => {}); }, 2 * 60 * 1000);
 }
 
+// ==================== ШАХМАТЫ ====================
 const PIECE_VALUES = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
 const isWhite = p => !!p && p === p.toUpperCase();
 const inBoard = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
@@ -320,7 +376,6 @@ function pickMove(state, isWhiteTurn, epsilon = 0.1) {
   return best;
 }
 
-// 🔥 Возвращает { result, moveLog } — лог ходов с FEN после каждого
 function playSelfPlayGame() {
   let state = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
   const history = [];
@@ -387,10 +442,7 @@ function trainOnHistory(history, result) {
 
 function getStats() {
   return {
-    games: DATA.games,
-    wins: DATA.wins,
-    losses: DATA.losses,
-    draws: DATA.draws,
+    games: DATA.games, wins: DATA.wins, losses: DATA.losses, draws: DATA.draws,
     episodeActive: false,
   };
 }
@@ -406,8 +458,9 @@ function startEpisode() {}
 function recordTransition() {}
 function learnFromObservedMove() {}
 function finishEpisode() {}
-function loadWeights() { loadData(); }
-function saveWeights() { saveData(); }
+function loadWeights() { return loadFromDB(); }
+function saveWeights() { return saveToDB(); }
+function reloadWeights() { return reloadFromDB(); }
 
 module.exports = {
   pickMove: pickMoveForServer,
@@ -420,5 +473,7 @@ module.exports = {
   saveWeights,
   startAutoSave,
   playSelfPlayGame,
-  saveData,
+  saveData: saveToDB,
+  reloadWeights,
+  setPool,
 };
