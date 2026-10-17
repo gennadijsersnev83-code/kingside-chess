@@ -7,6 +7,7 @@ const { Pool } = require('pg');
 const botPool = require('./bot-pool');
 const watcherLearning = require('./watcher-learning');
 const watcherPool = require('./watcher-pool');
+const { sendVerificationEmail, sendPasswordResetEmail } = require('./mailer');
 
 const app = express();
 const server = http.createServer(app);
@@ -148,9 +149,19 @@ async function initDB() {
     ['wins_classical','INTEGER DEFAULT 0'],['wins_rapid','INTEGER DEFAULT 0'],['wins_blitz','INTEGER DEFAULT 0'],['wins_bullet','INTEGER DEFAULT 0'],
     ['losses_classical','INTEGER DEFAULT 0'],['losses_rapid','INTEGER DEFAULT 0'],['losses_blitz','INTEGER DEFAULT 0'],['losses_bullet','INTEGER DEFAULT 0'],
     ['games_classical','INTEGER DEFAULT 0'],['games_rapid','INTEGER DEFAULT 0'],['games_blitz','INTEGER DEFAULT 0'],['games_bullet','INTEGER DEFAULT 0'],
-    ['muted_until','BIGINT DEFAULT 0'],['is_bot','BOOLEAN DEFAULT FALSE']
+    ['muted_until','BIGINT DEFAULT 0'],['is_bot','BOOLEAN DEFAULT FALSE'],
+    ['email','TEXT'], ['email_verified','BOOLEAN DEFAULT FALSE'], ['verify_token','TEXT'], ['verify_token_expires','BIGINT DEFAULT 0']
   ];
   for (const [name, type] of cols) await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${name} ${type};`);
+  
+  await pool.query(`CREATE TABLE IF NOT EXISTS password_resets (
+    id SERIAL PRIMARY KEY,
+    username TEXT NOT NULL,
+    token TEXT NOT NULL UNIQUE,
+    expires_at BIGINT NOT NULL,
+    used BOOLEAN DEFAULT FALSE
+  );`);
+
   await pool.query(`UPDATE users SET rating_classical = rating WHERE rating_classical IS NULL;`);
   await pool.query(`UPDATE users SET rating_rapid = rating WHERE rating_rapid IS NULL;`);
   await pool.query(`UPDATE users SET rating_blitz = rating WHERE rating_blitz IS NULL;`);
@@ -186,6 +197,10 @@ async function loadDB() {
       vol: row.vol != null ? row.vol : GLICKO2.DEFAULT_VOL,
       wins: row.wins, losses: row.losses, draws: row.draws, games: row.games,
       createdAt: Number(row.created_at), mutedUntil: Number(row.muted_until || 0), isBot: !!row.is_bot,
+      email: row.email,
+      emailVerified: !!row.email_verified,
+      verifyToken: row.verify_token,
+      verifyExpires: Number(row.verify_token_expires || 0),
       categories: {
         classical: { rating: row.rating_classical != null ? row.rating_classical : row.rating, rd: row.rd_classical != null ? row.rd_classical : GLICKO2.DEFAULT_RD, vol: row.vol_classical != null ? row.vol_classical : GLICKO2.DEFAULT_VOL, wins: row.wins_classical || 0, losses: row.losses_classical || 0, games: row.games_classical || 0 },
         rapid:     { rating: row.rating_rapid     != null ? row.rating_rapid     : row.rating, rd: row.rd_rapid     != null ? row.rd_rapid     : GLICKO2.DEFAULT_RD, vol: row.vol_rapid     != null ? row.vol_rapid     : GLICKO2.DEFAULT_VOL, wins: row.wins_rapid     || 0, losses: row.losses_rapid     || 0, games: row.games_rapid     || 0 },
@@ -203,6 +218,7 @@ async function loadDB() {
       db.users[bot.name] = {
         passwordHash: '', salt: '', rating: startRating, rd: GLICKO2.DEFAULT_RD, vol: GLICKO2.DEFAULT_VOL,
         wins: 0, losses: 0, draws: 0, games: 0, createdAt: Date.now(), mutedUntil: 0, isBot: true,
+        email: null, emailVerified: true, verifyToken: null, verifyExpires: 0,
         categories: { classical: emptyRatingBlock(startRating), rapid: emptyRatingBlock(startRating), blitz: emptyRatingBlock(startRating), bullet: emptyRatingBlock(startRating) }
       };
       try {
@@ -214,8 +230,8 @@ async function loadDB() {
                               wins_classical, wins_rapid, wins_blitz, wins_bullet,
                               losses_classical, losses_rapid, losses_blitz, losses_bullet,
                               games_classical, games_rapid, games_blitz, games_bullet,
-                              muted_until, is_bot)
-           VALUES ($1,$2,$3,$4,$5,$6,0,0,0,0,$7,$4,$4,$4,$4,$5,$5,$5,$5,$6,$6,$6,$6,0,0,0,0,0,0,0,0,0,0,0,0,0,TRUE)`,
+                              muted_until, is_bot, email_verified)
+           VALUES ($1,$2,$3,$4,$5,$6,0,0,0,0,$7,$4,$4,$4,$4,$5,$5,$5,$5,$6,$6,$6,$6,0,0,0,0,0,0,0,0,0,0,0,0,0,TRUE,TRUE)`,
           [bot.name, '', '', startRating, GLICKO2.DEFAULT_RD, GLICKO2.DEFAULT_VOL, Date.now()]
         );
       } catch (e) {}
@@ -235,8 +251,8 @@ async function saveUser(username) {
                         wins_classical, wins_rapid, wins_blitz, wins_bullet,
                         losses_classical, losses_rapid, losses_blitz, losses_bullet,
                         games_classical, games_rapid, games_blitz, games_bullet,
-                        muted_until, is_bot)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37)
+                        muted_until, is_bot, email, email_verified, verify_token, verify_token_expires)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41)
      ON CONFLICT (username) DO UPDATE SET
        rating = EXCLUDED.rating, rd = EXCLUDED.rd, vol = EXCLUDED.vol,
        wins = EXCLUDED.wins, losses = EXCLUDED.losses, draws = EXCLUDED.draws, games = EXCLUDED.games,
@@ -252,7 +268,9 @@ async function saveUser(username) {
        losses_blitz = EXCLUDED.losses_blitz, losses_bullet = EXCLUDED.losses_bullet,
        games_classical = EXCLUDED.games_classical, games_rapid = EXCLUDED.games_rapid,
        games_blitz = EXCLUDED.games_blitz, games_bullet = EXCLUDED.games_bullet,
-       muted_until = EXCLUDED.muted_until, is_bot = EXCLUDED.is_bot`,
+       muted_until = EXCLUDED.muted_until, is_bot = EXCLUDED.is_bot,
+       email = EXCLUDED.email, email_verified = EXCLUDED.email_verified,
+       verify_token = EXCLUDED.verify_token, verify_token_expires = EXCLUDED.verify_token_expires`,
     [username, u.passwordHash, u.salt, u.rating, u.rd || GLICKO2.DEFAULT_RD, u.vol || GLICKO2.DEFAULT_VOL,
      u.wins, u.losses, u.draws, u.games, u.createdAt,
      c.classical ? c.classical.rating : u.rating, c.rapid ? c.rapid.rating : u.rating,
@@ -264,7 +282,8 @@ async function saveUser(username) {
      get('classical','wins'), get('rapid','wins'), get('blitz','wins'), get('bullet','wins'),
      get('classical','losses'), get('rapid','losses'), get('blitz','losses'), get('bullet','losses'),
      get('classical','games'), get('rapid','games'), get('blitz','games'), get('bullet','games'),
-     u.mutedUntil || 0, !!u.isBot]
+     u.mutedUntil || 0, !!u.isBot,
+     u.email || null, !!u.emailVerified, u.verifyToken || null, u.verifyExpires || 0]
   );
 }
 
@@ -1719,6 +1738,35 @@ async function unreadCount(username) {
   return r.rows[0].n || 0;
 }
 
+app.get('/api/verify', async (req, res) => {
+  const { token } = req.query;
+  if (!token) return res.status(400).send('Токен не указан');
+  
+  try {
+    const r = await pool.query('SELECT username, verify_token_expires FROM users WHERE verify_token = $1', [token]);
+    if (!r.rows.length) return res.status(400).send('Неверный или устаревший токен');
+    
+    const { username, verify_token_expires } = r.rows[0];
+    if (Date.now() > Number(verify_token_expires)) {
+      return res.status(400).send('Срок действия токена истек. Зарегистрируйтесь заново.');
+    }
+    
+    await pool.query(
+      'UPDATE users SET email_verified = TRUE, verify_token = NULL, verify_token_expires = 0 WHERE username = $1',
+      [username]
+    );
+    
+    if (db.users[username]) {
+      db.users[username].emailVerified = true;
+    }
+    
+    res.redirect('/#/autorize?verified=1');
+  } catch (e) {
+    console.error('[Verify] Ошибка:', e);
+    res.status(500).send('Внутренняя ошибка сервера');
+  }
+});
+
 io.on('connection', (socket) => {
   socket.emit('stats', {
     online: countOnline(), games: db.totalGames, activeGames: countActiveLobbies(),
@@ -1728,7 +1776,7 @@ io.on('connection', (socket) => {
   });
   socket.emit('liveGamesUpdate', buildGamesList());
 
-  socket.on('register', async ({ username, password }, cb) => {
+  socket.on('register', async ({ username, password, email }, cb) => {
     if (typeof cb !== 'function') return;
     if (!username || !password) return cb({ ok: false, msg: 'Заполните поля' });
     if (ALL_BOT_NAMES.has(username)) return cb({ ok: false, msg: 'Это имя зарезервировано' });
@@ -1736,20 +1784,41 @@ io.on('connection', (socket) => {
     if (!/^[a-zA-Zа-яА-Я0-9_\-]+$/.test(username)) return cb({ ok: false, msg: 'Логин: буквы, цифры, _ и -' });
     if (password.length < 3) return cb({ ok: false, msg: 'Пароль минимум 3 символа' });
     if (password.length > 128) return cb({ ok: false, msg: 'Пароль слишком длинный' });
+    
     let user = db.users[username];
     if (user) {
       if (!verifyPassword(password, user.salt, user.passwordHash)) return cb({ ok: false, msg: 'Неверный пароль' });
+      if (user.emailVerified === false) return cb({ ok: false, msg: 'Пожалуйста, подтвердите ваш email. Проверьте почту.', pending: true });
     } else {
-      const salt = newSalt(); const passwordHash = hashPassword(password, salt);
+      if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
+        return cb({ ok: false, msg: 'Укажите корректный email' });
+      }
+      const emailCheck = await pool.query('SELECT username FROM users WHERE email = $1', [email]);
+      if (emailCheck.rows.length > 0 && emailCheck.rows[0].username !== username) {
+        return cb({ ok: false, msg: 'Этот email уже используется другим аккаунтом' });
+      }
+      
+      const salt = newSalt(); 
+      const passwordHash = hashPassword(password, salt);
       const base = 1200;
+      const verifyToken = crypto.randomBytes(32).toString('hex');
+      const verifyExpires = Date.now() + 24 * 60 * 60 * 1000;
+      
       db.users[username] = {
         passwordHash, salt, rating: base, rd: GLICKO2.DEFAULT_RD, vol: GLICKO2.DEFAULT_VOL,
         wins: 0, losses: 0, draws: 0, games: 0,
         createdAt: Date.now(), mutedUntil: 0, isBot: false,
+        email: email, emailVerified: false, verifyToken: verifyToken, verifyExpires: verifyExpires,
         categories: { classical: emptyRatingBlock(base), rapid: emptyRatingBlock(base), blitz: emptyRatingBlock(base), bullet: emptyRatingBlock(base) }
       };
-      try { await saveUser(username); } catch (err) {}
+      
+      sendVerificationEmail(email, username, verifyToken).catch(e => console.error('[Mail Error]', e));
+      
+      try { await saveUser(username); } catch (err) { console.error(err); return cb({ ok: false, msg: 'Ошибка БД при создании' }); }
+      
+      return cb({ ok: false, msg: 'Аккаунт создан! Проверьте почту и подтвердите email.', pending: true });
     }
+    
     online.set(socket.id, username);
     socket.username = username;
     cb({ ok: true, user: publicUser(username) });
@@ -2593,6 +2662,68 @@ io.on('connection', (socket) => {
     if (typeof cb !== 'function') return;
     if (!socket.username) return cb({ count: 0 });
     try { cb({ count: await unreadCount(socket.username) }); } catch (e) { cb({ count: 0 }); }
+  });
+
+  socket.on('requestPasswordReset', async ({ email }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!email) return cb({ ok: false, msg: 'Укажите email' });
+    
+    try {
+      const r = await pool.query('SELECT username FROM users WHERE email = $1', [email]);
+      if (!r.rows.length) {
+        return cb({ ok: true, msg: 'Если email зарегистрирован, письмо отправлено' });
+      }
+      
+      const username = r.rows[0].username;
+      const token = crypto.randomBytes(32).toString('hex');
+      const expires = Date.now() + 60 * 60 * 1000;
+      
+      await pool.query(
+        'INSERT INTO password_resets (username, token, expires_at) VALUES ($1, $2, $3)',
+        [username, token, expires]
+      );
+      
+      sendPasswordResetEmail(email, username, token).catch(e => console.error(e));
+      cb({ ok: true, msg: 'Если email зарегистрирован, письмо отправлено' });
+    } catch (e) {
+      console.error('[Reset] Ошибка:', e);
+      cb({ ok: false, msg: 'Ошибка сервера' });
+    }
+  });
+
+  socket.on('resetPassword', async ({ token, newPassword }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!token || !newPassword || newPassword.length < 3) {
+      return cb({ ok: false, msg: 'Неверный токен или слишком короткий пароль' });
+    }
+    
+    try {
+      const r = await pool.query(
+        'SELECT username FROM password_resets WHERE token = $1 AND used = FALSE AND expires_at > $2',
+        [token, Date.now()]
+      );
+      
+      if (!r.rows.length) {
+        return cb({ ok: false, msg: 'Ссылка недействительна или истекла' });
+      }
+      
+      const username = r.rows[0].username;
+      const salt = newSalt();
+      const hash = hashPassword(newPassword, salt);
+      
+      await pool.query('UPDATE users SET password_hash = $1, salt = $2 WHERE username = $3', [hash, salt, username]);
+      await pool.query('UPDATE password_resets SET used = TRUE WHERE token = $1', [token]);
+      
+      if (db.users[username]) {
+        db.users[username].passwordHash = hash;
+        db.users[username].salt = salt;
+      }
+      
+      cb({ ok: true });
+    } catch (e) {
+      console.error('[Reset] Ошибка:', e);
+      cb({ ok: false, msg: 'Ошибка сервера' });
+    }
   });
 
   socket.on('disconnect', () => {
