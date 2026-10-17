@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const { Pool } = require('pg');
 const botPool = require('./bot-pool');
 const watcherLearning = require('./watcher-learning');
+const watcherPool = require('./watcher-pool');
 
 const app = express();
 const server = http.createServer(app);
@@ -314,6 +315,90 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
+// ============================================================
+// 🔥 ФАНТОМНЫЕ ПАРТИИ SELF-PLAY (видны в «Смотреть»)
+// ============================================================
+const SELF_PLAY_BOT_ID = 'WatcherSelfPlay';
+const selfPlayLobbies = new Map(); // id -> { lastEmitAt }
+
+function createSelfPlayLobby(moveLog) {
+  // moveLog = [{from, to, san, fenAfter}]
+  if (!moveLog || !moveLog.length) return null;
+  const id = 'sp_' + genId();
+  const firstFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+  const last = moveLog[moveLog.length - 1];
+  const lastHist = { from: last.from, to: last.to, byColor: (moveLog.length - 1) % 2 === 0 ? 'w' : 'b', ts: Date.now() };
+
+  // Рассчитываем время: играем «условно», с инкрементом, чтобы выглядело красиво
+  const timeBase = 180; // 3 минуты
+  const moveCount = moveLog.length;
+  const timePerSide = Math.max(5, timeBase - Math.floor(moveCount * 0.5));
+
+  const lobby = {
+    id,
+    host: SELF_PLAY_BOT_ID,
+    hostSocket: 'BOT:' + SELF_PLAY_BOT_ID,
+    guest: SELF_PLAY_BOT_ID,
+    guestSocket: 'BOT:' + SELF_PLAY_BOT_ID,
+    hostColor: 'w',
+    guestColor: 'b',
+    time: timeBase,
+    inc: 0,
+    timeW: timePerSide,
+    timeB: timePerSide,
+    turn: last.fenAfter ? last.fenAfter.split(' ')[1] : 'w',
+    fen: last.fenAfter || firstFen,
+    started: true,
+    finished: false,
+    lastTick: Date.now(),
+    chat: [],
+    drawOffer: null,
+    createdAt: Date.now(),
+    arenaId: null,
+    arenaName: null,
+    rematch: null,
+    isBot: true,
+    botColor: 'w',
+    botName: SELF_PLAY_BOT_ID,
+    botColor2: 'b',
+    botName2: SELF_PLAY_BOT_ID,
+    history: [lastHist],
+    positionCounts: new Map(),
+    isSelfPlay: true, // ← помечаем, чтобы фильтры знали
+    selfPlayHistory: moveLog
+  };
+  lobbies.set(id, lobby);
+  selfPlayLobbies.set(id, { lastEmitAt: Date.now() });
+  return lobby;
+}
+
+function updateSelfPlayLobby(lobby, moveLog) {
+  if (!lobby || !moveLog || !moveLog.length) return;
+  const last = moveLog[moveLog.length - 1];
+  lobby.fen = last.fenAfter;
+  lobby.turn = last.fenAfter.split(' ')[1];
+  lobby.lastTick = Date.now();
+  lobby.history = [{ from: last.from, to: last.to, byColor: last.byColor, ts: Date.now() }];
+  lobby.selfPlayHistory = moveLog;
+}
+
+function finishSelfPlayLobby(lobby, result) {
+  if (!lobby) return;
+  lobby.finished = true;
+  lobby.finishedAt = Date.now();
+  lobby.result = result;
+  // Оставляем в lobbies на 30 секунд, чтобы зрители увидели, потом удаляем
+  setTimeout(() => {
+    lobbies.delete(lobby.id);
+    selfPlayLobbies.delete(lobby.id);
+    broadcastLiveGames();
+  }, 30000);
+}
+
+// —————————————————————————————————————————————
+// Конец блока self-play
+// —————————————————————————————————————————————
+
 function countActiveLobbies() { let n = 0; for (const l of lobbies.values()) { if (l.finished) continue; if (l.started) n++; } return n; }
 
 function countWaitingLobbies() {
@@ -321,6 +406,7 @@ function countWaitingLobbies() {
   const now = Date.now();
   for (const [id, l] of lobbies.entries()) {
     if (!l || l.finished || l.arenaId || l.started || l.guest) continue;
+    if (l.isSelfPlay) continue;
     const isBotLobby = !!l.isBot;
     const hostOnline = isBotLobby || (l.hostSocket && io.sockets.sockets.has(l.hostSocket));
     if (!hostOnline) continue;
@@ -397,6 +483,34 @@ function buildGamesList() {
   const list = [];
   for (const [id, l] of lobbies.entries()) {
     if (l.finished || !l.started) continue;
+
+    // 🔥 Self-play фантомные партии показываем как Watcher vs Watcher
+    if (l.isSelfPlay) {
+      const whiteName = SELF_PLAY_BOT_ID;
+      const blackName = SELF_PLAY_BOT_ID;
+      const lastHist = (l.history && l.history.length) ? l.history[l.history.length - 1] : null;
+      list.push({
+        id,
+        white: whiteName,
+        black: blackName,
+        whiteRating: db.users[WATCHER_NAME] ? db.users[WATCHER_NAME].rating : 1500,
+        blackRating: db.users[WATCHER_NAME] ? db.users[WATCHER_NAME].rating : 1500,
+        whiteIsAdmin: false, blackIsAdmin: false,
+        whiteIsMod: false, blackIsMod: false,
+        whiteIsBot: true, blackIsBot: true,
+        isBotGame: true,
+        isSelfPlay: true,
+        timeW: l.timeW, timeB: l.timeB, turn: l.turn,
+        timeControl: l.time, increment: l.inc,
+        isArena: false, arenaName: null,
+        fen: l.fen,
+        lastMove: lastHist && lastHist.from && lastHist.to ? { from: lastHist.from, to: lastHist.to } : null,
+        watchersCount: watchersCountOf(l),
+        finished: l.finished
+      });
+      continue;
+    }
+
     const whiteName = l.hostColor === 'w' ? l.host : l.guest;
     const blackName = l.hostColor === 'b' ? l.host : l.guest;
     const whiteU = db.users[whiteName]; const blackU = db.users[blackName];
@@ -414,7 +528,8 @@ function buildGamesList() {
       isArena: !!l.arenaId, arenaName: l.arenaName || null,
       fen: l.fen,
       lastMove: lastHist && lastHist.from && lastHist.to ? { from: lastHist.from, to: lastHist.to } : null,
-      watchersCount: watchersCountOf(l)
+      watchersCount: watchersCountOf(l),
+      finished: !!l.finished
     });
   }
   list.sort((a, b) => {
@@ -575,6 +690,15 @@ function checkAutoDraw(lobbyId) {
 async function finishGame(lobbyId, result, reason) {
   const l = lobbies.get(lobbyId);
   if (!l || l.finished || finishedLobbyIds.has(lobbyId)) return;
+
+  // 🔥 Self-play — не влияет на рейтинг и статистику. Просто завершаем и удаляем.
+  if (l.isSelfPlay) {
+    l.finished = true;
+    l.started = false;
+    finishedLobbyIds.add(lobbyId);
+    return;
+  }
+
   finishedLobbyIds.add(lobbyId);
   l.finished = true; l.started = false;
 
@@ -645,7 +769,6 @@ async function finishGame(lobbyId, result, reason) {
     isArena: !!l.arenaId, arenaName: l.arenaName || null, isBot: isBotGame
   };
   if (whiteIsWatcher || blackIsWatcher) {
-    try { watcherLearning.finishEpisode(result, whiteIsWatcher ? 'w' : 'b'); watcherLearning.saveWeights(); } catch (e) {}
     try { const beh = botInitBehavior(WATCHER_NAME); if (beh.state === 'playing') { beh.state = 'idle'; beh.activityId = null; beh.lastChange = Date.now(); } } catch (e) {}
   }
   try { await saveUser(whiteName); } catch (e) {}
@@ -671,6 +794,9 @@ async function finishGame(lobbyId, result, reason) {
   broadcastOnline(); broadcastLiveGames();
 }
 
+// ============================================================
+// ARENAS (без изменений)
+// ============================================================
 const ARENA_TEMPLATES = [
   { id: 'bullet-halfhour', name: 'Получасовая пуля', description: '1+0 · рейтинговая', timeControl: 1, increment: 0, durationMin: 27, repeat: 'every30', color: 'bullet', botFriendly: false },
   { id: 'blitz-hourly', name: 'Ежечасная блиц-арена', description: '3+2 · рейтинговая', timeControl: 3, increment: 2, durationMin: 57, repeat: 'hourly', color: 'blitz', botFriendly: false },
@@ -777,13 +903,14 @@ function botActiveGamesCount(botName) {
   let n = 0;
   for (const l of lobbies.values()) {
     if (l.finished || !l.isBot) continue;
+    if (l.isSelfPlay) continue;
     if (l.botName === botName || l.botName2 === botName) n++;
   }
   return n;
 }
 function botIsBusy(botName) {
   if (botName === WATCHER_NAME) {
-    for (const l of lobbies.values()) if (!l.finished && (l.host === WATCHER_NAME || l.guest === WATCHER_NAME)) return true;
+    for (const l of lobbies.values()) if (!l.finished && !l.isSelfPlay && (l.host === WATCHER_NAME || l.guest === WATCHER_NAME)) return true;
     return false;
   }
   return botActiveGamesCount(botName) >= MAX_BOT_GAMES;
@@ -807,7 +934,7 @@ function watcherGamesInArena(arenaId) {
   return n;
 }
 function watcherHasActiveLobby() {
-  for (const l of lobbies.values()) if (!l.finished && l.started && (l.host === WATCHER_NAME || l.guest === WATCHER_NAME)) return true;
+  for (const l of lobbies.values()) if (!l.finished && !l.isSelfPlay && l.started && (l.host === WATCHER_NAME || l.guest === WATCHER_NAME)) return true;
   return false;
 }
 function watcherInAnyArena() {
@@ -966,6 +1093,7 @@ function watcherTick() {
     const liveGames = [];
     for (const [id, l] of lobbies.entries()) {
       if (l.finished || !l.started) continue;
+      if (l.isSelfPlay) continue;
       if (l.host === WATCHER_NAME || l.guest === WATCHER_NAME) continue;
       liveGames.push(id);
     }
@@ -998,7 +1126,7 @@ function watcherTick() {
   }
   if (beh.state === 'idle' && Math.random() < 0.35) {
     let hasOwnLobby = false;
-    for (const [id, l] of lobbies.entries()) if (!l.finished && !l.started && l.host === WATCHER_NAME) { hasOwnLobby = true; break; }
+    for (const [id, l] of lobbies.entries()) if (!l.finished && !l.started && !l.isSelfPlay && l.host === WATCHER_NAME) { hasOwnLobby = true; break; }
     if (!hasOwnLobby) {
       const counts = countWaitingLobbies();
       if (counts.bot >= MAX_BOT_WAITING) return;
@@ -1291,6 +1419,7 @@ setInterval(() => {
   const now = Date.now();
   for (const [id, lobby] of lobbies.entries()) {
     if (!lobby.started || lobby.finished) continue;
+    if (lobby.isSelfPlay) continue;
     const side = lobby.turn;
     if (side !== 'w' && side !== 'b') continue;
     const elapsed = Math.floor((now - lobby.lastTick) / 1000);
@@ -1329,6 +1458,7 @@ function clearMute(username) {
 function scheduleBotMove(lobbyId) {
   const l = lobbies.get(lobbyId);
   if (!l || l.finished || !l.isBot) return;
+  if (l.isSelfPlay) return;
   const currentTurn = l.turn;
   const botColor = (l.botColor === currentTurn) ? l.botColor : (l.botColor2 === currentTurn ? l.botColor2 : null);
   const botName = (botColor === l.botColor) ? l.botName : (botColor === l.botColor2 ? l.botName2 : null);
@@ -1362,12 +1492,6 @@ function scheduleBotMove(lobbyId) {
       if (!cur.history) cur.history = [];
       cur.history.push({ from, to, captured: captured || null, byColor: botColor, ts: Date.now() });
       if (cur.history.length > 10) cur.history.shift();
-      if (botName === WATCHER_NAME) {
-        try {
-          if (!watcherLearning.getStats().episodeActive) watcherLearning.startEpisode(botColor, { time: cur.time, inc: cur.inc });
-          watcherLearning.recordTransition(prevFen, botToFen(nextState), from, to, botColor, { time: cur.time, inc: cur.inc }, captured || null);
-        } catch (e) {}
-      }
       const now = Date.now();
       const elapsed = Math.floor((now - cur.lastTick) / 1000);
       if (botColor === 'w') cur.timeW = Math.max(0, cur.timeW - elapsed) + cur.inc;
@@ -1520,12 +1644,6 @@ function scheduleBotMove(lobbyId) {
     if (!cur2.history) cur2.history = [];
     cur2.history.push({ from, to, captured: captured || null, byColor: botColor, ts: Date.now() });
     if (cur2.history.length > 10) cur2.history.shift();
-    if (botName === WATCHER_NAME) {
-      try {
-        if (!watcherLearning.getStats().episodeActive) watcherLearning.startEpisode(botColor, { time: cur2.time, inc: cur2.inc });
-        watcherLearning.recordTransition(prevFen, botToFen(nextState), from, to, botColor, { time: cur2.time, inc: cur2.inc }, captured || null);
-      } catch (e) {}
-    }
     const now = Date.now();
     const elapsed = Math.floor((now - cur2.lastTick) / 1000);
     if (botColor === 'w') cur2.timeW = Math.max(0, cur2.timeW - elapsed) + cur2.inc;
@@ -1670,6 +1788,7 @@ io.on('connection', (socket) => {
     if (typeof cb !== 'function') return;
     const l = lobbies.get(lid);
     if (!l) return cb({ ok: false, msg: 'Партия не найдена' });
+    if (l.isSelfPlay) return cb({ ok: false, msg: 'Это просмотр self-play партии. Используйте watchGame.' });
     if (socket.username !== l.host && socket.username !== l.guest) return cb({ ok: false, msg: 'Вы не участник' });
     if (l.host === socket.username) l.hostSocket = socket.id; else l.guestSocket = socket.id;
     if (socket.username === l.host && !l.guestSocket && !l.isBot) return cb({ ok: false, msg: 'Соперник ещё не подключился' });
@@ -1695,17 +1814,17 @@ io.on('connection', (socket) => {
     if (!l.watchers) l.watchers = new Set();
     l.watchers.add(socket.id);
     io.emit('lobbiesUpdate'); broadcastWatchers(id); broadcastLiveGames();
-    const whiteName = l.hostColor === 'w' ? l.host : l.guest;
-    const blackName = l.hostColor === 'b' ? l.host : l.guest;
+    const whiteName = l.isSelfPlay ? SELF_PLAY_BOT_ID : (l.hostColor === 'w' ? l.host : l.guest);
+    const blackName = l.isSelfPlay ? SELF_PLAY_BOT_ID : (l.hostColor === 'b' ? l.host : l.guest);
     const lastHist = (l.history && l.history.length) ? l.history[l.history.length - 1] : null;
     if (typeof cb === 'function') cb({ ok: true, game: {
       id, white: whiteName, black: blackName,
-      whiteRating: db.users[whiteName] ? db.users[whiteName].rating : null,
-      blackRating: db.users[blackName] ? db.users[blackName].rating : null,
-      whiteIsAdmin: isAdmin(whiteName), blackIsAdmin: isAdmin(blackName),
-      whiteIsMod: isMod(whiteName), blackIsMod: isMod(blackName),
-      whiteIsBot: !!(db.users[whiteName] && db.users[whiteName].isBot),
-      blackIsBot: !!(db.users[blackName] && db.users[blackName].isBot),
+      whiteRating: l.isSelfPlay ? (db.users[WATCHER_NAME] ? db.users[WATCHER_NAME].rating : 1500) : (db.users[whiteName] ? db.users[whiteName].rating : null),
+      blackRating: l.isSelfPlay ? (db.users[WATCHER_NAME] ? db.users[WATCHER_NAME].rating : 1500) : (db.users[blackName] ? db.users[blackName].rating : null),
+      whiteIsAdmin: false, blackIsAdmin: false,
+      whiteIsMod: false, blackIsMod: false,
+      whiteIsBot: l.isSelfPlay ? true : !!(db.users[whiteName] && db.users[whiteName].isBot),
+      blackIsBot: l.isSelfPlay ? true : !!(db.users[blackName] && db.users[blackName].isBot),
       timeW: l.timeW, timeB: l.timeB, turn: l.turn,
       timeControl: l.time, increment: l.inc, fen: l.fen,
       lastMove: lastHist && lastHist.from && lastHist.to ? { from: lastHist.from, to: lastHist.to } : null,
@@ -1725,6 +1844,7 @@ io.on('connection', (socket) => {
     const list = [];
     for (const [id, l] of lobbies.entries()) {
       if (l.finished || l.arenaId) continue;
+      if (l.isSelfPlay) continue; // self-play не показываем в зале ожидания
       if (l.isBot && !l.isWatcher) continue;
       list.push({ id, host: l.host, time: l.time, inc: l.inc, hostIsAdmin: isAdmin(l.host), hostIsMod: isMod(l.host), status: l.guest ? 'playing' : 'waiting', isBot: l.isWatcher });
     }
@@ -1741,7 +1861,7 @@ io.on('connection', (socket) => {
     let myWaiting = null;
     for (const [, l] of lobbies.entries()) {
       if (l.finished || l.arenaId) continue;
-      if (l.started || l.guest) continue;
+      if (l.started || l.guest || l.isSelfPlay) continue;
       if (l.host !== socket.username) continue;
       if (l.hostSocket && !io.sockets.sockets.has(l.hostSocket)) {
         lobbies.delete(l.id);
@@ -1752,7 +1872,7 @@ io.on('connection', (socket) => {
     }
     if (!myWaiting) {
       for (const [id, l] of lobbies.entries()) {
-        if (!l || l.finished || l.arenaId || l.started || l.guest) continue;
+        if (!l || l.finished || l.arenaId || l.started || l.guest || l.isSelfPlay) continue;
         if (l.isBot) continue;
         if (l.hostSocket && !io.sockets.sockets.has(l.hostSocket)) {
           lobbies.delete(id);
@@ -1762,7 +1882,7 @@ io.on('connection', (socket) => {
 
     let matched = null;
     for (const [, l] of lobbies.entries()) {
-      if (l.finished || l.arenaId || (l.isBot && !l.isWatcher) || l.guest) continue;
+      if (l.finished || l.arenaId || (l.isBot && !l.isWatcher) || l.guest || l.isSelfPlay) continue;
       if (l.host === socket.username || l.hostSocket === socket.id) continue;
       if (Number(l.time) !== time || Number(l.inc) !== inc) continue;
       matched = l; break;
@@ -1852,11 +1972,13 @@ io.on('connection', (socket) => {
     const l = lobbies.get(id);
     if (!l) return cb({ ok: false, msg: 'Лобби не найдено' });
     if (l.finished) return cb({ ok: false, msg: 'Партия завершена' });
+    if (l.isSelfPlay) return cb({ ok: false, msg: 'Это self-play партия. Можно только смотреть.' });
     if (l.guest) return cb({ ok: false, msg: 'Лобби занято' });
     if (l.host === socket.username) return cb({ ok: false, msg: 'Это ваше лобби' });
     if (socket.username === WATCHER_NAME && l.host === WATCHER_NAME) return cb({ ok: false, msg: 'Занято' });
     for (const [, other] of lobbies.entries()) {
       if (other.finished) continue;
+      if (other.isSelfPlay) continue;
       if ((other.host === socket.username || other.guest === socket.username) && other !== l) {
         return cb({ ok: false, msg: 'Вы уже в другой партии/лобби' });
       }
@@ -1887,6 +2009,7 @@ io.on('connection', (socket) => {
   socket.on('move', ({ lobbyId, fen, turn, san }) => {
     const l = lobbies.get(lobbyId);
     if (!l || l.finished || !l.started) return;
+    if (l.isSelfPlay) return;
     if (socket.id !== l.hostSocket && socket.id !== l.guestSocket) return;
     const myColor = socket.id === l.hostSocket ? l.hostColor : l.guestColor;
     if (l.turn !== myColor) return;
@@ -1953,18 +2076,22 @@ io.on('connection', (socket) => {
   socket.on('resign', ({ lobbyId }) => {
     const l = lobbies.get(lobbyId);
     if (!l || l.finished) return;
+    if (l.isSelfPlay) return;
     const myColor = socket.id === l.hostSocket ? l.hostColor : l.guestColor;
     finishGame(lobbyId, myColor === 'w' ? 'b' : 'w', 'Сдача');
   });
 
   socket.on('gameOver', ({ lobbyId, result }) => {
-    if (!lobbies.has(lobbyId)) return;
+    const l = lobbies.get(lobbyId);
+    if (!l) return;
+    if (l.isSelfPlay) return;
     finishGame(lobbyId, result, 'Завершено');
   });
 
   socket.on('chatMessage', ({ lobbyId, text }) => {
     const l = lobbies.get(lobbyId);
     if (!l || !socket.username) return;
+    if (l.isSelfPlay) return;
     const muteUntil = checkMute(socket.username);
     if (muteUntil > 0) { const mins = Math.ceil((muteUntil - Date.now()) / 60000); socket.emit('chatError', { msg: `Вы заглушены ещё ${mins} мин.` }); return; }
     if (typeof text !== 'string') return;
@@ -2013,6 +2140,7 @@ io.on('connection', (socket) => {
   socket.on('drawOffer', ({ lobbyId }) => {
     const l = lobbies.get(lobbyId);
     if (!l || l.finished || !l.started) return;
+    if (l.isSelfPlay) return;
     if (socket.id !== l.hostSocket && socket.id !== l.guestSocket) return;
     l.drawOffer = { by: socket.id, at: Date.now() };
     socket.to(lobbyId).emit('drawOffered', { from: socket.username });
@@ -2042,12 +2170,14 @@ io.on('connection', (socket) => {
   socket.on('drawAccept', ({ lobbyId }) => {
     const l = lobbies.get(lobbyId);
     if (!l || l.finished) return;
+    if (l.isSelfPlay) return;
     l.drawOffer = null;
     finishGame(lobbyId, 'draw', 'Ничья по согласию');
   });
   socket.on('drawDecline', ({ lobbyId }) => {
     const l = lobbies.get(lobbyId);
     if (!l || l.finished) return;
+    if (l.isSelfPlay) return;
     l.drawOffer = null;
     socket.to(lobbyId).emit('drawDeclined');
   });
@@ -2055,6 +2185,7 @@ io.on('connection', (socket) => {
   socket.on('rematchRequest', ({ lobbyId }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     let l = lobbies.get(lobbyId);
+    if (l && l.isSelfPlay) return cb({ ok: false, msg: 'Нельзя' });
     let info = null;
     if (!l || l.finished) info = finishedGamesInfo.get(lobbyId);
     if (!info && socket.username) {
@@ -2479,22 +2610,67 @@ io.on('connection', (socket) => {
   });
 });
 
+// ============================================================
+// ЗАПУСК + SELF-PLAY ТРЕНЕР В ОТДЕЛЬНОМ ПОТОКЕ
+// ============================================================
 (async () => {
   try { await initDB(); await loadDB(); }
   catch (err) { console.error('[DB] Ошибка инициализации:', err.message); }
   watcherLearning.loadWeights();
   watcherLearning.startAutoSave();
+
+  // Self-play в worker-потоке
+  watcherPool.handler = (msg) => {
+    if (msg.type === 'ready') {
+      console.log('[WatcherPool] Worker готов, self-play запущен');
+    } else if (msg.type === 'gamesDone') {
+      const s = msg.stats;
+      // 🔥 Создать фантомное лобби для показа в «Смотреть»
+      if (msg.gameLog && msg.gameLog.length >= 4) {
+        const spLobby = createSelfPlayLobby(msg.gameLog);
+        if (spLobby) {
+          // Имитируем broadcast — «Смотреть» увидит как обычную партию
+          broadcastLiveGames();
+          // Через 15 секунд «завершаем» партию
+          setTimeout(() => {
+            finishSelfPlayLobby(spLobby, msg.gameResult || 'draw');
+          }, 15000);
+        }
+      }
+      console.log(`[SelfPlay] +${msg.played} партий, всего: ${s.games}, W/L/D=${s.wins}/${s.losses}/${s.draws}`);
+    } else if (msg.type === 'error') {
+      console.error('[WatcherPool] Ошибка:', msg.msg);
+    }
+  };
+  watcherPool.start();
+
+  // Раз в 30 секунд — 1 партия self-play (лёгкая, чтобы не грузить)
+  setInterval(() => {
+    let busy = false;
+    for (const l of lobbies.values()) {
+      if (l.finished || l.isSelfPlay) continue;
+      if (l.host === WATCHER_NAME || l.guest === WATCHER_NAME) { busy = true; break; }
+    }
+    if (!busy) watcherPool.playGames(1);
+  }, 30000);
+
   getArenaSchedule(48);
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, '0.0.0.0', () => {
     console.log('==================================================');
     console.log('  Kingside — сервер запущен');
     console.log(`  Порт: ${PORT}`);
-    console.log(`  CPU ядер: ${require('os').cpus().length}`);
+    console.log('  Watcher: self-play в worker-потоке');
     console.log('==================================================');
   });
 })();
 
-process.on('SIGINT', async () => { try { await botPool.terminate(); watcherLearning.saveWeights(); } catch (e) {} process.exit(0); });
-process.on('SIGTERM', async () => { try { await botPool.terminate(); watcherLearning.saveWeights(); } catch (e) {} process.exit(0); });
+process.on('SIGINT', async () => {
+  try { watcherPool.stop(); await botPool.terminate(); watcherLearning.saveWeights(); } catch (e) {}
+  process.exit(0);
+});
+process.on('SIGTERM', async () => {
+  try { watcherPool.stop(); await botPool.terminate(); watcherLearning.saveWeights(); } catch (e) {}
+  process.exit(0);
+});
 process.on('uncaughtException', (err) => { console.error('[Server] Ошибка:', err); });
