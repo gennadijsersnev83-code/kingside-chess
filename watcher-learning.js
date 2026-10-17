@@ -95,27 +95,9 @@ function setPool(pool) { _pool = pool; }
 
 async function ensureTables() {
   if (!_pool) return;
-  await _pool.query(`
-    CREATE TABLE IF NOT EXISTS watcher_weights (
-      key TEXT PRIMARY KEY,
-      value REAL NOT NULL DEFAULT 0
-    );
-  `);
-  await _pool.query(`
-    CREATE TABLE IF NOT EXISTS watcher_stats (
-      id INTEGER PRIMARY KEY DEFAULT 1,
-      games INTEGER NOT NULL DEFAULT 0,
-      wins INTEGER NOT NULL DEFAULT 0,
-      losses INTEGER NOT NULL DEFAULT 0,
-      draws INTEGER NOT NULL DEFAULT 0,
-      last_update BIGINT NOT NULL DEFAULT 0
-    );
-  `);
-  await _pool.query(`
-    INSERT INTO watcher_stats (id, games, wins, losses, draws, last_update)
-    VALUES (1, 0, 0, 0, 0, 0)
-    ON CONFLICT (id) DO NOTHING;
-  `);
+  await _pool.query(`CREATE TABLE IF NOT EXISTS watcher_weights (key TEXT PRIMARY KEY, value REAL NOT NULL DEFAULT 0);`);
+  await _pool.query(`CREATE TABLE IF NOT EXISTS watcher_stats (id INTEGER PRIMARY KEY DEFAULT 1, games INTEGER NOT NULL DEFAULT 0, wins INTEGER NOT NULL DEFAULT 0, losses INTEGER NOT NULL DEFAULT 0, draws INTEGER NOT NULL DEFAULT 0, last_update BIGINT NOT NULL DEFAULT 0);`);
+  await _pool.query(`INSERT INTO watcher_stats (id, games, wins, losses, draws, last_update) VALUES (1, 0, 0, 0, 0, 0) ON CONFLICT (id) DO NOTHING;`);
 }
 
 async function loadFromDB() {
@@ -165,17 +147,10 @@ async function saveToDB() {
           params.push(`($${idx * 2 + 1}, $${idx * 2 + 2})`);
           values.push(k, Number(v));
         });
-        await _pool.query(
-          `INSERT INTO watcher_weights (key, value) VALUES ${params.join(',')}
-           ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
-          values
-        );
+        await _pool.query(`INSERT INTO watcher_weights (key, value) VALUES ${params.join(',')} ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, values);
       }
     }
-    await _pool.query(
-      `UPDATE watcher_stats SET games = $1, wins = $2, losses = $3, draws = $4, last_update = $5 WHERE id = 1`,
-      [DATA.games, DATA.wins, DATA.losses, DATA.draws, Date.now()]
-    );
+    await _pool.query(`UPDATE watcher_stats SET games = $1, wins = $2, losses = $3, draws = $4, last_update = $5 WHERE id = 1`, [DATA.games, DATA.wins, DATA.losses, DATA.draws, Date.now()]);
     DATA.lastUpdate = Date.now();
   } catch (e) {
     console.error('[Watcher] Ошибка сохранения в БД:', e.message);
@@ -206,6 +181,7 @@ function startAutoSave() {
 
 // ==================== ШАХМАТЫ ====================
 const PIECE_VALUES = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
+const MATE_SCORE = 100000;
 const isWhite = p => !!p && p === p.toUpperCase();
 const inBoard = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
 
@@ -362,66 +338,97 @@ function evaluate(state, forWhite) {
   return forWhite ? score : -score;
 }
 
-function pickMove(state, isWhiteTurn, epsilon = 0.1) {
-  const legal = allLegalMoves(state, isWhiteTurn);
-  if (legal.length === 0) return null;
-  if (legal.length === 1) return legal[0];
-  if (Math.random() < epsilon) return legal[Math.floor(Math.random() * legal.length)];
-  let best = null, bestScore = -Infinity;
-  for (const [from, to] of legal) {
+// ============================================================
+// 🔥 NEGAMAX С АЛЬФА-БЕТА И QUIESCENCE
+// ============================================================
+function quiescence(state, alpha, beta, color) {
+  const standPat = color * evaluate(state, color === 1);
+  if (standPat >= beta) return beta;
+  if (alpha < standPat) alpha = standPat;
+
+  const legal = allLegalMoves(state, color === 1);
+  // Только взятия
+  const captures = legal.filter(([from, to]) => state.board[to[0]][to[1]]);
+  for (const [from, to] of captures) {
     const next = applyMove(state, from, to);
-    const score = evaluate(next, isWhiteTurn);
-    if (score > bestScore) { bestScore = score; best = [from, to]; }
+    const score = -quiescence(next, -beta, -alpha, -color);
+    if (score >= beta) return beta;
+    if (score > alpha) alpha = score;
   }
-  return best;
+  return alpha;
 }
 
-// ============================================================
-// 🔥 РЕЖИМ «СПАСЕНИЯ НИЧЬЕЙ» (аккуратный, без жадности)
-// ============================================================
-function pickMoveSaveDraw(state, isWhiteTurn) {
-  const legal = allLegalMoves(state, isWhiteTurn);
-  if (legal.length === 0) return null;
-  if (legal.length === 1) return legal[0];
+function negamax(state, depth, alpha, beta, color, deadline) {
+  if (Date.now() >= deadline) {
+    return color * evaluate(state, color === 1); // тайм-аут
+  }
 
-  // Материал «до»
-  const myMaterial = (() => {
-    let m = 0;
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-      const p = state.board[r][c]; if (!p) continue;
-      if (isWhite(p) === isWhiteTurn) m += PIECE_VALUES[p.toLowerCase()] || 0;
+  const legal = allLegalMoves(state, color === 1);
+  if (legal.length === 0) {
+    if (inCheck(state, color === 1)) {
+      return -MATE_SCORE + (10 - depth);
     }
-    return m;
-  })();
+    return 0;
+  }
 
-  let best = null, bestScore = -Infinity;
+  if (depth === 0) {
+    return quiescence(state, alpha, beta, color);
+  }
+
+  let best = -Infinity;
   for (const [from, to] of legal) {
     const next = applyMove(state, from, to);
-    const evalScore = evaluate(next, isWhiteTurn);
-    
-    // Материал «после»
-    const newMyMaterial = (() => {
-      let m = 0;
-      for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-        const p = next.board[r][c]; if (!p) continue;
-        if (isWhite(p) === isWhiteTurn) m += PIECE_VALUES[p.toLowerCase()] || 0;
-      }
-      return m;
-    })();
-    const materialLoss = myMaterial - newMyMaterial;
-    
-    // Штраф за потерю материала
-    let lossPenalty = 0;
-    if (materialLoss > 0) lossPenalty = materialLoss * 5;
-    
-    const score = evalScore - lossPenalty;
-    if (score > bestScore) { bestScore = score; best = [from, to]; }
+    const score = -negamax(next, depth - 1, -beta, -alpha, -color, deadline);
+    if (score > best) best = score;
+    if (score > alpha) alpha = score;
+    if (alpha >= beta) break;
+    if (Date.now() >= deadline) break;
   }
   return best;
 }
 
+// Итеративное углубление — ищет depth=1,2,3,4,5... пока есть время
+function pickMoveSearch(state, isWhiteTurn, timeMs) {
+  const legal = allLegalMoves(state, isWhiteTurn);
+  if (legal.length === 0) return null;
+  if (legal.length === 1) return legal[0];
+
+  const color = isWhiteTurn ? 1 : -1;
+  const deadline = Date.now() + Math.max(50, timeMs);
+
+  let bestMove = legal[0];
+  let maxDepth = 6;
+
+  for (let depth = 1; depth <= maxDepth; depth++) {
+    let alpha = -Infinity, beta = Infinity;
+    let localBest = null, localBestScore = -Infinity;
+
+    // Перестановка ходов: взятия первыми
+    const ordered = legal.slice().sort((a, b) => {
+      const capA = state.board[a[1][0]][a[1][1]];
+      const capB = state.board[b[1][0]][b[1][1]];
+      const valA = capA ? (PIECE_VALUES[capA.toLowerCase()] || 0) : 0;
+      const valB = capB ? (PIECE_VALUES[capB.toLowerCase()] || 0) : 0;
+      return valB - valA;
+    });
+
+    for (const [from, to] of ordered) {
+      if (Date.now() >= deadline) break;
+      const next = applyMove(state, from, to);
+      const score = -negamax(next, depth - 1, -beta, -alpha, -color, deadline);
+      if (score > localBestScore) { localBestScore = score; localBest = [from, to]; }
+      if (score > alpha) alpha = score;
+    }
+
+    if (localBest && Date.now() < deadline) bestMove = localBest;
+    if (Date.now() >= deadline) break;
+  }
+
+  return bestMove;
+}
+
 // ============================================================
-// SELF-PLAY
+// SELF-PLAY (с поиском)
 // ============================================================
 function playSelfPlayGame() {
   let state = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
@@ -440,16 +447,18 @@ function playSelfPlayGame() {
     if (state.half >= 100) { result = 0; break; }
 
     const isW = state.turn === 'w';
-    const mv = pickMove(state, isW, 0.2);
+    // 🔥 Поиск 100 мс на ход (быстро)
+    const mv = pickMoveSearch(state, isW, 100);
     if (!mv) break;
 
     const pieceMoved = state.board[mv[0][0]][mv[0][1]];
     const captured = state.board[mv[1][0]][mv[1][1]];
-    const sqFrom = sqName(mv[0][0], mv[0][1]);
-    const sqTo = sqName(mv[1][0], mv[1][1]);
+    const nextState = applyMove(state, mv[0], mv[1]);
+    const causedCheck = inCheck(nextState, !isW);
+    const isMate = causedCheck && allLegalMoves(nextState, !isW).length === 0;
 
-    history.push({ white: isW, pieceMoved, captured, sqFrom, sqTo });
-    state = applyMove(state, mv[0], mv[1]);
+    history.push({ white: isW, pieceMoved, captured, sqFrom: sqName(mv[0][0], mv[0][1]), sqTo: sqName(mv[1][0], mv[1][1]), causedCheck, isMate });
+    state = nextState;
 
     moveLog.push({
       from: mv[0],
@@ -470,13 +479,12 @@ function playSelfPlayGame() {
 }
 
 // ============================================================
-// 🔥 ОБУЧЕНИЕ: ничья = 0.1, БЕЗ tradeBonus
+// ОБУЧЕНИЕ (веса обновляются)
 // ============================================================
 function trainOnHistory(history, result) {
   if (history.length === 0) return;
   const lr = 0.005;
 
-  // Ничья = 0.1 (лучше поражения, хуже победы, но НЕ отменяет материал)
   let whiteReward, blackReward;
   if (result === 1) { whiteReward = 1; blackReward = -1; }
   else if (result === -1) { whiteReward = -1; blackReward = 1; }
@@ -486,19 +494,22 @@ function trainOnHistory(history, result) {
     const reward = move.white ? whiteReward : blackReward;
     const side = move.white ? 1 : -1;
 
+    const checkBonus = move.causedCheck ? 0.05 : 0;
+    const mateBonus = move.isMate ? 0.5 : 0;
+    const total = reward + checkBonus + mateBonus;
+
     const keyFrom = `${move.pieceMoved}_${move.sqFrom}`;
     const keyTo = `${move.pieceMoved}_${move.sqTo}`;
     if (typeof DATA.weights[keyTo] !== 'number') DATA.weights[keyTo] = 0;
     if (typeof DATA.weights[keyFrom] !== 'number') DATA.weights[keyFrom] = 0;
 
-    // 🔥 УБРАНО: tradeBonus. Больше не жрёт фигуры вслепую.
-    DATA.weights[keyTo] = Math.max(-2, Math.min(2, DATA.weights[keyTo] + lr * side * reward));
-    DATA.weights[keyFrom] = Math.max(-2, Math.min(2, DATA.weights[keyFrom] - lr * side * reward * 0.3));
+    DATA.weights[keyTo] = Math.max(-2, Math.min(2, DATA.weights[keyTo] + lr * side * total));
+    DATA.weights[keyFrom] = Math.max(-2, Math.min(2, DATA.weights[keyFrom] - lr * side * total * 0.3));
   }
 }
 
 // ============================================================
-// ПУБЛИЧНЫЙ API
+// API
 // ============================================================
 function getStats() {
   return {
@@ -510,15 +521,21 @@ function getStats() {
 function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
   const state = parseFen(fen);
   const myTime = timeInfo.time || 5;
-  
-  // Если мало времени (< 30 сек) — играем аккуратно
-  if (myTime < 30) {
-    const move = pickMoveSaveDraw(state, color === 'w');
-    if (!move) return null;
-    return { from: move[0], to: move[1] };
-  }
-  
-  const move = pickMove(state, color === 'w', 0.05);
+
+  // Время на ход:
+  // 1+0 → 100 мс
+  // 3+2 → 300 мс
+  // 10+0 → 1000 мс
+  // 30+0 → 2000 мс
+  let thinkMs;
+  if (myTime < 2) thinkMs = 50;
+  else if (myTime < 5) thinkMs = 150;
+  else if (myTime < 10) thinkMs = 300;
+  else if (myTime < 30) thinkMs = 800;
+  else thinkMs = 1500;
+  thinkMs = Math.min(thinkMs, myTime * 1000 * 0.1);
+
+  const move = pickMoveSearch(state, color === 'w', thinkMs);
   if (!move) return null;
   return { from: move[0], to: move[1] };
 }
