@@ -580,17 +580,29 @@ const Router = {
   apply() {
     const { name, param } = this.current;
     
-    // Если мы на странице логина или не авторизованы
-    if (name === 'login' || !App.me) {
+    // Если мы на странице сброса пароля
+    if (name === 'reset') {
       document.body.classList.add('login-active');
-      this.show('loginScreen');
+      Router.show('resetScreen');
       return;
-    } else {
-      document.body.classList.remove('login-active');
     }
 
-    if (name === 'game' && param && param.startsWith('sp_')) {
-      Router.go('lobby');
+    // Обработка #/verify?token=... (хотя сервер уже редиректит, на всякий случай)
+    if (name === 'verify') {
+      Router.go('autorize');
+      return;
+    }
+
+    // Если мы на странице логина/регистрации или не авторизованы
+    if (name === 'login' || name === 'autorize' || !App.me) {
+      document.body.classList.add('login-active');
+      Router.show('loginScreen');
+      
+      // Если пришли по ссылке подтверждения
+      if (name === 'autorize' && param && param.includes('verified=1')) {
+        document.getElementById('loginMsg').textContent = 'Email подтвержден! Теперь войдите.';
+        document.getElementById('loginMsg').style.color = '#629924';
+      }
       return;
     }
 
