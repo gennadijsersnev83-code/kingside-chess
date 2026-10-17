@@ -230,36 +230,26 @@ const Chess = {
 // ============================================================
 const Auth = {
   mode: 'login',
-  captchaAnswer: 0,
 
   switchTab(mode) {
     this.mode = mode;
     const tabLogin = document.getElementById('tabLoginBtn');
     const tabReg = document.getElementById('tabRegisterBtn');
-    const captchaField = document.getElementById('captchaField');
+    const emailField = document.getElementById('emailField');
     const btnText = document.getElementById('btnText');
 
     if (mode === 'login') {
       tabLogin.classList.add('active');
       tabReg.classList.remove('active');
-      captchaField.style.display = 'none';
+      emailField.style.display = 'none';
       btnText.textContent = 'Войти';
     } else {
       tabReg.classList.add('active');
       tabLogin.classList.remove('active');
-      captchaField.style.display = 'block';
+      emailField.style.display = 'block';
       btnText.textContent = 'Зарегистрироваться';
-      this.generateCaptcha();
     }
     document.getElementById('loginMsg').textContent = '';
-  },
-
-  generateCaptcha() {
-    const a = Math.floor(Math.random() * 10) + 1;
-    const b = Math.floor(Math.random() * 10) + 1;
-    this.captchaAnswer = a + b;
-    document.getElementById('captchaQuestion').textContent = `${a} + ${b}`;
-    document.getElementById('captchaAnswer').value = '';
   },
 
   togglePassword() {
@@ -272,9 +262,39 @@ const Auth = {
       pw.type = 'password';
       icon.textContent = '👁';
     }
+  },
+
+  openReset() {
+    const email = prompt('Введите email, указанный при регистрации:');
+    if (!email) return;
+    App.socket.emit('requestPasswordReset', { email }, (res) => {
+      alert(res?.msg || 'Если email зарегистрирован, письмо отправлено');
+    });
+  },
+
+  doResetPassword() {
+    const token = new URLSearchParams(location.hash.split('?')[1]).get('token');
+    const newPassword = document.getElementById('newPassword').value;
+    const msgEl = document.getElementById('resetMsg');
+
+    if (!token) { msgEl.textContent = 'Неверная ссылка'; return; }
+    if (!newPassword || newPassword.length < 3) { msgEl.textContent = 'Пароль минимум 3 символа'; return; }
+
+    msgEl.textContent = 'Загрузка...';
+    msgEl.style.color = 'var(--text)';
+
+    App.socket.emit('resetPassword', { token, newPassword }, (res) => {
+      if (!res || !res.ok) {
+        msgEl.style.color = '#ff6b6b';
+        msgEl.textContent = res?.msg || 'Ошибка';
+        return;
+      }
+      msgEl.style.color = '#629924';
+      msgEl.textContent = 'Пароль успешно изменен! Теперь войдите.';
+      setTimeout(() => Router.go('autorize'), 2000);
+    });
   }
 };
-
 // ============================================================
 // APP
 // ============================================================
