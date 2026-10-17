@@ -73,65 +73,62 @@ const PST_START = {
   ],
 };
 
-// ============================================================
-// ДЕБЮТНАЯ КНИГА
-// ============================================================
 const OPENING_BOOK = {
   'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1': [
-    { from: [6, 4], to: [4, 4] }, // e4
-    { from: [6, 3], to: [4, 3] }, // d4
-    { from: [7, 6], to: [5, 5] }, // Nf3
-    { from: [6, 2], to: [4, 2] }  // c4
+    { from: [6, 4], to: [4, 4] },
+    { from: [6, 3], to: [4, 3] },
+    { from: [7, 6], to: [5, 5] },
+    { from: [6, 2], to: [4, 2] }
   ],
   'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1': [
-    { from: [1, 4], to: [3, 4] }, // e5
-    { from: [1, 2], to: [3, 2] }, // c5
-    { from: [1, 3], to: [3, 3] }, // d5
-    { from: [1, 5], to: [2, 5] }  // f6
+    { from: [1, 4], to: [3, 4] },
+    { from: [1, 2], to: [3, 2] },
+    { from: [1, 3], to: [3, 3] },
+    { from: [1, 5], to: [2, 5] }
   ],
   'rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1': [
-    { from: [1, 3], to: [3, 3] }, // d5
-    { from: [1, 6], to: [2, 6] }, // Nf6
-    { from: [1, 2], to: [3, 2] }  // c5
+    { from: [1, 3], to: [3, 3] },
+    { from: [1, 6], to: [2, 6] },
+    { from: [1, 2], to: [3, 2] }
   ],
   'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2': [
-    { from: [7, 6], to: [5, 5] }, // Nf3
-    { from: [7, 5], to: [4, 2] }, // Bc4
-    { from: [6, 3], to: [4, 3] }  // d4
+    { from: [7, 6], to: [5, 5] },
+    { from: [7, 5], to: [4, 2] },
+    { from: [6, 3], to: [4, 3] }
   ],
   'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2': [
-    { from: [7, 6], to: [5, 5] }, // Nf3
-    { from: [6, 3], to: [4, 3] }, // d4
-    { from: [7, 2], to: [5, 2] }  // c3
+    { from: [7, 6], to: [5, 5] },
+    { from: [6, 3], to: [4, 3] },
+    { from: [7, 2], to: [5, 2] }
   ],
   'rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq d6 0 2': [
-    { from: [7, 2], to: [5, 2] }, // c4
-    { from: [7, 6], to: [5, 5] }, // Nf3
-    { from: [7, 3], to: [5, 3] }  // Qd3
+    { from: [7, 2], to: [5, 2] },
+    { from: [7, 6], to: [5, 5] },
+    { from: [7, 3], to: [5, 3] }
   ],
   'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2': [
-    { from: [0, 1], to: [2, 2] }, // Nc6
-    { from: [1, 3], to: [3, 3] }  // d6
+    { from: [0, 1], to: [2, 2] },
+    { from: [1, 3], to: [3, 3] }
   ],
   'rnbqkb1r/pppppppp/5n2/8/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 1 2': [
-    { from: [7, 2], to: [5, 2] }, // c4
-    { from: [7, 6], to: [5, 5] }, // Nf3
-    { from: [6, 2], to: [4, 2] }  // e4
+    { from: [7, 2], to: [5, 2] },
+    { from: [7, 6], to: [5, 5] },
+    { from: [6, 2], to: [4, 2] }
   ],
   'rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1': [
-    { from: [1, 4], to: [3, 4] }, // e5
-    { from: [1, 2], to: [3, 2] }, // c5
-    { from: [1, 6], to: [2, 6] }  // Nf6
+    { from: [1, 4], to: [3, 4] },
+    { from: [1, 2], to: [3, 2] },
+    { from: [1, 6], to: [2, 6] }
   ],
   'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3': [
-    { from: [7, 5], to: [4, 2] }, // Bc4
-    { from: [6, 3], to: [4, 3] }, // d4
-    { from: [7, 1], to: [5, 2] }  // Nc3
+    { from: [7, 5], to: [4, 2] },
+    { from: [6, 3], to: [4, 3] },
+    { from: [7, 1], to: [5, 2] }
   ],
   'rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2': [
-    { from: [1, 3], to: [3, 3] }, // d6
-    { from: [0, 1], to: [2, 2] }, // Nc6
-    { from: [1, 4], to: [2, 4] }  // e6
+    { from: [1, 3], to: [3, 3] },
+    { from: [0, 1], to: [2, 2] },
+    { from: [1, 4], to: [2, 4] }
   ]
 };
 
@@ -415,7 +412,6 @@ function evaluate(state, forWhite) {
     if (whitePawnsByFile[f] > 1) score -= 10 * (whitePawnsByFile[f] - 1);
     if (blackPawnsByFile[f] > 1) score += 10 * (blackPawnsByFile[f] - 1);
   }
-  
   for (let f = 0; f < 8; f++) {
     if (whitePawnsByFile[f] > 0) {
       const left = f > 0 ? whitePawnsByFile[f-1] : 0;
@@ -555,15 +551,10 @@ function moveScore(state, from, to) {
   return score;
 }
 
-// 🔥 УСТОЙЧИВАЯ ФУНКЦИЯ ПОИСКА В КНИГЕ
 function getBookMove(fen) {
   if (!fen || typeof fen !== 'string') return null;
   const key = fen.split(' ').slice(0, 4).join(' ');
-  
-  // Сначала пробуем точное совпадение
   if (OPENING_BOOK[fen]) return OPENING_BOOK[fen];
-  
-  // Потом по ключу без счетчиков
   for (const bookFen in OPENING_BOOK) {
     if (bookFen.split(' ').slice(0, 4).join(' ') === key) {
       return OPENING_BOOK[bookFen];
@@ -573,18 +564,18 @@ function getBookMove(fen) {
 }
 
 function pickMoveSearch(state, isWhiteTurn, timeMs, fenForBook) {
-  // 🔥 Проверяем дебютную книгу (только если ходов < 10)
-  // Безопасно: если fenForBook нет, просто пропускаем
+  // 🔥 Проверка книги с защитой от undefined
   if (fenForBook) {
     try {
       const bookMoves = getBookMove(fenForBook);
-      if (bookMoves && bookMoves.length > 0) {
-        if (Math.random() < 0.85) {
-          return bookMoves[Math.floor(Math.random() * bookMoves.length)];
+      if (bookMoves && Array.isArray(bookMoves) && bookMoves.length > 0) {
+        const mv = bookMoves[Math.floor(Math.random() * bookMoves.length)];
+        if (mv && Array.isArray(mv.from) && Array.isArray(mv.to) && mv.from.length === 2 && mv.to.length === 2) {
+          return mv;
         }
       }
     } catch (e) {
-      // Если книга сломалась — просто идем дальше, без падения
+      console.error('[Watcher] Book error:', e.message);
     }
   }
 
@@ -619,7 +610,7 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, fenForBook) {
       if (score > alpha) alpha = score;
     }
 
-    if (localBest && Date.now() < deadline) bestMove = localBest;
+    if (localBest && Array.isArray(localBest) && Date.now() < deadline) bestMove = localBest;
     if (Date.now() >= deadline) break;
   }
 
@@ -685,7 +676,10 @@ function playSelfPlayGame() {
 
     const isW = state.turn === 'w';
     const mv = pickMoveSearch(state, isW, 80, toFen(state));
-    if (!mv) break;
+    // 🔥 ЗАЩИТА: если mv не массив — прерываем
+    if (!mv || !Array.isArray(mv) || mv.length !== 2) break;
+    if (!Array.isArray(mv[0]) || !Array.isArray(mv[1])) break;
+    if (mv[0].length !== 2 || mv[1].length !== 2) break;
 
     const pieceMoved = state.board[mv[0][0]][mv[0][1]];
     const captured = state.board[mv[1][0]][mv[1][1]];
@@ -707,11 +701,7 @@ function playSelfPlayGame() {
 
   let adjustedResult = result;
   if (result === 0 && Math.abs(finalEval) > 300) {
-    if (finalEval > 0) {
-      adjustedResult = 1;
-    } else {
-      adjustedResult = -1;
-    }
+    adjustedResult = finalEval > 0 ? 1 : -1;
   }
 
   trainOnHistory(history, adjustedResult);
@@ -772,15 +762,18 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
     const myTime = timeInfo && timeInfo.time ? timeInfo.time : 5;
 
     let thinkMs;
-    if (myTime < 2) thinkMs = 30;
-    else if (myTime < 10) thinkMs = Math.min(150, myTime * 1000 * 0.05);
-    else if (myTime < 30) thinkMs = Math.min(500, myTime * 1000 * 0.08);
-    else thinkMs = Math.min(1500, myTime * 1000 * 0.1);
-    thinkMs = Math.min(thinkMs, myTime * 1000 * 0.3);
+    if (myTime < 2) thinkMs = 50;
+    else if (myTime < 10) thinkMs = 100;
+    else if (myTime < 30) thinkMs = 200;
+    else thinkMs = 400;
+    
+    thinkMs = Math.min(thinkMs, myTime * 1000 * 0.15);
     thinkMs = Math.max(50, thinkMs);
 
     const move = pickMoveSearch(state, color === 'w', thinkMs, fen);
-    if (!move) return null;
+    if (!move || !Array.isArray(move) || move.length !== 2) return null;
+    if (!Array.isArray(move[0]) || !Array.isArray(move[1])) return null;
+    if (move[0].length !== 2 || move[1].length !== 2) return null;
     return { from: move[0], to: move[1] };
   } catch (e) {
     console.error('[Watcher] pickMoveForServer error:', e.message);
