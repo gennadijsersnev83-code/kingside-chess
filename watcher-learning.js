@@ -73,65 +73,41 @@ const PST_START = {
   ],
 };
 
-// ============================================================
-// ДЕБЮТНАЯ КНИГА
-// ============================================================
 const OPENING_BOOK = {
   'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1': [
-    { from: [6, 4], to: [4, 4] }, // e4
-    { from: [6, 3], to: [4, 3] }, // d4
-    { from: [7, 6], to: [5, 5] }, // Nf3
-    { from: [6, 2], to: [4, 2] }  // c4
+    { from: [6, 4], to: [4, 4] }, { from: [6, 3], to: [4, 3] },
+    { from: [7, 6], to: [5, 5] }, { from: [6, 2], to: [4, 2] }
   ],
   'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1': [
-    { from: [1, 4], to: [3, 4] }, // e5
-    { from: [1, 2], to: [3, 2] }, // c5
-    { from: [1, 3], to: [3, 3] }, // d5
-    { from: [1, 5], to: [2, 5] }  // f6
+    { from: [1, 4], to: [3, 4] }, { from: [1, 2], to: [3, 2] },
+    { from: [1, 3], to: [3, 3] }, { from: [1, 5], to: [2, 5] }
   ],
   'rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1': [
-    { from: [1, 3], to: [3, 3] }, // d5
-    { from: [1, 6], to: [2, 6] }, // Nf6
-    { from: [1, 2], to: [3, 2] }  // c5
+    { from: [1, 3], to: [3, 3] }, { from: [1, 6], to: [2, 6] }, { from: [1, 2], to: [3, 2] }
   ],
   'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2': [
-    { from: [7, 6], to: [5, 5] }, // Nf3
-    { from: [7, 5], to: [4, 2] }, // Bc4
-    { from: [6, 3], to: [4, 3] }  // d4
+    { from: [7, 6], to: [5, 5] }, { from: [7, 5], to: [4, 2] }, { from: [6, 3], to: [4, 3] }
   ],
   'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2': [
-    { from: [7, 6], to: [5, 5] }, // Nf3
-    { from: [6, 3], to: [4, 3] }, // d4
-    { from: [7, 2], to: [5, 2] }  // c3
+    { from: [7, 6], to: [5, 5] }, { from: [6, 3], to: [4, 3] }, { from: [7, 2], to: [5, 2] }
   ],
   'rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq d6 0 2': [
-    { from: [7, 2], to: [5, 2] }, // c4
-    { from: [7, 6], to: [5, 5] }, // Nf3
-    { from: [7, 3], to: [5, 3] }  // Qd3
+    { from: [7, 2], to: [5, 2] }, { from: [7, 6], to: [5, 5] }, { from: [7, 3], to: [5, 3] }
   ],
   'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2': [
-    { from: [0, 1], to: [2, 2] }, // Nc6
-    { from: [1, 3], to: [3, 3] }  // d6
+    { from: [0, 1], to: [2, 2] }, { from: [1, 3], to: [3, 3] }
   ],
   'rnbqkb1r/pppppppp/5n2/8/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 1 2': [
-    { from: [7, 2], to: [5, 2] }, // c4
-    { from: [7, 6], to: [5, 5] }, // Nf3
-    { from: [6, 2], to: [4, 2] }  // e4
+    { from: [7, 2], to: [5, 2] }, { from: [7, 6], to: [5, 5] }, { from: [6, 2], to: [4, 2] }
   ],
   'rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1': [
-    { from: [1, 4], to: [3, 4] }, // e5
-    { from: [1, 2], to: [3, 2] }, // c5
-    { from: [1, 6], to: [2, 6] }  // Nf6
+    { from: [1, 4], to: [3, 4] }, { from: [1, 2], to: [3, 2] }, { from: [1, 6], to: [2, 6] }
   ],
   'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3': [
-    { from: [7, 5], to: [4, 2] }, // Bc4
-    { from: [6, 3], to: [4, 3] }, // d4
-    { from: [7, 1], to: [5, 2] }  // Nc3
+    { from: [7, 5], to: [4, 2] }, { from: [6, 3], to: [4, 3] }, { from: [7, 1], to: [5, 2] }
   ],
   'rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2': [
-    { from: [1, 3], to: [3, 3] }, // d6
-    { from: [0, 1], to: [2, 2] }, // Nc6
-    { from: [1, 4], to: [2, 4] }  // e6
+    { from: [1, 3], to: [3, 3] }, { from: [0, 1], to: [2, 2] }, { from: [1, 4], to: [2, 4] }
   ]
 };
 
@@ -388,7 +364,7 @@ function allLegalMoves(state, white) {
 function sqName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
 
 // ============================================================
-// ОЦЕНКА (с защитой ферзя/фигур от "висяков")
+// ОЦЕНКА (с защитой фигур)
 // ============================================================
 function evaluate(state, forWhite) {
   let score = 0;
@@ -411,7 +387,6 @@ function evaluate(state, forWhite) {
     if (p === 'p') blackPawnsByFile[c]++;
   }
   
-  // Штраф за сдвоенные/изолированные пешки
   for (let f = 0; f < 8; f++) {
     if (whitePawnsByFile[f] > 1) score -= 10 * (whitePawnsByFile[f] - 1);
     if (blackPawnsByFile[f] > 1) score += 10 * (blackPawnsByFile[f] - 1);
@@ -429,7 +404,6 @@ function evaluate(state, forWhite) {
     }
   }
 
-  // Бонус за продвижение пешек
   for (let c = 0; c < 8; c++) {
     for (let r = 0; r < 8; r++) {
       if (state.board[r][c] === 'P') score += (6 - r) * 5;
@@ -437,12 +411,12 @@ function evaluate(state, forWhite) {
     }
   }
   
-  // 🔥 КРИТИЧЕСКАЯ ЗАЩИТА ОТ ПОТЕРИ ФЕРЗЯ/ФИГУР
+  // 🔥 ЗАЩИТА ФИГУР
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     const isW = isWhite(p);
     const val = PIECE_VALUES[p.toLowerCase()] || 0;
-    if (val < 300) continue; // только кони, слоны, ладьи, ферзи
+    if (val < 300) continue;
     
     if (isAttacked(state, r, c, !isW)) {
       let defended = false;
@@ -459,13 +433,11 @@ function evaluate(state, forWhite) {
     }
   }
   
-  // Безопасность короля
   if (whitePieces + blackPieces > 10) {
     if (whiteKing && whiteKing[1] === 4 && whiteKing[0] === 7) score -= 30;
     if (blackKing && blackKing[1] === 4 && blackKing[0] === 0) score += 30;
   }
   
-  // Эндшпиль
   if (whitePieces + blackPieces <= 5) {
     if (whiteKing && blackKing) {
       const dist = Math.abs(whiteKing[0] - blackKing[0]) + Math.abs(whiteKing[1] - blackKing[1]);
@@ -590,48 +562,7 @@ function getBookMove(fen) {
   return null;
 }
 
-// ============================================================
-// 🔥 БЕЗОПАСНОСТЬ ХОДА (не отдавать ферзя/фигуру)
-// ============================================================
-function isMoveSafe(state, from, to, isWhiteTurn) {
-  const piece = state.board[from[0]][from[1]];
-  if (!piece) return true;
-  const pieceVal = PIECE_VALUES[piece.toLowerCase()] || 0;
-  
-  const next = applyMove(state, from, to);
-  
-  // Проверяем, не атакована ли наша фигура после хода
-  // (если это была не пешка и не король)
-  if (pieceVal >= 300) {
-    // Ищем нашу фигуру на to
-    let pieceOnTo = null;
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-      if (next.board[r][c] === piece) { pieceOnTo = [r, c]; break; }
-    }
-    if (pieceOnTo) {
-      const isW = isWhite(piece);
-      if (isAttacked(next, pieceOnTo[0], pieceOnTo[1], !isW)) {
-        // Атакована. Есть ли защита?
-        let defended = false;
-        for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-          if (r === pieceOnTo[0] && c === pieceOnTo[1]) continue;
-          const q = next.board[r][c]; if (!q || isWhite(q) !== isW) continue;
-          if (pseudoMoves(next, r, c).some(([mr, mc]) => mr === pieceOnTo[0] && mc === pieceOnTo[1])) { defended = true; break; }
-        }
-        if (!defended) {
-          // Потеря фигуры. Проверяем, есть ли компенсация (взятие)
-          const captured = state.board[to[0]][to[1]];
-          const capturedVal = captured ? (PIECE_VALUES[captured.toLowerCase()] || 0) : 0;
-          if (capturedVal < pieceVal - 100) return false; // Потеря без компенсации
-        }
-      }
-    }
-  }
-  return true;
-}
-
 function pickMoveSearch(state, isWhiteTurn, timeMs, fenForBook) {
-  // Дебютная книга
   if (fenForBook) {
     try {
       const bookMoves = getBookMove(fenForBook);
@@ -647,26 +578,22 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, fenForBook) {
   if (legal.length === 0) return null;
   if (legal.length === 1) return legal[0];
 
-  // 🔥 Фильтр: отбрасываем ходы, ведущие к потере ферзя/фигуры
-  const safeMoves = legal.filter(([from, to]) => isMoveSafe(state, from, to, isWhiteTurn));
-  const movesToUse = safeMoves.length > 0 ? safeMoves : legal;
-
-  for (let i = movesToUse.length - 1; i > 0; i--) {
+  for (let i = legal.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [movesToUse[i], movesToUse[j]] = [movesToUse[j], movesToUse[i]];
+    [legal[i], legal[j]] = [legal[j], legal[i]];
   }
 
   const color = isWhiteTurn ? 1 : -1;
   const deadline = Date.now() + Math.max(50, timeMs);
 
-  let bestMove = movesToUse[0];
+  let bestMove = legal[0];
   let maxDepth = 6;
 
   for (let depth = 1; depth <= maxDepth; depth++) {
     let alpha = -Infinity, beta = Infinity;
     let localBest = null, localBestScore = -Infinity;
 
-    const ordered = movesToUse.slice().sort((a, b) => {
+    const ordered = legal.slice().sort((a, b) => {
       return moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]);
     });
 
@@ -819,7 +746,6 @@ function getStats() {
   };
 }
 
-// 🔥 Возвращаем фиксированный тайм-менеджмент, как в bot-worker.js
 function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
   if (!fen || typeof fen !== 'string') return null;
   
@@ -827,7 +753,6 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
     const state = parseFen(fen);
     const myTime = timeInfo && timeInfo.time ? timeInfo.time : 5;
 
-    // Простой фиксированный расчёт (без адаптивности)
     let thinkMs;
     if (myTime < 2) thinkMs = 50;
     else if (myTime < 5) thinkMs = 100;
@@ -835,7 +760,6 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
     else if (myTime < 30) thinkMs = 400;
     else thinkMs = 800;
     
-    // Не тратить больше 15% от остатка
     thinkMs = Math.min(thinkMs, myTime * 1000 * 0.15);
     thinkMs = Math.max(50, thinkMs);
 
