@@ -324,9 +324,33 @@ const App = {
   doLogin() {
     const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
-    if (!username || !password) { document.getElementById('loginMsg').textContent = 'Введите логин и пароль'; return; }
-    this.socket.emit('register', { username, password }, (res) => {
-      if (!res || !res.ok) { document.getElementById('loginMsg').textContent = (res && res.msg) || 'Ошибка'; return; }
+    const msgEl = document.getElementById('loginMsg');
+
+    if (!username || !password) { msgEl.textContent = 'Введите логин и пароль'; return; }
+    
+    // Если выбран режим регистрации, проверяем капчу
+    if (Auth.mode === 'register') {
+      const userAnswer = parseInt(document.getElementById('captchaAnswer').value);
+      if (isNaN(userAnswer) || userAnswer !== Auth.captchaAnswer) {
+        msgEl.textContent = 'Неверный ответ. Попробуйте снова.';
+        Auth.generateCaptcha(); // Меняем пример
+        return;
+      }
+    }
+
+    const payload = { username, password };
+    msgEl.textContent = 'Загрузка...';
+    msgEl.style.color = 'var(--text)';
+
+    this.socket.emit('register', payload, (res) => {
+      msgEl.style.color = '#ff6b6b'; // Красный для ошибок
+      
+      if (!res || !res.ok) {
+        msgEl.textContent = (res && res.msg) || 'Ошибка';
+        if (Auth.mode === 'register') Auth.generateCaptcha(); 
+        return;
+      }
+      
       this.me = res.user;
       try { localStorage.setItem('kingside_login', JSON.stringify({ username, password })); } catch (e) {}
       this.updateTopbarUser();
