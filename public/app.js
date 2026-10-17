@@ -308,21 +308,19 @@ const App = {
     let saved = null;
     try { saved = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
     if (!saved) return;
-    
-    // 🔥 ЗАЩИТА: если это self-play лобби, не восстанавливаем
+
     if (saved.startsWith('sp_')) {
       try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
       Game.updateBackToGameBtn();
       return;
     }
-    
+
     this.socket.emit('getGameState', { lobbyId: saved }, (res) => {
       if (!res || !res.ok) {
         try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
         Game.updateBackToGameBtn();
         return;
       }
-      // 🔥 ЗАЩИТА: если сервер вернул self-play (на всякий случай)
       if (res.state && res.state.isSelfPlay) {
         try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
         Game.updateBackToGameBtn();
@@ -478,13 +476,12 @@ const Router = {
   apply() {
     const { name, param } = this.current;
     if (!App.me && name !== 'login') { this.show('loginScreen'); return; }
-    
-    // 🔥 ЗАЩИТА: если в URL self-play лобби — перекидываем в лобби
+
     if (name === 'game' && param && param.startsWith('sp_')) {
       Router.go('lobby');
       return;
     }
-    
+
     if (App.me && App.gameActive && !App.gameEnded && App.lobbyId && name === 'lobby') {
       const opponent = document.getElementById('activeGameOpponent');
       if (opponent) opponent.textContent = App.opponentName || 'соперником';
@@ -591,10 +588,9 @@ const Lobby = {
   renderWaiting() {
     const el = document.getElementById('lobbyTabContent');
     App.socket.emit('getLobbies', (res) => {
-      // 🔥 ФИЛЬТР: убираем self-play
       let list = Array.isArray(res) ? res : ((res && Array.isArray(res.list)) ? res.list : []);
       list = list.filter(l => !l.isSelfPlay);
-      
+
       el.innerHTML = '';
       const current = new Map();
       if (list.length) for (const l of list) if (l.status === 'waiting') current.set(l.id, l);
@@ -693,7 +689,6 @@ const Watch = {
   requestId: 0, autoRefreshHandle: null,
   init() {},
   enter(gameId) {
-    // 🔥 ЗАЩИТА: если self-play, не входим
     if (gameId && gameId.startsWith('sp_')) { Router.go('watch'); return; }
     this.refresh(true);
     if (gameId) this.watch(gameId);
@@ -703,10 +698,9 @@ const Watch = {
   refresh(force) { App.socket.emit('getLiveGames', (list) => { this.refreshFromList(list); }); },
   refreshFromList(list) {
     const box = document.getElementById('watchListBody'); if (!box) return;
-    
-    // 🔥 ФИЛЬТР: убираем self-play
+
     list = (list || []).filter(g => !g.isSelfPlay && !(g.id && g.id.startsWith('sp_')));
-    
+
     const hash = JSON.stringify(list); if (hash === this.lastHash) return; this.lastHash = hash;
     if (!list.length) { box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>'; return; }
     box.innerHTML = list.map(g => {
@@ -722,7 +716,6 @@ const Watch = {
     }).join('');
   },
   watch(id) {
-    // 🔥 ЗАЩИТА: self-play не смотрим
     if (!id || id.startsWith('sp_')) { alert('Self-play партии недоступны для просмотра'); return; }
     if (this.watchingGameId === id) { if (Router.current.name !== 'watch') Router.go('watch', id); return; }
     if (this.watchingGameId) App.socket.emit('unwatchGame', { id: this.watchingGameId });
@@ -825,6 +818,8 @@ const Arena = {
   enterList() { this.refresh(true); },
   enterPage(arenaId) {
     if (!arenaId) { Router.go('arenas'); return; }
+    // 🔥 FIX: при входе в арену останавливаем просмотр чужой партии
+    if (Watch.watchingGameId) Watch.stop();
     if (this.currentArenaId && this.currentArenaId !== arenaId) App.socket.emit('leaveArenaRoom', { arenaId: this.currentArenaId });
     this.currentArenaId = arenaId;
     document.getElementById('arenaChatMessages').innerHTML = '';
@@ -839,6 +834,8 @@ const Arena = {
     this.gamesRefreshHandle = setInterval(() => { if (document.getElementById('arenaPageScreen').classList.contains('active')) this.renderGamesList(); }, 3000);
   },
   leaveRoom() {
+    // 🔥 FIX: при выходе из арены тоже останавливаем просмотр
+    if (Watch.watchingGameId) Watch.stop();
     if (this.currentArenaId) { App.socket.emit('leaveArenaRoom', { arenaId: this.currentArenaId }); this.currentArenaId = null; }
     if (this.pageRefreshHandle) { clearInterval(this.pageRefreshHandle); this.pageRefreshHandle = null; }
     if (this.statusTickHandle) { clearInterval(this.statusTickHandle); this.statusTickHandle = null; }
@@ -988,7 +985,11 @@ const Arena = {
       if (pcEl) pcEl.textContent = res.participantsCount || 0; if (vcEl) vcEl.textContent = res.chatViewersCount || 0;
       const hash = JSON.stringify({ live: live.map(g => [g.lobbyId, g.fen, g.timeW, g.timeB]), done: done.slice(0, 30).map(g => [g.white, g.black, g.result, g.finishedAt]) });
       if (hash === this.lastGamesHash) return; this.lastGamesHash = hash;
-      if (live.length) { const g = live[0]; topEl.innerHTML = this.renderTopGame(g); const link = topEl.querySelector('.arenaTopGameLink'); if (link) link.onclick = () => Watch.watch(g.lobbyId); }
+      // 🔥 FIX: приоритет моей партии в топ-блоке
+      const myName = App.me ? App.me.username : null;
+      const myLive = myName ? live.find(g => g.white === myName || g.black === myName) : null;
+      const topGame = myLive || live[0] || null;
+      if (topGame) { topEl.innerHTML = this.renderTopGame(topGame); const link = topEl.querySelector('.arenaTopGameLink'); if (link) link.onclick = () => Watch.watch(topGame.lobbyId); }
       else topEl.innerHTML = '<div class="arenaTopGameEmpty">Сейчас никто не играет</div>';
       if (!done.length) { listEl.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>'; return; }
       listEl.innerHTML = done.slice(0, 50).map(g => {
@@ -1036,12 +1037,20 @@ const Arena = {
     box.scrollTop = box.scrollHeight;
   },
   onUpdate(arenaId) {
-    if (this.currentArenaId === arenaId) { this.lastStateHash = ''; this.lastGamesHash = ''; if (document.getElementById('arenaPageScreen').classList.contains('active')) { this.loadPage(); this.renderGamesList(); } }
+    // 🔥 FIX: не форсируем renderGamesList — его вызовет интервал с проверкой хэша
+    if (this.currentArenaId === arenaId) {
+      this.lastStateHash = '';
+      if (document.getElementById('arenaPageScreen').classList.contains('active')) this.loadPage();
+    }
     if (document.getElementById('arenasScreen').classList.contains('active')) this.refresh();
     if (document.getElementById('lobbyScreen').classList.contains('active')) TopArenas.refresh();
   },
   onFinished(arenaId, top3) {
-    if (this.currentArenaId === arenaId) { this.lastStateHash = ''; this.lastGamesHash = ''; if (document.getElementById('arenaPageScreen').classList.contains('active')) { this.loadPage(); this.renderGamesList(); } if (top3 && top3.length) this.showWinnerBanner(top3); }
+    if (this.currentArenaId === arenaId) {
+      this.lastStateHash = ''; this.lastGamesHash = '';
+      if (document.getElementById('arenaPageScreen').classList.contains('active')) { this.loadPage(); this.renderGamesList(); }
+      if (top3 && top3.length) this.showWinnerBanner(top3);
+    }
     if (document.getElementById('arenasScreen').classList.contains('active')) this.refresh();
     if (document.getElementById('lobbyScreen').classList.contains('active')) TopArenas.refresh();
   }
@@ -1413,7 +1422,7 @@ const Banners = {
 };
 
 // ============================================================
-// GAME (без изменений, только правка Banners.hideDraw в endGame)
+// GAME
 // ============================================================
 const Game = {
   selected: null, legalMoves: [], moveHistory: [], moveFens: [], viewIndex: -1,
@@ -1437,17 +1446,13 @@ const Game = {
   },
 
   enter(lobbyId) {
-    // 🔥 ЗАЩИТА: если это self-play, не входим
-    if (lobbyId && lobbyId.startsWith('sp_')) {
-      Router.go('lobby');
-      return;
-    }
+    if (lobbyId && lobbyId.startsWith('sp_')) { Router.go('lobby'); return; }
     if (lobbyId && (!App.lobbyId || App.lobbyId !== lobbyId)) {
       App.lobbyId = lobbyId;
-      App.socket.emit('getGameState', { lobbyId }, (res) => { 
+      App.socket.emit('getGameState', { lobbyId }, (res) => {
         if (!res || !res.ok) { alert((res && res.msg) || 'Партия не найдена'); Router.go('lobby'); return; }
         if (res.state && res.state.isSelfPlay) { Router.go('lobby'); return; }
-        this.applyGameStateFromServer(res.state, lobbyId); 
+        this.applyGameStateFromServer(res.state, lobbyId);
       });
       return;
     }
@@ -1532,7 +1537,6 @@ const Game = {
   },
   updateBackToGameBtn() { const opponent = document.getElementById('activeGameOpponent'); if (opponent) opponent.textContent = App.opponentName || 'соперником'; },
   applyGameStateFromServer(s, lobbyId) {
-    // 🔥 ЗАЩИТА: если self-play — игнорируем
     if (s && s.isSelfPlay) { console.warn('Попытка применить self-play state'); return; }
     App.lobbyId = lobbyId; App.myColor = s.myColor; App.opponentName = s.opponent;
     const activeGameOpponent = document.getElementById('activeGameOpponent'); if (activeGameOpponent) activeGameOpponent.textContent = s.opponent || 'соперником';
@@ -1838,7 +1842,6 @@ const Game = {
   },
   onOpponentLeft() { if (!App.gameActive) return; alert('Соперник отключился'); this.updateBackToGameBtn(); },
   onGameStart(payload) {
-    // 🔥 ЗАЩИТА: self-play игнорируем
     if (payload.lobbyId && payload.lobbyId.startsWith('sp_')) {
       console.warn('[Game] Получен gameStart для self-play, игнорируем');
       return;
@@ -1847,7 +1850,12 @@ const Game = {
       console.warn('[Game] Получен gameStart с isSelfPlay, игнорируем');
       return;
     }
-    
+    // 🔥 FIX: если уже есть активная партия с другим lobbyId — игнорируем чужой gameStart
+    if (App.gameActive && !App.gameEnded && App.lobbyId && payload.lobbyId && payload.lobbyId !== App.lobbyId) {
+      console.warn('[Game] Игнорирую gameStart для чужого lobbyId', payload.lobbyId, 'текущий', App.lobbyId);
+      return;
+    }
+
     const { color, opponent, opponentRating, time, inc, lobbyId, fen, chat, arenaId, arenaName, opponentIsAdmin, opponentIsMod, opponentOnline, opponentIsBot, isBot: isBotFlag } = payload;
     if (lobbyId) App.lobbyId = lobbyId;
     App.myColor = color || 'w'; App.inc = inc || 0;
@@ -1878,7 +1886,9 @@ const Game = {
     try { localStorage.setItem('kingside_active_lobby', App.lobbyId); localStorage.setItem('kingside_last_lobby', App.lobbyId); } catch (e) {}
     Sounds.start();
   },
-  onBoardUpdate({ fen, san, from, to }) {
+  onBoardUpdate({ lobbyId, fen, san, from, to }) {
+    // 🔥 FIX: применяем только события СВОЕЙ партии
+    if (!lobbyId || lobbyId !== App.lobbyId) return;
     if (!App.gameActive || App.gameEnded) return;
     const prevFen = App.currentFen; App.currentFen = fen;
     this.selected = null; this.legalMoves = []; this.viewIndex = -1;
@@ -1889,12 +1899,16 @@ const Game = {
     if (san) Sounds.moveBySan(san);
     this.checkGameEnd(state); this.tryApplyPremove();
   },
-  onTimeUpdate({ timeW, timeB, serverNow }) {
+  onTimeUpdate({ lobbyId, timeW, timeB, serverNow }) {
+    // 🔥 FIX: применяем только события СВОЕЙ партии
+    if (!lobbyId || lobbyId !== App.lobbyId) return;
     if (!App.gameActive || App.gameEnded) return;
     const state = Chess.parseFen(App.currentFen);
     this.updateTimersFromServer(timeW, timeB, serverNow, state.turn);
   },
-  onGameEnded({ result, reason, isArena, arenaId, isBot }) {
+  onGameEnded({ lobbyId, result, reason, isArena, arenaId, isBot }) {
+    // 🔥 FIX: завершаем только СВОЮ партию
+    if (!lobbyId || lobbyId !== App.lobbyId) return;
     if (App.gameEnded) return;
     let winner = null;
     if (result === 'w') winner = 'w'; else if (result === 'b') winner = 'b';
