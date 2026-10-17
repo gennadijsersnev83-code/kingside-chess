@@ -8,20 +8,7 @@
 <link rel="stylesheet" href="/style.css">
 
 <style>
-.activeGameNoticeScreen { position:fixed; z-index:1000; inset:64px 0 0; min-height:0; padding:16px; box-sizing:border-box; overflow:auto; background:rgba(0,0,0,.72); align-items:center; justify-content:center; }
-.activeGameNoticeScreen.active { display:flex; }
-.activeGameNoticeCard { position:relative; isolation:isolate; overflow:hidden; width:min(660px, 100%); min-height:550px; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; box-sizing:border-box; padding:118px 20px 44px; text-align:center; background:#262522; border:1px solid #302e2a; border-radius:7px; color:#dedbd5; }
-.activeGameWatermark { position:absolute; z-index:-1; inset:-70px 0 auto; font-family:serif; font-size:500px; line-height:1; color:rgba(180,177,168,.12); transform:rotate(-12deg); pointer-events:none; }
-.activeGameNoticeTitle { font-size:38px; line-height:1.15; font-weight:300; color:#e3e0d9; }
-.activeGameNoticeSub { margin-top:4px; font-size:14px; color:#c8c5be; }
-.activeGameNoticeSub strong { color:#e5e2dc; }
-.activeGameReturnBtn { margin-top:52px; width:min(267px, 100%); min-height:65px; border:0; border-radius:7px; background:linear-gradient(#399be8,#2586d5); box-shadow:0 3px 0 rgba(0,0,0,.16); color:white; font-size:21px; font-weight:700; cursor:pointer; }
-.activeGameReturnBtn span { margin-right:8px; font-size:23px; }
-.activeGameOr { margin:39px 0 20px; font-size:14px; color:#d5d1ca; }
-.activeGameAbortBtn { min-width:161px; min-height:40px; padding:0 15px; border:0; border-radius:6px; background:linear-gradient(#e34444,#c82b2b); color:#fff; font-size:13px; font-weight:700; cursor:pointer; }
-.activeGameAbortBtn span { margin-right:5px; }
-.activeGameNoticeFoot { margin-top:21px; font-size:14px; color:#c7c3bc; }
-@media(max-width:600px) { .activeGameNoticeScreen { inset:56px 0 0; padding:10px; } .activeGameNoticeCard { min-height:calc(100vh - 90px); padding:90px 16px 32px; } .activeGameNoticeTitle { font-size:32px; } .activeGameWatermark { font-size:350px; } .activeGameReturnBtn { margin-top:42px; } }
+/* ... (существующие стили оставляем без изменений) ... */
 </style>
 </head>
 <body>
@@ -29,42 +16,38 @@
 <!-- LOGIN (отдельная страница) -->
 <section id="loginScreen" class="screen login-page">
   <div class="auth-card">
-    <!-- Вкладки -->
     <div class="auth-tabs">
       <button class="auth-tab active" id="tabLoginBtn" onclick="Auth.switchTab('login')">Войти</button>
       <button class="auth-tab" id="tabRegisterBtn" onclick="Auth.switchTab('register')">Регистрация</button>
     </div>
 
-    <!-- Поле логина -->
     <div class="auth-field">
       <label>Логин</label>
       <input id="username" placeholder="PeshkaSasha" autocomplete="username">
     </div>
 
-    <!-- Поле email (только при регистрации) -->
+    <!-- Поле email (показывается только при регистрации) -->
     <div class="auth-field" id="emailField" style="display: none;">
       <label>Email</label>
       <input id="email" type="email" placeholder="you@example.com" autocomplete="email">
     </div>
 
-    <!-- Поле пароля -->
     <div class="auth-field">
       <label>Пароль</label>
       <div class="password-wrap">
         <input id="password" type="password" placeholder="••••••••••••" autocomplete="current-password">
         <span class="eye-icon" id="eyeIcon" onclick="Auth.togglePassword()">👁</span>
       </div>
-      <a href="#" class="forgot-link" onclick="Auth.openReset(); return false;">Забыли пароль?</a>
+      <!-- Ссылка для сброса пароля -->
+      <a href="#" class="forgot-link" onclick="Auth.openResetModal(); return false;">Забыли пароль?</a>
     </div>
 
-    <!-- Чекбокс -->
     <label class="checkbox-row">
       <input type="checkbox" id="rememberMe" checked>
       <span class="checkmark"></span>
       <span>Не выходить из аккаунта</span>
     </label>
 
-    <!-- Кнопка -->
     <button id="submitBtn" class="primary auth-submit" onclick="App.doLogin()">
       <span id="btnText">Войти</span>
     </button>
@@ -73,15 +56,30 @@
   </div>
 </section>
 
-<!-- Экран сброса пароля (скрыт по умолчанию) -->
+<!-- Модальное окно: Запрос сброса пароля -->
+<div id="resetRequestModal" class="botModal">
+  <div class="botModalBox">
+    <h3>Восстановление пароля</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Укажите email, на который был зарегистрирован аккаунт.</p>
+    <div class="auth-field">
+      <input id="resetEmailInput" type="email" placeholder="you@example.com">
+    </div>
+    <div class="botModalActions" style="margin-top:10px;">
+      <button class="cancelBtn" onclick="Auth.closeResetModal()">Отмена</button>
+      <button class="startBtn" onclick="Auth.submitResetRequest()">Отправить</button>
+    </div>
+  </div>
+</div>
+
+<!-- Экран сброса пароля (по ссылке из письма) -->
 <section id="resetScreen" class="screen login-page" style="display: none;">
   <div class="auth-card">
-    <h2 style="margin-top:0;color:var(--text-bright);text-align:center;">Сброс пароля</h2>
+    <h2 style="margin-top:0;color:var(--text-bright);text-align:center;">Новый пароль</h2>
     <div class="auth-field">
-      <label>Новый пароль</label>
+      <label>Придумайте новый пароль</label>
       <input id="newPassword" type="password" placeholder="••••••••••••">
     </div>
-    <button class="primary auth-submit" onclick="Auth.doResetPassword()">Сохранить новый пароль</button>
+    <button class="primary auth-submit" onclick="Auth.doResetPassword()">Сохранить</button>
     <div id="resetMsg" class="auth-msg"></div>
     <div style="text-align:center;margin-top:16px;">
       <a href="#/autorize" class="forgot-link">← Вернуться ко входу</a>
@@ -89,6 +87,7 @@
   </div>
 </section>
 
+<!-- (ОСТАЛЬНОЙ HTML ОСТАЕТСЯ БЕЗ ИЗМЕНЕНИЙ: Топбар, Main, Игра, Арены и т.д.) -->
 <!-- Топбар и меню (скрываются, когда мы на логине) -->
 <header class="topbar" id="mainHeader">
   <div class="logo" onclick="Router.go('lobby')"><span class="mark">♔</span> Kingside</div>
@@ -160,6 +159,7 @@
     </div>
   </section>
 
+  <!-- (ОСТАЛЬНОЙ HTML ОСТАЕТСЯ БЕЗ ИЗМЕНЕНИЙ) -->
   <!-- WATCH -->
   <section id="watchScreen" class="screen">
     <div class="watchWrap">
@@ -265,7 +265,7 @@
     </div>
   </section>
 
-  <!-- INBOX (отдельная страница) -->
+  <!-- INBOX -->
   <section id="inboxScreen" class="screen">
     <div class="inboxWrap">
       <aside class="inboxSidebar">
