@@ -1,24 +1,30 @@
 'use strict';
 
 const { parentPort } = require('worker_threads');
+const { Pool } = require('pg');
 
 let watcher = null;
+let dbPool = null;
 
-function initWatcher() {
+async function initWatcher() {
   if (!watcher) {
-    try {
-      watcher = require('./watcher-learning');
-      watcher.loadWeights();
-    } catch (e) {
-      parentPort.postMessage({ type: 'error', msg: 'Init failed: ' + e.message });
-      throw e;
+    watcher = require('./watcher-learning');
+    if (process.env.DATABASE_URL_WATCHER) {
+      dbPool = new Pool({
+        connectionString: process.env.DATABASE_URL_WATCHER,
+        ssl: { rejectUnauthorized: false }
+      });
+      watcher.setPool(dbPool);
+    } else {
+      console.warn('[Worker] DATABASE_URL_WATCHER не задан!');
     }
+    await watcher.loadWeights();
   }
 }
 
-parentPort.on('message', (msg) => {
+parentPort.on('message', async (msg) => {
   try {
-    initWatcher();
+    await initWatcher();
 
     if (msg.type === 'playGames') {
       const n = msg.count || 10;
@@ -33,7 +39,7 @@ parentPort.on('message', (msg) => {
         else d++;
         lastGame = game;
       }
-      watcher.saveData();
+      await watcher.saveData();
 
       parentPort.postMessage({
         type: 'gamesDone',
@@ -48,11 +54,12 @@ parentPort.on('message', (msg) => {
       parentPort.postMessage({ type: 'stats', stats: watcher.getStats() });
 
     } else if (msg.type === 'saveData') {
-      watcher.saveData();
+      await watcher.saveData();
       parentPort.postMessage({ type: 'saved' });
 
     } else if (msg.type === 'stop') {
-      if (watcher) watcher.saveData();
+      if (watcher) await watcher.saveData();
+      if (dbPool) { try { await dbPool.end(); } catch (e) {} }
       parentPort.postMessage({ type: 'stopped' });
       process.exit(0);
     }
