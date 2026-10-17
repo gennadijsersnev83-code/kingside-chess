@@ -339,15 +339,14 @@ function evaluate(state, forWhite) {
 }
 
 // ============================================================
-// 🔥 NEGAMAX С АЛЬФА-БЕТА И QUIESCENCE
+// 🔥 NEGAMAX (ИСПРАВЛЕНО: без двойного инвертирования знака)
 // ============================================================
 function quiescence(state, alpha, beta, color) {
-  const standPat = color * evaluate(state, color === 1);
+  const standPat = evaluate(state, color === 1); // 🔥 БЕЗ color *
   if (standPat >= beta) return beta;
   if (alpha < standPat) alpha = standPat;
 
   const legal = allLegalMoves(state, color === 1);
-  // Только взятия
   const captures = legal.filter(([from, to]) => state.board[to[0]][to[1]]);
   for (const [from, to] of captures) {
     const next = applyMove(state, from, to);
@@ -360,7 +359,7 @@ function quiescence(state, alpha, beta, color) {
 
 function negamax(state, depth, alpha, beta, color, deadline) {
   if (Date.now() >= deadline) {
-    return color * evaluate(state, color === 1); // тайм-аут
+    return evaluate(state, color === 1); // 🔥 БЕЗ color *
   }
 
   const legal = allLegalMoves(state, color === 1);
@@ -387,7 +386,6 @@ function negamax(state, depth, alpha, beta, color, deadline) {
   return best;
 }
 
-// Итеративное углубление — ищет depth=1,2,3,4,5... пока есть время
 function pickMoveSearch(state, isWhiteTurn, timeMs) {
   const legal = allLegalMoves(state, isWhiteTurn);
   if (legal.length === 0) return null;
@@ -397,13 +395,12 @@ function pickMoveSearch(state, isWhiteTurn, timeMs) {
   const deadline = Date.now() + Math.max(50, timeMs);
 
   let bestMove = legal[0];
-  let maxDepth = 6;
+  let maxDepth = 5;
 
   for (let depth = 1; depth <= maxDepth; depth++) {
     let alpha = -Infinity, beta = Infinity;
     let localBest = null, localBestScore = -Infinity;
 
-    // Перестановка ходов: взятия первыми
     const ordered = legal.slice().sort((a, b) => {
       const capA = state.board[a[1][0]][a[1][1]];
       const capB = state.board[b[1][0]][b[1][1]];
@@ -428,7 +425,7 @@ function pickMoveSearch(state, isWhiteTurn, timeMs) {
 }
 
 // ============================================================
-// SELF-PLAY (с поиском)
+// SELF-PLAY
 // ============================================================
 function playSelfPlayGame() {
   let state = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
@@ -447,8 +444,7 @@ function playSelfPlayGame() {
     if (state.half >= 100) { result = 0; break; }
 
     const isW = state.turn === 'w';
-    // 🔥 Поиск 100 мс на ход (быстро)
-    const mv = pickMoveSearch(state, isW, 100);
+    const mv = pickMoveSearch(state, isW, 80);
     if (!mv) break;
 
     const pieceMoved = state.board[mv[0][0]][mv[0][1]];
@@ -479,7 +475,7 @@ function playSelfPlayGame() {
 }
 
 // ============================================================
-// ОБУЧЕНИЕ (веса обновляются)
+// ОБУЧЕНИЕ
 // ============================================================
 function trainOnHistory(history, result) {
   if (history.length === 0) return;
@@ -522,11 +518,6 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
   const state = parseFen(fen);
   const myTime = timeInfo.time || 5;
 
-  // Время на ход:
-  // 1+0 → 100 мс
-  // 3+2 → 300 мс
-  // 10+0 → 1000 мс
-  // 30+0 → 2000 мс
   let thinkMs;
   if (myTime < 2) thinkMs = 50;
   else if (myTime < 5) thinkMs = 150;
