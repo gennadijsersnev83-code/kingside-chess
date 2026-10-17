@@ -73,65 +73,6 @@ const PST_START = {
   ],
 };
 
-const OPENING_BOOK = {
-  'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1': [
-    { from: [6, 4], to: [4, 4] },
-    { from: [6, 3], to: [4, 3] },
-    { from: [7, 6], to: [5, 5] },
-    { from: [6, 2], to: [4, 2] }
-  ],
-  'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1': [
-    { from: [1, 4], to: [3, 4] },
-    { from: [1, 2], to: [3, 2] },
-    { from: [1, 3], to: [3, 3] },
-    { from: [1, 5], to: [2, 5] }
-  ],
-  'rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1': [
-    { from: [1, 3], to: [3, 3] },
-    { from: [1, 6], to: [2, 6] },
-    { from: [1, 2], to: [3, 2] }
-  ],
-  'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2': [
-    { from: [7, 6], to: [5, 5] },
-    { from: [7, 5], to: [4, 2] },
-    { from: [6, 3], to: [4, 3] }
-  ],
-  'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2': [
-    { from: [7, 6], to: [5, 5] },
-    { from: [6, 3], to: [4, 3] },
-    { from: [7, 2], to: [5, 2] }
-  ],
-  'rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq d6 0 2': [
-    { from: [7, 2], to: [5, 2] },
-    { from: [7, 6], to: [5, 5] },
-    { from: [7, 3], to: [5, 3] }
-  ],
-  'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2': [
-    { from: [0, 1], to: [2, 2] },
-    { from: [1, 3], to: [3, 3] }
-  ],
-  'rnbqkb1r/pppppppp/5n2/8/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 1 2': [
-    { from: [7, 2], to: [5, 2] },
-    { from: [7, 6], to: [5, 5] },
-    { from: [6, 2], to: [4, 2] }
-  ],
-  'rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1': [
-    { from: [1, 4], to: [3, 4] },
-    { from: [1, 2], to: [3, 2] },
-    { from: [1, 6], to: [2, 6] }
-  ],
-  'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3': [
-    { from: [7, 5], to: [4, 2] },
-    { from: [6, 3], to: [4, 3] },
-    { from: [7, 1], to: [5, 2] }
-  ],
-  'rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2': [
-    { from: [1, 3], to: [3, 3] },
-    { from: [0, 1], to: [2, 2] },
-    { from: [1, 4], to: [2, 4] }
-  ]
-};
-
 function initWeights() {
   const files = 'abcdefgh';
   const pieces = ['P','N','B','R','Q','K','p','n','b','r','q','k'];
@@ -393,21 +334,21 @@ function evaluate(state, forWhite) {
   let whiteKing = null, blackKing = null;
   const whitePawnsByFile = [0,0,0,0,0,0,0,0];
   const blackPawnsByFile = [0,0,0,0,0,0,0,0];
-  
+
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     const isW = isWhite(p);
     const material = PIECE_VALUES[p.toLowerCase()] || 0;
     const w = DATA.weights[`${p}_${sqName(r, c)}`] || 0;
     score += isW ? (material + w * 100) : -(material + w * 100);
-    
+
     if (p === 'K') whiteKing = [r, c];
     if (p === 'k') blackKing = [r, c];
     if (p !== 'K' && p !== 'k') { if (isW) whitePieces++; else blackPieces++; }
     if (p === 'P') whitePawnsByFile[c]++;
     if (p === 'p') blackPawnsByFile[c]++;
   }
-  
+
   for (let f = 0; f < 8; f++) {
     if (whitePawnsByFile[f] > 1) score -= 10 * (whitePawnsByFile[f] - 1);
     if (blackPawnsByFile[f] > 1) score += 10 * (blackPawnsByFile[f] - 1);
@@ -431,7 +372,33 @@ function evaluate(state, forWhite) {
       if (state.board[r][c] === 'p') score -= (r - 1) * 5;
     }
   }
-  
+
+  // Защита фигур от "висяков"
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = state.board[r][c]; if (!p) continue;
+    const isW = isWhite(p);
+    const val = PIECE_VALUES[p.toLowerCase()] || 0;
+    if (val < 300) continue;
+    if (isAttacked(state, r, c, !isW)) {
+      let defended = false;
+      for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
+        if (rr === r && cc === c) continue;
+        const q = state.board[rr][cc]; if (!q || isWhite(q) !== isW) continue;
+        if (pseudoMoves(state, rr, cc).some(([mr, mc]) => mr === r && mc === c)) { defended = true; break; }
+      }
+      if (!defended) {
+        score += isW ? -val : val;
+      } else {
+        score += isW ? -val * 0.1 : val * 0.1;
+      }
+    }
+  }
+
+  if (whitePieces + blackPieces > 10) {
+    if (whiteKing && whiteKing[1] === 4 && whiteKing[0] === 7) score -= 30;
+    if (blackKing && blackKing[1] === 4 && blackKing[0] === 0) score += 30;
+  }
+
   if (whitePieces + blackPieces <= 5) {
     if (whiteKing && blackKing) {
       const dist = Math.abs(whiteKing[0] - blackKing[0]) + Math.abs(whiteKing[1] - blackKing[1]);
@@ -442,12 +409,7 @@ function evaluate(state, forWhite) {
       score += edgeDistW * 10;
     }
   }
-  
-  if (whitePieces + blackPieces > 10) {
-    if (whiteKing && whiteKing[1] === 4 && whiteKing[0] === 7) score -= 30;
-    if (blackKing && blackKing[1] === 4 && blackKing[0] === 0) score += 30;
-  }
-  
+
   return forWhite ? score : -score;
 }
 
@@ -463,12 +425,10 @@ function quiescence(state, alpha, beta, color) {
   }
 
   const captures = legal.filter(([from, to]) => state.board[to[0]][to[1]]);
-  
   captures.sort((a, b) => {
     const attackerA = state.board[a[0][0]][a[0][1]].toLowerCase();
     const victimA = state.board[a[1][0]][a[1][1]].toLowerCase();
     const scoreA = (PIECE_VALUES[victimA] || 0) * 10 - (PIECE_VALUES[attackerA] || 0);
-    
     const attackerB = state.board[b[0][0]][b[0][1]].toLowerCase();
     const victimB = state.board[b[1][0]][b[1][1]].toLowerCase();
     const scoreB = (PIECE_VALUES[victimB] || 0) * 10 - (PIECE_VALUES[attackerB] || 0);
@@ -551,34 +511,7 @@ function moveScore(state, from, to) {
   return score;
 }
 
-function getBookMove(fen) {
-  if (!fen || typeof fen !== 'string') return null;
-  const key = fen.split(' ').slice(0, 4).join(' ');
-  if (OPENING_BOOK[fen]) return OPENING_BOOK[fen];
-  for (const bookFen in OPENING_BOOK) {
-    if (bookFen.split(' ').slice(0, 4).join(' ') === key) {
-      return OPENING_BOOK[bookFen];
-    }
-  }
-  return null;
-}
-
-function pickMoveSearch(state, isWhiteTurn, timeMs, fenForBook) {
-  // 🔥 Проверка книги с защитой от undefined
-  if (fenForBook) {
-    try {
-      const bookMoves = getBookMove(fenForBook);
-      if (bookMoves && Array.isArray(bookMoves) && bookMoves.length > 0) {
-        const mv = bookMoves[Math.floor(Math.random() * bookMoves.length)];
-        if (mv && Array.isArray(mv.from) && Array.isArray(mv.to) && mv.from.length === 2 && mv.to.length === 2) {
-          return mv;
-        }
-      }
-    } catch (e) {
-      console.error('[Watcher] Book error:', e.message);
-    }
-  }
-
+function pickMoveSearch(state, isWhiteTurn, timeMs) {
   const legal = allLegalMoves(state, isWhiteTurn);
   if (legal.length === 0) return null;
   if (legal.length === 1) return legal[0];
@@ -610,7 +543,7 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, fenForBook) {
       if (score > alpha) alpha = score;
     }
 
-    if (localBest && Array.isArray(localBest) && Date.now() < deadline) bestMove = localBest;
+    if (localBest && Date.now() < deadline) bestMove = localBest;
     if (Date.now() >= deadline) break;
   }
 
@@ -637,11 +570,11 @@ function playSelfPlayGame() {
       break;
     }
     if (state.half >= 100) { result = 0; break; }
-    
+
     const key = toFen(state).split(' ').slice(0, 4).join(' ');
     const count = (positionCounts.get(key) || 0) + 1;
     positionCounts.set(key, count);
-    
+
     if (count >= 3) {
       const evalNow = evaluate(state, state.turn === 'w');
       if (Math.abs(evalNow) > 150) {
@@ -675,8 +608,9 @@ function playSelfPlayGame() {
     }
 
     const isW = state.turn === 'w';
-    const mv = pickMoveSearch(state, isW, 80, toFen(state));
-    // 🔥 ЗАЩИТА: если mv не массив — прерываем
+    const mv = pickMoveSearch(state, isW, 80);
+
+    // 🔥 ЗАЩИТА
     if (!mv || !Array.isArray(mv) || mv.length !== 2) break;
     if (!Array.isArray(mv[0]) || !Array.isArray(mv[1])) break;
     if (mv[0].length !== 2 || mv[1].length !== 2) break;
@@ -756,7 +690,7 @@ function getStats() {
 
 function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
   if (!fen || typeof fen !== 'string') return null;
-  
+
   try {
     const state = parseFen(fen);
     const myTime = timeInfo && timeInfo.time ? timeInfo.time : 5;
@@ -766,11 +700,11 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
     else if (myTime < 10) thinkMs = 100;
     else if (myTime < 30) thinkMs = 200;
     else thinkMs = 400;
-    
+
     thinkMs = Math.min(thinkMs, myTime * 1000 * 0.15);
     thinkMs = Math.max(50, thinkMs);
 
-    const move = pickMoveSearch(state, color === 'w', thinkMs, fen);
+    const move = pickMoveSearch(state, color === 'w', thinkMs);
     if (!move || !Array.isArray(move) || move.length !== 2) return null;
     if (!Array.isArray(move[0]) || !Array.isArray(move[1])) return null;
     if (move[0].length !== 2 || move[1].length !== 2) return null;
