@@ -326,7 +326,7 @@ function allLegalMoves(state, white) {
 function sqName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
 
 // ============================================================
-// ОЦЕНКА
+// 🔥 ОЦЕНКА (с защитой короля и фигур)
 // ============================================================
 function evaluate(state, forWhite) {
   let score = 0;
@@ -349,6 +349,7 @@ function evaluate(state, forWhite) {
     if (p === 'p') blackPawnsByFile[c]++;
   }
 
+  // Штраф за сдвоенные/изолированные пешки
   for (let f = 0; f < 8; f++) {
     if (whitePawnsByFile[f] > 1) score -= 10 * (whitePawnsByFile[f] - 1);
     if (blackPawnsByFile[f] > 1) score += 10 * (blackPawnsByFile[f] - 1);
@@ -366,6 +367,7 @@ function evaluate(state, forWhite) {
     }
   }
 
+  // Бонус за продвижение пешек
   for (let c = 0; c < 8; c++) {
     for (let r = 0; r < 8; r++) {
       if (state.board[r][c] === 'P') score += (6 - r) * 5;
@@ -373,7 +375,23 @@ function evaluate(state, forWhite) {
     }
   }
 
-  // Защита фигур от "висяков"
+  // 🔥 БЕЗОПАСНОСТЬ КОРОЛЯ (в миттельшпиле)
+  if (whitePieces + blackPieces > 10) {
+    if (whiteKing) {
+      if (whiteKing[1] === 4) score -= 300; // Ke1 — очень плохо
+      else if (whiteKing[1] === 3 || whiteKing[1] === 5) score -= 150; // Kd1, Kf1
+      else if (whiteKing[1] === 2 || whiteKing[1] === 6) score += 100; // Kc1, Kg1 — рокировка
+      if (whiteKing[0] < 7) score -= 200; // король вышел из дома
+    }
+    if (blackKing) {
+      if (blackKing[1] === 4) score += 300;
+      else if (blackKing[1] === 3 || blackKing[1] === 5) score += 150;
+      else if (blackKing[1] === 2 || blackKing[1] === 6) score -= 100;
+      if (blackKing[0] > 0) score += 200;
+    }
+  }
+
+  // 🔥 ЗАЩИТА ФИГУР (висяки)
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     const isW = isWhite(p);
@@ -394,11 +412,7 @@ function evaluate(state, forWhite) {
     }
   }
 
-  if (whitePieces + blackPieces > 10) {
-    if (whiteKing && whiteKing[1] === 4 && whiteKing[0] === 7) score -= 30;
-    if (blackKing && blackKing[1] === 4 && blackKing[0] === 0) score += 30;
-  }
-
+  // Эндшпиль: король идёт в центр
   if (whitePieces + blackPieces <= 5) {
     if (whiteKing && blackKing) {
       const dist = Math.abs(whiteKing[0] - blackKing[0]) + Math.abs(whiteKing[1] - blackKing[1]);
@@ -610,7 +624,7 @@ function playSelfPlayGame() {
     const isW = state.turn === 'w';
     const mv = pickMoveSearch(state, isW, 80);
 
-    // 🔥 ЗАЩИТА
+    // 🔥 ЗАЩИТА: проверяем, что mv — массив из двух массивов
     if (!mv || !Array.isArray(mv) || mv.length !== 2) break;
     if (!Array.isArray(mv[0]) || !Array.isArray(mv[1])) break;
     if (mv[0].length !== 2 || mv[1].length !== 2) break;
