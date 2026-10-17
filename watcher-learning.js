@@ -377,35 +377,44 @@ function pickMove(state, isWhiteTurn, epsilon = 0.1) {
 }
 
 // ============================================================
-// 🔥 РЕЖИМ «СПАСЕНИЯ НИЧЬЕЙ» ПРИ МАЛОМ ВРЕМЕНИ
+// 🔥 РЕЖИМ «СПАСЕНИЯ НИЧЬЕЙ» (аккуратный, без жадности)
 // ============================================================
 function pickMoveSaveDraw(state, isWhiteTurn) {
   const legal = allLegalMoves(state, isWhiteTurn);
   if (legal.length === 0) return null;
   if (legal.length === 1) return legal[0];
 
+  // Материал «до»
+  const myMaterial = (() => {
+    let m = 0;
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = state.board[r][c]; if (!p) continue;
+      if (isWhite(p) === isWhiteTurn) m += PIECE_VALUES[p.toLowerCase()] || 0;
+    }
+    return m;
+  })();
+
   let best = null, bestScore = -Infinity;
   for (const [from, to] of legal) {
-    const captured = state.board[to[0]][to[1]];
     const next = applyMove(state, from, to);
     const evalScore = evaluate(next, isWhiteTurn);
-
-    // 🔥 Бонус за размен (упрощение)
-    let tradeBonus = 0;
-    if (captured) {
-      const val = PIECE_VALUES[captured.toLowerCase()] || 0;
-      tradeBonus = val * 2;
-    }
-
-    // 🔥 Штраф за «сложные» ходы (много фигур на доске)
-    let complexityPenalty = 0;
-    let pieceCount = 0;
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-      if (next.board[r][c]) pieceCount++;
-    }
-    complexityPenalty = pieceCount * 2;
-
-    const score = evalScore + tradeBonus - complexityPenalty;
+    
+    // Материал «после»
+    const newMyMaterial = (() => {
+      let m = 0;
+      for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+        const p = next.board[r][c]; if (!p) continue;
+        if (isWhite(p) === isWhiteTurn) m += PIECE_VALUES[p.toLowerCase()] || 0;
+      }
+      return m;
+    })();
+    const materialLoss = myMaterial - newMyMaterial;
+    
+    // Штраф за потерю материала
+    let lossPenalty = 0;
+    if (materialLoss > 0) lossPenalty = materialLoss * 5;
+    
+    const score = evalScore - lossPenalty;
     if (score > bestScore) { bestScore = score; best = [from, to]; }
   }
   return best;
@@ -435,11 +444,11 @@ function playSelfPlayGame() {
     if (!mv) break;
 
     const pieceMoved = state.board[mv[0][0]][mv[0][1]];
-    const captured = state.board[mv[1][0]][mv[1][1]]; // 🔥 запоминаем взятие
+    const captured = state.board[mv[1][0]][mv[1][1]];
     const sqFrom = sqName(mv[0][0], mv[0][1]);
     const sqTo = sqName(mv[1][0], mv[1][1]);
 
-    history.push({ white: isW, pieceMoved, captured, sqFrom, sqTo }); // 🔥 добавили captured
+    history.push({ white: isW, pieceMoved, captured, sqFrom, sqTo });
     state = applyMove(state, mv[0], mv[1]);
 
     moveLog.push({
@@ -461,17 +470,17 @@ function playSelfPlayGame() {
 }
 
 // ============================================================
-// 🔥 ОБУЧЕНИЕ: ничья = 0.3, бонус за взятие
+// 🔥 ОБУЧЕНИЕ: ничья = 0.1, БЕЗ tradeBonus
 // ============================================================
 function trainOnHistory(history, result) {
   if (history.length === 0) return;
   const lr = 0.005;
 
-  // 🔥 Ничья = 0.3 (лучше поражения, хуже победы)
+  // Ничья = 0.1 (лучше поражения, хуже победы, но НЕ отменяет материал)
   let whiteReward, blackReward;
   if (result === 1) { whiteReward = 1; blackReward = -1; }
   else if (result === -1) { whiteReward = -1; blackReward = 1; }
-  else { whiteReward = 0.3; blackReward = 0.3; }
+  else { whiteReward = 0.1; blackReward = 0.1; }
 
   for (const move of history) {
     const reward = move.white ? whiteReward : blackReward;
@@ -482,15 +491,9 @@ function trainOnHistory(history, result) {
     if (typeof DATA.weights[keyTo] !== 'number') DATA.weights[keyTo] = 0;
     if (typeof DATA.weights[keyFrom] !== 'number') DATA.weights[keyFrom] = 0;
 
-    // 🔥 Бонус за размен (стимулирует упрощение)
-    let tradeBonus = 0;
-    if (move.captured) {
-      const capVal = PIECE_VALUES[move.captured.toLowerCase()] || 0;
-      tradeBonus = capVal / 5000;
-    }
-
-    DATA.weights[keyTo] = Math.max(-2, Math.min(2, DATA.weights[keyTo] + lr * side * (reward + tradeBonus)));
-    DATA.weights[keyFrom] = Math.max(-2, Math.min(2, DATA.weights[keyFrom] - lr * side * (reward + tradeBonus) * 0.3));
+    // 🔥 УБРАНО: tradeBonus. Больше не жрёт фигуры вслепую.
+    DATA.weights[keyTo] = Math.max(-2, Math.min(2, DATA.weights[keyTo] + lr * side * reward));
+    DATA.weights[keyFrom] = Math.max(-2, Math.min(2, DATA.weights[keyFrom] - lr * side * reward * 0.3));
   }
 }
 
@@ -504,12 +507,11 @@ function getStats() {
   };
 }
 
-// 🔥 Режим «спасения ничьей» при малом времени
 function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
   const state = parseFen(fen);
   const myTime = timeInfo.time || 5;
   
-  // Если мало времени (< 30 сек) — играем на упрощение
+  // Если мало времени (< 30 сек) — играем аккуратно
   if (myTime < 30) {
     const move = pickMoveSaveDraw(state, color === 'w');
     if (!move) return null;
