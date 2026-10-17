@@ -295,6 +295,7 @@ const Auth = {
     });
   }
 };
+
 // ============================================================
 // APP
 // ============================================================
@@ -360,27 +361,6 @@ const App = {
         if (res && res.pending) msgEl.style.color = '#7dbe30'; // Зеленый цвет для "проверьте почту"
         return;
       }
-      this.me = res.user;
-      try { localStorage.setItem('kingside_login', JSON.stringify({ username, password })); } catch (e) {}
-      this.updateTopbarUser();
-      Router.go('lobby');
-      this.tryResumeGame();
-    });
-  },
-
-    const payload = { username, password };
-    msgEl.textContent = 'Загрузка...';
-    msgEl.style.color = 'var(--text)';
-
-    this.socket.emit('register', payload, (res) => {
-      msgEl.style.color = '#ff6b6b';
-      
-      if (!res || !res.ok) {
-        msgEl.textContent = (res && res.msg) || 'Ошибка';
-        if (Auth.mode === 'register') Auth.generateCaptcha(); 
-        return;
-      }
-      
       this.me = res.user;
       try { localStorage.setItem('kingside_login', JSON.stringify({ username, password })); } catch (e) {}
       this.updateTopbarUser();
