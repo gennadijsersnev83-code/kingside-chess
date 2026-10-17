@@ -130,11 +130,12 @@ const Chess = {
     } else if (type === 'n') { [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc]) => add(r+dr, c+dc)); }
     else if (type === 'k') {
       [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc]) => add(r+dr, c+dc));
-      if (white && r === 7 && c === 4 && !this.isAttacked(state, 7, 4, false)) {
+      // 🔥 рокировка запрещена, если король под шахом
+      if (white && r === 7 && c === 4 && !this.inCheck(state, true)) {
         if (state.castling.includes('K') && !state.board[7][5] && !state.board[7][6] && state.board[7][7] === 'R' && !this.isAttacked(state, 7, 5, false) && !this.isAttacked(state, 7, 6, false)) moves.push([7, 6]);
         if (state.castling.includes('Q') && !state.board[7][3] && !state.board[7][2] && !state.board[7][1] && state.board[7][0] === 'R' && !this.isAttacked(state, 7, 3, false) && !this.isAttacked(state, 7, 2, false)) moves.push([7, 2]);
       }
-      if (!white && r === 0 && c === 4 && !this.isAttacked(state, 0, 4, true)) {
+      if (!white && r === 0 && c === 4 && !this.inCheck(state, false)) {
         if (state.castling.includes('k') && !state.board[0][5] && !state.board[0][6] && state.board[0][7] === 'r' && !this.isAttacked(state, 0, 5, true) && !this.isAttacked(state, 0, 6, true)) moves.push([0, 6]);
         if (state.castling.includes('q') && !state.board[0][3] && !state.board[0][2] && !state.board[0][1] && state.board[0][0] === 'r' && !this.isAttacked(state, 0, 3, true) && !this.isAttacked(state, 0, 2, true)) moves.push([0, 2]);
       }
@@ -274,15 +275,31 @@ const App = {
   doLogin() {
     const username = document.getElementById('username').value.trim();
     const password = document.getElementById('password').value;
+    const email = (document.getElementById('email')?.value || '').trim();
     if (!username || !password) { document.getElementById('loginMsg').textContent = 'Введите логин и пароль'; return; }
-    this.socket.emit('register', { username, password }, (res) => {
-      if (!res || !res.ok) { document.getElementById('loginMsg').textContent = (res && res.msg) || 'Ошибка'; return; }
+    const payload = { username, password };
+    if (email) payload.email = email;
+    this.socket.emit('register', payload, (res) => {
+      const msgEl = document.getElementById('loginMsg');
+      const resendBtn = document.getElementById('resendBtn');
+      if (!res || !res.ok) {
+        msgEl.textContent = (res && res.msg) || 'Ошибка';
+        if (resendBtn) resendBtn.style.display = (res && res.needsVerification) ? 'block' : 'none';
+        return;
+      }
+      if (resendBtn) resendBtn.style.display = 'none';
       this.me = res.user;
       try { localStorage.setItem('kingside_login', JSON.stringify({ username, password })); } catch (e) {}
       this.updateTopbarUser();
       Router.go('lobby');
       this.tryResumeGame();
     });
+  },
+
+  resendVerification() {
+    const username = document.getElementById('username').value.trim();
+    if (!username) { alert('Введи логин'); return; }
+    this.socket.emit('resendVerification', { username }, (res) => { alert((res && res.msg) || 'Готово'); });
   },
 
   logout() {
@@ -296,7 +313,14 @@ const App = {
     if (!saved || !saved.username || !saved.password) return;
     try { document.getElementById('username').value = saved.username; } catch (e) {}
     this.socket.emit('register', { username: saved.username, password: saved.password }, (res) => {
-      if (!res || !res.ok) { try { localStorage.removeItem('kingside_login'); } catch (e) {} return; }
+      if (!res || !res.ok) {
+        if (!(res && res.needsVerification)) { try { localStorage.removeItem('kingside_login'); } catch (e) {} }
+        else {
+          const msgEl = document.getElementById('loginMsg'); if (msgEl) msgEl.textContent = res.msg || 'Подтверди email';
+          const resendBtn = document.getElementById('resendBtn'); if (resendBtn) resendBtn.style.display = 'block';
+        }
+        return;
+      }
       this.me = res.user;
       this.updateTopbarUser();
       Router.go('lobby');
@@ -657,7 +681,7 @@ const Bot = {
   openDialog() {
     const dlg = document.getElementById('botDialog'); if (!dlg) return;
     App.socket.emit('getBots', (list) => {
-      if (Array.isArray(list)) App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.initialRating, games: b.games || 0, isMaster: b.level === 4 }));
+      if (Array.isArray(list)) App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.rating, games: b.games || 0, isMaster: b.level === 4 }));
       this.render(); dlg.classList.add('show');
     });
   },
@@ -665,7 +689,7 @@ const Bot = {
   render() {
     const levelsEl = document.getElementById('botLevels'); const timesEl = document.getElementById('botTimes');
     if (!levelsEl || !timesEl) return;
-    if (!App.botLevels.length) { App.socket.emit('getBots', (list) => { if (Array.isArray(list)) { App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.initialRating, games: b.games || 0, isMaster: b.level === 4 })); this.render(); } }); return; }
+    if (!App.botLevels.length) { App.socket.emit('getBots', (list) => { if (Array.isArray(list)) { App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.rating, games: b.games || 0, isMaster: b.level === 4 })); this.render(); } }); return; }
     const st = App.botDialogState;
     levelsEl.innerHTML = App.botLevels.map(l => { const active = st.level === l.level; const cls = active ? 'active' : ''; const extra = l.isMaster ? 'masterBtn' : ''; return `<button data-level="${l.level}" class="${cls} ${extra}"><div class="btitle">${l.title}</div><div class="brating">${l.rating}</div></button>`; }).join('');
     timesEl.innerHTML = App.botTimes.map(t => { const active = st.time === t.t && st.inc === t.i; return `<button data-t="${t.t}" data-i="${t.i}" class="${active ? 'active' : ''}">${t.label}</button>`; }).join('');
@@ -818,7 +842,6 @@ const Arena = {
   enterList() { this.refresh(true); },
   enterPage(arenaId) {
     if (!arenaId) { Router.go('arenas'); return; }
-    // 🔥 FIX: при входе в арену останавливаем просмотр чужой партии
     if (Watch.watchingGameId) Watch.stop();
     if (this.currentArenaId && this.currentArenaId !== arenaId) App.socket.emit('leaveArenaRoom', { arenaId: this.currentArenaId });
     this.currentArenaId = arenaId;
@@ -834,7 +857,6 @@ const Arena = {
     this.gamesRefreshHandle = setInterval(() => { if (document.getElementById('arenaPageScreen').classList.contains('active')) this.renderGamesList(); }, 3000);
   },
   leaveRoom() {
-    // 🔥 FIX: при выходе из арены тоже останавливаем просмотр
     if (Watch.watchingGameId) Watch.stop();
     if (this.currentArenaId) { App.socket.emit('leaveArenaRoom', { arenaId: this.currentArenaId }); this.currentArenaId = null; }
     if (this.pageRefreshHandle) { clearInterval(this.pageRefreshHandle); this.pageRefreshHandle = null; }
@@ -985,7 +1007,6 @@ const Arena = {
       if (pcEl) pcEl.textContent = res.participantsCount || 0; if (vcEl) vcEl.textContent = res.chatViewersCount || 0;
       const hash = JSON.stringify({ live: live.map(g => [g.lobbyId, g.fen, g.timeW, g.timeB]), done: done.slice(0, 30).map(g => [g.white, g.black, g.result, g.finishedAt]) });
       if (hash === this.lastGamesHash) return; this.lastGamesHash = hash;
-      // 🔥 FIX: приоритет моей партии в топ-блоке
       const myName = App.me ? App.me.username : null;
       const myLive = myName ? live.find(g => g.white === myName || g.black === myName) : null;
       const topGame = myLive || live[0] || null;
@@ -1037,7 +1058,6 @@ const Arena = {
     box.scrollTop = box.scrollHeight;
   },
   onUpdate(arenaId) {
-    // 🔥 FIX: не форсируем renderGamesList — его вызовет интервал с проверкой хэша
     if (this.currentArenaId === arenaId) {
       this.lastStateHash = '';
       if (document.getElementById('arenaPageScreen').classList.contains('active')) this.loadPage();
@@ -1088,6 +1108,10 @@ const Profile = {
     document.getElementById('pName').innerHTML = onlinePrefix + Utils.nickHtml(user.username, user.isAdmin, user.isMod, user.isBot);
     const badges = [];
     if (user.isBot) badges.push('<span class="botBadge">🤖 – Бот</span>');
+    if (!user.isBot) {
+      if (user.emailVerified) badges.push('<span class="roleBadge" style="color:#7dbe30">✅ – Email подтверждён</span>');
+      else if (user.hasEmail) badges.push('<span class="roleBadge" style="color:#ff9c3a">⚠ – Email не подтверждён</span>');
+    }
     if (user.role === 'admin') badges.push('<span class="roleBadge admin">👑 – Админ</span>');
     if (user.role === 'moderator') badges.push('<span class="roleBadge mod">🛡 – Модератор</span>');
     if (user.isDev) badges.push('<span class="roleBadge dev">⚙ – Разраб</span>');
@@ -1850,7 +1874,6 @@ const Game = {
       console.warn('[Game] Получен gameStart с isSelfPlay, игнорируем');
       return;
     }
-    // 🔥 FIX: если уже есть активная партия с другим lobbyId — игнорируем чужой gameStart
     if (App.gameActive && !App.gameEnded && App.lobbyId && payload.lobbyId && payload.lobbyId !== App.lobbyId) {
       console.warn('[Game] Игнорирую gameStart для чужого lobbyId', payload.lobbyId, 'текущий', App.lobbyId);
       return;
@@ -1887,7 +1910,6 @@ const Game = {
     Sounds.start();
   },
   onBoardUpdate({ lobbyId, fen, san, from, to }) {
-    // 🔥 FIX: применяем только события СВОЕЙ партии
     if (!lobbyId || lobbyId !== App.lobbyId) return;
     if (!App.gameActive || App.gameEnded) return;
     const prevFen = App.currentFen; App.currentFen = fen;
@@ -1900,14 +1922,12 @@ const Game = {
     this.checkGameEnd(state); this.tryApplyPremove();
   },
   onTimeUpdate({ lobbyId, timeW, timeB, serverNow }) {
-    // 🔥 FIX: применяем только события СВОЕЙ партии
     if (!lobbyId || lobbyId !== App.lobbyId) return;
     if (!App.gameActive || App.gameEnded) return;
     const state = Chess.parseFen(App.currentFen);
     this.updateTimersFromServer(timeW, timeB, serverNow, state.turn);
   },
   onGameEnded({ lobbyId, result, reason, isArena, arenaId, isBot }) {
-    // 🔥 FIX: завершаем только СВОЮ партию
     if (!lobbyId || lobbyId !== App.lobbyId) return;
     if (App.gameEnded) return;
     let winner = null;
