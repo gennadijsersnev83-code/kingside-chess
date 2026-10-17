@@ -7,7 +7,6 @@ const { Pool } = require('pg');
 const botPool = require('./bot-pool');
 const watcherLearning = require('./watcher-learning');
 const watcherPool = require('./watcher-pool');
-const { sendVerificationEmail, generateToken } = require('./mailer');
 
 const app = express();
 const server = http.createServer(app);
@@ -149,14 +148,9 @@ async function initDB() {
     ['wins_classical','INTEGER DEFAULT 0'],['wins_rapid','INTEGER DEFAULT 0'],['wins_blitz','INTEGER DEFAULT 0'],['wins_bullet','INTEGER DEFAULT 0'],
     ['losses_classical','INTEGER DEFAULT 0'],['losses_rapid','INTEGER DEFAULT 0'],['losses_blitz','INTEGER DEFAULT 0'],['losses_bullet','INTEGER DEFAULT 0'],
     ['games_classical','INTEGER DEFAULT 0'],['games_rapid','INTEGER DEFAULT 0'],['games_blitz','INTEGER DEFAULT 0'],['games_bullet','INTEGER DEFAULT 0'],
-    ['muted_until','BIGINT DEFAULT 0'],['is_bot','BOOLEAN DEFAULT FALSE'],
-    ['email','TEXT'],
-    ['email_verified','BOOLEAN DEFAULT FALSE'],
-    ['verification_token','TEXT'],
-    ['verification_expires_at','BIGINT DEFAULT 0']
+    ['muted_until','BIGINT DEFAULT 0'],['is_bot','BOOLEAN DEFAULT FALSE']
   ];
   for (const [name, type] of cols) await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${name} ${type};`);
-  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users (LOWER(email)) WHERE email IS NOT NULL;`);
   await pool.query(`UPDATE users SET rating_classical = rating WHERE rating_classical IS NULL;`);
   await pool.query(`UPDATE users SET rating_rapid = rating WHERE rating_rapid IS NULL;`);
   await pool.query(`UPDATE users SET rating_blitz = rating WHERE rating_blitz IS NULL;`);
@@ -192,9 +186,6 @@ async function loadDB() {
       vol: row.vol != null ? row.vol : GLICKO2.DEFAULT_VOL,
       wins: row.wins, losses: row.losses, draws: row.draws, games: row.games,
       createdAt: Number(row.created_at), mutedUntil: Number(row.muted_until || 0), isBot: !!row.is_bot,
-      email: row.email || null, emailVerified: !!row.email_verified,
-      verificationToken: row.verification_token || null,
-      verificationExpiresAt: Number(row.verification_expires_at || 0),
       categories: {
         classical: { rating: row.rating_classical != null ? row.rating_classical : row.rating, rd: row.rd_classical != null ? row.rd_classical : GLICKO2.DEFAULT_RD, vol: row.vol_classical != null ? row.vol_classical : GLICKO2.DEFAULT_VOL, wins: row.wins_classical || 0, losses: row.losses_classical || 0, games: row.games_classical || 0 },
         rapid:     { rating: row.rating_rapid     != null ? row.rating_rapid     : row.rating, rd: row.rd_rapid     != null ? row.rd_rapid     : GLICKO2.DEFAULT_RD, vol: row.vol_rapid     != null ? row.vol_rapid     : GLICKO2.DEFAULT_VOL, wins: row.wins_rapid     || 0, losses: row.losses_rapid     || 0, games: row.games_rapid     || 0 },
@@ -212,7 +203,6 @@ async function loadDB() {
       db.users[bot.name] = {
         passwordHash: '', salt: '', rating: startRating, rd: GLICKO2.DEFAULT_RD, vol: GLICKO2.DEFAULT_VOL,
         wins: 0, losses: 0, draws: 0, games: 0, createdAt: Date.now(), mutedUntil: 0, isBot: true,
-        email: null, emailVerified: true, verificationToken: null, verificationExpiresAt: 0,
         categories: { classical: emptyRatingBlock(startRating), rapid: emptyRatingBlock(startRating), blitz: emptyRatingBlock(startRating), bullet: emptyRatingBlock(startRating) }
       };
       try {
@@ -224,12 +214,12 @@ async function loadDB() {
                               wins_classical, wins_rapid, wins_blitz, wins_bullet,
                               losses_classical, losses_rapid, losses_blitz, losses_bullet,
                               games_classical, games_rapid, games_blitz, games_bullet,
-                              muted_until, is_bot, email_verified)
-           VALUES ($1,$2,$3,$4,$5,$6,0,0,0,0,$7,$4,$4,$4,$4,$5,$5,$5,$5,$6,$6,$6,$6,0,0,0,0,0,0,0,0,0,0,0,0,0,TRUE,TRUE)`,
+                              muted_until, is_bot)
+           VALUES ($1,$2,$3,$4,$5,$6,0,0,0,0,$7,$4,$4,$4,$4,$5,$5,$5,$5,$6,$6,$6,$6,0,0,0,0,0,0,0,0,0,0,0,0,0,TRUE)`,
           [bot.name, '', '', startRating, GLICKO2.DEFAULT_RD, GLICKO2.DEFAULT_VOL, Date.now()]
         );
       } catch (e) {}
-    } else { existing.isBot = true; if (existing.emailVerified === undefined) existing.emailVerified = true; }
+    } else existing.isBot = true;
   }
 }
 
@@ -278,14 +268,6 @@ async function saveUser(username) {
   );
 }
 
-async function saveUserEmail(username) {
-  const u = db.users[username]; if (!u) return;
-  await pool.query(
-    `UPDATE users SET email = $2, email_verified = $3, verification_token = $4, verification_expires_at = $5 WHERE username = $1`,
-    [username, u.email || null, !!u.emailVerified, u.verificationToken || null, u.verificationExpiresAt || 0]
-  );
-}
-
 async function saveGame(game) {
   await pool.query(
     `INSERT INTO games (white, black, result, reason, time_control, increment,
@@ -322,9 +304,7 @@ function publicUser(name) {
     wins: u.wins, losses: u.losses, draws: u.draws, games: u.games,
     createdAt: u.createdAt, role: roleOf(name), isAdmin: isAdmin(name), isMod: isMod(name), isDev: isDev(name),
     mutedUntil: u.mutedUntil || 0, categories: u.categories || null,
-    isBot: !!u.isBot && name !== WATCHER_NAME,
-    emailVerified: !!u.emailVerified,
-    hasEmail: !!u.email
+    isBot: !!u.isBot && name !== WATCHER_NAME
   };
 }
 function isUserOnline(username) { for (const [, name] of online.entries()) if (name === username) return true; return false; }
@@ -596,14 +576,13 @@ function botPseudoMoves(state, r, c) {
   } else if (type === 'n') { [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc]) => add(r+dr, c+dc)); }
   else if (type === 'k') {
     [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc]) => add(r+dr, c+dc));
-    // 🔥 рокировка запрещена, если король под шахом
-    if (white && r === 7 && c === 4 && !botInCheck(state, true)) {
-      if (state.castling.includes('K') && !state.board[7][5] && !state.board[7][6] && state.board[7][7] === 'R' && !botIsAttacked(state, 7, 5, false) && !botIsAttacked(state, 7, 6, false)) moves.push([7, 6]);
-      if (state.castling.includes('Q') && !state.board[7][3] && !state.board[7][2] && !state.board[7][1] && state.board[7][0] === 'R' && !botIsAttacked(state, 7, 3, false) && !botIsAttacked(state, 7, 2, false)) moves.push([7, 2]);
+    if (white && r === 7 && c === 4) {
+      if (state.castling.includes('K') && !state.board[7][5] && !state.board[7][6] && state.board[7][7] === 'R') moves.push([7, 6]);
+      if (state.castling.includes('Q') && !state.board[7][3] && !state.board[7][2] && !state.board[7][1] && state.board[7][0] === 'R') moves.push([7, 2]);
     }
-    if (!white && r === 0 && c === 4 && !botInCheck(state, false)) {
-      if (state.castling.includes('k') && !state.board[0][5] && !state.board[0][6] && state.board[0][7] === 'r' && !botIsAttacked(state, 0, 5, true) && !botIsAttacked(state, 0, 6, true)) moves.push([0, 6]);
-      if (state.castling.includes('q') && !state.board[0][3] && !state.board[0][2] && !state.board[0][1] && state.board[0][0] === 'r' && !botIsAttacked(state, 0, 3, true) && !botIsAttacked(state, 0, 2, true)) moves.push([0, 2]);
+    if (!white && r === 0 && c === 4) {
+      if (state.castling.includes('k') && !state.board[0][5] && !state.board[0][6] && state.board[0][7] === 'r') moves.push([0, 6]);
+      if (state.castling.includes('q') && !state.board[0][3] && !state.board[0][2] && !state.board[0][1] && state.board[0][0] === 'r') moves.push([0, 2]);
     }
   } else {
     const dirs = [];
@@ -1543,32 +1522,40 @@ function scheduleBotMove(lobbyId) {
   }
   let delay;
   if (botName === WATCHER_NAME) {
-    delay = 800 + Math.random() * 1200;
+    delay = 800 + Math.random() * 1200; // Watcher не трогаем
   } else {
     const remainMs = botTimeLeft * 1000;
+    
+    // 🔥 КРИТИЧЕСКОЕ ВРЕМЯ (меньше 10 секунд) — ходим мгновенно
     if (remainMs < 2000) {
-      delay = 30 + Math.random() * 40;
+      delay = 30 + Math.random() * 40;        // 30-70 мс
     } else if (remainMs < 5000) {
-      delay = 50 + Math.random() * 100;
+      delay = 50 + Math.random() * 100;       // 50-150 мс
     } else if (remainMs < 10000) {
-      delay = 100 + Math.random() * 200;
+      delay = 100 + Math.random() * 200;      // 100-300 мс
     } else {
+      // Нормальный режим — думаем, но не дольше 3 секунд
       let frac;
       if (remainMs < 30000)        frac = 0.020;
       else if (remainMs < 60000)   frac = 0.025;
       else if (remainMs < 180000)  frac = 0.030;
       else if (remainMs < 600000)  frac = 0.025;
       else                         frac = 0.020;
+      
       const incBoostMs = Math.min(inc * 1000 * 0.6, remainMs * 0.05);
       let thinkMs = remainMs * frac + incBoostMs;
-      thinkMs = Math.max(80, Math.min(3000, thinkMs));
+      thinkMs = Math.max(80, Math.min(3000, thinkMs)); // максимум 3 секунды
       thinkMs = Math.min(thinkMs, remainMs / 15);
+      
       const jitter = 0.7 + Math.random() * 0.5;
       delay = thinkMs * jitter;
+      
       if (botInCheck(state, botIsWhiteTurn)) delay *= 1.2;
       let hasCapture = false;
       for (const [from, to] of botMoves) if (state.board[to[0]][to[1]]) { hasCapture = true; break; }
       if (hasCapture) delay *= 1.1;
+      
+      // Жесткий лимит: не больше 20% от остатка
       const maxThinkMs = Math.max(80, Math.min(3000, Math.floor(remainMs * 0.20)));
       if (delay > maxThinkMs) delay = maxThinkMs;
       if (delay < 80) delay = 80;
@@ -1732,32 +1719,6 @@ async function unreadCount(username) {
   return r.rows[0].n || 0;
 }
 
-// ============================================================
-// EMAIL VERIFICATION HTTP ENDPOINT
-// ============================================================
-app.get('/verify-email', async (req, res) => {
-  const { token } = req.query;
-  if (!token || typeof token !== 'string') return res.status(400).send('Токен не указан');
-  try {
-    const r = await pool.query(
-      'SELECT username FROM users WHERE verification_token = $1 AND verification_expires_at > $2',
-      [token, Date.now()]
-    );
-    if (r.rows.length === 0) return res.status(410).send('Ссылка недействительна или истекла');
-    const username = r.rows[0].username;
-    await pool.query(
-      'UPDATE users SET email_verified = TRUE, verification_token = NULL, verification_expires_at = 0 WHERE username = $1',
-      [username]
-    );
-    const u = db.users[username];
-    if (u) { u.emailVerified = true; u.verificationToken = null; u.verificationExpiresAt = 0; }
-    res.redirect('/?verified=1');
-  } catch (e) {
-    console.error('[verify-email]', e.message);
-    res.status(500).send('Ошибка проверки');
-  }
-});
-
 io.on('connection', (socket) => {
   socket.emit('stats', {
     online: countOnline(), games: db.totalGames, activeGames: countActiveLobbies(),
@@ -1767,7 +1728,7 @@ io.on('connection', (socket) => {
   });
   socket.emit('liveGamesUpdate', buildGamesList());
 
-  socket.on('register', async ({ username, password, email }, cb) => {
+  socket.on('register', async ({ username, password }, cb) => {
     if (typeof cb !== 'function') return;
     if (!username || !password) return cb({ ok: false, msg: 'Заполните поля' });
     if (ALL_BOT_NAMES.has(username)) return cb({ ok: false, msg: 'Это имя зарезервировано' });
@@ -1775,65 +1736,26 @@ io.on('connection', (socket) => {
     if (!/^[a-zA-Zа-яА-Я0-9_\-]+$/.test(username)) return cb({ ok: false, msg: 'Логин: буквы, цифры, _ и -' });
     if (password.length < 3) return cb({ ok: false, msg: 'Пароль минимум 3 символа' });
     if (password.length > 128) return cb({ ok: false, msg: 'Пароль слишком длинный' });
-
-    if (email) {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return cb({ ok: false, msg: 'Некорректный email' });
-      const emailTaken = await pool.query('SELECT username FROM users WHERE LOWER(email) = LOWER($1) AND username <> $2', [email, username]);
-      if (emailTaken.rows.length > 0) return cb({ ok: false, msg: 'Этот email уже привязан к другому аккаунту' });
-      let user = db.users[username];
-      if (user) {
-        if (user.email && user.emailVerified) return cb({ ok: false, msg: 'Этот логин уже занят и подтверждён. Войдите.' });
-        if (!verifyPassword(password, user.salt, user.passwordHash)) return cb({ ok: false, msg: 'Логин уже занят другим игроком' });
-        user.email = email; user.emailVerified = false;
-        user.verificationToken = generateToken();
-        user.verificationExpiresAt = Date.now() + 24 * 60 * 60 * 1000;
-        await saveUserEmail(username);
-        sendVerificationEmail({ to: email, username, token: user.verificationToken }).catch(err => console.error('[mail]', err.message));
-        return cb({ ok: false, needsVerification: true, msg: 'Письмо отправлено повторно. Проверь почту.' });
-      }
-      const salt = newSalt();
-      const passwordHash = hashPassword(password, salt);
+    let user = db.users[username];
+    if (user) {
+      if (!verifyPassword(password, user.salt, user.passwordHash)) return cb({ ok: false, msg: 'Неверный пароль' });
+    } else {
+      const salt = newSalt(); const passwordHash = hashPassword(password, salt);
       const base = 1200;
-      const token = generateToken();
       db.users[username] = {
         passwordHash, salt, rating: base, rd: GLICKO2.DEFAULT_RD, vol: GLICKO2.DEFAULT_VOL,
-        wins: 0, losses: 0, draws: 0, games: 0, createdAt: Date.now(), mutedUntil: 0, isBot: false,
-        categories: { classical: emptyRatingBlock(base), rapid: emptyRatingBlock(base), blitz: emptyRatingBlock(base), bullet: emptyRatingBlock(base) },
-        email, emailVerified: false, verificationToken: token,
-        verificationExpiresAt: Date.now() + 24 * 60 * 60 * 1000
+        wins: 0, losses: 0, draws: 0, games: 0,
+        createdAt: Date.now(), mutedUntil: 0, isBot: false,
+        categories: { classical: emptyRatingBlock(base), rapid: emptyRatingBlock(base), blitz: emptyRatingBlock(base), bullet: emptyRatingBlock(base) }
       };
-      try { await saveUser(username); await saveUserEmail(username); } catch (err) {}
-      sendVerificationEmail({ to: email, username, token }).catch(err => console.error('[mail]', err.message));
-      return cb({ ok: false, needsVerification: true, msg: 'Аккаунт создан. Подтверди email, чтобы войти.' });
+      try { await saveUser(username); } catch (err) {}
     }
-
-    let user = db.users[username];
-    if (!user) return cb({ ok: false, msg: 'Неверный логин или пароль' });
-    if (!verifyPassword(password, user.salt, user.passwordHash)) return cb({ ok: false, msg: 'Неверный логин или пароль' });
-    if (!user.isBot && !user.emailVerified) return cb({ ok: false, needsVerification: true, msg: 'Email не подтверждён. Проверь почту или запроси письмо повторно.' });
-
     online.set(socket.id, username);
     socket.username = username;
     cb({ ok: true, user: publicUser(username) });
     broadcastOnline();
     const un = await unreadCount(username);
     socket.emit('msgUnread', { count: un });
-  });
-
-  socket.on('resendVerification', async ({ username }, cb) => {
-    if (typeof cb !== 'function') return cb({ ok: false, msg: 'Ошибка' });
-    if (!username) return cb({ ok: false, msg: 'Не указан логин' });
-    const u = db.users[username];
-    if (!u) return cb({ ok: false, msg: 'Игрок не найден' });
-    if (u.emailVerified) return cb({ ok: false, msg: 'Email уже подтверждён' });
-    if (!u.email) return cb({ ok: false, msg: 'У аккаунта нет email' });
-    if (u.verificationExpiresAt && u.verificationExpiresAt > Date.now() + 22 * 60 * 60 * 1000) return cb({ ok: false, msg: 'Подожди пару минут перед повторной отправкой' });
-    u.verificationToken = generateToken();
-    u.verificationExpiresAt = Date.now() + 24 * 60 * 60 * 1000;
-    await saveUserEmail(username);
-    try { await sendVerificationEmail({ to: u.email, username, token: u.verificationToken }); }
-    catch (err) { console.error('[mail]', err.message); return cb({ ok: false, msg: 'Не удалось отправить письмо' }); }
-    cb({ ok: true, msg: 'Письмо отправлено повторно' });
   });
 
   socket.on('getProfile', async ({ username }, cb) => {
