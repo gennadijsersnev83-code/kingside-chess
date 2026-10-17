@@ -226,6 +226,56 @@ const Chess = {
 };
 
 // ============================================================
+// AUTH (ЛОГИН / РЕГИСТРАЦИЯ)
+// ============================================================
+const Auth = {
+  mode: 'login',
+  captchaAnswer: 0,
+
+  switchTab(mode) {
+    this.mode = mode;
+    const tabLogin = document.getElementById('tabLoginBtn');
+    const tabReg = document.getElementById('tabRegisterBtn');
+    const captchaField = document.getElementById('captchaField');
+    const btnText = document.getElementById('btnText');
+
+    if (mode === 'login') {
+      tabLogin.classList.add('active');
+      tabReg.classList.remove('active');
+      captchaField.style.display = 'none';
+      btnText.textContent = 'Войти';
+    } else {
+      tabReg.classList.add('active');
+      tabLogin.classList.remove('active');
+      captchaField.style.display = 'block';
+      btnText.textContent = 'Зарегистрироваться';
+      this.generateCaptcha(); // Генерируем пример при открытии
+    }
+    document.getElementById('loginMsg').textContent = '';
+  },
+
+  generateCaptcha() {
+    const a = Math.floor(Math.random() * 10) + 1;
+    const b = Math.floor(Math.random() * 10) + 1;
+    this.captchaAnswer = a + b;
+    document.getElementById('captchaQuestion').textContent = `${a} + ${b}`;
+    document.getElementById('captchaAnswer').value = '';
+  },
+
+  togglePassword() {
+    const pw = document.getElementById('password');
+    const icon = document.getElementById('eyeIcon');
+    if (pw.type === 'password') {
+      pw.type = 'text';
+      icon.textContent = '🙈';
+    } else {
+      pw.type = 'password';
+      icon.textContent = '👁';
+    }
+  }
+};
+
+// ============================================================
 // APP
 // ============================================================
 const App = {
