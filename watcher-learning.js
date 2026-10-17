@@ -74,71 +74,60 @@ const PST_START = {
 };
 
 // ============================================================
-// 🔥 ДЕБЮТНАЯ КНИГА (5-6 ходов в глубину)
+// ДЕБЮТНАЯ КНИГА
 // ============================================================
 const OPENING_BOOK = {
-  // Стартовая позиция
   'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1': [
     { from: [6, 4], to: [4, 4] }, // e4
     { from: [6, 3], to: [4, 3] }, // d4
     { from: [7, 6], to: [5, 5] }, // Nf3
     { from: [6, 2], to: [4, 2] }  // c4
   ],
-  // 1. e4
   'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1': [
     { from: [1, 4], to: [3, 4] }, // e5
     { from: [1, 2], to: [3, 2] }, // c5
     { from: [1, 3], to: [3, 3] }, // d5
-    { from: [1, 5], to: [2, 5] }  // f6 (Алехин)
+    { from: [1, 5], to: [2, 5] }  // f6
   ],
-  // 1. d4
   'rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1': [
     { from: [1, 3], to: [3, 3] }, // d5
     { from: [1, 6], to: [2, 6] }, // Nf6
     { from: [1, 2], to: [3, 2] }  // c5
   ],
-  // 1. e4 e5
   'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2': [
     { from: [7, 6], to: [5, 5] }, // Nf3
     { from: [7, 5], to: [4, 2] }, // Bc4
     { from: [6, 3], to: [4, 3] }  // d4
   ],
-  // 1. e4 c5 (Сицилианская)
   'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2': [
     { from: [7, 6], to: [5, 5] }, // Nf3
     { from: [6, 3], to: [4, 3] }, // d4
-    { from: [7, 2], to: [5, 2] }  // c3 (закрытая)
+    { from: [7, 2], to: [5, 2] }  // c3
   ],
-  // 1. d4 d5
   'rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq d6 0 2': [
-    { from: [7, 2], to: [5, 2] }, // c4 (ферзевый гамбит)
+    { from: [7, 2], to: [5, 2] }, // c4
     { from: [7, 6], to: [5, 5] }, // Nf3
     { from: [7, 3], to: [5, 3] }  // Qd3
   ],
-  // 1. e4 e5 2. Nf3
   'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2': [
     { from: [0, 1], to: [2, 2] }, // Nc6
-    { from: [1, 3], to: [3, 3] }  // d6 (Филидор)
+    { from: [1, 3], to: [3, 3] }  // d6
   ],
-  // 1. d4 Nf6
   'rnbqkb1r/pppppppp/5n2/8/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 1 2': [
     { from: [7, 2], to: [5, 2] }, // c4
     { from: [7, 6], to: [5, 5] }, // Nf3
     { from: [6, 2], to: [4, 2] }  // e4
   ],
-  // 1. c4 (Английское начало)
   'rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1': [
     { from: [1, 4], to: [3, 4] }, // e5
     { from: [1, 2], to: [3, 2] }, // c5
     { from: [1, 6], to: [2, 6] }  // Nf6
   ],
-  // 1. e4 e5 2. Nf3 Nc6
   'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3': [
     { from: [7, 5], to: [4, 2] }, // Bc4
     { from: [6, 3], to: [4, 3] }, // d4
     { from: [7, 1], to: [5, 2] }  // Nc3
   ],
-  // 1. e4 c5 2. Nf3
   'rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2': [
     { from: [1, 3], to: [3, 3] }, // d6
     { from: [0, 1], to: [2, 2] }, // Nc6
@@ -146,9 +135,6 @@ const OPENING_BOOK = {
   ]
 };
 
-// ============================================================
-// PST WEIGHTS
-// ============================================================
 function initWeights() {
   const files = 'abcdefgh';
   const pieces = ['P','N','B','R','Q','K','p','n','b','r','q','k'];
@@ -569,11 +555,15 @@ function moveScore(state, from, to) {
   return score;
 }
 
-// 🔥 Проверяем, есть ли ход в дебютной книге
+// 🔥 УСТОЙЧИВАЯ ФУНКЦИЯ ПОИСКА В КНИГЕ
 function getBookMove(fen) {
+  if (!fen || typeof fen !== 'string') return null;
   const key = fen.split(' ').slice(0, 4).join(' ');
+  
+  // Сначала пробуем точное совпадение
   if (OPENING_BOOK[fen]) return OPENING_BOOK[fen];
-  // Пробуем найти по ключу без счетчиков
+  
+  // Потом по ключу без счетчиков
   for (const bookFen in OPENING_BOOK) {
     if (bookFen.split(' ').slice(0, 4).join(' ') === key) {
       return OPENING_BOOK[bookFen];
@@ -584,13 +574,17 @@ function getBookMove(fen) {
 
 function pickMoveSearch(state, isWhiteTurn, timeMs, fenForBook) {
   // 🔥 Проверяем дебютную книгу (только если ходов < 10)
+  // Безопасно: если fenForBook нет, просто пропускаем
   if (fenForBook) {
-    const bookMoves = getBookMove(fenForBook);
-    if (bookMoves && bookMoves.length > 0) {
-      // 85% вероятность взять из книги, чтобы иногда бот "думал" сам
-      if (Math.random() < 0.85) {
-        return bookMoves[Math.floor(Math.random() * bookMoves.length)];
+    try {
+      const bookMoves = getBookMove(fenForBook);
+      if (bookMoves && bookMoves.length > 0) {
+        if (Math.random() < 0.85) {
+          return bookMoves[Math.floor(Math.random() * bookMoves.length)];
+        }
       }
+    } catch (e) {
+      // Если книга сломалась — просто идем дальше, без падения
     }
   }
 
@@ -714,7 +708,9 @@ function playSelfPlayGame() {
   let adjustedResult = result;
   if (result === 0 && Math.abs(finalEval) > 300) {
     if (finalEval > 0) {
-      adjustedResult = finalEval > 0 ? 1 : -1;
+      adjustedResult = 1;
+    } else {
+      adjustedResult = -1;
     }
   }
 
@@ -769,19 +765,27 @@ function getStats() {
 }
 
 function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
-  const state = parseFen(fen);
-  const myTime = timeInfo.time || 5;
+  if (!fen || typeof fen !== 'string') return null;
+  
+  try {
+    const state = parseFen(fen);
+    const myTime = timeInfo && timeInfo.time ? timeInfo.time : 5;
 
-  let thinkMs;
-  if (myTime < 2) thinkMs = 30;
-  else if (myTime < 10) thinkMs = Math.min(150, myTime * 1000 * 0.05);
-  else if (myTime < 30) thinkMs = Math.min(500, myTime * 1000 * 0.08);
-  else thinkMs = Math.min(1500, myTime * 1000 * 0.1);
-  thinkMs = Math.min(thinkMs, myTime * 1000 * 0.3);
+    let thinkMs;
+    if (myTime < 2) thinkMs = 30;
+    else if (myTime < 10) thinkMs = Math.min(150, myTime * 1000 * 0.05);
+    else if (myTime < 30) thinkMs = Math.min(500, myTime * 1000 * 0.08);
+    else thinkMs = Math.min(1500, myTime * 1000 * 0.1);
+    thinkMs = Math.min(thinkMs, myTime * 1000 * 0.3);
+    thinkMs = Math.max(50, thinkMs);
 
-  const move = pickMoveSearch(state, color === 'w', thinkMs, fen);
-  if (!move) return null;
-  return { from: move[0], to: move[1] };
+    const move = pickMoveSearch(state, color === 'w', thinkMs, fen);
+    if (!move) return null;
+    return { from: move[0], to: move[1] };
+  } catch (e) {
+    console.error('[Watcher] pickMoveForServer error:', e.message);
+    return null;
+  }
 }
 
 function startEpisode() {}
