@@ -1,14 +1,32 @@
 'use strict';
 
 const { parentPort } = require('worker_threads');
+const { Pool } = require('pg');
 
 let watcher = null;
+let watcherDbPool = null;
 
-function initWatcher() {
+async function initWatcher() {
   if (!watcher) {
     try {
       watcher = require('./watcher-learning');
-      watcher.loadWeights();
+
+      // 🔥 Подключаем БД в воркере (отдельный пул)
+      if (process.env.DATABASE_URL_WATCHER) {
+        watcherDbPool = new Pool({
+          connectionString: process.env.DATABASE_URL_WATCHER,
+          ssl: { rejectUnauthorized: false }
+        });
+        watcher.setPool(watcherDbPool);
+        console.log('[WatcherWorker] Подключено к БД весов');
+      } else {
+        console.warn('[WatcherWorker] DATABASE_URL_WATCHER не задан — веса НЕ загрузятся!');
+      }
+
+      // 🔥 ЖДЁМ загрузки весов
+      await watcher.loadWeights();
+      console.log(`[WatcherWorker] Веса загружены: ${watcher.getStats().games} партий`);
+
     } catch (e) {
       parentPort.postMessage({ type: 'error', msg: 'Init failed: ' + e.message });
       throw e;
@@ -16,9 +34,9 @@ function initWatcher() {
   }
 }
 
-parentPort.on('message', (msg) => {
+parentPort.on('message', async (msg) => {
   try {
-    initWatcher();
+    await initWatcher();
 
     if (msg.type === 'playGames') {
       const n = msg.count || 10;
@@ -33,7 +51,7 @@ parentPort.on('message', (msg) => {
         else d++;
         lastGame = game;
       }
-      watcher.saveData();
+      await watcher.saveData();
 
       parentPort.postMessage({
         type: 'gamesDone',
@@ -48,11 +66,11 @@ parentPort.on('message', (msg) => {
       parentPort.postMessage({ type: 'stats', stats: watcher.getStats() });
 
     } else if (msg.type === 'saveData') {
-      watcher.saveData();
+      await watcher.saveData();
       parentPort.postMessage({ type: 'saved' });
 
     } else if (msg.type === 'stop') {
-      if (watcher) watcher.saveData();
+      if (watcher) await watcher.saveData();
       parentPort.postMessage({ type: 'stopped' });
       process.exit(0);
     }
