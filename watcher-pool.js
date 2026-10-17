@@ -1,9 +1,8 @@
 'use strict';
 
 /**
- * watcher-pool.js — управление worker'ом self-play.
- * Запускает один worker, шлёт задачи, обрабатывает результаты.
- * Позволяет при необходимости пересоздать worker (после падения).
+ * watcher-pool.js — управление worker-потоком self-play.
+ * Запускает один worker, шлёт задачи, перезапускает при падении.
  */
 
 const { Worker } = require('worker_threads');
@@ -16,7 +15,7 @@ class WatcherPool {
     this.busy = false;
     this.queue = [];
     this.totalGames = 0;
-    this.handler = null; // callback для логов
+    this.handler = null;
   }
 
   start() {
@@ -34,7 +33,7 @@ class WatcherPool {
         this.totalGames += msg.played;
         if (this.handler) this.handler({ type: 'gamesDone', ...msg, totalGames: this.totalGames });
         this.flushQueue();
-      } else if (msg.type === 'stats' || msg.type === 'saved' || msg.type === 'stopped' || msg.type === 'error') {
+      } else {
         if (msg.type === 'stopped') this.busy = false;
         if (this.handler) this.handler(msg);
         this.flushQueue();
@@ -47,7 +46,6 @@ class WatcherPool {
       this.worker = null;
       this.ready = false;
       this.busy = false;
-      // Перезапустить через 5 секунд
       setTimeout(() => this.start(), 5000);
     });
 
