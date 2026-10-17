@@ -41,6 +41,12 @@
       <input id="username" placeholder="PeshkaSasha" autocomplete="username">
     </div>
 
+    <!-- Поле email (только при регистрации) -->
+    <div class="auth-field" id="emailField" style="display: none;">
+      <label>Email</label>
+      <input id="email" type="email" placeholder="you@example.com" autocomplete="email">
+    </div>
+
     <!-- Поле пароля -->
     <div class="auth-field">
       <label>Пароль</label>
@@ -48,13 +54,7 @@
         <input id="password" type="password" placeholder="••••••••••••" autocomplete="current-password">
         <span class="eye-icon" id="eyeIcon" onclick="Auth.togglePassword()">👁</span>
       </div>
-      <!-- <a href="#" class="forgot-link" onclick="alert('Восстановление пароля пока не настроено'); return false;">Сброс пароля</a> -->
-    </div>
-
-    <!-- Капча (только при регистрации) -->
-    <div class="auth-field" id="captchaField" style="display: none;">
-      <label>Защита от ботов: сколько будет <span id="captchaQuestion" style="color: var(--accent); font-weight: bold;"></span>?</label>
-      <input id="captchaAnswer" type="number" placeholder="Введите ответ">
+      <a href="#" class="forgot-link" onclick="Auth.openReset(); return false;">Забыли пароль?</a>
     </div>
 
     <!-- Чекбокс -->
@@ -70,6 +70,22 @@
     </button>
 
     <div id="loginMsg" class="auth-msg"></div>
+  </div>
+</section>
+
+<!-- Экран сброса пароля (скрыт по умолчанию) -->
+<section id="resetScreen" class="screen login-page" style="display: none;">
+  <div class="auth-card">
+    <h2 style="margin-top:0;color:var(--text-bright);text-align:center;">Сброс пароля</h2>
+    <div class="auth-field">
+      <label>Новый пароль</label>
+      <input id="newPassword" type="password" placeholder="••••••••••••">
+    </div>
+    <button class="primary auth-submit" onclick="Auth.doResetPassword()">Сохранить новый пароль</button>
+    <div id="resetMsg" class="auth-msg"></div>
+    <div style="text-align:center;margin-top:16px;">
+      <a href="#/autorize" class="forgot-link">← Вернуться ко входу</a>
+    </div>
   </div>
 </section>
 
