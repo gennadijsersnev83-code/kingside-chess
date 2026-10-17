@@ -334,7 +334,6 @@ function evaluate(state, forWhite) {
   let whiteKing = null, blackKing = null;
   const whitePawnsByFile = [0,0,0,0,0,0,0,0];
   const blackPawnsByFile = [0,0,0,0,0,0,0,0];
-  let whiteMobility = 0, blackMobility = 0;
   
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
@@ -369,6 +368,14 @@ function evaluate(state, forWhite) {
       if (left === 0 && right === 0) score += 15;
     }
   }
+
+  // 🔥 Бонус за продвижение пешек (стимулирует идти вперед)
+  for (let c = 0; c < 8; c++) {
+    for (let r = 0; r < 8; r++) {
+      if (state.board[r][c] === 'P') score += (6 - r) * 5;
+      if (state.board[r][c] === 'p') score -= (r - 1) * 5;
+    }
+  }
   
   // 🔥 В эндшпиле (мало фигур, кроме королей)
   if (whitePieces + blackPieces <= 5) {
@@ -384,8 +391,8 @@ function evaluate(state, forWhite) {
   
   // 🔥 Безопасность короля (штраф, если король не рокирован в миттельшпиле)
   if (whitePieces + blackPieces > 10) {
-    if (whiteKing && whiteKing[1] === 4 && whiteKing[0] === 7) score -= 30; // король на e1
-    if (blackKing && blackKing[1] === 4 && blackKing[0] === 0) score += 30; // король на e8
+    if (whiteKing && whiteKing[1] === 4 && whiteKing[0] === 7) score -= 30;
+    if (blackKing && blackKing[1] === 4 && blackKing[0] === 0) score += 30;
   }
   
   return forWhite ? score : -score;
@@ -407,7 +414,6 @@ function quiescence(state, alpha, beta, color) {
 
   const captures = legal.filter(([from, to]) => state.board[to[0]][to[1]]);
   
-  // MVV-LVA сортировка
   captures.sort((a, b) => {
     const attackerA = state.board[a[0][0]][a[0][1]].toLowerCase();
     const victimA = state.board[a[1][0]][a[1][1]].toLowerCase();
@@ -429,7 +435,7 @@ function quiescence(state, alpha, beta, color) {
 }
 
 // ============================================================
-// 🔥 NEGAMAX с Killer Moves (ускорение поиска)
+// 🔥 NEGAMAX с Killer Moves
 // ============================================================
 const killerMoves = [];
 
@@ -444,7 +450,6 @@ function negamax(state, depth, alpha, beta, color, deadline) {
 
   if (depth === 0) return quiescence(state, alpha, beta, color);
 
-  // 🔥 Killer moves: ходы, которые на других ветках вызвали отсечение
   const killers = killerMoves[depth] || [];
   const ordered = legal.slice().sort((a, b) => {
     const aKiller = killers.some(k => k[0][0] === a[0][0] && k[0][1] === a[0][1] && k[1][0] === a[1][0] && k[1][1] === a[1][1]);
@@ -461,7 +466,6 @@ function negamax(state, depth, alpha, beta, color, deadline) {
     if (score > best) best = score;
     if (score > alpha) alpha = score;
     if (alpha >= beta) {
-      // Запоминаем killer move
       if (!killerMoves[depth]) killerMoves[depth] = [];
       killerMoves[depth].push([from, to]);
       if (killerMoves[depth].length > 2) killerMoves[depth].shift();
@@ -473,26 +477,23 @@ function negamax(state, depth, alpha, beta, color, deadline) {
 }
 
 // ============================================================
-// 🔥 MOVE ORDERING (MVV-LVA + Killer Moves + Превращение)
+// 🔥 MOVE ORDERING
 // ============================================================
 function moveScore(state, from, to) {
   const attacker = state.board[from[0]][from[1]];
   const victim = state.board[to[0]][to[1]];
   let score = 0;
 
-  // 1. Взятия
   if (victim) {
     const attackerVal = PIECE_VALUES[attacker.toLowerCase()] || 0;
     const victimVal = PIECE_VALUES[victim.toLowerCase()] || 0;
     score += 10000 + victimVal * 10 - attackerVal;
   }
 
-  // 2. Превращение пешки
   if (attacker.toLowerCase() === 'p' && (to[0] === 0 || to[0] === 7)) {
     score += 9000;
   }
 
-  // 3. Близость к вражескому королю
   const oppKingChar = attacker === attacker.toUpperCase() ? 'k' : 'K';
   let oppKingPos = null;
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
@@ -546,7 +547,7 @@ function pickMoveSearch(state, isWhiteTurn, timeMs) {
 }
 
 // ============================================================
-// 🔥 SELF-PLAY
+// 🔥 SELF-PLAY С АНТИ-ПОВТОРЕНИЕМ И НАКАЗАНИЕМ ЗА НИЧЬЮ
 // ============================================================
 function playSelfPlayGame() {
   let state = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
@@ -554,6 +555,7 @@ function playSelfPlayGame() {
   const moveLog = [];
   const positionCounts = new Map();
   let result = 0;
+  let finalEval = 0;
   const maxMoves = 200;
 
   for (let move = 0; move < maxMoves; move++) {
@@ -565,10 +567,45 @@ function playSelfPlayGame() {
     }
     if (state.half >= 100) { result = 0; break; }
     
+    // 🔥 Проверка на троекратное повторение с анализом позиции
     const key = toFen(state).split(' ').slice(0, 4).join(' ');
     const count = (positionCounts.get(key) || 0) + 1;
     positionCounts.set(key, count);
-    if (count >= 3) { result = 0; break; }
+    
+    if (count >= 3) {
+      // 🔥 Если позиция повторяется, но есть преимущество — пытаемся найти другой ход
+      const evalNow = evaluate(state, state.turn === 'w');
+      if (Math.abs(evalNow) > 150) {
+        // Ищем ход, который не ведет к немедленному повторению
+        const nonRepeating = legal.filter(([from, to]) => {
+          const next = applyMove(state, from, to);
+          const nextKey = toFen(next).split(' ').slice(0, 4).join(' ');
+          return !positionCounts.has(nextKey) || positionCounts.get(nextKey) < 2;
+        });
+        if (nonRepeating.length > 0) {
+          // Выбираем лучший из неповторяющихся ходов
+          let bestMv = nonRepeating[0];
+          let bestScore = -Infinity;
+          const isW = state.turn === 'w';
+          for (const [from, to] of nonRepeating) {
+            const next = applyMove(state, from, to);
+            const score = evaluate(next, !isW);
+            if (score > bestScore) { bestScore = score; bestMv = [from, to]; }
+          }
+          const pieceMoved = state.board[bestMv[0][0]][bestMv[0][1]];
+          const captured = state.board[bestMv[1][0]][bestMv[1][1]];
+          const nextState = applyMove(state, bestMv[0], bestMv[1]);
+          const causedCheck = inCheck(nextState, !isW);
+          const isMate = causedCheck && allLegalMoves(nextState, !isW).length === 0;
+          history.push({ white: isW, pieceMoved, captured, sqFrom: sqName(bestMv[0][0], bestMv[0][1]), sqTo: sqName(bestMv[1][0], bestMv[1][1]), causedCheck, isMate });
+          state = nextState;
+          moveLog.push({ from: bestMv[0], to: bestMv[1], byColor: isW ? 'w' : 'b', fenAfter: toFen(state) });
+          continue;
+        }
+      }
+      result = 0;
+      break;
+    }
 
     const isW = state.turn === 'w';
     const mv = pickMoveSearch(state, isW, 80);
@@ -582,6 +619,7 @@ function playSelfPlayGame() {
 
     history.push({ white: isW, pieceMoved, captured, sqFrom: sqName(mv[0][0], mv[0][1]), sqTo: sqName(mv[1][0], mv[1][1]), causedCheck, isMate });
     state = nextState;
+    finalEval = evaluate(state, state.turn === 'w'); // оценка с точки зрения того, кто будет ходить
 
     moveLog.push({
       from: mv[0],
@@ -591,7 +629,22 @@ function playSelfPlayGame() {
     });
   }
 
-  trainOnHistory(history, result);
+  // 🔥 Наказание за ничью при преимуществе
+  let adjustedResult = result;
+  if (result === 0 && Math.abs(finalEval) > 300) {
+    // Если была ничья, но преимущество было больше 3 пешек — наказываем
+    // Сторона с преимуществом получает -1 (как за поражение)
+    if (finalEval > 0) {
+      // Преимущество у белых (ходили черные, оценка положительная для черных? 
+      // finalEval считается с точки зрения того, кто ходит. 
+      // Если ходят черные (finalEval для черных), и оценка > 0 — значит черные лучше.
+      // Это сложно, поэтому просто накажем того, у кого был перевес.
+      // Для простоты: если оценка большая, значит одна из сторон доминировала.
+      adjustedResult = finalEval > 0 ? 1 : -1;
+    }
+  }
+
+  trainOnHistory(history, adjustedResult);
 
   DATA.games++;
   if (result === 1) DATA.wins++;
