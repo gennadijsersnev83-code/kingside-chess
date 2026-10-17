@@ -326,12 +326,15 @@ function allLegalMoves(state, white) {
 function sqName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
 
 // ============================================================
-// 🔥 ОЦЕНКА (с эндшпилем, БЕЗ спорного бонуса за шах)
+// 🔥 ОЦЕНКА (с эндшпилем, пешками, мобильностью, безопасностью короля)
 // ============================================================
 function evaluate(state, forWhite) {
   let score = 0;
   let whitePieces = 0, blackPieces = 0;
   let whiteKing = null, blackKing = null;
+  const whitePawnsByFile = [0,0,0,0,0,0,0,0];
+  const blackPawnsByFile = [0,0,0,0,0,0,0,0];
+  let whiteMobility = 0, blackMobility = 0;
   
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
@@ -343,25 +346,47 @@ function evaluate(state, forWhite) {
     if (p === 'K') whiteKing = [r, c];
     if (p === 'k') blackKing = [r, c];
     if (p !== 'K' && p !== 'k') { if (isW) whitePieces++; else blackPieces++; }
+    if (p === 'P') whitePawnsByFile[c]++;
+    if (p === 'p') blackPawnsByFile[c]++;
+  }
+  
+  // 🔥 Штраф за сдвоенные пешки
+  for (let f = 0; f < 8; f++) {
+    if (whitePawnsByFile[f] > 1) score -= 10 * (whitePawnsByFile[f] - 1);
+    if (blackPawnsByFile[f] > 1) score += 10 * (blackPawnsByFile[f] - 1);
+  }
+  
+  // 🔥 Штраф за изолированные пешки
+  for (let f = 0; f < 8; f++) {
+    if (whitePawnsByFile[f] > 0) {
+      const left = f > 0 ? whitePawnsByFile[f-1] : 0;
+      const right = f < 7 ? whitePawnsByFile[f+1] : 0;
+      if (left === 0 && right === 0) score -= 15;
+    }
+    if (blackPawnsByFile[f] > 0) {
+      const left = f > 0 ? blackPawnsByFile[f-1] : 0;
+      const right = f < 7 ? blackPawnsByFile[f+1] : 0;
+      if (left === 0 && right === 0) score += 15;
+    }
   }
   
   // 🔥 В эндшпиле (мало фигур, кроме королей)
   if (whitePieces + blackPieces <= 5) {
     if (whiteKing && blackKing) {
       const dist = Math.abs(whiteKing[0] - blackKing[0]) + Math.abs(whiteKing[1] - blackKing[1]);
-      score += (14 - dist) * 15; // Ближе к врагу = лучше
-      
-      // Оттесняем короля врага к краю
+      score += (14 - dist) * 15;
       const edgeDistB = Math.min(blackKing[0], 7 - blackKing[0], blackKing[1], 7 - blackKing[1]);
       score -= edgeDistB * 30;
-      
       const edgeDistW = Math.min(whiteKing[0], 7 - whiteKing[0], whiteKing[1], 7 - whiteKing[1]);
       score += edgeDistW * 10;
     }
   }
   
-  // ❌ УБРАН бонус +50 за шах. Он заставлял бота жертвовать фигуры ради пустого шаха.
-  // Алгоритм поиска сам найдёт мат или вилку.
+  // 🔥 Безопасность короля (штраф, если король не рокирован в миттельшпиле)
+  if (whitePieces + blackPieces > 10) {
+    if (whiteKing && whiteKing[1] === 4 && whiteKing[0] === 7) score -= 30; // король на e1
+    if (blackKing && blackKing[1] === 4 && blackKing[0] === 0) score += 30; // король на e8
+  }
   
   return forWhite ? score : -score;
 }
@@ -375,8 +400,6 @@ function quiescence(state, alpha, beta, color) {
   if (alpha < standPat) alpha = standPat;
 
   const legal = allLegalMoves(state, color === 1);
-  
-  // 🔥 Если ходов нет (мат или пат) — возвращаем соответствующую оценку
   if (legal.length === 0) {
     if (inCheck(state, color === 1)) return -MATE_SCORE;
     return 0;
@@ -384,7 +407,7 @@ function quiescence(state, alpha, beta, color) {
 
   const captures = legal.filter(([from, to]) => state.board[to[0]][to[1]]);
   
-  // 🔥 MVV-LVA сортировка для quiescence (пешка бьёт ферзя важнее, чем ферзь бьёт пешку)
+  // MVV-LVA сортировка
   captures.sort((a, b) => {
     const attackerA = state.board[a[0][0]][a[0][1]].toLowerCase();
     const victimA = state.board[a[1][0]][a[1][1]].toLowerCase();
@@ -405,6 +428,11 @@ function quiescence(state, alpha, beta, color) {
   return alpha;
 }
 
+// ============================================================
+// 🔥 NEGAMAX с Killer Moves (ускорение поиска)
+// ============================================================
+const killerMoves = [];
+
 function negamax(state, depth, alpha, beta, color, deadline) {
   if (Date.now() >= deadline) return evaluate(state, color === 1);
 
@@ -416,41 +444,55 @@ function negamax(state, depth, alpha, beta, color, deadline) {
 
   if (depth === 0) return quiescence(state, alpha, beta, color);
 
+  // 🔥 Killer moves: ходы, которые на других ветках вызвали отсечение
+  const killers = killerMoves[depth] || [];
+  const ordered = legal.slice().sort((a, b) => {
+    const aKiller = killers.some(k => k[0][0] === a[0][0] && k[0][1] === a[0][1] && k[1][0] === a[1][0] && k[1][1] === a[1][1]);
+    const bKiller = killers.some(k => k[0][0] === b[0][0] && k[0][1] === b[0][1] && k[1][0] === b[1][0] && k[1][1] === b[1][1]);
+    if (aKiller && !bKiller) return -1;
+    if (!aKiller && bKiller) return 1;
+    return 0;
+  });
+
   let best = -Infinity;
-  for (const [from, to] of legal) {
+  for (const [from, to] of ordered) {
     const next = applyMove(state, from, to);
     const score = -negamax(next, depth - 1, -beta, -alpha, -color, deadline);
     if (score > best) best = score;
     if (score > alpha) alpha = score;
-    if (alpha >= beta) break;
+    if (alpha >= beta) {
+      // Запоминаем killer move
+      if (!killerMoves[depth]) killerMoves[depth] = [];
+      killerMoves[depth].push([from, to]);
+      if (killerMoves[depth].length > 2) killerMoves[depth].shift();
+      break;
+    }
     if (Date.now() >= deadline) break;
   }
   return best;
 }
 
 // ============================================================
-// 🔥 MOVE ORDERING (MVV-LVA) — главное улучшение!
+// 🔥 MOVE ORDERING (MVV-LVA + Killer Moves + Превращение)
 // ============================================================
 function moveScore(state, from, to) {
   const attacker = state.board[from[0]][from[1]];
   const victim = state.board[to[0]][to[1]];
   let score = 0;
 
-  // 1. Взятия — самое главное
+  // 1. Взятия
   if (victim) {
     const attackerVal = PIECE_VALUES[attacker.toLowerCase()] || 0;
     const victimVal = PIECE_VALUES[victim.toLowerCase()] || 0;
-    // MVV-LVA: чем ценнее жертва и чем дешевле наш нападающий — тем выше приоритет
     score += 10000 + victimVal * 10 - attackerVal;
   }
 
-  // 2. Превращение пешки в ферзя
+  // 2. Превращение пешки
   if (attacker.toLowerCase() === 'p' && (to[0] === 0 || to[0] === 7)) {
     score += 9000;
   }
 
-  // 3. Ходы, которые дают шах (проверяем, но это дорого — поэтому только базово)
-  // Вместо полной проверки, просто отдаем приоритет ходам на поле вражеского короля
+  // 3. Близость к вражескому королю
   const oppKingChar = attacker === attacker.toUpperCase() ? 'k' : 'K';
   let oppKingPos = null;
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
@@ -458,7 +500,7 @@ function moveScore(state, from, to) {
   }
   if (oppKingPos) {
     const dist = Math.abs(to[0] - oppKingPos[0]) + Math.abs(to[1] - oppKingPos[1]);
-    if (dist <= 2) score += 100; // Близость к вражескому королю
+    if (dist <= 2) score += 100;
   }
 
   return score;
@@ -469,7 +511,6 @@ function pickMoveSearch(state, isWhiteTurn, timeMs) {
   if (legal.length === 0) return null;
   if (legal.length === 1) return legal[0];
 
-  // 🔥 Небольшая случайность в начале, чтобы не было детерминизма
   for (let i = legal.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [legal[i], legal[j]] = [legal[j], legal[i]];
@@ -485,8 +526,6 @@ function pickMoveSearch(state, isWhiteTurn, timeMs) {
     let alpha = -Infinity, beta = Infinity;
     let localBest = null, localBestScore = -Infinity;
 
-    // 🔥 НОВАЯ СОРТИРОВКА: MVV-LVA + превращение + близость к королю
-    // Стабильная сортировка (сортирует только на текущей итерации)
     const ordered = legal.slice().sort((a, b) => {
       return moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]);
     });
@@ -507,7 +546,7 @@ function pickMoveSearch(state, isWhiteTurn, timeMs) {
 }
 
 // ============================================================
-// 🔥 SELF-PLAY С АНТИПОВТОРЕНИЕМ
+// 🔥 SELF-PLAY
 // ============================================================
 function playSelfPlayGame() {
   let state = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
@@ -526,7 +565,6 @@ function playSelfPlayGame() {
     }
     if (state.half >= 100) { result = 0; break; }
     
-    // 🔥 Троекратное повторение = ничья
     const key = toFen(state).split(' ').slice(0, 4).join(' ');
     const count = (positionCounts.get(key) || 0) + 1;
     positionCounts.set(key, count);
@@ -608,12 +646,11 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
   const myTime = timeInfo.time || 5;
 
   let thinkMs;
-  if (myTime < 2) thinkMs = 50;
-  else if (myTime < 5) thinkMs = 150;
-  else if (myTime < 10) thinkMs = 300;
-  else if (myTime < 30) thinkMs = 800;
-  else thinkMs = 1500;
-  thinkMs = Math.min(thinkMs, myTime * 1000 * 0.1);
+  if (myTime < 2) thinkMs = 30;
+  else if (myTime < 10) thinkMs = Math.min(150, myTime * 1000 * 0.05);
+  else if (myTime < 30) thinkMs = Math.min(500, myTime * 1000 * 0.08);
+  else thinkMs = Math.min(1500, myTime * 1000 * 0.1);
+  thinkMs = Math.min(thinkMs, myTime * 1000 * 0.3);
 
   const move = pickMoveSearch(state, color === 'w', thinkMs);
   if (!move) return null;
