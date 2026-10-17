@@ -26,7 +26,55 @@
 </head>
 <body>
 
-<header class="topbar">
+<!-- LOGIN (отдельная страница) -->
+<section id="loginScreen" class="screen login-page">
+  <div class="auth-card">
+    <!-- Вкладки -->
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tabLoginBtn" onclick="Auth.switchTab('login')">Войти</button>
+      <button class="auth-tab" id="tabRegisterBtn" onclick="Auth.switchTab('register')">Регистрация</button>
+    </div>
+
+    <!-- Поле логина -->
+    <div class="auth-field">
+      <label>Логин</label>
+      <input id="username" placeholder="PeshkaSasha" autocomplete="username">
+    </div>
+
+    <!-- Поле пароля -->
+    <div class="auth-field">
+      <label>Пароль</label>
+      <div class="password-wrap">
+        <input id="password" type="password" placeholder="••••••••••••" autocomplete="current-password">
+        <span class="eye-icon" id="eyeIcon" onclick="Auth.togglePassword()">👁</span>
+      </div>
+      <a href="#" class="forgot-link" onclick="alert('Восстановление пароля пока не настроено'); return false;">Сброс пароля</a>
+    </div>
+
+    <!-- Капча (только при регистрации) -->
+    <div class="auth-field" id="captchaField" style="display: none;">
+      <label>Защита от ботов: сколько будет <span id="captchaQuestion" style="color: var(--accent); font-weight: bold;"></span>?</label>
+      <input id="captchaAnswer" type="number" placeholder="Введите ответ">
+    </div>
+
+    <!-- Чекбокс -->
+    <label class="checkbox-row">
+      <input type="checkbox" id="rememberMe" checked>
+      <span class="checkmark"></span>
+      <span>Не выходить из аккаунта</span>
+    </label>
+
+    <!-- Кнопка -->
+    <button id="submitBtn" class="primary auth-submit" onclick="App.doLogin()">
+      <span id="btnText">Войти</span>
+    </button>
+
+    <div id="loginMsg" class="auth-msg"></div>
+  </div>
+</section>
+
+<!-- Топбар и меню (скрываются, когда мы на логине) -->
+<header class="topbar" id="mainHeader">
   <div class="logo" onclick="Router.go('lobby')"><span class="mark">♔</span> Kingside</div>
   <nav id="mainNav">
     <a data-nav="lobby" onclick="Router.go('lobby')">Игра</a>
@@ -65,54 +113,7 @@
   </div>
 </div>
 
-<main>
-  <!-- LOGIN -->
-  <section id="loginScreen" class="screen">
-    <div class="auth-card">
-      <!-- Вкладки -->
-      <div class="auth-tabs">
-        <button class="auth-tab active" id="tabLoginBtn" onclick="Auth.switchTab('login')">Войти</button>
-        <button class="auth-tab" id="tabRegisterBtn" onclick="Auth.switchTab('register')">Регистрация</button>
-      </div>
-
-      <!-- Поле логина -->
-      <div class="auth-field">
-        <label>Логин</label>
-        <input id="username" placeholder="PeshkaSasha" autocomplete="username">
-      </div>
-
-      <!-- Поле пароля -->
-      <div class="auth-field">
-        <label>Пароль</label>
-        <div class="password-wrap">
-          <input id="password" type="password" placeholder="••••••••••••" autocomplete="current-password">
-          <span class="eye-icon" id="eyeIcon" onclick="Auth.togglePassword()">👁</span>
-        </div>
-        <a href="#" class="forgot-link" onclick="alert('Восстановление пароля пока не настроено'); return false;">Сброс пароля</a>
-      </div>
-
-      <!-- Капча (только при регистрации) -->
-      <div class="auth-field" id="captchaField" style="display: none;">
-        <label>Защита от ботов: сколько будет <span id="captchaQuestion" style="color: var(--accent); font-weight: bold;"></span>?</label>
-        <input id="captchaAnswer" type="number" placeholder="Введите ответ">
-      </div>
-
-      <!-- Чекбокс -->
-      <label class="checkbox-row">
-        <input type="checkbox" id="rememberMe" checked>
-        <span class="checkmark"></span>
-        <span>Не выходить из аккаунта</span>
-      </label>
-
-      <!-- Кнопка -->
-      <button id="submitBtn" class="primary auth-submit" onclick="App.doLogin()">
-        <span id="btnText">Войти</span>
-      </button>
-
-      <div id="loginMsg" class="auth-msg"></div>
-    </div>
-  </section>
-
+<main id="mainContent">
   <!-- LOBBY -->
   <section id="lobbyScreen" class="screen">
     <div class="homeWrap">
