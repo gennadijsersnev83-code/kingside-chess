@@ -1,8 +1,8 @@
 'use strict';
 
 /**
- * watcher-worker.js — отдельный поток для self-play тренера Watcher.
- * Не блокирует сервер. Получает задачи через parentPort.
+ * watcher-worker.js — worker thread для self-play тренера.
+ * Не блокирует основной поток сервера.
  */
 
 const { parentPort } = require('worker_threads');
@@ -13,7 +13,7 @@ function initWatcher() {
   if (!watcher) {
     try {
       watcher = require('./watcher-learning');
-      watcher.loadWeights(); // загрузка из файла (или БД — если передашь)
+      watcher.loadWeights();
     } catch (e) {
       parentPort.postMessage({ type: 'error', msg: 'Init failed: ' + e.message });
       throw e;
@@ -26,23 +26,20 @@ parentPort.on('message', (msg) => {
     initWatcher();
 
     if (msg.type === 'playGames') {
-      // Сыграть N партий self-play
       const n = msg.count || 10;
-      const results = { w: 0, b: 0, d: 0 };
+      let w = 0, b = 0, d = 0;
       for (let i = 0; i < n; i++) {
         const r = watcher.playSelfPlayGame();
-        if (r === 1) results.w++;
-        else if (r === -1) results.b++;
-        else results.d++;
+        if (r === 1) w++;
+        else if (r === -1) b++;
+        else d++;
       }
-      // Сохранить веса после серии
       watcher.saveData();
-      const stats = watcher.getStats();
       parentPort.postMessage({
         type: 'gamesDone',
         played: n,
-        results,
-        stats,
+        results: { w, b, d },
+        stats: watcher.getStats(),
       });
 
     } else if (msg.type === 'getStats') {
