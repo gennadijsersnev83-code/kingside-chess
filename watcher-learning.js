@@ -73,84 +73,41 @@ const PST_START = {
   ],
 };
 
-// ============================================================
-// ДЕБЮТНАЯ КНИГА (расширенная)
-// ============================================================
 const OPENING_BOOK = {
-  // Стартовая позиция
   'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1': [
-    { from: [6, 4], to: [4, 4] }, // e4
-    { from: [6, 3], to: [4, 3] }, // d4
-    { from: [7, 6], to: [5, 5] }, // Nf3
-    { from: [6, 2], to: [4, 2] }, // c4
-    { from: [7, 1], to: [5, 2] }  // Nc3
+    { from: [6, 4], to: [4, 4] }, { from: [6, 3], to: [4, 3] },
+    { from: [7, 6], to: [5, 5] }, { from: [6, 2], to: [4, 2] }
   ],
-  // 1. e4
   'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1': [
-    { from: [1, 4], to: [3, 4] }, // e5
-    { from: [1, 2], to: [3, 2] }, // c5 (Сицилианская)
-    { from: [1, 3], to: [3, 3] }, // d5 (Скандинавская)
-    { from: [1, 5], to: [2, 5] }, // f6 (Алехин)
-    { from: [1, 6], to: [2, 6] }  // Nf6
+    { from: [1, 4], to: [3, 4] }, { from: [1, 2], to: [3, 2] },
+    { from: [1, 3], to: [3, 3] }, { from: [1, 5], to: [2, 5] }
   ],
-  // 1. d4
   'rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1': [
-    { from: [1, 3], to: [3, 3] }, // d5
-    { from: [1, 6], to: [2, 6] }, // Nf6
-    { from: [1, 2], to: [3, 2] }  // c5
+    { from: [1, 3], to: [3, 3] }, { from: [1, 6], to: [2, 6] }, { from: [1, 2], to: [3, 2] }
   ],
-  // 1. Nf3
-  'rnbqkbnr/pppppppp/8/8/8/5N2/PPPPPPPP/RNBQKB1R b KQkq - 1 1': [
-    { from: [1, 3], to: [3, 3] }, // d5
-    { from: [1, 4], to: [3, 4] }, // e5
-    { from: [1, 6], to: [2, 6] }  // Nf6
-  ],
-  // 1. c4
-  'rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1': [
-    { from: [1, 4], to: [3, 4] }, // e5
-    { from: [1, 2], to: [3, 2] }, // c5
-    { from: [1, 6], to: [2, 6] }  // Nf6
-  ],
-  // 1. e4 e5
   'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2': [
-    { from: [7, 6], to: [5, 5] }, // Nf3
-    { from: [7, 5], to: [4, 2] }, // Bc4
-    { from: [6, 3], to: [4, 3] }  // d4
+    { from: [7, 6], to: [5, 5] }, { from: [7, 5], to: [4, 2] }, { from: [6, 3], to: [4, 3] }
   ],
-  // 1. e4 c5
   'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2': [
-    { from: [7, 6], to: [5, 5] }, // Nf3
-    { from: [6, 3], to: [4, 3] }, // d4
-    { from: [7, 2], to: [5, 2] }  // c3
+    { from: [7, 6], to: [5, 5] }, { from: [6, 3], to: [4, 3] }, { from: [7, 2], to: [5, 2] }
   ],
-  // 1. d4 d5
   'rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq d6 0 2': [
-    { from: [7, 2], to: [5, 2] }, // c4
-    { from: [7, 6], to: [5, 5] }, // Nf3
-    { from: [7, 3], to: [5, 3] }  // Qd3
+    { from: [7, 2], to: [5, 2] }, { from: [7, 6], to: [5, 5] }, { from: [7, 3], to: [5, 3] }
   ],
-  // 1. e4 e5 2. Nf3
   'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2': [
-    { from: [0, 1], to: [2, 2] }, // Nc6
-    { from: [1, 3], to: [3, 3] }  // d6
+    { from: [0, 1], to: [2, 2] }, { from: [1, 3], to: [3, 3] }
   ],
-  // 1. d4 Nf6
   'rnbqkb1r/pppppppp/5n2/8/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 1 2': [
-    { from: [7, 2], to: [5, 2] }, // c4
-    { from: [7, 6], to: [5, 5] }, // Nf3
-    { from: [6, 2], to: [4, 2] }  // e4
+    { from: [7, 2], to: [5, 2] }, { from: [7, 6], to: [5, 5] }, { from: [6, 2], to: [4, 2] }
   ],
-  // 1. e4 e5 2. Nf3 Nc6
+  'rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1': [
+    { from: [1, 4], to: [3, 4] }, { from: [1, 2], to: [3, 2] }, { from: [1, 6], to: [2, 6] }
+  ],
   'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3': [
-    { from: [7, 5], to: [4, 2] }, // Bc4
-    { from: [6, 3], to: [4, 3] }, // d4
-    { from: [7, 1], to: [5, 2] }  // Nc3
+    { from: [7, 5], to: [4, 2] }, { from: [6, 3], to: [4, 3] }, { from: [7, 1], to: [5, 2] }
   ],
-  // 1. e4 c5 2. Nf3
   'rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2': [
-    { from: [1, 3], to: [3, 3] }, // d6
-    { from: [0, 1], to: [2, 2] }, // Nc6
-    { from: [1, 4], to: [2, 4] }  // e6
+    { from: [1, 3], to: [3, 3] }, { from: [0, 1], to: [2, 2] }, { from: [1, 4], to: [2, 4] }
   ]
 };
 
@@ -407,7 +364,7 @@ function allLegalMoves(state, white) {
 function sqName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
 
 // ============================================================
-// ОЦЕНКА
+// ОЦЕНКА (с защитой фигур)
 // ============================================================
 function evaluate(state, forWhite) {
   let score = 0;
@@ -454,7 +411,7 @@ function evaluate(state, forWhite) {
     }
   }
   
-  // Защита фигур от "висяков"
+  // 🔥 ЗАЩИТА ФИГУР
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     const isW = isWhite(p);
@@ -593,7 +550,6 @@ function moveScore(state, from, to) {
   return score;
 }
 
-// 🔥 ЖЁСТКИЙ ПОИСК В КНИГЕ (с отладкой)
 function getBookMove(fen) {
   if (!fen || typeof fen !== 'string') return null;
   const key = fen.split(' ').slice(0, 4).join(' ');
@@ -607,24 +563,15 @@ function getBookMove(fen) {
 }
 
 function pickMoveSearch(state, isWhiteTurn, timeMs, fenForBook) {
-  // 🔥 ЖЁСТКАЯ ПРИВЯЗКА К КНИГЕ: 100% из книги, если позиция есть
   if (fenForBook) {
     try {
       const bookMoves = getBookMove(fenForBook);
       if (bookMoves && bookMoves.length > 0) {
-        // Отладка: выводим в консоль, что нашли книжный ход
-        if (process.env.DEBUG_WATCHER) {
-          console.log('[Watcher] Book move for FEN:', fenForBook, '->', bookMoves.length, 'options');
-        }
-        return bookMoves[Math.floor(Math.random() * bookMoves.length)];
-      } else {
-        if (process.env.DEBUG_WATCHER) {
-          console.log('[Watcher] No book move for FEN:', fenForBook);
+        if (Math.random() < 0.85) {
+          return bookMoves[Math.floor(Math.random() * bookMoves.length)];
         }
       }
-    } catch (e) {
-      console.error('[Watcher] Book error:', e.message);
-    }
+    } catch (e) {}
   }
 
   const legal = allLegalMoves(state, isWhiteTurn);
