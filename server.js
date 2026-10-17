@@ -110,10 +110,27 @@ function updateGlicko2(rating, rd, vol, results) {
   };
 }
 
+// ============================================================
+// ОСНОВНАЯ БД
+// ============================================================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
+
+// ============================================================
+// ОТДЕЛЬНАЯ БД ДЛЯ ВЕСОВ WATCHER (второй Postgres)
+// ============================================================
+let watcherDbPool = null;
+if (process.env.DATABASE_URL_WATCHER) {
+  watcherDbPool = new Pool({
+    connectionString: process.env.DATABASE_URL_WATCHER,
+    ssl: { rejectUnauthorized: false }
+  });
+  console.log('[WatcherDB] Подключено отдельное хранилище весов');
+} else {
+  console.warn('[WatcherDB] DATABASE_URL_WATCHER не задан — веса НЕ сохранятся!');
+}
 
 let db = { users: {}, totalGames: 0 };
 
@@ -316,21 +333,19 @@ setInterval(() => {
 }, 5 * 60 * 1000);
 
 // ============================================================
-// 🔥 ФАНТОМНЫЕ ПАРТИИ SELF-PLAY (видны в «Смотреть»)
+// ФАНТОМНЫЕ ПАРТИИ SELF-PLAY
 // ============================================================
 const SELF_PLAY_BOT_ID = 'WatcherSelfPlay';
-const selfPlayLobbies = new Map(); // id -> { lastEmitAt }
+const selfPlayLobbies = new Map();
 
 function createSelfPlayLobby(moveLog) {
-  // moveLog = [{from, to, san, fenAfter}]
   if (!moveLog || !moveLog.length) return null;
   const id = 'sp_' + genId();
   const firstFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
   const last = moveLog[moveLog.length - 1];
   const lastHist = { from: last.from, to: last.to, byColor: (moveLog.length - 1) % 2 === 0 ? 'w' : 'b', ts: Date.now() };
 
-  // Рассчитываем время: играем «условно», с инкрементом, чтобы выглядело красиво
-  const timeBase = 180; // 3 минуты
+  const timeBase = 180;
   const moveCount = moveLog.length;
   const timePerSide = Math.max(5, timeBase - Math.floor(moveCount * 0.5));
 
@@ -364,7 +379,7 @@ function createSelfPlayLobby(moveLog) {
     botName2: SELF_PLAY_BOT_ID,
     history: [lastHist],
     positionCounts: new Map(),
-    isSelfPlay: true, // ← помечаем, чтобы фильтры знали
+    isSelfPlay: true,
     selfPlayHistory: moveLog
   };
   lobbies.set(id, lobby);
@@ -387,17 +402,12 @@ function finishSelfPlayLobby(lobby, result) {
   lobby.finished = true;
   lobby.finishedAt = Date.now();
   lobby.result = result;
-  // Оставляем в lobbies на 30 секунд, чтобы зрители увидели, потом удаляем
   setTimeout(() => {
     lobbies.delete(lobby.id);
     selfPlayLobbies.delete(lobby.id);
     broadcastLiveGames();
   }, 30000);
 }
-
-// —————————————————————————————————————————————
-// Конец блока self-play
-// —————————————————————————————————————————————
 
 function countActiveLobbies() { let n = 0; for (const l of lobbies.values()) { if (l.finished) continue; if (l.started) n++; } return n; }
 
@@ -484,7 +494,6 @@ function buildGamesList() {
   for (const [id, l] of lobbies.entries()) {
     if (l.finished || !l.started) continue;
 
-    // 🔥 Self-play фантомные партии показываем как Watcher vs Watcher
     if (l.isSelfPlay) {
       const whiteName = SELF_PLAY_BOT_ID;
       const blackName = SELF_PLAY_BOT_ID;
@@ -691,7 +700,6 @@ async function finishGame(lobbyId, result, reason) {
   const l = lobbies.get(lobbyId);
   if (!l || l.finished || finishedLobbyIds.has(lobbyId)) return;
 
-  // 🔥 Self-play — не влияет на рейтинг и статистику. Просто завершаем и удаляем.
   if (l.isSelfPlay) {
     l.finished = true;
     l.started = false;
@@ -794,9 +802,6 @@ async function finishGame(lobbyId, result, reason) {
   broadcastOnline(); broadcastLiveGames();
 }
 
-// ============================================================
-// ARENAS (без изменений)
-// ============================================================
 const ARENA_TEMPLATES = [
   { id: 'bullet-halfhour', name: 'Получасовая пуля', description: '1+0 · рейтинговая', timeControl: 1, increment: 0, durationMin: 27, repeat: 'every30', color: 'bullet', botFriendly: false },
   { id: 'blitz-hourly', name: 'Ежечасная блиц-арена', description: '3+2 · рейтинговая', timeControl: 3, increment: 2, durationMin: 57, repeat: 'hourly', color: 'blitz', botFriendly: false },
@@ -1844,7 +1849,7 @@ io.on('connection', (socket) => {
     const list = [];
     for (const [id, l] of lobbies.entries()) {
       if (l.finished || l.arenaId) continue;
-      if (l.isSelfPlay) continue; // self-play не показываем в зале ожидания
+      if (l.isSelfPlay) continue;
       if (l.isBot && !l.isWatcher) continue;
       list.push({ id, host: l.host, time: l.time, inc: l.inc, hostIsAdmin: isAdmin(l.host), hostIsMod: isMod(l.host), status: l.guest ? 'playing' : 'waiting', isBot: l.isWatcher });
     }
@@ -2616,22 +2621,26 @@ io.on('connection', (socket) => {
 (async () => {
   try { await initDB(); await loadDB(); }
   catch (err) { console.error('[DB] Ошибка инициализации:', err.message); }
-  watcherLearning.loadWeights();
+
+  if (watcherDbPool) {
+    watcherLearning.setPool(watcherDbPool);
+  }
+  await watcherLearning.loadWeights();
   watcherLearning.startAutoSave();
 
-  // Self-play в worker-потоке
+  setInterval(() => {
+    try { watcherLearning.reloadWeights(); } catch (e) {}
+  }, 30000);
+
   watcherPool.handler = (msg) => {
     if (msg.type === 'ready') {
       console.log('[WatcherPool] Worker готов, self-play запущен');
     } else if (msg.type === 'gamesDone') {
       const s = msg.stats;
-      // 🔥 Создать фантомное лобби для показа в «Смотреть»
       if (msg.gameLog && msg.gameLog.length >= 4) {
         const spLobby = createSelfPlayLobby(msg.gameLog);
         if (spLobby) {
-          // Имитируем broadcast — «Смотреть» увидит как обычную партию
           broadcastLiveGames();
-          // Через 15 секунд «завершаем» партию
           setTimeout(() => {
             finishSelfPlayLobby(spLobby, msg.gameResult || 'draw');
           }, 15000);
@@ -2644,11 +2653,11 @@ io.on('connection', (socket) => {
   };
   watcherPool.start();
 
-  // Раз в 30 секунд — 1 партия self-play (лёгкая, чтобы не грузить)
   setInterval(() => {
     let busy = false;
     for (const l of lobbies.values()) {
       if (l.finished || l.isSelfPlay) continue;
+      if (l.arenaId) continue;
       if (l.host === WATCHER_NAME || l.guest === WATCHER_NAME) { busy = true; break; }
     }
     if (!busy) watcherPool.playGames(1);
