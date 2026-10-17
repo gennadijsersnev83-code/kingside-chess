@@ -325,24 +325,52 @@ function allLegalMoves(state, white) {
 
 function sqName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
 
+// ============================================================
+// 🔥 НОВАЯ ОЦЕНКА (с эндшпилем, шахом и оттеснением)
+// ============================================================
 function evaluate(state, forWhite) {
   let score = 0;
+  let whitePieces = 0, blackPieces = 0;
+  let whiteKing = null, blackKing = null;
+  
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     const isW = isWhite(p);
     const material = PIECE_VALUES[p.toLowerCase()] || 0;
     const w = DATA.weights[`${p}_${sqName(r, c)}`] || 0;
-    const total = material + w * 100;
-    score += isW ? total : -total;
+    score += isW ? (material + w * 100) : -(material + w * 100);
+    
+    if (p === 'K') whiteKing = [r, c];
+    if (p === 'k') blackKing = [r, c];
+    if (p !== 'K' && p !== 'k') { if (isW) whitePieces++; else blackPieces++; }
   }
+  
+  // 🔥 В эндшпиле (мало фигур, кроме королей)
+  if (whitePieces + blackPieces <= 5) {
+    if (whiteKing && blackKing) {
+      const dist = Math.abs(whiteKing[0] - blackKing[0]) + Math.abs(whiteKing[1] - blackKing[1]);
+      score += (14 - dist) * 15; // Ближе к врагу = лучше
+      
+      // Оттесняем короля врага к краю
+      const edgeDistB = Math.min(blackKing[0], 7 - blackKing[0], blackKing[1], 7 - blackKing[1]);
+      score -= edgeDistB * 30;
+      
+      const edgeDistW = Math.min(whiteKing[0], 7 - whiteKing[0], whiteKing[1], 7 - whiteKing[1]);
+      score += edgeDistW * 10;
+    }
+  }
+  
+  // 🔥 Бонус за шах (стимулирует атаку)
+  if (inCheck(state, !forWhite)) score += 50;
+  
   return forWhite ? score : -score;
 }
 
 // ============================================================
-// 🔥 NEGAMAX (ИСПРАВЛЕНО: без двойного инвертирования знака)
+// 🔥 NEGAMAX С АЛЬФА-БЕТА И QUIESCENCE (ИСПРАВЛЕНО)
 // ============================================================
 function quiescence(state, alpha, beta, color) {
-  const standPat = evaluate(state, color === 1); // 🔥 БЕЗ color *
+  const standPat = evaluate(state, color === 1);
   if (standPat >= beta) return beta;
   if (alpha < standPat) alpha = standPat;
 
@@ -358,21 +386,15 @@ function quiescence(state, alpha, beta, color) {
 }
 
 function negamax(state, depth, alpha, beta, color, deadline) {
-  if (Date.now() >= deadline) {
-    return evaluate(state, color === 1); // 🔥 БЕЗ color *
-  }
+  if (Date.now() >= deadline) return evaluate(state, color === 1);
 
   const legal = allLegalMoves(state, color === 1);
   if (legal.length === 0) {
-    if (inCheck(state, color === 1)) {
-      return -MATE_SCORE + (10 - depth);
-    }
+    if (inCheck(state, color === 1)) return -MATE_SCORE + (10 - depth);
     return 0;
   }
 
-  if (depth === 0) {
-    return quiescence(state, alpha, beta, color);
-  }
+  if (depth === 0) return quiescence(state, alpha, beta, color);
 
   let best = -Infinity;
   for (const [from, to] of legal) {
@@ -391,11 +413,17 @@ function pickMoveSearch(state, isWhiteTurn, timeMs) {
   if (legal.length === 0) return null;
   if (legal.length === 1) return legal[0];
 
+  // 🔥 Перемешать ходы (чтобы не было детерминизма)
+  for (let i = legal.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [legal[i], legal[j]] = [legal[j], legal[i]];
+  }
+
   const color = isWhiteTurn ? 1 : -1;
   const deadline = Date.now() + Math.max(50, timeMs);
 
   let bestMove = legal[0];
-  let maxDepth = 5;
+  let maxDepth = 6;
 
   for (let depth = 1; depth <= maxDepth; depth++) {
     let alpha = -Infinity, beta = Infinity;
@@ -425,12 +453,13 @@ function pickMoveSearch(state, isWhiteTurn, timeMs) {
 }
 
 // ============================================================
-// SELF-PLAY
+// 🔥 SELF-PLAY С АНТИПОВТОРЕНИЕМ
 // ============================================================
 function playSelfPlayGame() {
   let state = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
   const history = [];
   const moveLog = [];
+  const positionCounts = new Map();
   let result = 0;
   const maxMoves = 200;
 
@@ -442,6 +471,12 @@ function playSelfPlayGame() {
       break;
     }
     if (state.half >= 100) { result = 0; break; }
+    
+    // 🔥 Троекратное повторение = ничья
+    const key = toFen(state).split(' ').slice(0, 4).join(' ');
+    const count = (positionCounts.get(key) || 0) + 1;
+    positionCounts.set(key, count);
+    if (count >= 3) { result = 0; break; }
 
     const isW = state.turn === 'w';
     const mv = pickMoveSearch(state, isW, 80);
