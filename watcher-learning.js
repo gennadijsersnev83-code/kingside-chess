@@ -376,6 +376,44 @@ function pickMove(state, isWhiteTurn, epsilon = 0.1) {
   return best;
 }
 
+// ============================================================
+// 🔥 РЕЖИМ «СПАСЕНИЯ НИЧЬЕЙ» ПРИ МАЛОМ ВРЕМЕНИ
+// ============================================================
+function pickMoveSaveDraw(state, isWhiteTurn) {
+  const legal = allLegalMoves(state, isWhiteTurn);
+  if (legal.length === 0) return null;
+  if (legal.length === 1) return legal[0];
+
+  let best = null, bestScore = -Infinity;
+  for (const [from, to] of legal) {
+    const captured = state.board[to[0]][to[1]];
+    const next = applyMove(state, from, to);
+    const evalScore = evaluate(next, isWhiteTurn);
+
+    // 🔥 Бонус за размен (упрощение)
+    let tradeBonus = 0;
+    if (captured) {
+      const val = PIECE_VALUES[captured.toLowerCase()] || 0;
+      tradeBonus = val * 2;
+    }
+
+    // 🔥 Штраф за «сложные» ходы (много фигур на доске)
+    let complexityPenalty = 0;
+    let pieceCount = 0;
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      if (next.board[r][c]) pieceCount++;
+    }
+    complexityPenalty = pieceCount * 2;
+
+    const score = evalScore + tradeBonus - complexityPenalty;
+    if (score > bestScore) { bestScore = score; best = [from, to]; }
+  }
+  return best;
+}
+
+// ============================================================
+// SELF-PLAY
+// ============================================================
 function playSelfPlayGame() {
   let state = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
   const history = [];
@@ -397,10 +435,11 @@ function playSelfPlayGame() {
     if (!mv) break;
 
     const pieceMoved = state.board[mv[0][0]][mv[0][1]];
+    const captured = state.board[mv[1][0]][mv[1][1]]; // 🔥 запоминаем взятие
     const sqFrom = sqName(mv[0][0], mv[0][1]);
     const sqTo = sqName(mv[1][0], mv[1][1]);
 
-    history.push({ white: isW, pieceMoved, sqFrom, sqTo });
+    history.push({ white: isW, pieceMoved, captured, sqFrom, sqTo }); // 🔥 добавили captured
     state = applyMove(state, mv[0], mv[1]);
 
     moveLog.push({
@@ -421,25 +460,43 @@ function playSelfPlayGame() {
   return { result, moveLog };
 }
 
+// ============================================================
+// 🔥 ОБУЧЕНИЕ: ничья = 0.3, бонус за взятие
+// ============================================================
 function trainOnHistory(history, result) {
   if (history.length === 0) return;
   const lr = 0.005;
+
+  // 🔥 Ничья = 0.3 (лучше поражения, хуже победы)
+  let whiteReward, blackReward;
+  if (result === 1) { whiteReward = 1; blackReward = -1; }
+  else if (result === -1) { whiteReward = -1; blackReward = 1; }
+  else { whiteReward = 0.3; blackReward = 0.3; }
+
   for (const move of history) {
+    const reward = move.white ? whiteReward : blackReward;
     const side = move.white ? 1 : -1;
-    let reward;
-    if (result === 1) reward = move.white ? 1 : -1;
-    else if (result === -1) reward = move.white ? -1 : 1;
-    else reward = 0;
-    if (reward === 0) continue;
+
     const keyFrom = `${move.pieceMoved}_${move.sqFrom}`;
     const keyTo = `${move.pieceMoved}_${move.sqTo}`;
     if (typeof DATA.weights[keyTo] !== 'number') DATA.weights[keyTo] = 0;
     if (typeof DATA.weights[keyFrom] !== 'number') DATA.weights[keyFrom] = 0;
-    DATA.weights[keyTo] = Math.max(-2, Math.min(2, DATA.weights[keyTo] + lr * side * reward));
-    DATA.weights[keyFrom] = Math.max(-2, Math.min(2, DATA.weights[keyFrom] - lr * side * reward * 0.3));
+
+    // 🔥 Бонус за размен (стимулирует упрощение)
+    let tradeBonus = 0;
+    if (move.captured) {
+      const capVal = PIECE_VALUES[move.captured.toLowerCase()] || 0;
+      tradeBonus = capVal / 5000;
+    }
+
+    DATA.weights[keyTo] = Math.max(-2, Math.min(2, DATA.weights[keyTo] + lr * side * (reward + tradeBonus)));
+    DATA.weights[keyFrom] = Math.max(-2, Math.min(2, DATA.weights[keyFrom] - lr * side * (reward + tradeBonus) * 0.3));
   }
 }
 
+// ============================================================
+// ПУБЛИЧНЫЙ API
+// ============================================================
 function getStats() {
   return {
     games: DATA.games, wins: DATA.wins, losses: DATA.losses, draws: DATA.draws,
@@ -447,8 +504,18 @@ function getStats() {
   };
 }
 
+// 🔥 Режим «спасения ничьей» при малом времени
 function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
   const state = parseFen(fen);
+  const myTime = timeInfo.time || 5;
+  
+  // Если мало времени (< 30 сек) — играем на упрощение
+  if (myTime < 30) {
+    const move = pickMoveSaveDraw(state, color === 'w');
+    if (!move) return null;
+    return { from: move[0], to: move[1] };
+  }
+  
   const move = pickMove(state, color === 'w', 0.05);
   if (!move) return null;
   return { from: move[0], to: move[1] };
