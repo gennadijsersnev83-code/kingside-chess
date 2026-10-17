@@ -73,6 +73,82 @@ const PST_START = {
   ],
 };
 
+// ============================================================
+// 🔥 ДЕБЮТНАЯ КНИГА (5-6 ходов в глубину)
+// ============================================================
+const OPENING_BOOK = {
+  // Стартовая позиция
+  'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1': [
+    { from: [6, 4], to: [4, 4] }, // e4
+    { from: [6, 3], to: [4, 3] }, // d4
+    { from: [7, 6], to: [5, 5] }, // Nf3
+    { from: [6, 2], to: [4, 2] }  // c4
+  ],
+  // 1. e4
+  'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1': [
+    { from: [1, 4], to: [3, 4] }, // e5
+    { from: [1, 2], to: [3, 2] }, // c5
+    { from: [1, 3], to: [3, 3] }, // d5
+    { from: [1, 5], to: [2, 5] }  // f6 (Алехин)
+  ],
+  // 1. d4
+  'rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq d3 0 1': [
+    { from: [1, 3], to: [3, 3] }, // d5
+    { from: [1, 6], to: [2, 6] }, // Nf6
+    { from: [1, 2], to: [3, 2] }  // c5
+  ],
+  // 1. e4 e5
+  'rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq e6 0 2': [
+    { from: [7, 6], to: [5, 5] }, // Nf3
+    { from: [7, 5], to: [4, 2] }, // Bc4
+    { from: [6, 3], to: [4, 3] }  // d4
+  ],
+  // 1. e4 c5 (Сицилианская)
+  'rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2': [
+    { from: [7, 6], to: [5, 5] }, // Nf3
+    { from: [6, 3], to: [4, 3] }, // d4
+    { from: [7, 2], to: [5, 2] }  // c3 (закрытая)
+  ],
+  // 1. d4 d5
+  'rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq d6 0 2': [
+    { from: [7, 2], to: [5, 2] }, // c4 (ферзевый гамбит)
+    { from: [7, 6], to: [5, 5] }, // Nf3
+    { from: [7, 3], to: [5, 3] }  // Qd3
+  ],
+  // 1. e4 e5 2. Nf3
+  'rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2': [
+    { from: [0, 1], to: [2, 2] }, // Nc6
+    { from: [1, 3], to: [3, 3] }  // d6 (Филидор)
+  ],
+  // 1. d4 Nf6
+  'rnbqkb1r/pppppppp/5n2/8/3P4/8/PPP1PPPP/RNBQKBNR w KQkq - 1 2': [
+    { from: [7, 2], to: [5, 2] }, // c4
+    { from: [7, 6], to: [5, 5] }, // Nf3
+    { from: [6, 2], to: [4, 2] }  // e4
+  ],
+  // 1. c4 (Английское начало)
+  'rnbqkbnr/pppppppp/8/8/2P5/8/PP1PPPPP/RNBQKBNR b KQkq c3 0 1': [
+    { from: [1, 4], to: [3, 4] }, // e5
+    { from: [1, 2], to: [3, 2] }, // c5
+    { from: [1, 6], to: [2, 6] }  // Nf6
+  ],
+  // 1. e4 e5 2. Nf3 Nc6
+  'r1bqkbnr/pppp1ppp/2n5/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq - 2 3': [
+    { from: [7, 5], to: [4, 2] }, // Bc4
+    { from: [6, 3], to: [4, 3] }, // d4
+    { from: [7, 1], to: [5, 2] }  // Nc3
+  ],
+  // 1. e4 c5 2. Nf3
+  'rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2': [
+    { from: [1, 3], to: [3, 3] }, // d6
+    { from: [0, 1], to: [2, 2] }, // Nc6
+    { from: [1, 4], to: [2, 4] }  // e6
+  ]
+};
+
+// ============================================================
+// PST WEIGHTS
+// ============================================================
 function initWeights() {
   const files = 'abcdefgh';
   const pieces = ['P','N','B','R','Q','K','p','n','b','r','q','k'];
@@ -326,7 +402,7 @@ function allLegalMoves(state, white) {
 function sqName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
 
 // ============================================================
-// 🔥 ОЦЕНКА (с эндшпилем, пешками, мобильностью, безопасностью короля)
+// ОЦЕНКА
 // ============================================================
 function evaluate(state, forWhite) {
   let score = 0;
@@ -349,13 +425,11 @@ function evaluate(state, forWhite) {
     if (p === 'p') blackPawnsByFile[c]++;
   }
   
-  // 🔥 Штраф за сдвоенные пешки
   for (let f = 0; f < 8; f++) {
     if (whitePawnsByFile[f] > 1) score -= 10 * (whitePawnsByFile[f] - 1);
     if (blackPawnsByFile[f] > 1) score += 10 * (blackPawnsByFile[f] - 1);
   }
   
-  // 🔥 Штраф за изолированные пешки
   for (let f = 0; f < 8; f++) {
     if (whitePawnsByFile[f] > 0) {
       const left = f > 0 ? whitePawnsByFile[f-1] : 0;
@@ -369,7 +443,6 @@ function evaluate(state, forWhite) {
     }
   }
 
-  // 🔥 Бонус за продвижение пешек (стимулирует идти вперед)
   for (let c = 0; c < 8; c++) {
     for (let r = 0; r < 8; r++) {
       if (state.board[r][c] === 'P') score += (6 - r) * 5;
@@ -377,7 +450,6 @@ function evaluate(state, forWhite) {
     }
   }
   
-  // 🔥 В эндшпиле (мало фигур, кроме королей)
   if (whitePieces + blackPieces <= 5) {
     if (whiteKing && blackKing) {
       const dist = Math.abs(whiteKing[0] - blackKing[0]) + Math.abs(whiteKing[1] - blackKing[1]);
@@ -389,7 +461,6 @@ function evaluate(state, forWhite) {
     }
   }
   
-  // 🔥 Безопасность короля (штраф, если король не рокирован в миттельшпиле)
   if (whitePieces + blackPieces > 10) {
     if (whiteKing && whiteKing[1] === 4 && whiteKing[0] === 7) score -= 30;
     if (blackKing && blackKing[1] === 4 && blackKing[0] === 0) score += 30;
@@ -398,9 +469,6 @@ function evaluate(state, forWhite) {
   return forWhite ? score : -score;
 }
 
-// ============================================================
-// 🔥 QUIESCENCE (поиск взятий, с защитой от мата)
-// ============================================================
 function quiescence(state, alpha, beta, color) {
   const standPat = evaluate(state, color === 1);
   if (standPat >= beta) return beta;
@@ -434,9 +502,6 @@ function quiescence(state, alpha, beta, color) {
   return alpha;
 }
 
-// ============================================================
-// 🔥 NEGAMAX с Killer Moves
-// ============================================================
 const killerMoves = [];
 
 function negamax(state, depth, alpha, beta, color, deadline) {
@@ -476,9 +541,6 @@ function negamax(state, depth, alpha, beta, color, deadline) {
   return best;
 }
 
-// ============================================================
-// 🔥 MOVE ORDERING
-// ============================================================
 function moveScore(state, from, to) {
   const attacker = state.board[from[0]][from[1]];
   const victim = state.board[to[0]][to[1]];
@@ -507,7 +569,31 @@ function moveScore(state, from, to) {
   return score;
 }
 
-function pickMoveSearch(state, isWhiteTurn, timeMs) {
+// 🔥 Проверяем, есть ли ход в дебютной книге
+function getBookMove(fen) {
+  const key = fen.split(' ').slice(0, 4).join(' ');
+  if (OPENING_BOOK[fen]) return OPENING_BOOK[fen];
+  // Пробуем найти по ключу без счетчиков
+  for (const bookFen in OPENING_BOOK) {
+    if (bookFen.split(' ').slice(0, 4).join(' ') === key) {
+      return OPENING_BOOK[bookFen];
+    }
+  }
+  return null;
+}
+
+function pickMoveSearch(state, isWhiteTurn, timeMs, fenForBook) {
+  // 🔥 Проверяем дебютную книгу (только если ходов < 10)
+  if (fenForBook) {
+    const bookMoves = getBookMove(fenForBook);
+    if (bookMoves && bookMoves.length > 0) {
+      // 85% вероятность взять из книги, чтобы иногда бот "думал" сам
+      if (Math.random() < 0.85) {
+        return bookMoves[Math.floor(Math.random() * bookMoves.length)];
+      }
+    }
+  }
+
   const legal = allLegalMoves(state, isWhiteTurn);
   if (legal.length === 0) return null;
   if (legal.length === 1) return legal[0];
@@ -547,7 +633,7 @@ function pickMoveSearch(state, isWhiteTurn, timeMs) {
 }
 
 // ============================================================
-// 🔥 SELF-PLAY С АНТИ-ПОВТОРЕНИЕМ И НАКАЗАНИЕМ ЗА НИЧЬЮ
+// SELF-PLAY
 // ============================================================
 function playSelfPlayGame() {
   let state = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
@@ -567,23 +653,19 @@ function playSelfPlayGame() {
     }
     if (state.half >= 100) { result = 0; break; }
     
-    // 🔥 Проверка на троекратное повторение с анализом позиции
     const key = toFen(state).split(' ').slice(0, 4).join(' ');
     const count = (positionCounts.get(key) || 0) + 1;
     positionCounts.set(key, count);
     
     if (count >= 3) {
-      // 🔥 Если позиция повторяется, но есть преимущество — пытаемся найти другой ход
       const evalNow = evaluate(state, state.turn === 'w');
       if (Math.abs(evalNow) > 150) {
-        // Ищем ход, который не ведет к немедленному повторению
         const nonRepeating = legal.filter(([from, to]) => {
           const next = applyMove(state, from, to);
           const nextKey = toFen(next).split(' ').slice(0, 4).join(' ');
           return !positionCounts.has(nextKey) || positionCounts.get(nextKey) < 2;
         });
         if (nonRepeating.length > 0) {
-          // Выбираем лучший из неповторяющихся ходов
           let bestMv = nonRepeating[0];
           let bestScore = -Infinity;
           const isW = state.turn === 'w';
@@ -608,7 +690,7 @@ function playSelfPlayGame() {
     }
 
     const isW = state.turn === 'w';
-    const mv = pickMoveSearch(state, isW, 80);
+    const mv = pickMoveSearch(state, isW, 80, toFen(state));
     if (!mv) break;
 
     const pieceMoved = state.board[mv[0][0]][mv[0][1]];
@@ -619,7 +701,7 @@ function playSelfPlayGame() {
 
     history.push({ white: isW, pieceMoved, captured, sqFrom: sqName(mv[0][0], mv[0][1]), sqTo: sqName(mv[1][0], mv[1][1]), causedCheck, isMate });
     state = nextState;
-    finalEval = evaluate(state, state.turn === 'w'); // оценка с точки зрения того, кто будет ходить
+    finalEval = evaluate(state, state.turn === 'w');
 
     moveLog.push({
       from: mv[0],
@@ -629,17 +711,9 @@ function playSelfPlayGame() {
     });
   }
 
-  // 🔥 Наказание за ничью при преимуществе
   let adjustedResult = result;
   if (result === 0 && Math.abs(finalEval) > 300) {
-    // Если была ничья, но преимущество было больше 3 пешек — наказываем
-    // Сторона с преимуществом получает -1 (как за поражение)
     if (finalEval > 0) {
-      // Преимущество у белых (ходили черные, оценка положительная для черных? 
-      // finalEval считается с точки зрения того, кто ходит. 
-      // Если ходят черные (finalEval для черных), и оценка > 0 — значит черные лучше.
-      // Это сложно, поэтому просто накажем того, у кого был перевес.
-      // Для простоты: если оценка большая, значит одна из сторон доминировала.
       adjustedResult = finalEval > 0 ? 1 : -1;
     }
   }
@@ -705,7 +779,7 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
   else thinkMs = Math.min(1500, myTime * 1000 * 0.1);
   thinkMs = Math.min(thinkMs, myTime * 1000 * 0.3);
 
-  const move = pickMoveSearch(state, color === 'w', thinkMs);
+  const move = pickMoveSearch(state, color === 'w', thinkMs, fen);
   if (!move) return null;
   return { from: move[0], to: move[1] };
 }
