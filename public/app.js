@@ -249,7 +249,7 @@ const Auth = {
       tabLogin.classList.remove('active');
       captchaField.style.display = 'block';
       btnText.textContent = 'Зарегистрироваться';
-      this.generateCaptcha(); // Генерируем пример при открытии
+      this.generateCaptcha();
     }
     document.getElementById('loginMsg').textContent = '';
   },
@@ -333,7 +333,7 @@ const App = {
       const userAnswer = parseInt(document.getElementById('captchaAnswer').value);
       if (isNaN(userAnswer) || userAnswer !== Auth.captchaAnswer) {
         msgEl.textContent = 'Неверный ответ. Попробуйте снова.';
-        Auth.generateCaptcha(); // Меняем пример
+        Auth.generateCaptcha();
         return;
       }
     }
@@ -343,7 +343,7 @@ const App = {
     msgEl.style.color = 'var(--text)';
 
     this.socket.emit('register', payload, (res) => {
-      msgEl.style.color = '#ff6b6b'; // Красный для ошибок
+      msgEl.style.color = '#ff6b6b';
       
       if (!res || !res.ok) {
         msgEl.textContent = (res && res.msg) || 'Ошибка';
@@ -549,7 +549,15 @@ const Router = {
   },
   apply() {
     const { name, param } = this.current;
-    if (!App.me && name !== 'login') { this.show('loginScreen'); return; }
+    
+    // Если мы на странице логина или не авторизованы
+    if (name === 'login' || !App.me) {
+      document.body.classList.add('login-active');
+      this.show('loginScreen');
+      return;
+    } else {
+      document.body.classList.remove('login-active');
+    }
 
     if (name === 'game' && param && param.startsWith('sp_')) {
       Router.go('lobby');
@@ -569,7 +577,7 @@ const Router = {
     if (name !== 'arenaPage' && Arena.currentArenaId) Arena.leaveRoom();
     const map = { login: 'loginScreen', lobby: 'lobbyScreen', watch: 'watchScreen', arenas: 'arenasScreen', arenaPage: 'arenaPageScreen', profile: 'profileScreen', community: 'communityScreen', game: 'gameScreen', inbox: 'inboxScreen' };
     const screenId = map[name];
-    if (!screenId) { this.show('loginScreen'); return; }
+    if (!screenId) { this.show('lobbyScreen'); return; }
     this.show(screenId);
     document.querySelectorAll('#mainNav a').forEach(a => {
       const nav = a.dataset.nav;
@@ -892,7 +900,6 @@ const Arena = {
   enterList() { this.refresh(true); },
   enterPage(arenaId) {
     if (!arenaId) { Router.go('arenas'); return; }
-    // 🔥 FIX: при входе в арену останавливаем просмотр чужой партии
     if (Watch.watchingGameId) Watch.stop();
     if (this.currentArenaId && this.currentArenaId !== arenaId) App.socket.emit('leaveArenaRoom', { arenaId: this.currentArenaId });
     this.currentArenaId = arenaId;
@@ -908,7 +915,6 @@ const Arena = {
     this.gamesRefreshHandle = setInterval(() => { if (document.getElementById('arenaPageScreen').classList.contains('active')) this.renderGamesList(); }, 3000);
   },
   leaveRoom() {
-    // 🔥 FIX: при выходе из арены тоже останавливаем просмотр
     if (Watch.watchingGameId) Watch.stop();
     if (this.currentArenaId) { App.socket.emit('leaveArenaRoom', { arenaId: this.currentArenaId }); this.currentArenaId = null; }
     if (this.pageRefreshHandle) { clearInterval(this.pageRefreshHandle); this.pageRefreshHandle = null; }
@@ -1059,7 +1065,6 @@ const Arena = {
       if (pcEl) pcEl.textContent = res.participantsCount || 0; if (vcEl) vcEl.textContent = res.chatViewersCount || 0;
       const hash = JSON.stringify({ live: live.map(g => [g.lobbyId, g.fen, g.timeW, g.timeB]), done: done.slice(0, 30).map(g => [g.white, g.black, g.result, g.finishedAt]) });
       if (hash === this.lastGamesHash) return; this.lastGamesHash = hash;
-      // 🔥 FIX: приоритет моей партии в топ-блоке
       const myName = App.me ? App.me.username : null;
       const myLive = myName ? live.find(g => g.white === myName || g.black === myName) : null;
       const topGame = myLive || live[0] || null;
@@ -1111,7 +1116,6 @@ const Arena = {
     box.scrollTop = box.scrollHeight;
   },
   onUpdate(arenaId) {
-    // 🔥 FIX: не форсируем renderGamesList — его вызовет интервал с проверкой хэша
     if (this.currentArenaId === arenaId) {
       this.lastStateHash = '';
       if (document.getElementById('arenaPageScreen').classList.contains('active')) this.loadPage();
@@ -1924,7 +1928,6 @@ const Game = {
       console.warn('[Game] Получен gameStart с isSelfPlay, игнорируем');
       return;
     }
-    // 🔥 FIX: если уже есть активная партия с другим lobbyId — игнорируем чужой gameStart
     if (App.gameActive && !App.gameEnded && App.lobbyId && payload.lobbyId && payload.lobbyId !== App.lobbyId) {
       console.warn('[Game] Игнорирую gameStart для чужого lobbyId', payload.lobbyId, 'текущий', App.lobbyId);
       return;
@@ -1961,7 +1964,6 @@ const Game = {
     Sounds.start();
   },
   onBoardUpdate({ lobbyId, fen, san, from, to }) {
-    // 🔥 FIX: применяем только события СВОЕЙ партии
     if (!lobbyId || lobbyId !== App.lobbyId) return;
     if (!App.gameActive || App.gameEnded) return;
     const prevFen = App.currentFen; App.currentFen = fen;
@@ -1974,14 +1976,12 @@ const Game = {
     this.checkGameEnd(state); this.tryApplyPremove();
   },
   onTimeUpdate({ lobbyId, timeW, timeB, serverNow }) {
-    // 🔥 FIX: применяем только события СВОЕЙ партии
     if (!lobbyId || lobbyId !== App.lobbyId) return;
     if (!App.gameActive || App.gameEnded) return;
     const state = Chess.parseFen(App.currentFen);
     this.updateTimersFromServer(timeW, timeB, serverNow, state.turn);
   },
   onGameEnded({ lobbyId, result, reason, isArena, arenaId, isBot }) {
-    // 🔥 FIX: завершаем только СВОЮ партию
     if (!lobbyId || lobbyId !== App.lobbyId) return;
     if (App.gameEnded) return;
     let winner = null;
@@ -2001,7 +2001,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.App = App; window.Router = Router; window.Lobby = Lobby; window.Bot = Bot;
   window.Watch = Watch; window.Arena = Arena; window.Profile = Profile; window.Community = Community;
   window.Game = Game; window.Banners = Banners; window.Mod = Mod; window.Utils = Utils;
-  window.UserMenu = UserMenu; window.Inbox = Inbox; window.Ping = Ping;
+  window.UserMenu = UserMenu; window.Inbox = Inbox; window.Ping = Ping; window.Auth = Auth;
   App.init();
 });
 
