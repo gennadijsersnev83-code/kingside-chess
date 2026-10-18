@@ -29,43 +29,38 @@
 <!-- LOGIN (отдельная страница) -->
 <section id="loginScreen" class="screen login-page">
   <div class="auth-card">
-    <!-- Вкладки -->
     <div class="auth-tabs">
       <button class="auth-tab active" id="tabLoginBtn" onclick="Auth.switchTab('login')">Войти</button>
       <button class="auth-tab" id="tabRegisterBtn" onclick="Auth.switchTab('register')">Регистрация</button>
     </div>
 
-    <!-- Поле логина -->
     <div class="auth-field">
       <label>Логин</label>
       <input id="username" placeholder="PeshkaSasha" autocomplete="username">
+      <div id="usernameStatus" style="font-size:12px; margin-top:4px; min-height:16px;"></div>
     </div>
 
-    <!-- Поле email (показывается только при регистрации) -->
     <div class="auth-field" id="emailField" style="display: none;">
       <label>Email</label>
       <input id="email" type="email" placeholder="you@example.com" autocomplete="email">
+      <div id="emailStatus" style="font-size:12px; margin-top:4px; min-height:16px;"></div>
     </div>
 
-    <!-- Поле пароля -->
     <div class="auth-field">
       <label>Пароль</label>
       <div class="password-wrap">
-        <input id="password" type="password" placeholder="••••••••••••" autocomplete="current-password">
+        <input id="password" type="password" placeholder="••••••••••••" autocomplete="new-password">
         <span class="eye-icon" id="eyeIcon" onclick="Auth.togglePassword()">👁</span>
       </div>
-      <!-- Ссылка для сброса пароля -->
       <a href="#" class="forgot-link" onclick="Auth.openResetModal(); return false;">Забыли пароль?</a>
     </div>
 
-    <!-- Чекбокс -->
-    <label class="checkbox-row">
-      <input type="checkbox" id="rememberMe" checked>
+    <label class="checkbox-row" style="margin-bottom:16px;">
+      <input type="checkbox" id="honorCheckbox">
       <span class="checkmark"></span>
-      <span>Не выходить из аккаунта</span>
+      <span>Подтверждаю, что буду играть честно</span>
     </label>
 
-    <!-- Кнопка -->
     <button id="submitBtn" class="primary auth-submit" onclick="App.doLogin()">
       <span id="btnText">Войти</span>
     </button>
@@ -77,14 +72,14 @@
 <!-- Модальное окно: Запрос сброса пароля -->
 <div id="resetRequestModal" class="botModal">
   <div class="botModalBox">
-    <h3>Восстановление пароля</h3>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Укажите email, на который был зарегистрирован аккаунт.</p>
+    <h3>Сброс пароля</h3>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px;">Введите вашу электронную почту, мы отправим вам письмо с ссылкой на сброс пароля.</p>
     <div class="auth-field">
       <input id="resetEmailInput" type="email" placeholder="you@example.com">
     </div>
     <div class="botModalActions" style="margin-top:10px;">
       <button class="cancelBtn" onclick="Auth.closeResetModal()">Отмена</button>
-      <button class="startBtn" onclick="Auth.submitResetRequest()">Отправить</button>
+      <button class="startBtn" onclick="Auth.submitResetRequest()">Сбросить пароль</button>
     </div>
   </div>
 </div>
@@ -92,12 +87,19 @@
 <!-- Экран сброса пароля (по ссылке из письма) -->
 <section id="resetScreen" class="screen login-page" style="display: none;">
   <div class="auth-card">
-    <h2 style="margin-top:0;color:var(--text-bright);text-align:center;">Новый пароль</h2>
+    <h2 style="margin-top:0;color:var(--text-bright);text-align:center;">Сброс пароля</h2>
+    <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">Введите новый пароль дважды</p>
+    
     <div class="auth-field">
-      <label>Придумайте новый пароль</label>
-      <input id="newPassword" type="password" placeholder="••••••••••••">
+      <label>Новый пароль</label>
+      <input id="newPassword" type="password" placeholder="••••••••••••" autocomplete="new-password">
     </div>
-    <button class="primary auth-submit" onclick="Auth.doResetPassword()">Сохранить</button>
+    <div class="auth-field">
+      <label>Повторите пароль</label>
+      <input id="confirmPassword" type="password" placeholder="••••••••••••" autocomplete="new-password">
+    </div>
+    
+    <button class="primary auth-submit" onclick="Auth.doResetPassword()">Обновить пароль</button>
     <div id="resetMsg" class="auth-msg"></div>
     <div style="text-align:center;margin-top:16px;">
       <a href="#/autorize" class="forgot-link">← Вернуться ко входу</a>
