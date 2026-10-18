@@ -102,7 +102,7 @@ const Sounds = (function() {
 })();
 
 // ============================================================
-// CHESS
+// CHESS (сокращено для читаемости, не меняем логику)
 // ============================================================
 const Chess = {
   EMOJI: { 'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙','k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟' },
@@ -264,21 +264,42 @@ const Auth = {
     }
   },
 
-  openReset() {
-    const email = prompt('Введите email, указанный при регистрации:');
-    if (!email) return;
+  // Открывает модальное окно для ввода email при сбросе
+  openResetModal() {
+    const modal = document.getElementById('resetRequestModal');
+    if (modal) modal.classList.add('show');
+    const input = document.getElementById('resetEmailInput');
+    if (input) input.value = '';
+  },
+
+  closeResetModal() {
+    const modal = document.getElementById('resetRequestModal');
+    if (modal) modal.classList.remove('show');
+  },
+
+  // Отправляет запрос на сервер
+  submitResetRequest() {
+    const email = document.getElementById('resetEmailInput').value.trim();
+    if (!email) { alert('Пожалуйста, введите email'); return; }
+    
+    this.closeResetModal();
+    
     App.socket.emit('requestPasswordReset', { email }, (res) => {
       alert(res?.msg || 'Если email зарегистрирован, письмо отправлено');
     });
   },
 
+  // Выполняет сохранение нового пароля по ссылке
   doResetPassword() {
-    const token = new URLSearchParams(location.hash.split('?')[1]).get('token');
+    const hashPart = location.hash.split('?')[1];
+    const token = hashPart ? new URLSearchParams(hashPart).get('token') : null;
     const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
     const msgEl = document.getElementById('resetMsg');
 
-    if (!token) { msgEl.textContent = 'Неверная ссылка'; return; }
-    if (!newPassword || newPassword.length < 3) { msgEl.textContent = 'Пароль минимум 3 символа'; return; }
+    if (!token) { msgEl.textContent = 'Неверная ссылка для сброса'; msgEl.style.color = '#ff6b6b'; return; }
+    if (!newPassword || newPassword.length < 3) { msgEl.textContent = 'Пароль минимум 3 символа'; msgEl.style.color = '#ff6b6b'; return; }
+    if (newPassword !== confirmPassword) { msgEl.textContent = 'Пароли не совпадают'; msgEl.style.color = '#ff6b6b'; return; }
 
     msgEl.textContent = 'Загрузка...';
     msgEl.style.color = 'var(--text)';
@@ -290,7 +311,7 @@ const Auth = {
         return;
       }
       msgEl.style.color = '#629924';
-      msgEl.textContent = 'Пароль успешно изменен! Теперь войдите.';
+      msgEl.textContent = 'Пароль успешно изменен!';
       setTimeout(() => Router.go('autorize'), 2000);
     });
   }
@@ -350,6 +371,10 @@ const App = {
 
     if (!username || !password) { msgEl.textContent = 'Введите логин и пароль'; return; }
     if (Auth.mode === 'register' && !email) { msgEl.textContent = 'Введите email'; return; }
+    if (Auth.mode === 'register') {
+      const honor = document.getElementById('honorCheckbox');
+      if (honor && !honor.checked) { msgEl.textContent = 'Подтвердите, что будете играть честно'; return; }
+    }
 
     msgEl.textContent = 'Загрузка...';
     msgEl.style.color = 'var(--text)';
@@ -358,7 +383,10 @@ const App = {
       if (!res || !res.ok) {
         msgEl.style.color = '#ff6b6b';
         msgEl.textContent = (res && res.msg) || 'Ошибка';
-        if (res && res.pending) msgEl.style.color = '#7dbe30'; // Зеленый цвет для "проверьте почту"
+        if (res && res.pending) {
+          msgEl.style.color = '#7dbe30';
+          msgEl.innerHTML = `Мы отправили письмо с подтверждением на почту: <b>${email}</b>.<br>Если письмо не приходит, проверьте папку «Спам».`;
+        }
         return;
       }
       this.me = res.user;
@@ -580,8 +608,19 @@ const Router = {
       
       // Если пришли по ссылке подтверждения
       if (name === 'autorize' && param && param.includes('verified=1')) {
-        document.getElementById('loginMsg').textContent = 'Email подтвержден! Теперь войдите.';
-        document.getElementById('loginMsg').style.color = '#629924';
+        const loginMsg = document.getElementById('loginMsg');
+        loginMsg.textContent = 'Email подтвержден! Теперь войдите.';
+        loginMsg.style.color = '#629924';
+
+        // Автоматический вход, если в URL есть username
+        const urlParams = new URLSearchParams(location.hash.split('?')[1]);
+        const un = urlParams.get('username');
+        if (un && db.users[un]) {
+          // Просто перенаправляем в лобби
+          App.me = publicUser(un);
+          App.updateTopbarUser();
+          Router.go('lobby');
+        }
       }
       return;
     }
