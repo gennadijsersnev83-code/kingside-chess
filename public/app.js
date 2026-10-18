@@ -250,6 +250,8 @@ const Auth = {
       btnText.textContent = 'Зарегистрироваться';
     }
     document.getElementById('loginMsg').textContent = '';
+    const usernameStatus = document.getElementById('usernameStatus');
+    if (usernameStatus && mode === 'login') { usernameStatus.textContent = ''; usernameStatus.className = ''; }
   },
 
   togglePassword() {
@@ -292,7 +294,7 @@ const Auth = {
     const token = hashPart ? new URLSearchParams(hashPart).get('token') : null;
     const newPassword = document.getElementById('newPassword').value;
     const confirmPassword = document.getElementById('confirmPassword').value;
-    const msgEl = document.getElementById('resetMsg2') || document.getElementById('resetMsg');
+    const msgEl = document.getElementById('resetMsg');
 
     if (!token) { msgEl.textContent = 'Неверная ссылка для сброса'; msgEl.style.color = '#ff6b6b'; return; }
     if (!newPassword || newPassword.length < 3) { msgEl.textContent = 'Пароль минимум 3 символа'; msgEl.style.color = '#ff6b6b'; return; }
@@ -313,9 +315,6 @@ const Auth = {
     });
   },
 
-  requestReset() { return this.submitResetRequest(); },
-  doReset() { return this.doResetPassword(); },
-
   init() {
     const usernameInput = document.getElementById('username');
     const emailInput = document.getElementById('email');
@@ -330,10 +329,12 @@ const Auth = {
         const val = usernameInput.value.trim();
         usernameStatus.textContent = '';
         usernameStatus.className = '';
-        if (val.length < 2) return;
+        // Nickname availability is relevant only during registration.
+        if (Auth.mode !== 'register' || val.length < 2) return;
         usernameTimeout = setTimeout(() => {
+          if (Auth.mode !== 'register') return;
           App.socket.emit('checkUsername', { username: val }, (res) => {
-            if (!res) return;
+            if (!res || Auth.mode !== 'register') return;
             usernameStatus.textContent = res.msg || '';
             usernameStatus.className = res.available ? 'available' : 'taken';
           });
@@ -433,7 +434,6 @@ const App = {
         return;
       }
       this.me = res.user;
-      document.body.classList.remove('login-active');
       try { localStorage.setItem('kingside_login', JSON.stringify({ username, password })); } catch (e) {}
       this.updateTopbarUser();
       Router.go('lobby');
@@ -454,7 +454,6 @@ const App = {
     this.socket.emit('register', { username: saved.username, password: saved.password }, (res) => {
       if (!res || !res.ok) { try { localStorage.removeItem('kingside_login'); } catch (e) {} return; }
       this.me = res.user;
-      document.body.classList.remove('login-active');
       this.updateTopbarUser();
       Router.go('lobby');
       this.tryResumeGame();
@@ -624,14 +623,10 @@ const Router = {
     if (location.hash === path) this.handle(); else location.hash = path;
   },
   handle() {
-    const rawHash = location.hash.replace(/^#\/?/, '');
-    const queryAt = rawHash.indexOf('?');
-    const routePart = queryAt >= 0 ? rawHash.slice(0, queryAt) : rawHash;
-    const queryPart = queryAt >= 0 ? rawHash.slice(queryAt + 1) : '';
-    const parts = routePart.split('/').filter(Boolean);
-    const name = parts[0] || (App.me ? 'lobby' : 'autorize');
+    const hash = location.hash.replace(/^#\/?/, '');
+    const parts = hash.split('/').filter(Boolean);
+    const name = parts[0] || (App.me ? 'lobby' : 'login');
     const param = parts[1] ? decodeURIComponent(parts[1]) : null;
-    this.query = new URLSearchParams(queryPart);
     this.current = { name, param }; this.apply();
   },
   apply() {
@@ -640,15 +635,6 @@ const Router = {
     if (name === 'reset') {
       document.body.classList.add('login-active');
       Router.show('resetScreen');
-      // A reset URL from the email contains ?token=...; show the new-password
-      // form only for that link. Plain #/reset is the request-email screen.
-      const resetToken = this.query ? this.query.get('token') : null;
-      const step1 = document.getElementById('resetStep1');
-      const step2 = document.getElementById('resetStep2');
-      if (step1) step1.style.display = resetToken ? 'none' : 'block';
-      if (step2) step2.style.display = resetToken ? 'block' : 'none';
-      const resetMsg = document.getElementById('resetMsg2');
-      if (resetMsg) resetMsg.textContent = '';
       return;
     }
 
@@ -661,24 +647,26 @@ const Router = {
       document.body.classList.add('login-active');
       Router.show('autorizeScreen');
       
-      if (name === 'autorize' && this.query && this.query.get('verified') === '1') {
+      if (name === 'autorize' && param && param.includes('verified=1')) {
         const urlParams = new URLSearchParams(location.hash.split('?')[1]);
         const un = urlParams.get('username');
         
-        const loginMsg = document.getElementById('loginMsg');
-        if (loginMsg) {
-          loginMsg.textContent = 'Email подтверждён! Теперь войдите.';
-          loginMsg.style.color = '#7dbe30';
+        if (un && App.socket) {
+          App.socket.emit('register', { username: un, password: '' }, (res) => {
+            const loginMsg = document.getElementById('loginMsg');
+            loginMsg.textContent = 'Email подтвержден! Теперь войдите.';
+            loginMsg.style.color = '#629924';
+            const usernameInput = document.getElementById('username');
+            if (usernameInput) usernameInput.value = un;
+          });
+        } else {
+          const loginMsg = document.getElementById('loginMsg');
+          loginMsg.textContent = 'Email подтвержден! Теперь войдите.';
+          loginMsg.style.color = '#629924';
         }
-        const usernameInput = document.getElementById('username');
-        if (un && usernameInput) usernameInput.value = un;
       }
       return;
     }
-
-    // После успешного входа обязательно снимаем режим авторизации,
-    // иначе CSS продолжает скрывать шапку и весь интерфейс (чёрный экран).
-    if (App.me) document.body.classList.remove('login-active');
 
     if (App.me && App.gameActive && !App.gameEnded && App.lobbyId && name === 'lobby') {
       const opponent = document.getElementById('activeGameOpponent');
@@ -2145,3 +2133,4 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('mouseover', e => { const n = e.target.closest && e.target.closest('[data-player]'); if (n) show(n); });
   document.addEventListener('mouseout', e => { const n = e.target.closest && e.target.closest('[data-player]'); if (n && !n.contains(e.relatedTarget)) { clearTimeout(hoverTimer); hoverName = ''; const c = document.getElementById('playerHoverCard'); if (c) c.style.display = 'none'; } });
 })();
+
