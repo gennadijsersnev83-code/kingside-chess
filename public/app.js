@@ -102,7 +102,7 @@ const Sounds = (function() {
 })();
 
 // ============================================================
-// CHESS (сокращено для читаемости, не меняем логику)
+// CHESS
 // ============================================================
 const Chess = {
   EMOJI: { 'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙','k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟' },
@@ -264,7 +264,6 @@ const Auth = {
     }
   },
 
-  // Открывает модальное окно для ввода email при сбросе
   openResetModal() {
     const modal = document.getElementById('resetRequestModal');
     if (modal) modal.classList.add('show');
@@ -277,7 +276,6 @@ const Auth = {
     if (modal) modal.classList.remove('show');
   },
 
-  // Отправляет запрос на сервер
   submitResetRequest() {
     const email = document.getElementById('resetEmailInput').value.trim();
     if (!email) { alert('Пожалуйста, введите email'); return; }
@@ -289,7 +287,6 @@ const Auth = {
     });
   },
 
-  // Выполняет сохранение нового пароля по ссылке
   doResetPassword() {
     const hashPart = location.hash.split('?')[1];
     const token = hashPart ? new URLSearchParams(hashPart).get('token') : null;
@@ -314,6 +311,49 @@ const Auth = {
       msgEl.textContent = 'Пароль успешно изменен!';
       setTimeout(() => Router.go('autorize'), 2000);
     });
+  },
+
+  init() {
+    const usernameInput = document.getElementById('username');
+    const emailInput = document.getElementById('email');
+    const usernameStatus = document.getElementById('usernameStatus');
+    const emailStatus = document.getElementById('emailStatus');
+    let usernameTimeout = null;
+    let emailTimeout = null;
+
+    if (usernameInput && usernameStatus) {
+      usernameInput.addEventListener('input', () => {
+        clearTimeout(usernameTimeout);
+        const val = usernameInput.value.trim();
+        usernameStatus.textContent = '';
+        usernameStatus.className = '';
+        if (val.length < 2) return;
+        usernameTimeout = setTimeout(() => {
+          App.socket.emit('checkUsername', { username: val }, (res) => {
+            if (!res) return;
+            usernameStatus.textContent = res.msg || '';
+            usernameStatus.className = res.available ? 'available' : 'taken';
+          });
+        }, 500);
+      });
+    }
+
+    if (emailInput && emailStatus) {
+      emailInput.addEventListener('input', () => {
+        clearTimeout(emailTimeout);
+        const val = emailInput.value.trim();
+        emailStatus.textContent = '';
+        emailStatus.className = '';
+        if (!/^[^@]+@[^@]+\.[^@]+$/.test(val)) return;
+        emailTimeout = setTimeout(() => {
+          App.socket.emit('checkEmail', { email: val }, (res) => {
+            if (!res) return;
+            emailStatus.textContent = res.msg || '';
+            emailStatus.className = res.available ? 'available' : 'taken';
+          });
+        }, 500);
+      });
+    }
   }
 };
 
@@ -346,7 +386,7 @@ const App = {
     Router.init();
     TopArenas.init(); Stats.init(); Lobby.init(); Bot.init();
     Watch.init(); Arena.init(); Profile.init(); Community.init();
-    Game.init(); Banners.init(); UserMenu.init(); Inbox.init(); Ping.init();
+    Game.init(); Banners.init(); UserMenu.init(); Inbox.init(); Ping.init(); Auth.init();
     this.tryAutoLogin();
     this.scheduleArenaClock();
   },
@@ -588,38 +628,37 @@ const Router = {
   apply() {
     const { name, param } = this.current;
     
-    // Если мы на странице сброса пароля
     if (name === 'reset') {
       document.body.classList.add('login-active');
       Router.show('resetScreen');
       return;
     }
 
-    // Обработка #/verify?token=... (хотя сервер уже редиректит, на всякий случай)
     if (name === 'verify') {
       Router.go('autorize');
       return;
     }
 
-    // Если мы на странице логина/регистрации или не авторизованы
     if (name === 'login' || name === 'autorize' || !App.me) {
       document.body.classList.add('login-active');
       Router.show('loginScreen');
       
-      // Если пришли по ссылке подтверждения
       if (name === 'autorize' && param && param.includes('verified=1')) {
-        const loginMsg = document.getElementById('loginMsg');
-        loginMsg.textContent = 'Email подтвержден! Теперь войдите.';
-        loginMsg.style.color = '#629924';
-
-        // Автоматический вход, если в URL есть username
         const urlParams = new URLSearchParams(location.hash.split('?')[1]);
         const un = urlParams.get('username');
-        if (un && db.users[un]) {
-          // Просто перенаправляем в лобби
-          App.me = publicUser(un);
-          App.updateTopbarUser();
-          Router.go('lobby');
+        
+        if (un && App.socket) {
+          App.socket.emit('register', { username: un, password: '' }, (res) => {
+            const loginMsg = document.getElementById('loginMsg');
+            loginMsg.textContent = 'Email подтвержден! Теперь войдите.';
+            loginMsg.style.color = '#629924';
+            const usernameInput = document.getElementById('username');
+            if (usernameInput) usernameInput.value = un;
+          });
+        } else {
+          const loginMsg = document.getElementById('loginMsg');
+          loginMsg.textContent = 'Email подтвержден! Теперь войдите.';
+          loginMsg.style.color = '#629924';
         }
       }
       return;
@@ -2066,7 +2105,6 @@ document.addEventListener('DOMContentLoaded', () => {
   App.init();
 });
 
-// Hover card
 (function() {
   let hoverTimer = null, hoverName = '';
   function ensureCard() { let card = document.getElementById('playerHoverCard'); if (!card) { card = document.createElement('div'); card.id = 'playerHoverCard'; document.body.appendChild(card); } return card; }
