@@ -292,7 +292,7 @@ const Auth = {
     const token = hashPart ? new URLSearchParams(hashPart).get('token') : null;
     const newPassword = document.getElementById('newPassword').value;
     const confirmPassword = document.getElementById('confirmPassword').value;
-    const msgEl = document.getElementById('resetMsg');
+    const msgEl = document.getElementById('resetMsg2') || document.getElementById('resetMsg');
 
     if (!token) { msgEl.textContent = 'Неверная ссылка для сброса'; msgEl.style.color = '#ff6b6b'; return; }
     if (!newPassword || newPassword.length < 3) { msgEl.textContent = 'Пароль минимум 3 символа'; msgEl.style.color = '#ff6b6b'; return; }
@@ -312,6 +312,9 @@ const Auth = {
       setTimeout(() => Router.go('autorize'), 2000);
     });
   },
+
+  requestReset() { return this.submitResetRequest(); },
+  doReset() { return this.doResetPassword(); },
 
   init() {
     const usernameInput = document.getElementById('username');
@@ -619,10 +622,14 @@ const Router = {
     if (location.hash === path) this.handle(); else location.hash = path;
   },
   handle() {
-    const hash = location.hash.replace(/^#\/?/, '');
-    const parts = hash.split('/').filter(Boolean);
-    const name = parts[0] || (App.me ? 'lobby' : 'login');
+    const rawHash = location.hash.replace(/^#\/?/, '');
+    const queryAt = rawHash.indexOf('?');
+    const routePart = queryAt >= 0 ? rawHash.slice(0, queryAt) : rawHash;
+    const queryPart = queryAt >= 0 ? rawHash.slice(queryAt + 1) : '';
+    const parts = routePart.split('/').filter(Boolean);
+    const name = parts[0] || (App.me ? 'lobby' : 'autorize');
     const param = parts[1] ? decodeURIComponent(parts[1]) : null;
+    this.query = new URLSearchParams(queryPart);
     this.current = { name, param }; this.apply();
   },
   apply() {
@@ -641,25 +648,19 @@ const Router = {
 
     if (name === 'login' || name === 'autorize' || !App.me) {
       document.body.classList.add('login-active');
-      Router.show('loginScreen');
+      Router.show('autorizeScreen');
       
-      if (name === 'autorize' && param && param.includes('verified=1')) {
+      if (name === 'autorize' && this.query && this.query.get('verified') === '1') {
         const urlParams = new URLSearchParams(location.hash.split('?')[1]);
         const un = urlParams.get('username');
         
-        if (un && App.socket) {
-          App.socket.emit('register', { username: un, password: '' }, (res) => {
-            const loginMsg = document.getElementById('loginMsg');
-            loginMsg.textContent = 'Email подтвержден! Теперь войдите.';
-            loginMsg.style.color = '#629924';
-            const usernameInput = document.getElementById('username');
-            if (usernameInput) usernameInput.value = un;
-          });
-        } else {
-          const loginMsg = document.getElementById('loginMsg');
-          loginMsg.textContent = 'Email подтвержден! Теперь войдите.';
-          loginMsg.style.color = '#629924';
+        const loginMsg = document.getElementById('loginMsg');
+        if (loginMsg) {
+          loginMsg.textContent = 'Email подтверждён! Теперь войдите.';
+          loginMsg.style.color = '#7dbe30';
         }
+        const usernameInput = document.getElementById('username');
+        if (un && usernameInput) usernameInput.value = un;
       }
       return;
     }
@@ -675,7 +676,7 @@ const Router = {
     if (activeNotice) activeNotice.classList.remove('active');
     if (name !== 'watch' && Watch.autoRefreshHandle) { clearInterval(Watch.autoRefreshHandle); Watch.autoRefreshHandle = null; }
     if (name !== 'arenaPage' && Arena.currentArenaId) Arena.leaveRoom();
-    const map = { login: 'loginScreen', lobby: 'lobbyScreen', watch: 'watchScreen', arenas: 'arenasScreen', arenaPage: 'arenaPageScreen', profile: 'profileScreen', community: 'communityScreen', game: 'gameScreen', inbox: 'inboxScreen' };
+    const map = { login: 'autorizeScreen', lobby: 'lobbyScreen', watch: 'watchScreen', arenas: 'arenasScreen', arenaPage: 'arenaPageScreen', profile: 'profileScreen', community: 'communityScreen', game: 'gameScreen', inbox: 'inboxScreen' };
     const screenId = map[name];
     if (!screenId) { this.show('lobbyScreen'); return; }
     this.show(screenId);
