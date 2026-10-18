@@ -395,6 +395,16 @@ const App = {
     this.scheduleArenaClock();
   },
 
+  showAuthenticatedUI() {
+    // Clear both the auth-only body class and inline hidden states.
+    document.body.classList.remove('login-active');
+    const header = document.getElementById('mainHeader');
+    const main = document.getElementById('mainContent');
+    if (header) header.style.display = '';
+    if (main) main.style.display = '';
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  },
+
   updateTopbarUser() {
     if (!this.me) return;
     document.getElementById('userBtn').style.display = 'flex';
@@ -435,6 +445,7 @@ const App = {
       }
       this.me = res.user;
       try { localStorage.setItem('kingside_login', JSON.stringify({ username, password })); } catch (e) {}
+      this.showAuthenticatedUI();
       this.updateTopbarUser();
       Router.go('lobby');
       this.tryResumeGame();
@@ -454,6 +465,7 @@ const App = {
     this.socket.emit('register', { username: saved.username, password: saved.password }, (res) => {
       if (!res || !res.ok) { try { localStorage.removeItem('kingside_login'); } catch (e) {} return; }
       this.me = res.user;
+      this.showAuthenticatedUI();
       this.updateTopbarUser();
       Router.go('lobby');
       this.tryResumeGame();
@@ -666,6 +678,14 @@ const Router = {
         }
       }
       return;
+    }
+
+    if (App.me && name !== 'reset' && name !== 'verify' && name !== 'login' && name !== 'autorize') {
+      document.body.classList.remove('login-active');
+      const header = document.getElementById('mainHeader');
+      const main = document.getElementById('mainContent');
+      if (header) header.style.display = '';
+      if (main) main.style.display = '';
     }
 
     if (App.me && App.gameActive && !App.gameEnded && App.lobbyId && name === 'lobby') {
