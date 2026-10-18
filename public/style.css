@@ -1215,6 +1215,21 @@ header.topbar .iconBtn .badge {
   .userMenu { width: 240px; right: 8px; }
   .inboxWrap { height: calc(100vh - 90px); border-radius: 0; border-left: none; border-right: none; max-width: 100%; }
 }
+
+/* Стили для проверки логина/почты */
+#usernameStatus, #emailStatus {
+  font-size: 12px;
+  margin-top: 4px;
+  min-height: 16px;
+  transition: color 0.2s;
+}
+#usernameStatus.available, #emailStatus.available {
+  color: #629924; /* зеленый */
+}
+#usernameStatus.taken, #emailStatus.taken {
+  color: #ff6b6b; /* красный */
+}
+
 /* Стили для экрана сброса пароля */
 #resetScreen {
   display: none;
