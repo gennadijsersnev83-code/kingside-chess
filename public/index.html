@@ -37,7 +37,7 @@ body.login-active #mainContent { display: none !important; }
     <div class="auth-field">
       <label>Пароль</label>
       <div class="password-wrap">
-        <input id="password" type="password" placeholder="••••••••••••" autocomplete="new-password">
+        <input id="password" type="password" placeholder="••••••••••••" autocomplete="current-password">
         <span class="eye-icon" id="eyeIcon" onclick="Auth.togglePassword()">👁</span>
       </div>
       <a href="#/reset" class="forgot-link" style="display:inline-block;margin-top:8px;font-size:12px;color:#4a9ce8;text-align:right;width:100%;">Забыли пароль?</a>
@@ -49,7 +49,7 @@ body.login-active #mainContent { display: none !important; }
       <span>Подтверждаю, что буду играть честно</span>
     </label>
 
-    <button id="submitBtn" class="primary auth-submit" onclick="Auth.submit()">
+    <button id="submitBtn" class="primary auth-submit" onclick="App.doLogin()">
       <span id="btnText">Войти</span>
     </button>
 
@@ -64,12 +64,12 @@ body.login-active #mainContent { display: none !important; }
     
     <!-- Шаг 1: Запрос email -->
     <div id="resetStep1">
-      <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">Укажите email, привязанный к аккаунту. Мы отправим одноразовую ссылку для создания нового пароля.</p>
+      <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">Введите вашу электронную почту, мы отправим вам письмо с ссылкой на сброс пароля.</p>
       <div class="auth-field">
         <label>Email</label>
-        <input id="resetEmailInput" type="email" placeholder="you@example.com" autocomplete="email">
+        <input id="resetEmailInput" type="email" placeholder="you@example.com">
       </div>
-      <button class="primary auth-submit" onclick="Auth.submitResetRequest()">Сбросить пароль</button>
+      <button class="primary auth-submit" onclick="Auth.requestReset()">Сбросить пароль</button>
       <div id="resetMsg1" class="auth-msg"></div>
     </div>
 
@@ -78,13 +78,13 @@ body.login-active #mainContent { display: none !important; }
       <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">Введите новый пароль дважды.</p>
       <div class="auth-field">
         <label>Новый пароль</label>
-        <input id="newPassword" type="password" autocomplete="new-password" placeholder="••••••••••••" autocomplete="new-password">
+        <input id="newPassword" type="password" placeholder="••••••••••••" autocomplete="new-password">
       </div>
       <div class="auth-field">
         <label>Повторите пароль</label>
-        <input id="confirmPassword" type="password" autocomplete="new-password" placeholder="••••••••••••" autocomplete="new-password">
+        <input id="confirmPassword" type="password" placeholder="••••••••••••" autocomplete="new-password">
       </div>
-      <button class="primary auth-submit" onclick="Auth.doResetPassword()">Обновить пароль</button>
+      <button class="primary auth-submit" onclick="Auth.doReset()">Обновить пароль</button>
       <div id="resetMsg2" class="auth-msg"></div>
     </div>
 
