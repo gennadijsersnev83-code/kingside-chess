@@ -1235,3 +1235,28 @@ header.topbar .iconBtn .badge {
 .forgot-link:hover {
   text-decoration: underline;
 }
+
+/* Auth pages: compact, Lichess-inspired dark interface */
+.login-page { min-height:100vh; padding:24px 16px; }
+.login-page .auth-card {
+  max-width:400px; padding:28px 30px; border-radius:10px;
+  background:#262421; border:1px solid #3d3a35;
+  box-shadow:0 12px 36px rgba(0,0,0,.28);
+}
+.login-page .auth-tabs { gap:24px; margin-bottom:22px; }
+.login-page .auth-tab { font-size:15px; }
+.login-page .auth-tab.active { color:#81b64c; border-bottom-color:#81b64c; }
+.login-page .auth-field label { color:#e8e6e3; }
+.login-page .auth-field input { min-height:44px; background:#171614; border-color:#49453e; }
+.login-page .auth-field input:focus { border-color:#81b64c; box-shadow:0 0 0 2px rgba(129,182,76,.14); }
+.login-page .auth-submit { min-height:46px; background:#81b64c; color:#fff; font-weight:700; }
+.login-page .auth-submit:hover { background:#95c85d; }
+.login-page .forgot-link { color:#81b64c !important; }
+.login-page .auth-msg { overflow-wrap:anywhere; line-height:1.5; }
+.login-page .checkbox-row { align-items:flex-start; line-height:1.4; }
+.login-page .checkmark { flex:0 0 16px; }
+@media (max-width:480px) {
+  .login-page { padding:16px 12px; }
+  .login-page .auth-card { padding:24px 20px; }
+}
+#autorizeScreen.active, #resetScreen.active { display:flex !important; }
