@@ -433,6 +433,7 @@ const App = {
         return;
       }
       this.me = res.user;
+      document.body.classList.remove('login-active');
       try { localStorage.setItem('kingside_login', JSON.stringify({ username, password })); } catch (e) {}
       this.updateTopbarUser();
       Router.go('lobby');
@@ -453,6 +454,7 @@ const App = {
     this.socket.emit('register', { username: saved.username, password: saved.password }, (res) => {
       if (!res || !res.ok) { try { localStorage.removeItem('kingside_login'); } catch (e) {} return; }
       this.me = res.user;
+      document.body.classList.remove('login-active');
       this.updateTopbarUser();
       Router.go('lobby');
       this.tryResumeGame();
@@ -664,6 +666,10 @@ const Router = {
       }
       return;
     }
+
+    // После успешного входа обязательно снимаем режим авторизации,
+    // иначе CSS продолжает скрывать шапку и весь интерфейс (чёрный экран).
+    if (App.me) document.body.classList.remove('login-active');
 
     if (App.me && App.gameActive && !App.gameEnded && App.lobbyId && name === 'lobby') {
       const opponent = document.getElementById('activeGameOpponent');
