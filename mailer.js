@@ -1,6 +1,6 @@
 'use strict';
 
-const BASE_URL = 'https://kingside-chess-production-ba12.up.railway.app';
+const BASE_URL = (process.env.PUBLIC_BASE_URL || 'https://kingside-chess-production-ba12.up.railway.app').replace(/\/$/, '');
 
 async function sendEmail(payload) {
   try {
@@ -15,17 +15,18 @@ async function sendEmail(payload) {
     });
     if (!res.ok) {
       const errorText = await res.text();
-      console.error(`[Mail Error] Brevo API вернул ${res.status}:`, errorText);
-    } else {
-      console.log(`[Mail] Письмо успешно отправлено на ${payload.to[0].email}`);
+      throw new Error(`Brevo API ${res.status}: ${errorText}`);
     }
+    console.log(`[Mail] Письмо успешно отправлено на ${payload.to[0].email}`);
+    return true;
   } catch (e) {
-    console.error('[Mail Error] Сетевая ошибка:', e.message);
+    console.error('[Mail Error] Не удалось отправить письмо:', e.message);
+    throw e;
   }
 }
 
 async function sendVerificationEmail(toEmail, username, token) {
-  const link = `${BASE_URL}/#/verify?token=${token}`;
+  const link = `${BASE_URL}/api/verify?token=${encodeURIComponent(token)}`;
   await sendEmail({
     subject: 'Подтвердите аккаунт Kingside',
     htmlContent: `
@@ -67,3 +68,4 @@ async function sendPasswordResetEmail(toEmail, username, token) {
 }
 
 module.exports = { sendVerificationEmail, sendPasswordResetEmail };
+
