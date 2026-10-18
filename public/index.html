@@ -26,7 +26,6 @@
 </head>
 <body>
 
-<!-- LOGIN (отдельная страница) -->
 <section id="loginScreen" class="screen login-page">
   <div class="auth-card">
     <div class="auth-tabs">
@@ -69,7 +68,6 @@
   </div>
 </section>
 
-<!-- Модальное окно: Запрос сброса пароля -->
 <div id="resetRequestModal" class="botModal">
   <div class="botModalBox">
     <h3>Сброс пароля</h3>
@@ -84,7 +82,6 @@
   </div>
 </div>
 
-<!-- Экран сброса пароля (по ссылке из письма) -->
 <section id="resetScreen" class="screen login-page" style="display: none;">
   <div class="auth-card">
     <h2 style="margin-top:0;color:var(--text-bright);text-align:center;">Сброс пароля</h2>
@@ -107,7 +104,6 @@
   </div>
 </section>
 
-<!-- Топбар и меню -->
 <header class="topbar" id="mainHeader">
   <div class="logo" onclick="Router.go('lobby')"><span class="mark">♔</span> Kingside</div>
   <nav id="mainNav">
@@ -129,7 +125,6 @@
   </div>
 </header>
 
-<!-- Меню пользователя -->
 <div id="userMenu" class="userMenu" style="display:none;">
   <div class="umHeader">
     <div class="umAvatar" id="umAvatar">?</div>
@@ -148,7 +143,6 @@
 </div>
 
 <main id="mainContent">
-  <!-- LOBBY -->
   <section id="lobbyScreen" class="screen">
     <div class="homeWrap">
       <aside class="homeLeft">
@@ -178,7 +172,6 @@
     </div>
   </section>
 
-  <!-- WATCH -->
   <section id="watchScreen" class="screen">
     <div class="watchWrap">
       <div class="watchList">
@@ -189,7 +182,6 @@
     </div>
   </section>
 
-  <!-- ARENAS LIST -->
   <section id="arenasScreen" class="screen">
     <div style="max-width:1100px; margin:0 auto;">
       <div class="arenasHeader">
@@ -200,7 +192,6 @@
     </div>
   </section>
 
-  <!-- ARENA PAGE -->
   <section id="arenaPageScreen" class="screen">
     <div class="arenaPage">
       <aside class="arenaLeft">
@@ -243,7 +234,6 @@
     </div>
   </section>
 
-  <!-- PROFILE -->
   <section id="profileScreen" class="screen">
     <div class="profilePage">
       <div class="profileHead">
@@ -273,7 +263,6 @@
     </div>
   </section>
 
-  <!-- COMMUNITY -->
   <section id="communityScreen" class="screen">
     <div class="communityPage">
       <h2 style="color:var(--text-bright);font-weight:400;margin:0">Сообщество</h2>
@@ -283,7 +272,6 @@
     </div>
   </section>
 
-  <!-- INBOX (отдельная страница) -->
   <section id="inboxScreen" class="screen">
     <div class="inboxWrap">
       <aside class="inboxSidebar">
@@ -314,7 +302,6 @@
     </div>
   </section>
 
-  <!-- ACTIVE GAME NOTICE -->
   <section id="activeGameNoticeScreen" class="screen activeGameNoticeScreen">
     <div class="activeGameNoticeCard">
       <div class="activeGameWatermark" aria-hidden="true">♞</div>
@@ -327,7 +314,6 @@
     </div>
   </section>
 
-  <!-- GAME -->
   <section id="gameScreen" class="screen">
     <div class="gameWrap">
       <div class="col-chat">
@@ -372,7 +358,6 @@
   </section>
 </main>
 
-<!-- BOT DIALOG -->
 <div id="botDialog" class="botModal">
   <div class="botModalBox">
     <h3>🤖 Игра с компьютером</h3>
@@ -387,14 +372,12 @@
   </div>
 </div>
 
-<!-- REMATCH BANNER -->
 <div id="rematchBanner" class="rematchBanner" style="display:none;">
   <span class="rbText" id="rematchBannerText">⚔ Иван предлагает реванш</span>
   <button class="rbAccept" id="rematchBannerAccept">Принять</button>
   <button class="rbDecline" id="rematchBannerDecline">Отклонить</button>
 </div>
 
-<!-- DRAW OFFER BANNER -->
 <div id="drawOfferBanner" class="rematchBanner drawOfferBanner" style="display:none;">
   <span class="rbText" id="drawOfferBannerText">½ Соперник предлагает ничью</span>
   <button class="rbAccept" id="drawOfferBannerAccept">Принять</button>
