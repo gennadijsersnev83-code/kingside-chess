@@ -640,6 +640,15 @@ const Router = {
     if (name === 'reset') {
       document.body.classList.add('login-active');
       Router.show('resetScreen');
+      // A reset URL from the email contains ?token=...; show the new-password
+      // form only for that link. Plain #/reset is the request-email screen.
+      const resetToken = this.query ? this.query.get('token') : null;
+      const step1 = document.getElementById('resetStep1');
+      const step2 = document.getElementById('resetStep2');
+      if (step1) step1.style.display = resetToken ? 'none' : 'block';
+      if (step2) step2.style.display = resetToken ? 'block' : 'none';
+      const resetMsg = document.getElementById('resetMsg2');
+      if (resetMsg) resetMsg.textContent = '';
       return;
     }
 
