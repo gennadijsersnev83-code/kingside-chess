@@ -80,3 +80,4 @@ parentPort.on('message', async (msg) => {
 });
 
 parentPort.postMessage({ type: 'ready' });
+
