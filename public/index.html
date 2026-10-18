@@ -64,12 +64,12 @@ body.login-active #mainContent { display: none !important; }
     
     <!-- Шаг 1: Запрос email -->
     <div id="resetStep1">
-      <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">Введите вашу электронную почту, мы отправим вам письмо с ссылкой на сброс пароля.</p>
+      <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">Укажите email, привязанный к аккаунту. Мы отправим одноразовую ссылку для создания нового пароля.</p>
       <div class="auth-field">
         <label>Email</label>
-        <input id="resetEmailInput" type="email" placeholder="you@example.com">
+        <input id="resetEmailInput" type="email" placeholder="you@example.com" autocomplete="email">
       </div>
-      <button class="primary auth-submit" onclick="Auth.requestReset()">Сбросить пароль</button>
+      <button class="primary auth-submit" onclick="Auth.submitResetRequest()">Сбросить пароль</button>
       <div id="resetMsg1" class="auth-msg"></div>
     </div>
 
@@ -78,13 +78,13 @@ body.login-active #mainContent { display: none !important; }
       <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">Введите новый пароль дважды.</p>
       <div class="auth-field">
         <label>Новый пароль</label>
-        <input id="newPassword" type="password" placeholder="••••••••••••" autocomplete="new-password">
+        <input id="newPassword" type="password" autocomplete="new-password" placeholder="••••••••••••" autocomplete="new-password">
       </div>
       <div class="auth-field">
         <label>Повторите пароль</label>
-        <input id="confirmPassword" type="password" placeholder="••••••••••••" autocomplete="new-password">
+        <input id="confirmPassword" type="password" autocomplete="new-password" placeholder="••••••••••••" autocomplete="new-password">
       </div>
-      <button class="primary auth-submit" onclick="Auth.doReset()">Обновить пароль</button>
+      <button class="primary auth-submit" onclick="Auth.doResetPassword()">Обновить пароль</button>
       <div id="resetMsg2" class="auth-msg"></div>
     </div>
 
@@ -379,3 +379,4 @@ body.login-active #mainContent { display: none !important; }
 <script src="/app.js"></script>
 </body>
 </html>
+
