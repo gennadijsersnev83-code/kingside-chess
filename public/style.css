@@ -16,14 +16,12 @@ body {
   overflow-x:hidden; font-size:14px; -webkit-text-size-adjust:100%; line-height:1.45;
 }
 
-/* Скрываем шапку и меню пользователя, когда открыт логин */
 body.login-active #mainHeader,
 body.login-active #userMenu,
 body.login-active #mainContent {
   display: none !important;
 }
 
-/* ========= TOPBAR ========= */
 header.topbar {
   background:var(--bg-2); display:flex; align-items:center;
   padding:0 clamp(8px,2vw,18px); height:48px;
@@ -93,7 +91,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:12px 0; }
 .hint-text { color:var(--muted); font-size:12px; text-align:center; }
 
-/* ========= AUTH SCREEN (LOGIN/REGISTER) ========= */
 #loginScreen {
   display: none;
   justify-content: center;
@@ -272,7 +269,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   min-height: 20px;
 }
 
-/* ========= HOME / LOBBY ========= */
 .homeWrap {
   display:grid; grid-template-columns:280px 1fr 280px; gap:20px;
   max-width:1200px; margin:24px auto 0; align-items:stretch;
@@ -336,7 +332,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .lobbyContent > .lobbyList,
 .lobbyContent > .lobbyHeader { flex:0 0 auto; }
 
-/* Быстрый старт — внутри свой padding */
 .quickGrid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); grid-auto-rows:1fr; gap:8px; padding:16px; flex:1 1 auto; min-height:0; height:100%; align-content:stretch; box-sizing:border-box; }
 @media (max-width:560px) { .quickGrid { grid-template-columns:repeat(2,1fr); padding:10px; } }
 .quickBtn {
@@ -350,7 +345,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .quickBtn .qb-name { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
 .quickBtn.custom .qb-time { font-size:20px; color:var(--accent); }
 
-/* ========== ЗАЛ ОЖИДАНИЯ — LICHESS STYLE ========== */
 .lobbyHeader {
   display: grid;
   grid-template-columns: 22px 78px minmax(0,1fr) 72px 130px;
@@ -487,7 +481,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   font-size: 13px;
 }
 
-/* ========= WATCH ========= */
 .watchWrap { display:grid; grid-template-columns:320px minmax(0,1fr); gap:16px; max-width:1100px; margin:0 auto; align-items:start; }
 @media (max-width:900px) { .watchWrap { grid-template-columns:minmax(0,1fr); } }
 .watchList { background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden; }
@@ -547,7 +540,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 }
 .watchBoard .wbEmpty { padding:80px 20px; text-align:center; color:var(--muted); font-size:14px; }
 
-/* ========= ARENAS ========= */
 .arenasHeader { display:flex; justify-content:space-between; align-items:center; margin:0 0 16px 0; gap:12px; flex-wrap:wrap; }
 .arenasHeader .ahLeft { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; min-width:0; }
 .arenasHeader h1 { font-weight:300; font-size:32px; color:var(--text-bright); margin:0; }
@@ -690,7 +682,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaStatsBox { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:8px 12px; font-size:12px; color:var(--muted); display:flex; justify-content:space-between; gap:10px; flex:0 0 auto; }
 .arenaStatsBox b { color:var(--text-bright); }
 
-/* ========= GAME ========= */
 .gameWrap { display:grid; grid-template-columns:280px 480px 280px; gap:16px; align-items:start; justify-content:center; margin:0 auto; }
 @media (max-width:1120px) { .gameWrap { grid-template-columns:240px minmax(0,1fr) 260px; } }
 @media (max-width:940px) { .gameWrap { grid-template-columns:1fr; max-width:520px; } .col-chat { order:3; } .col-info { order:2; } .col-board { order:1; } }
@@ -798,7 +789,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .modMenu .sep { height:1px; background:var(--border); margin:4px 0; }
 .modMenu .lbl { color:var(--muted); font-size:11px; padding:6px 14px 2px; text-transform:uppercase; letter-spacing:.5px; }
 
-/* ========= PROFILE ========= */
 .profilePage { max-width:900px; margin:0 auto; }
 .profileHead { display:flex; align-items:center; gap:20px; padding:20px; background:var(--panel); border:1px solid var(--border); border-radius:8px; margin-bottom:16px; }
 .profileAvatar { width:72px; height:72px; border-radius:50%; background:var(--accent); color:#161512; display:flex; align-items:center; justify-content:center; font-size:32px; font-weight:700; flex-shrink:0; position:relative; }
@@ -839,7 +829,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .gameRow .date { color:var(--muted); font-size:12px; text-align:right; }
 .gameRow .opp { color:var(--text-bright); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
 
-/* ========= COMMUNITY ========= */
 .communityPage { max-width:1000px; margin:0 auto; padding:24px; }
 .communityGrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:8px; margin-top:18px; }
 .communityPlayer { display:flex; align-items:center; gap:10px; padding:10px 12px; background:var(--panel); border:1px solid var(--border); border-radius:6px; cursor:pointer; }
@@ -848,7 +837,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .communityPlayer .cpName { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-bright); }
 .communityPlayer .cpSub { font-size:11px; color:var(--muted); margin-top:3px; }
 
-/* ========= HOVER CARD ========= */
 #playerHoverCard {
   position:fixed; z-index:9999; display:none;
   width:300px; max-width:calc(100vw - 24px);
@@ -864,7 +852,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 #playerHoverCard .phStats { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px; margin-top:4px; }
 #playerHoverCard .phStat { background:#24231f; padding:6px 8px; border-radius:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:11px; color:#b9b6ad; }
 
-/* ========= BOT MODAL ========= */
 .botModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); align-items:center; justify-content:center; z-index:200; padding:20px; }
 .botModal.show { display:flex; }
 .botModalBox { background:#262522; border:1px solid #3a3833; border-radius:10px; padding:22px; max-width:460px; width:100%; color:#e8e6e3; max-height:90vh; overflow-y:auto; }
@@ -883,7 +870,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .botModalActions .cancelBtn { flex:1; padding:10px; background:#2d2c29; border:1px solid #3a3833; color:#bfbdb6; border-radius:4px; cursor:pointer; }
 .botModalActions .startBtn { flex:2; padding:10px; background:#629924; border:none; color:#fff; font-weight:700; border-radius:4px; cursor:pointer; }
 
-/* ========= REMATCH & DRAW BANNERS ========= */
 .rematchBanner {
   position: fixed; top: auto; bottom: 24px; left: 50%; transform: translateX(-50%); z-index: 500;
   background: linear-gradient(180deg, #3a2f1c, #26200f);
@@ -900,7 +886,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .rematchBanner .rbDecline:hover { background: var(--panel-hover); color: var(--text-bright); }
 .drawOfferBanner { top: auto; bottom: 24px; background: linear-gradient(180deg, #1c2a3a, #0f1a26); border-color: #4a9ce8; }
 
-/* ========= SIMPLE MODAL ========= */
 .simpleModal {
   position: fixed; inset: 0; background: rgba(0,0,0,.75);
   display: flex; align-items: center; justify-content: center;
@@ -918,7 +903,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .simpleModalBox .smAccept { background: #629924; color: #fff; border: none; }
 .simpleModalBox .smDecline { background: #2d2c29; border: 1px solid #3a3833; color: #bfbdb6; }
 
-/* ========= RESPONSIVE ========= */
 @media (max-width: 700px) {
   main { padding:10px 8px; }
   header.topbar { padding:0 8px; gap:2px; }
@@ -981,7 +965,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 }
 :focus-visible { outline:2px solid var(--accent-2); outline-offset:2px; }
 
-/* ========= ACTIVE GAME PANEL (внутри зала ожидания) ========= */
 .activeGamePanel {
   position: relative;
   isolation: isolate;
@@ -1071,7 +1054,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   .activeGamePanel .agpTitle { font-size: 26px; }
   .activeGamePanel .agpReturnBtn { min-width: 220px; min-height: 52px; font-size: 16px; }
 }
-/* ========= TOPBAR ICONS ========= */
 header.topbar .iconBtn {
   position: relative;
   background: var(--panel); border: 1px solid var(--border); color: var(--text-bright);
@@ -1087,7 +1069,6 @@ header.topbar .iconBtn .badge {
   display: flex; align-items: center; justify-content: center;
 }
 
-/* ========= USER MENU ========= */
 .userMenu {
   position: fixed; top: 54px; right: 12px; width: 260px;
   background: #262522; border: 1px solid #3a3833; border-radius: 8px;
@@ -1115,7 +1096,6 @@ header.topbar .iconBtn .badge {
 .userMenu .umServerDot.ok { background: #7dbe30; box-shadow: 0 0 6px rgba(125,190,48,.6); }
 .userMenu .umServerDot.bad { background: #e5484d; }
 
-/* ========= INBOX PAGE ========= */
 .inboxWrap {
   display: grid;
   grid-template-columns: 320px 1fr;
@@ -1216,7 +1196,6 @@ header.topbar .iconBtn .badge {
   .inboxWrap { height: calc(100vh - 90px); border-radius: 0; border-left: none; border-right: none; max-width: 100%; }
 }
 
-/* Стили для проверки логина/почты */
 #usernameStatus, #emailStatus {
   font-size: 12px;
   margin-top: 4px;
@@ -1224,13 +1203,12 @@ header.topbar .iconBtn .badge {
   transition: color 0.2s;
 }
 #usernameStatus.available, #emailStatus.available {
-  color: #629924; /* зеленый */
+  color: #629924;
 }
 #usernameStatus.taken, #emailStatus.taken {
-  color: #ff6b6b; /* красный */
+  color: #ff6b6b;
 }
 
-/* Стили для экрана сброса пароля */
 #resetScreen {
   display: none;
   justify-content: center;
@@ -1245,7 +1223,6 @@ header.topbar .iconBtn .badge {
   display: flex !important;
 }
 
-/* Стили для ссылки "Забыли пароль?" */
 .forgot-link {
   display: inline-block;
   margin-top: 8px;
