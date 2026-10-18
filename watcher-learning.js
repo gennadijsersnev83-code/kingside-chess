@@ -91,12 +91,39 @@ function initWeights() {
 
 // ==================== POSTGRES ====================
 let _pool = null;
+// Память конкретных тактических ошибок: позиция + ход -> штраф.
+const mistakeMemory = new Map();
+const MAX_MISTAKES = 12000;
 function setPool(pool) { _pool = pool; }
+function positionKey(fen) { return String(fen || '').split(' ').slice(0, 4).join(' '); }
+function mistakeKey(pos, from, to) { return `${pos}|${from}|${to}`; }
+function squareFromRC(sq) { return sqName(sq[0], sq[1]); }
+function recordMistake(pos, from, to, penalty) {
+  if (!pos || !from || !to || !(penalty > 0)) return;
+  const key = mistakeKey(pos, from, to);
+  const old = mistakeMemory.get(key) || { penalty: 0, seen: 0, updated: 0 };
+  old.penalty = Math.min(1800, Math.max(old.penalty, penalty));
+  old.seen += 1; old.updated = Date.now();
+  mistakeMemory.set(key, old);
+  if (mistakeMemory.size > MAX_MISTAKES) {
+    const oldest = [...mistakeMemory.entries()].sort((a,b) => a[1].updated - b[1].updated).slice(0, mistakeMemory.size - MAX_MISTAKES);
+    for (const [k] of oldest) mistakeMemory.delete(k);
+  }
+  if (_pool) {
+    _pool.query(`INSERT INTO watcher_tactical_mistakes (position_key, from_sq, to_sq, penalty, seen, updated_at)
+      VALUES ($1,$2,$3,$4,1,$5)
+      ON CONFLICT (position_key, from_sq, to_sq) DO UPDATE SET
+      penalty = GREATEST(watcher_tactical_mistakes.penalty, EXCLUDED.penalty),
+      seen = watcher_tactical_mistakes.seen + 1, updated_at = EXCLUDED.updated_at`,
+      [pos, from, to, old.penalty, old.updated]).catch(e => console.error('[Watcher] Ошибка сохранения тактической ошибки:', e.message));
+  }
+}
 
 async function ensureTables() {
   if (!_pool) return;
   await _pool.query(`CREATE TABLE IF NOT EXISTS watcher_weights (key TEXT PRIMARY KEY, value REAL NOT NULL DEFAULT 0);`);
   await _pool.query(`CREATE TABLE IF NOT EXISTS watcher_stats (id INTEGER PRIMARY KEY DEFAULT 1, games INTEGER NOT NULL DEFAULT 0, wins INTEGER NOT NULL DEFAULT 0, losses INTEGER NOT NULL DEFAULT 0, draws INTEGER NOT NULL DEFAULT 0, last_update BIGINT NOT NULL DEFAULT 0);`);
+  await _pool.query(`CREATE TABLE IF NOT EXISTS watcher_tactical_mistakes (position_key TEXT NOT NULL, from_sq TEXT NOT NULL, to_sq TEXT NOT NULL, penalty REAL NOT NULL DEFAULT 0, seen INTEGER NOT NULL DEFAULT 1, updated_at BIGINT NOT NULL DEFAULT 0, PRIMARY KEY(position_key, from_sq, to_sq));`);
   await _pool.query(`INSERT INTO watcher_stats (id, games, wins, losses, draws, last_update) VALUES (1, 0, 0, 0, 0, 0) ON CONFLICT (id) DO NOTHING;`);
 }
 
@@ -121,6 +148,9 @@ async function loadFromDB() {
       }
       if (restored) await saveToDB();
     }
+    const mRes = await _pool.query('SELECT position_key, from_sq, to_sq, penalty, seen, updated_at FROM watcher_tactical_mistakes ORDER BY updated_at DESC LIMIT $1', [MAX_MISTAKES]);
+    mistakeMemory.clear();
+    for (const row of mRes.rows) mistakeMemory.set(mistakeKey(row.position_key, row.from_sq, row.to_sq), { penalty: Number(row.penalty) || 0, seen: Number(row.seen) || 1, updated: Number(row.updated_at) || 0 });
     const sRes = await _pool.query('SELECT games, wins, losses, draws FROM watcher_stats WHERE id = 1');
     if (sRes.rows.length) {
       const r = sRes.rows[0];
@@ -525,6 +555,36 @@ function moveScore(state, from, to) {
   return score;
 }
 
+function tacticalSafetyPenalty(state, from, to, moverWhite) {
+  const piece = state.board[from[0]][from[1]];
+  if (!piece) return 0;
+  const next = applyMove(state, from, to);
+  const moved = next.board[to[0]][to[1]];
+  if (!moved) return 0;
+  const value = PIECE_VALUES[moved.toLowerCase()] || 0;
+  if (value < 300) return 0;
+  const attacked = isAttacked(next, to[0], to[1], !moverWhite);
+  if (!attacked) return 0;
+  const defended = isAttacked(next, to[0], to[1], moverWhite);
+  let cheapestAttacker = Infinity;
+  for (let r=0;r<8;r++) for (let c=0;c<8;c++) {
+    const p = next.board[r][c];
+    if (!p || isWhite(p) !== !moverWhite) continue;
+    if (pseudoMoves(next,r,c).some(([rr,cc]) => rr===to[0] && cc===to[1])) {
+      cheapestAttacker = Math.min(cheapestAttacker, PIECE_VALUES[p.toLowerCase()] || 0);
+    }
+  }
+  if (!defended) return Math.round(value * 0.88);
+  if (Number.isFinite(cheapestAttacker) && cheapestAttacker < value) return Math.round((value - cheapestAttacker) * 0.45);
+  return 0;
+}
+
+function learnedMistakePenalty(state, from, to) {
+  const key = mistakeKey(positionKey(toFen(state)), sqName(from[0], from[1]), sqName(to[0], to[1]));
+  const item = mistakeMemory.get(key);
+  return item ? Math.min(1800, item.penalty * Math.min(1.5, 1 + Math.log2(Math.max(1, item.seen)) * 0.08)) : 0;
+}
+
 function pickMoveSearch(state, isWhiteTurn, timeMs) {
   const legal = allLegalMoves(state, isWhiteTurn);
   if (legal.length === 0) return null;
@@ -552,7 +612,13 @@ function pickMoveSearch(state, isWhiteTurn, timeMs) {
     for (const [from, to] of ordered) {
       if (Date.now() >= deadline) break;
       const next = applyMove(state, from, to);
-      const score = -negamax(next, depth - 1, -beta, -alpha, -color, deadline);
+      let score = -negamax(next, depth - 1, -beta, -alpha, -color, deadline);
+      // Тактическая страховка: не отдаём дорогую фигуру без компенсации.
+      const safetyPenalty = tacticalSafetyPenalty(state, from, to, isWhiteTurn);
+      const memoryPenalty = learnedMistakePenalty(state, from, to);
+      const immediateGain = evaluate(next, isWhiteTurn) - evaluate(state, isWhiteTurn);
+      if (safetyPenalty > 0 && immediateGain < safetyPenalty * 0.8) score -= safetyPenalty;
+      score -= memoryPenalty;
       if (score > localBestScore) { localBestScore = score; localBest = [from, to]; }
       if (score > alpha) alpha = score;
     }
@@ -699,6 +765,7 @@ function getStats() {
   return {
     games: DATA.games, wins: DATA.wins, losses: DATA.losses, draws: DATA.draws,
     episodeActive: false,
+    tacticalMistakes: mistakeMemory.size,
   };
 }
 
@@ -731,7 +798,30 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
 
 function startEpisode() {}
 function recordTransition() {}
-function learnFromObservedMove() {}
+function learnFromObservedMove(prevFen, move, newFen, moverColor, timeControl, evalAfter) {
+  try {
+    if (!prevFen || !newFen || !move || !move.from || !move.to) return;
+    const before = parseFen(prevFen), after = parseFen(newFen);
+    const moverWhite = moverColor === 'w';
+    const from = Array.isArray(move.from) ? move.from : [8 - Number(String(move.from).slice(1)), String(move.from).charCodeAt(0) - 97];
+    const to = Array.isArray(move.to) ? move.to : [8 - Number(String(move.to).slice(1)), String(move.to).charCodeAt(0) - 97];
+    if (!before.board[from[0]] || !after.board[to[0]]) return;
+    const beforeEval = evaluate(before, moverWhite);
+    const afterEval = evaluate(after, moverWhite);
+    const drop = beforeEval - afterEval;
+    let hanging = 0;
+    const p = after.board[to[0]][to[1]];
+    if (p && isWhite(p) === moverWhite && (PIECE_VALUES[p.toLowerCase()] || 0) >= 300 && isAttacked(after, to[0], to[1], !moverWhite)) {
+      const defended = isAttacked(after, to[0], to[1], moverWhite);
+      if (!defended) hanging = Math.round((PIECE_VALUES[p.toLowerCase()] || 0) * 0.8);
+    }
+    // Сохраняем только значимые ошибки, чтобы не закреплять случайные шумовые оценки.
+    const penalty = Math.max(drop > 220 ? drop : 0, hanging);
+    if (penalty >= 250) recordMistake(positionKey(prevFen), sqName(from[0], from[1]), sqName(to[0], to[1]), penalty);
+  } catch (e) {
+    console.error('[Watcher] Ошибка анализа обучающего хода:', e.message);
+  }
+}
 function finishEpisode() {}
 function loadWeights() { return loadFromDB(); }
 function saveWeights() { return saveToDB(); }
@@ -752,3 +842,4 @@ module.exports = {
   reloadWeights,
   setPool,
 };
+
