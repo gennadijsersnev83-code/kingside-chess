@@ -1760,7 +1760,9 @@ app.get('/api/verify', async (req, res) => {
       db.users[username].emailVerified = true;
     }
     
-    res.redirect('/#/autorize?verified=1');
+    // Сразу авторизуем пользователя
+    const socketId = req.query.socketId; // В идеале нужно передавать socket.id, но так как это редирект, просто пустим
+    res.redirect('/#/autorize?verified=1&username=' + encodeURIComponent(username));
   } catch (e) {
     console.error('[Verify] Ошибка:', e);
     res.status(500).send('Внутренняя ошибка сервера');
@@ -1776,6 +1778,24 @@ io.on('connection', (socket) => {
   });
   socket.emit('liveGamesUpdate', buildGamesList());
 
+  socket.on('checkUsername', async ({ username }, cb) => {
+    if (typeof cb !== 'function') return;
+    if (!username || username.length < 2) return cb({ available: false, msg: 'Минимум 2 символа' });
+    if (ALL_BOT_NAMES.has(username)) return cb({ available: false, msg: 'Зарезервировано' });
+    if (!/^[a-zA-Zа-яА-Я0-9_\-]+$/.test(username)) return cb({ available: false, msg: 'Только буквы, цифры, _ и -' });
+    const u = db.users[username];
+    if (u) return cb({ available: false, msg: 'Ник занят' });
+    cb({ available: true, msg: 'Ник свободен' });
+  });
+
+  socket.on('checkEmail', async ({ email }, cb) => {
+    if (typeof cb !== 'function') return;
+    if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) return cb({ available: false, msg: 'Некорректный email' });
+    const emailCheck = await pool.query('SELECT username FROM users WHERE email = $1', [email]);
+    if (emailCheck.rows.length > 0) return cb({ available: false, msg: 'Почта уже используется' });
+    cb({ available: true, msg: 'Почта свободна' });
+  });
+
   socket.on('register', async ({ username, password, email }, cb) => {
     if (typeof cb !== 'function') return;
     if (!username || !password) return cb({ ok: false, msg: 'Заполните поля' });
@@ -1788,7 +1808,7 @@ io.on('connection', (socket) => {
     let user = db.users[username];
     if (user) {
       if (!verifyPassword(password, user.salt, user.passwordHash)) return cb({ ok: false, msg: 'Неверный пароль' });
-      if (user.emailVerified === false) return cb({ ok: false, msg: 'Пожалуйста, подтвердите ваш email. Проверьте почту.', pending: true });
+      if (user.emailVerified === false && user.email) return cb({ ok: false, msg: 'Пожалуйста, подтвердите ваш email. Проверьте почту.', pending: true });
     } else {
       if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
         return cb({ ok: false, msg: 'Укажите корректный email' });
@@ -1816,7 +1836,7 @@ io.on('connection', (socket) => {
       
       try { await saveUser(username); } catch (err) { console.error(err); return cb({ ok: false, msg: 'Ошибка БД при создании' }); }
       
-      return cb({ ok: false, msg: 'Аккаунт создан! Проверьте почту и подтвердите email.', pending: true });
+      return cb({ ok: false, msg: 'Аккаунт создан! Проверьте почту.', pending: true });
     }
     
     online.set(socket.id, username);
