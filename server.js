@@ -1786,7 +1786,21 @@ io.on('connection', (socket) => {
     let user = db.users[username];
     if (user) {
       if (!verifyPassword(password, user.salt, user.passwordHash)) return cb({ ok: false, msg: 'Неверный пароль' });
-      if (user.emailVerified === false && user.email) return cb({ ok: false, msg: 'Пожалуйста, подтвердите ваш email. Проверьте почту.', pending: true });
+      if (user.emailVerified === false && user.email) {
+        try {
+          if (!user.verifyToken || Number(user.verifyExpires || 0) < Date.now()) {
+            user.verifyToken = crypto.randomBytes(32).toString('hex');
+            user.verifyExpires = Date.now() + 24 * 60 * 60 * 1000;
+            await pool.query('UPDATE users SET verify_token = $1, verify_token_expires = $2 WHERE username = $3',
+              [user.verifyToken, user.verifyExpires, username]);
+          }
+          await sendVerificationEmail(user.email, username, user.verifyToken);
+          return cb({ ok: false, msg: 'Письмо подтверждения отправлено повторно. Проверьте почту и папку «Спам».', pending: true });
+        } catch (mailErr) {
+          console.error('[Mail Error] Повторная отправка подтверждения:', mailErr.message);
+          return cb({ ok: false, msg: 'Аккаунт ожидает подтверждения, но письмо отправить не удалось. Проверьте настройки почты на сервере.', pending: true });
+        }
+      }
     } else {
       if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
         return cb({ ok: false, msg: 'Укажите корректный email' });
@@ -1810,11 +1824,14 @@ io.on('connection', (socket) => {
         categories: { classical: emptyRatingBlock(base), rapid: emptyRatingBlock(base), blitz: emptyRatingBlock(base), bullet: emptyRatingBlock(base) }
       };
       
-      sendVerificationEmail(email, username, verifyToken).catch(e => console.error('[Mail Error]', e));
-      
       try { await saveUser(username); } catch (err) { console.error(err); return cb({ ok: false, msg: 'Ошибка БД при создании' }); }
-      
-      return cb({ ok: false, msg: 'Аккаунт создан! Проверьте почту.', pending: true });
+      try {
+        await sendVerificationEmail(email, username, verifyToken);
+        return cb({ ok: false, msg: 'Аккаунт создан! Проверьте почту и папку «Спам».', pending: true });
+      } catch (mailErr) {
+        console.error('[Mail Error] Подтверждение регистрации:', mailErr.message);
+        return cb({ ok: false, msg: 'Аккаунт создан, но письмо не отправлено. Попробуйте войти с тем же логином и паролем после настройки почты на сервере.', pending: true });
+      }
     }
     
     online.set(socket.id, username);
@@ -2681,8 +2698,13 @@ io.on('connection', (socket) => {
         [username, token, expires]
       );
       
-      sendPasswordResetEmail(email, username, token).catch(e => console.error(e));
-      cb({ ok: true, msg: 'Если email зарегистрирован, письмо отправлено' });
+      try {
+        await sendPasswordResetEmail(email, username, token);
+        cb({ ok: true, msg: 'Если email зарегистрирован, письмо отправлено' });
+      } catch (mailErr) {
+        console.error('[Reset] Не удалось отправить письмо:', mailErr.message);
+        cb({ ok: false, msg: 'Не удалось отправить письмо. Попробуйте позже.' });
+      }
     } catch (e) {
       console.error('[Reset] Ошибка:', e);
       cb({ ok: false, msg: 'Ошибка сервера' });
