@@ -111,17 +111,11 @@ function updateGlicko2(rating, rd, vol, results) {
   };
 }
 
-// ============================================================
-// ОСНОВНАЯ БД
-// ============================================================
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
-// ============================================================
-// ОТДЕЛЬНАЯ БД ДЛЯ ВЕСОВ WATCHER (второй Postgres)
-// ============================================================
 let watcherDbPool = null;
 if (process.env.DATABASE_URL_WATCHER) {
   watcherDbPool = new Pool({
@@ -351,9 +345,6 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-// ============================================================
-// ФАНТОМНЫЕ ПАРТИИ SELF-PLAY
-// ============================================================
 const SELF_PLAY_BOT_ID = 'WatcherSelfPlay';
 const selfPlayLobbies = new Map();
 
@@ -1541,40 +1532,29 @@ function scheduleBotMove(lobbyId) {
   }
   let delay;
   if (botName === WATCHER_NAME) {
-    delay = 800 + Math.random() * 1200; // Watcher не трогаем
+    delay = 800 + Math.random() * 1200;
   } else {
     const remainMs = botTimeLeft * 1000;
-    
-    // 🔥 КРИТИЧЕСКОЕ ВРЕМЯ (меньше 10 секунд) — ходим мгновенно
-    if (remainMs < 2000) {
-      delay = 30 + Math.random() * 40;        // 30-70 мс
-    } else if (remainMs < 5000) {
-      delay = 50 + Math.random() * 100;       // 50-150 мс
-    } else if (remainMs < 10000) {
-      delay = 100 + Math.random() * 200;      // 100-300 мс
-    } else {
-      // Нормальный режим — думаем, но не дольше 3 секунд
+    if (remainMs < 2000) delay = 30 + Math.random() * 40;
+    else if (remainMs < 5000) delay = 50 + Math.random() * 100;
+    else if (remainMs < 10000) delay = 100 + Math.random() * 200;
+    else {
       let frac;
-      if (remainMs < 30000)        frac = 0.020;
-      else if (remainMs < 60000)   frac = 0.025;
-      else if (remainMs < 180000)  frac = 0.030;
-      else if (remainMs < 600000)  frac = 0.025;
-      else                         frac = 0.020;
-      
+      if (remainMs < 30000) frac = 0.020;
+      else if (remainMs < 60000) frac = 0.025;
+      else if (remainMs < 180000) frac = 0.030;
+      else if (remainMs < 600000) frac = 0.025;
+      else frac = 0.020;
       const incBoostMs = Math.min(inc * 1000 * 0.6, remainMs * 0.05);
       let thinkMs = remainMs * frac + incBoostMs;
-      thinkMs = Math.max(80, Math.min(3000, thinkMs)); // максимум 3 секунды
+      thinkMs = Math.max(80, Math.min(3000, thinkMs));
       thinkMs = Math.min(thinkMs, remainMs / 15);
-      
       const jitter = 0.7 + Math.random() * 0.5;
       delay = thinkMs * jitter;
-      
       if (botInCheck(state, botIsWhiteTurn)) delay *= 1.2;
       let hasCapture = false;
       for (const [from, to] of botMoves) if (state.board[to[0]][to[1]]) { hasCapture = true; break; }
       if (hasCapture) delay *= 1.1;
-      
-      // Жесткий лимит: не больше 20% от остатка
       const maxThinkMs = Math.max(80, Math.min(3000, Math.floor(remainMs * 0.20)));
       if (delay > maxThinkMs) delay = maxThinkMs;
       if (delay < 80) delay = 80;
@@ -1596,7 +1576,7 @@ function scheduleBotMove(lobbyId) {
     else if (botRating < 1600) resignThreshold = -3500;
     else if (botRating < 1850) resignThreshold = -4000;
     else if (botRating < 2000) resignThreshold = -4500;
-    else                       resignThreshold = -5000;
+    else resignThreshold = -5000;
     const minMovesBeforeResign = botName === WATCHER_NAME ? 40 : (botRating < 1500 ? 30 : 40);
     const myMaterial = botEvalMaterial(st, botColor === 'w');
     const oppMaterial = botEvalMaterial(st, botColor !== 'w');
@@ -1760,8 +1740,6 @@ app.get('/api/verify', async (req, res) => {
       db.users[username].emailVerified = true;
     }
     
-    // Сразу авторизуем пользователя
-    const socketId = req.query.socketId; // В идеале нужно передавать socket.id, но так как это редирект, просто пустим
     res.redirect('/#/autorize?verified=1&username=' + encodeURIComponent(username));
   } catch (e) {
     console.error('[Verify] Ошибка:', e);
@@ -2781,9 +2759,6 @@ io.on('connection', (socket) => {
   });
 });
 
-// ============================================================
-// ЗАПУСК + SELF-PLAY ТРЕНЕР В ОТДЕЛЬНОМ ПОТОКЕ
-// ============================================================
 (async () => {
   try { await initDB(); await loadDB(); }
   catch (err) { console.error('[DB] Ошибка инициализации:', err.message); }
