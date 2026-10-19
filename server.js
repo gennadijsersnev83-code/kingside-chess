@@ -825,32 +825,58 @@ const ARENA_TEMPLATES = [
 ];
 
 function nextStartFor(tpl, now) {
-  // Все короткие чередуются через 60 минут: 
-  //   0-30 мин — human, 30-60 мин — bots (или наоборот, в зависимости от чётности часа)
-  const CYCLE_MS = 60 * 60 * 1000; // 60 минут полный цикл
-  const HALF_CYCLE_MS = 30 * 60 * 1000; // 30 минут на вариант
-  const isShort = (
-    tpl.repeat === 'bullet1_human' || tpl.repeat === 'bullet1_bots' ||
-    tpl.repeat === 'blitz32_human' || tpl.repeat === 'blitz32_bots' ||
-    tpl.repeat === 'rapid10_human' || tpl.repeat === 'rapid10_bots' ||
-    tpl.repeat === 'bullet21_human' || tpl.repeat === 'bullet21_bots'
+  // Список коротких с разной длиной цикла
+  const CYCLE_30 = 30 * 60 * 1000; // 30 минут — для 1+0
+  const CYCLE_60 = 60 * 60 * 1000; // 60 минут — для 2+1 и 3+2
+  const CYCLE_120 = 120 * 60 * 1000; // 2 часа — для 10+0 (117 мин duration)
+
+  const isOnePlusZero = (tpl.repeat === 'bullet1_human' || tpl.repeat === 'bullet1_bots');
+  const isBlitzOrBullet21 = (
+    tpl.repeat === 'bullet21_human' || tpl.repeat === 'bullet21_bots' ||
+    tpl.repeat === 'blitz32_human' || tpl.repeat === 'blitz32_bots'
   );
-  if (isShort) {
-    const slotIndex = Math.floor(now / HALF_CYCLE_MS);
-    // Чётные слоты — human, нечётные — bots (для всех "коротких" типов одинаково)
+  const isRapid10 = (tpl.repeat === 'rapid10_human' || tpl.repeat === 'rapid10_bots');
+
+  if (isOnePlusZero) {
+    const slot = Math.floor(now / CYCLE_30);
     const isBotVariant = tpl.repeat.endsWith('_bots');
-    const slotIsBot = (slotIndex % 2 === 1);
-    if (slotIsBot === isBotVariant) {
-      return slotIndex * HALF_CYCLE_MS;
-    }
-    return (slotIndex + 1) * HALF_CYCLE_MS;
+    const slotIsBot = (slot % 2 === 1);
+    if (slotIsBot === isBotVariant) return slot * CYCLE_30;
+    return (slot + 1) * CYCLE_30;
+  }
+  if (isBlitzOrBullet21) {
+    const slot = Math.floor(now / CYCLE_60);
+    const isBotVariant = tpl.repeat.endsWith('_bots');
+    const slotIsBot = (slot % 2 === 1);
+    if (slotIsBot === isBotVariant) return slot * CYCLE_60;
+    return (slot + 1) * CYCLE_60;
+  }
+  if (isRapid10) {
+    const slot = Math.floor(now / CYCLE_120);
+    const isBotVariant = tpl.repeat.endsWith('_bots');
+    const slotIsBot = (slot % 2 === 1);
+    if (slotIsBot === isBotVariant) return slot * CYCLE_120;
+    return (slot + 1) * CYCLE_120;
   }
   if (tpl.repeat === 'classical30') {
-    // Классика — только human, каждые 4 часа
     const slot = Math.floor(now / (4 * 60 * 60 * 1000));
     return slot * 4 * 60 * 60 * 1000;
   }
   return roundToMinute(now + 3600000);
+}
+
+function stepFor(tpl) {
+  const isOnePlusZero = (tpl.repeat === 'bullet1_human' || tpl.repeat === 'bullet1_bots');
+  const isBlitzOrBullet21 = (
+    tpl.repeat === 'bullet21_human' || tpl.repeat === 'bullet21_bots' ||
+    tpl.repeat === 'blitz32_human' || tpl.repeat === 'blitz32_bots'
+  );
+  const isRapid10 = (tpl.repeat === 'rapid10_human' || tpl.repeat === 'rapid10_bots');
+  if (isOnePlusZero) return 60 * 60 * 1000;   // следующий такой же через час
+  if (isBlitzOrBullet21) return 120 * 60 * 1000; // следующий такой же через 2 часа
+  if (isRapid10) return 240 * 60 * 1000;      // следующий такой же через 4 часа
+  if (tpl.repeat === 'classical30') return 8 * 3600 * 1000; // классика только human, следующая через 8 часов
+  return 3600 * 1000;
 }
 
 function stepFor(tpl) {
