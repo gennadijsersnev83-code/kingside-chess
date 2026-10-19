@@ -62,7 +62,6 @@ body.login-active #mainContent { display: none !important; }
   <div class="auth-card">
     <h2 style="margin-top:0;color:var(--text-bright);text-align:center;">Сброс пароля</h2>
     
-    <!-- Шаг 1: Запрос email -->
     <div id="resetStep1">
       <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">Введите вашу электронную почту, мы отправим вам письмо с ссылкой на сброс пароля.</p>
       <div class="auth-field">
@@ -73,7 +72,6 @@ body.login-active #mainContent { display: none !important; }
       <div id="resetMsg1" class="auth-msg"></div>
     </div>
 
-    <!-- Шаг 2: Ввод нового пароля -->
     <div id="resetStep2" style="display: none;">
       <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">Введите новый пароль дважды.</p>
       <div class="auth-field">
@@ -238,14 +236,27 @@ body.login-active #mainContent { display: none !important; }
           <button class="secondary" onclick="Router.go('lobby')">← На главную</button>
         </div>
       </div>
-      <div class="catRatingsGrid" id="catRatingsGrid"></div>
-      <div class="statsGrid">
-        <div class="statBox"><div class="v" id="pRating">—</div><div class="l">Рейтинг (осн.)</div></div>
-        <div class="statBox"><div class="v" id="pGames">—</div><div class="l">Партий</div></div>
-        <div class="statBox"><div class="v" id="pWins">—</div><div class="l">Побед</div></div>
-        <div class="statBox"><div class="v" id="pWinrate">—</div><div class="l">Winrate</div></div>
+
+      <!-- Профиль в стиле Lichess: слева контролы графика, справа статистика -->
+      <div class="profileMain">
+        <div class="profileMainLeft">
+          <div class="chartControlsWrap">
+            <div class="chartTitle">📈 Рейтинг по дням</div>
+            <div class="chartControls" id="chartControls"></div>
+          </div>
+          <div class="ratingChartWrap" id="ratingChartWrap"></div>
+        </div>
+        <div class="profileMainRight">
+          <div class="catRatingsGrid" id="catRatingsGrid"></div>
+          <div class="statsGrid">
+            <div class="statBox"><div class="v" id="pRating">—</div><div class="l">Рейтинг (осн.)</div></div>
+            <div class="statBox"><div class="v" id="pGames">—</div><div class="l">Партий</div></div>
+            <div class="statBox"><div class="v" id="pWins">—</div><div class="l">Побед</div></div>
+            <div class="statBox"><div class="v" id="pWinrate">—</div><div class="l">Winrate</div></div>
+          </div>
+        </div>
       </div>
-      <div class="ratingChart"><div style="color:var(--muted);font-size:12px;margin-bottom:8px">📈 Динамика рейтинга по дням</div><div id="ratingChartWrap"></div></div>
+
       <button class="profileShowGamesBtn" id="showGamesBtn" onclick="Profile.toggleGames()">📜 Показать партии</button>
       <div class="profileGamesHidden" id="profileGamesWrap">
         <h3 style="margin:16px 0 8px; color:var(--text-bright); font-weight:500">Последние партии</h3>
@@ -379,4 +390,3 @@ body.login-active #mainContent { display: none !important; }
 <script src="/app.js"></script>
 </body>
 </html>
-
