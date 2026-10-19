@@ -1290,3 +1290,12 @@ header.topbar .iconBtn .badge {
   .login-page { align-items:flex-start; }
 }
 #autorizeScreen.active, #resetScreen.active { display:flex !important; }
+
+/* Независимые графики рейтинга по каждому контролю времени */
+.ratingChartWrap { display:flex; flex-direction:column; gap:12px; }
+.ratingMiniChart { min-width:0; padding:12px 10px 8px; background:var(--panel); border:1px solid var(--border); border-radius:6px; }
+.ratingMiniChartTitle { display:flex; align-items:center; gap:8px; margin:0 0 8px; color:var(--text-bright); font-size:13px; font-weight:600; }
+.ratingMiniChartTitle > span { width:18px; height:3px; border-radius:3px; flex:0 0 auto; }
+.ratingMiniChartTitle b { margin-left:auto; font-size:15px; font-variant-numeric:tabular-nums; }
+.ratingMiniChartTitle em { font-size:12px; font-style:normal; font-variant-numeric:tabular-nums; }
+.ratingMiniChartEmpty { min-height:64px; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:12px; }
