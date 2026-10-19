@@ -813,30 +813,41 @@ async function finishGame(lobbyId, result, reason) {
 }
 
 const ARENA_TEMPLATES = [
-  { id: 'bullet-halfhour', name: 'Получасовая пуля', description: '1+0 · рейтинговая', timeControl: 1, increment: 0, durationMin: 27, repeat: 'every30', color: 'bullet', botFriendly: false },
-  { id: 'blitz-hourly', name: 'Ежечасная блиц-арена', description: '3+2 · рейтинговая', timeControl: 3, increment: 2, durationMin: 57, repeat: 'hourly', color: 'blitz', botFriendly: false },
-  { id: 'rapid-2h', name: 'Двухчасовая рапид-арена', description: '10+0 · рейтинговая', timeControl: 10, increment: 0, durationMin: 117, repeat: 'every2h', color: 'rapid', botFriendly: false },
-  { id: 'classical-4h', name: 'Классическая арена', description: '30+0 · классика', timeControl: 30, increment: 0, durationMin: 237, repeat: 'every4h', color: 'classical', botFriendly: false },
-  { id: 'bot-blitz-hourly', name: 'Блиц-арена с ботами', description: '3+2 · люди и боты', timeControl: 3, increment: 2, durationMin: 57, repeat: 'hourly', color: 'blitz', botFriendly: true },
-  { id: 'bot-rapid-2h', name: 'Рапид-арена с ботами', description: '10+0 · люди и боты', timeControl: 10, increment: 0, durationMin: 117, repeat: 'every2h', color: 'rapid', botFriendly: true },
-  { id: 'bot-bullet-halfhour', name: 'Пуля-арена с ботами', description: '1+0 · люди и боты', timeControl: 1, increment: 0, durationMin: 27, repeat: 'every30', color: 'bullet', botFriendly: true },
-  { id: 'bot-bullet-2h', name: 'Пуля-арена с ботами (2+1)', description: '2+1 · люди и боты', timeControl: 2, increment: 1, durationMin: 57, repeat: 'hourly', color: 'bullet', botFriendly: true }
+  { id: 'bullet1_human', name: 'Пуля 1+0', description: '1+0 · рейтинговая', timeControl: 1, increment: 0, durationMin: 27, repeat: 'bullet1_human', color: 'bullet', botFriendly: false, lane: 0 },
+  { id: 'bullet1_bots', name: 'Пуля 1+0 (Боты)', description: '1+0 · люди и боты', timeControl: 1, increment: 0, durationMin: 27, repeat: 'bullet1_bots', color: 'bullet', botFriendly: true, lane: 0 },
+  { id: 'blitz32_human', name: 'Блиц 3+2', description: '3+2 · рейтинговая', timeControl: 3, increment: 2, durationMin: 57, repeat: 'blitz32_human', color: 'blitz', botFriendly: false, lane: 1 },
+  { id: 'blitz32_bots', name: 'Блиц 3+2 (Боты)', description: '3+2 · люди и боты', timeControl: 3, increment: 2, durationMin: 57, repeat: 'blitz32_bots', color: 'blitz', botFriendly: true, lane: 1 },
+  { id: 'classical30_human', name: 'Классика 30+0', description: '30+0 · классика', timeControl: 30, increment: 0, durationMin: 237, repeat: 'classical30', color: 'classical', botFriendly: false, lane: 2 },
+  { id: 'rapid10_human', name: 'Рапид 10+0', description: '10+0 · рейтинговая', timeControl: 10, increment: 0, durationMin: 117, repeat: 'rapid10_human', color: 'rapid', botFriendly: false, lane: 3 },
+  { id: 'rapid10_bots', name: 'Рапид 10+0 (Боты)', description: '10+0 · люди и боты', timeControl: 10, increment: 0, durationMin: 117, repeat: 'rapid10_bots', color: 'rapid', botFriendly: true, lane: 3 },
+  { id: 'bullet21_human', name: 'Пуля 2+1', description: '2+1 · рейтинговая', timeControl: 2, increment: 1, durationMin: 57, repeat: 'bullet21_human', color: 'bullet', botFriendly: false, lane: 4 },
+  { id: 'bullet21_bots', name: 'Пуля 2+1 (Боты)', description: '2+1 · люди и боты', timeControl: 2, increment: 1, durationMin: 57, repeat: 'bullet21_bots', color: 'bullet', botFriendly: true, lane: 4 }
 ];
+
 function nextStartFor(tpl, now) {
-  const p = mskParts(now);
-  if (tpl.repeat === 'every30') { if (p.mi < 30) return fromMsk(p.y, p.mo, p.d, p.h, 30, 0); return fromMsk(p.y, p.mo, p.d, p.h + 1, 0, 0); }
-  if (tpl.repeat === 'hourly') { const c = fromMsk(p.y, p.mo, p.d, p.h, 0, 0); if (c >= now) return c; return fromMsk(p.y, p.mo, p.d, p.h + 1, 0, 0); }
-  if (tpl.repeat === 'every2h') { const eh = p.h - (p.h % 2); const c = fromMsk(p.y, p.mo, p.d, eh, 0, 0); if (c >= now) return c; return fromMsk(p.y, p.mo, p.d, eh + 2, 0, 0); }
-  if (tpl.repeat === 'every4h') { const fh = p.h - (p.h % 4); const c = fromMsk(p.y, p.mo, p.d, fh, 0, 0); if (c >= now) return c; return fromMsk(p.y, p.mo, p.d, fh + 4, 0, 0); }
+  if (tpl.repeat === 'bullet1_human' || tpl.repeat === 'bullet1_bots' ||
+      tpl.repeat === 'blitz32_human' || tpl.repeat === 'blitz32_bots' ||
+      tpl.repeat === 'rapid10_human' || tpl.repeat === 'rapid10_bots' ||
+      tpl.repeat === 'bullet21_human' || tpl.repeat === 'bullet21_bots') {
+    const slot = Math.floor(now / (30 * 60 * 1000));
+    const startTime = slot * 30 * 60 * 1000;
+    const isBot = tpl.repeat.endsWith('_bots');
+    const currentIsBot = (slot % 2 === 1);
+    if (isBot === currentIsBot) return startTime;
+    return startTime + 30 * 60 * 1000;
+  }
+  if (tpl.repeat === 'classical30') {
+    const slot = Math.floor(now / (4 * 60 * 60 * 1000));
+    return slot * 4 * 60 * 60 * 1000;
+  }
   return roundToMinute(now + 3600000);
 }
+
 function stepFor(tpl) {
-  if (tpl.repeat === 'hourly') return 3600 * 1000;
-  if (tpl.repeat === 'every30') return 30 * 60 * 1000;
-  if (tpl.repeat === 'every2h') return 2 * 3600 * 1000;
-  if (tpl.repeat === 'every4h') return 4 * 3600 * 1000;
-  return 3600 * 1000;
+  if (tpl.repeat === 'classical30') return 4 * 3600 * 1000;
+  return 2 * 30 * 60 * 1000;
 }
+
 function getOrCreateArenaState(instance) {
   const now = Date.now();
   let state = arenas.get(instance.id);
@@ -1389,6 +1400,7 @@ function finishArena(state) {
     else setTimeout(() => arenas.delete(state.id), 30 * 60 * 1000);
   }, 2 * 60 * 60 * 1000);
 }
+
 function getArenaSchedule(hoursAhead) {
   hoursAhead = hoursAhead || 48;
   const now = Date.now();
@@ -1408,7 +1420,7 @@ function getArenaSchedule(hoursAhead) {
       else if (now < endsAt) status = 'live';
       else status = 'finished';
       if (status === 'finished' && endsAt < finishedCutoff) { t += step; continue; }
-      const instance = { id: `${tpl.id}-${t}`, templateId: tpl.id, name: tpl.name, description: tpl.description, timeControl: tpl.timeControl, increment: tpl.increment, durationMin: tpl.durationMin, color: tpl.color, startsAt: t, endsAt, status, botFriendly: !!tpl.botFriendly };
+      const instance = { id: `${tpl.id}-${t}`, templateId: tpl.id, name: tpl.name, description: tpl.description, timeControl: tpl.timeControl, increment: tpl.increment, durationMin: tpl.durationMin, color: tpl.color, startsAt: t, endsAt, status, botFriendly: !!tpl.botFriendly, lane: tpl.lane };
       result.push(instance);
       const createAheadMs = 24 * 3600 * 1000;
       if (status === 'live' || (status === 'upcoming' && t - now < createAheadMs)) getOrCreateArenaState(instance);
@@ -1532,7 +1544,12 @@ function scheduleBotMove(lobbyId) {
   }
   let delay;
   if (botName === WATCHER_NAME) {
-    delay = 800 + Math.random() * 1200;
+    const remainMs = botTimeLeft * 1000;
+    if (remainMs < 2000) delay = 30 + Math.random() * 40;
+    else if (remainMs < 5000) delay = 50 + Math.random() * 100;
+    else if (remainMs < 10000) delay = 100 + Math.random() * 200;
+    else if (remainMs < 30000) delay = 150 + Math.random() * 300;
+    else delay = 300 + Math.random() * 500;
   } else {
     const remainMs = botTimeLeft * 1000;
     if (remainMs < 2000) delay = 30 + Math.random() * 40;
@@ -1640,10 +1657,11 @@ function scheduleBotMove(lobbyId) {
         if (!h.from || !h.to) return '';
         return String.fromCharCode(97 + h.from[1]) + (8 - h.from[0]) + String.fromCharCode(97 + h.to[1]) + (8 - h.to[0]);
       }).join('');
-      try { mv = watcherLearning.pickMove(cur.fen, botColor, { time: cur.time, inc: cur.inc }, availableMoves, line); }
-      catch (e) { mv = null; }
+      try {
+        mv = watcherLearning.pickMove(cur.fen, botColor, { timeLeft: botTimeLeft, inc: inc }, availableMoves, line);
+      } catch (e) { mv = null; }
     } else {
-      try { mv = await botPool.getMove(cur.fen, botRating, cur.time); }
+      try { mv = await botPool.getMove(cur.fen, botRating, cur.time, botTimeLeft, inc); }
       catch (err) { return; }
     }
     if (!mv) return;
