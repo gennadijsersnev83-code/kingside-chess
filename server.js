@@ -2873,4 +2873,3 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 process.on('uncaughtException', (err) => { console.error('[Server] Ошибка:', err); });
-
