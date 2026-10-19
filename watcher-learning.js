@@ -11,66 +11,12 @@ let DATA = {
 };
 
 const PST_START = {
-  P: [
-     0,  0,  0,  0,  0,  0,  0,  0,
-    50, 50, 50, 50, 50, 50, 50, 50,
-    10, 10, 20, 30, 30, 20, 10, 10,
-     5,  5, 10, 25, 25, 10,  5,  5,
-     0,  0,  0, 20, 20,  0,  0,  0,
-     5, -5,-10,  0,  0,-10, -5,  5,
-     5, 10, 10,-20,-20, 10, 10,  5,
-     0,  0,  0,  0,  0,  0,  0,  0,
-  ],
-  N: [
-    -50,-40,-30,-30,-30,-30,-40,-50,
-    -40,-20,  0,  0,  0,  0,-20,-40,
-    -30,  0, 10, 15, 15, 10,  0,-30,
-    -30,  5, 15, 20, 20, 15,  5,-30,
-    -30,  0, 15, 20, 20, 15,  0,-30,
-    -30,  5, 10, 15, 15, 10,  5,-30,
-    -40,-20,  0,  5,  5,  0,-20,-40,
-    -50,-40,-30,-30,-30,-30,-40,-50,
-  ],
-  B: [
-    -20,-10,-10,-10,-10,-10,-10,-20,
-    -10,  0,  0,  0,  0,  0,  0,-10,
-    -10,  0,  5, 10, 10,  5,  0,-10,
-    -10,  5,  5, 10, 10,  5,  5,-10,
-    -10,  0, 10, 10, 10, 10,  0,-10,
-    -10, 10, 10, 10, 10, 10, 10,-10,
-    -10,  5,  0,  0,  0,  0,  5,-10,
-    -20,-10,-10,-10,-10,-10,-10,-20,
-  ],
-  R: [
-     0,  0,  0,  0,  0,  0,  0,  0,
-     5, 10, 10, 10, 10, 10, 10,  5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-    -5,  0,  0,  0,  0,  0,  0, -5,
-     0,  0,  0,  5,  5,  0,  0,  0,
-  ],
-  Q: [
-    -20,-10,-10, -5, -5,-10,-10,-20,
-    -10,  0,  0,  0,  0,  0,  0,-10,
-    -10,  0,  5,  5,  5,  5,  0,-10,
-     -5,  0,  5,  5,  5,  5,  0, -5,
-      0,  0,  5,  5,  5,  5,  0, -5,
-    -10,  5,  5,  5,  5,  5,  0,-10,
-    -10,  0,  5,  0,  0,  0,  0,-10,
-    -20,-10,-10, -5, -5,-10,-10,-20,
-  ],
-  K: [
-    -30,-40,-40,-50,-50,-40,-40,-30,
-    -30,-40,-40,-50,-50,-40,-40,-30,
-    -30,-40,-40,-50,-50,-40,-40,-30,
-    -30,-40,-40,-50,-50,-40,-40,-30,
-    -20,-30,-30,-40,-40,-30,-30,-20,
-    -10,-20,-20,-20,-20,-20,-20,-10,
-     20, 20,  0,  0,  0,  0, 20, 20,
-     20, 30, 10,  0,  0, 10, 30, 20,
-  ],
+  P: [0,0,0,0,0,0,0,0, 50,50,50,50,50,50,50,50, 10,10,20,30,30,20,10,10, 5,5,10,25,25,10,5,5, 0,0,0,20,20,0,0,0, 5,-5,-10,0,0,-10,-5,5, 5,10,10,-20,-20,10,10,5, 0,0,0,0,0,0,0,0],
+  N: [-50,-40,-30,-30,-30,-30,-40,-50, -40,-20,0,0,0,0,-20,-40, -30,0,10,15,15,10,0,-30, -30,5,15,20,20,15,5,-30, -30,0,15,20,20,15,0,-30, -30,5,10,15,15,10,5,-30, -40,-20,0,5,5,0,-20,-40, -50,-40,-30,-30,-30,-30,-40,-50],
+  B: [-20,-10,-10,-10,-10,-10,-10,-20, -10,0,0,0,0,0,0,-10, -10,0,5,10,10,5,0,-10, -10,5,5,10,10,5,5,-10, -10,0,10,10,10,10,0,-10, -10,10,10,10,10,10,10,-10, -10,5,0,0,0,0,5,-10, -20,-10,-10,-10,-10,-10,-10,-20],
+  R: [0,0,0,0,0,0,0,0, 5,10,10,10,10,10,10,5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, -5,0,0,0,0,0,0,-5, 0,0,0,5,5,0,0,0],
+  Q: [-20,-10,-10,-5,-5,-10,-10,-20, -10,0,0,0,0,0,0,-10, -10,0,5,5,5,5,0,-10, -5,0,5,5,5,5,0,-5, 0,0,5,5,5,5,0,-5, -10,5,5,5,5,5,0,-10, -10,0,5,0,0,0,0,-10, -20,-10,-10,-5,-5,-10,-10,-20],
+  K: [-30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -30,-40,-40,-50,-50,-40,-40,-30, -20,-30,-30,-40,-40,-30,-30,-20, -10,-20,-20,-20,-20,-20,-20,-10, 20,20,0,0,0,0,20,20, 20,30,10,0,0,10,30,20],
 };
 
 function initWeights() {
@@ -91,7 +37,6 @@ function initWeights() {
 
 // ==================== POSTGRES ====================
 let _pool = null;
-// Память конкретных тактических ошибок: позиция + ход -> штраф.
 const mistakeMemory = new Map();
 const MAX_MISTAKES = 12000;
 function setPool(pool) { _pool = pool; }
@@ -613,7 +558,6 @@ function pickMoveSearch(state, isWhiteTurn, timeMs) {
       if (Date.now() >= deadline) break;
       const next = applyMove(state, from, to);
       let score = -negamax(next, depth - 1, -beta, -alpha, -color, deadline);
-      // Тактическая страховка: не отдаём дорогую фигуру без компенсации.
       const safetyPenalty = tacticalSafetyPenalty(state, from, to, isWhiteTurn);
       const memoryPenalty = learnedMistakePenalty(state, from, to);
       const immediateGain = evaluate(next, isWhiteTurn) - evaluate(state, isWhiteTurn);
@@ -690,7 +634,6 @@ function playSelfPlayGame() {
     const isW = state.turn === 'w';
     const mv = pickMoveSearch(state, isW, 80);
 
-    // 🔥 ЗАЩИТА: проверяем, что mv — массив из двух массивов
     if (!mv || !Array.isArray(mv) || mv.length !== 2) break;
     if (!Array.isArray(mv[0]) || !Array.isArray(mv[1])) break;
     if (mv[0].length !== 2 || mv[1].length !== 2) break;
@@ -774,16 +717,23 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
 
   try {
     const state = parseFen(fen);
-    const myTime = timeInfo && timeInfo.time ? timeInfo.time : 5;
+    // 🔥 Теперь учитываем переданное время (timeLeft) и инкремент (inc)
+    const myTime = timeInfo && typeof timeInfo.timeLeft === 'number' ? timeInfo.timeLeft : 5;
+    const inc = timeInfo && typeof timeInfo.inc === 'number' ? timeInfo.inc : 0;
 
     let thinkMs;
-    if (myTime < 2) thinkMs = 50;
+    // Адаптация под пулю (очень мало времени => быстрые ходы)
+    if (myTime < 2) thinkMs = 30;
+    else if (myTime < 5) thinkMs = 50;
     else if (myTime < 10) thinkMs = 100;
     else if (myTime < 30) thinkMs = 200;
+    else if (myTime < 60) thinkMs = 300;
     else thinkMs = 400;
 
-    thinkMs = Math.min(thinkMs, myTime * 1000 * 0.15);
-    thinkMs = Math.max(50, thinkMs);
+    // Не тратим больше 10% остатка времени + учитываем инкремент
+    const allowedByClock = (myTime + inc) * 0.1 * 1000;
+    thinkMs = Math.min(thinkMs, allowedByClock);
+    thinkMs = Math.max(30, thinkMs); // минимум 30мс чтобы хоть что-то посчитать
 
     const move = pickMoveSearch(state, color === 'w', thinkMs);
     if (!move || !Array.isArray(move) || move.length !== 2) return null;
@@ -815,7 +765,6 @@ function learnFromObservedMove(prevFen, move, newFen, moverColor, timeControl, e
       const defended = isAttacked(after, to[0], to[1], moverWhite);
       if (!defended) hanging = Math.round((PIECE_VALUES[p.toLowerCase()] || 0) * 0.8);
     }
-    // Сохраняем только значимые ошибки, чтобы не закреплять случайные шумовые оценки.
     const penalty = Math.max(drop > 220 ? drop : 0, hanging);
     if (penalty >= 250) recordMistake(positionKey(prevFen), sqName(from[0], from[1]), sqName(to[0], to[1]), penalty);
   } catch (e) {
@@ -842,4 +791,3 @@ module.exports = {
   reloadWeights,
   setPool,
 };
-
