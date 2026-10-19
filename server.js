@@ -827,7 +827,7 @@ const ARENA_TEMPLATES = [
 function nextStartFor(tpl, now) {
   const CYCLE_30 = 30 * 60 * 1000;
   const CYCLE_60 = 60 * 60 * 1000;
-  const CYCLE_150 = 150 * 60 * 1000; // 2.5 часа — гарантированный слот рапида
+  const CYCLE_120 = 120 * 60 * 1000; // 2 часа (120 мин) — идеально для рапида
 
   const isOnePlusZero = (tpl.repeat === 'bullet1_human' || tpl.repeat === 'bullet1_bots');
   const isBlitzOrBullet21 = (
@@ -851,14 +851,16 @@ function nextStartFor(tpl, now) {
     return (slot + 1) * CYCLE_60;
   }
   if (isRapid10) {
-    // 2.5 часа на слот рапида (117 мин длительность + 33 мин запас)
-    const slot = Math.floor(now / CYCLE_150);
+    // Рапид: human в чётные 2-часовки, bots в нечётные 2-часовки.
+    // Длительность 117 мин, зазор 3 мин до старта следующего (ровно в 120).
+    const slot = Math.floor(now / CYCLE_120);
     const isBotVariant = tpl.repeat.endsWith('_bots');
     const slotIsBot = (slot % 2 === 1);
-    if (slotIsBot === isBotVariant) return slot * CYCLE_150;
-    return (slot + 1) * CYCLE_150;
+    if (slotIsBot === isBotVariant) return slot * CYCLE_120;
+    return (slot + 1) * CYCLE_120;
   }
   if (tpl.repeat === 'classical30') {
+    // Классика: длится 237 мин, поэтому сетка 4 часа (240 мин).
     const slot = Math.floor(now / (4 * 60 * 60 * 1000));
     return slot * 4 * 60 * 60 * 1000;
   }
@@ -872,10 +874,11 @@ function stepFor(tpl) {
     tpl.repeat === 'blitz32_human' || tpl.repeat === 'blitz32_bots'
   );
   const isRapid10 = (tpl.repeat === 'rapid10_human' || tpl.repeat === 'rapid10_bots');
-  if (isOnePlusZero) return 60 * 60 * 1000;
-  if (isBlitzOrBullet21) return 120 * 60 * 1000;
-  if (isRapid10) return 5 * 60 * 60 * 1000; // следующий тот же рапид через полный цикл (2 * 2.5ч)
-  if (tpl.repeat === 'classical30') return 8 * 3600 * 1000;
+  
+  if (isOnePlusZero) return 60 * 60 * 1000;        // +1 час (следующий human/bots)
+  if (isBlitzOrBullet21) return 120 * 60 * 1000;   // +2 часа
+  if (isRapid10) return 240 * 60 * 1000;           // +4 часа
+  if (tpl.repeat === 'classical30') return 4 * 3600 * 1000; // +4 часа (следующая классика)
   return 3600 * 1000;
 }
 
