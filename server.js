@@ -825,18 +825,28 @@ const ARENA_TEMPLATES = [
 ];
 
 function nextStartFor(tpl, now) {
-  if (tpl.repeat === 'bullet1_human' || tpl.repeat === 'bullet1_bots' ||
-      tpl.repeat === 'blitz32_human' || tpl.repeat === 'blitz32_bots' ||
-      tpl.repeat === 'rapid10_human' || tpl.repeat === 'rapid10_bots' ||
-      tpl.repeat === 'bullet21_human' || tpl.repeat === 'bullet21_bots') {
-    const slot = Math.floor(now / (30 * 60 * 1000));
-    const startTime = slot * 30 * 60 * 1000;
-    const isBot = tpl.repeat.endsWith('_bots');
-    const currentIsBot = (slot % 2 === 1);
-    if (isBot === currentIsBot) return startTime;
-    return startTime + 30 * 60 * 1000;
+  // Все короткие чередуются через 60 минут: 
+  //   0-30 мин — human, 30-60 мин — bots (или наоборот, в зависимости от чётности часа)
+  const CYCLE_MS = 60 * 60 * 1000; // 60 минут полный цикл
+  const HALF_CYCLE_MS = 30 * 60 * 1000; // 30 минут на вариант
+  const isShort = (
+    tpl.repeat === 'bullet1_human' || tpl.repeat === 'bullet1_bots' ||
+    tpl.repeat === 'blitz32_human' || tpl.repeat === 'blitz32_bots' ||
+    tpl.repeat === 'rapid10_human' || tpl.repeat === 'rapid10_bots' ||
+    tpl.repeat === 'bullet21_human' || tpl.repeat === 'bullet21_bots'
+  );
+  if (isShort) {
+    const slotIndex = Math.floor(now / HALF_CYCLE_MS);
+    // Чётные слоты — human, нечётные — bots (для всех "коротких" типов одинаково)
+    const isBotVariant = tpl.repeat.endsWith('_bots');
+    const slotIsBot = (slotIndex % 2 === 1);
+    if (slotIsBot === isBotVariant) {
+      return slotIndex * HALF_CYCLE_MS;
+    }
+    return (slotIndex + 1) * HALF_CYCLE_MS;
   }
   if (tpl.repeat === 'classical30') {
+    // Классика — только human, каждые 4 часа
     const slot = Math.floor(now / (4 * 60 * 60 * 1000));
     return slot * 4 * 60 * 60 * 1000;
   }
@@ -845,7 +855,7 @@ function nextStartFor(tpl, now) {
 
 function stepFor(tpl) {
   if (tpl.repeat === 'classical30') return 4 * 3600 * 1000;
-  return 2 * 30 * 60 * 1000;
+  return 3600 * 1000; // 60 минут — полный цикл, чтобы не дублировать старты
 }
 
 function getOrCreateArenaState(instance) {
