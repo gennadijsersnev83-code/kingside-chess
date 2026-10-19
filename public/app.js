@@ -1380,117 +1380,54 @@ const Profile = {
     const wrap = document.getElementById('ratingChartWrap');
     if (!wrap || !this.chartData) return;
     const { games, user, categoryHistory } = this.chartData;
-
     const categories = [
-      { key:'bullet', label:'Пуля', color:'#fb7185', dash:'' },
-      { key:'blitz', label:'Блиц', color:'#4ade80', dash:'' },
-      { key:'rapid', label:'Рапид', color:'#38bdf8', dash:'' },
-      { key:'classical', label:'Классика', color:'#a78bfa', dash:'' }
+      { key:'bullet', label:'Пуля', color:'#fb7185' },
+      { key:'blitz', label:'Блиц', color:'#4ade80' },
+      { key:'rapid', label:'Рапид', color:'#38bdf8' },
+      { key:'classical', label:'Классика', color:'#a78bfa' }
     ];
-
-    const now = Date.now();
-    const dayMs = 24 * 60 * 60 * 1000;
-    let startTs = user.createdAt;
+    const now = Date.now(), dayMs = 86400000;
+    let startTs = Number(user.createdAt) || now;
     if (this.chartRange === '1m') startTs = Math.max(startTs, now - 30*dayMs);
     else if (this.chartRange === '3m') startTs = Math.max(startTs, now - 90*dayMs);
     else if (this.chartRange === '6m') startTs = Math.max(startTs, now - 180*dayMs);
     else if (this.chartRange === '1y') startTs = Math.max(startTs, now - 365*dayMs);
-    else startTs = user.createdAt;
-
-    const endTs = now;
     const startDay = Math.floor(startTs / dayMs) * dayMs;
-    const endDay = Math.floor(endTs / dayMs) * dayMs;
+    const endDay = Math.floor(now / dayMs) * dayMs;
+    const allGames = (Array.isArray(categoryHistory) ? categoryHistory : (games || []));
+    const W=900, H=240, PL=58, PR=18, PT=18, PB=32, IW=W-PL-PR, IH=H-PT-PB;
+    const xOf = day => PL + ((day-startDay)/(Math.max(dayMs,endDay-startDay))) * IW;
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-    const allGames = (categoryHistory && categoryHistory.length ? categoryHistory : games) || [];
-    const series = categories.map(cat => {
-      const relevant = allGames.filter(g => g.category === cat.key && Number(g.finishedAt) >= startDay && Number(g.finishedAt) <= endDay + dayMs);
+    const charts = categories.map(cat => {
+      const relevant = allGames.filter(g => g.category === cat.key && Number(g.finishedAt) >= startDay && Number(g.finishedAt) <= endDay + dayMs)
+        .sort((a,b) => Number(a.finishedAt)-Number(b.finishedAt));
+      // Берём фактический рейтинг после каждой партии; не подставляем текущий рейтинг
+      // на все дни — иначе получается ровная выдуманная линия.
       const byDay = new Map();
       for (const g of relevant) {
-        const day = Math.floor(Number(g.finishedAt) / dayMs) * dayMs;
-        const rating = Number(g.white === this.chartUserId ? g.whiteAfter : g.blackAfter);
-        if (Number.isFinite(rating)) byDay.set(day, rating);
+        const ts = Number(g.finishedAt);
+        const value = Number(g.white === this.chartUserId ? g.whiteAfter : g.blackAfter);
+        if (Number.isFinite(ts) && Number.isFinite(value)) byDay.set(Math.floor(ts/dayMs)*dayMs, value);
       }
-      const days = [];
-      for (let d = startDay; d <= endDay; d += dayMs) days.push(d);
-      const points = [];
-      let lastRating = null;
-      for (const d of days) {
-        if (byDay.has(d)) lastRating = byDay.get(d);
-        points.push({ day: d, rating: lastRating });
-      }
-      if (points.length && points[0].rating === null) {
-        const firstNonNull = points.find(p => p.rating !== null);
-        const fallback = user.categories && user.categories[cat.key] ? user.categories[cat.key].rating : 1200;
-        const startVal = firstNonNull ? firstNonNull.rating : fallback;
-        for (const p of points) if (p.rating === null) p.rating = startVal;
-      }
-      return { ...cat, points };
+      if (!byDay.size) return `<section class="ratingMiniChart"><div class="ratingMiniChartTitle"><span style="background:${cat.color}"></span>${cat.label}</div><div class="ratingMiniChartEmpty">Нет партий в этом режиме за выбранный период</div></section>`;
+      let last = null;
+      const points=[];
+      for(let d=startDay; d<=endDay; d+=dayMs){ if(byDay.has(d)) last=byDay.get(d); if(last!==null) points.push({day:d,rating:last}); }
+      const values = points.map(p=>p.rating);
+      const minV=Math.min(...values), maxV=Math.max(...values);
+      const pad=Math.max(20,Math.ceil((maxV-minV)*.12));
+      const yMin=Math.floor((minV-pad)/50)*50, yMax=Math.ceil((maxV+pad)/50)*50 || minV+50;
+      const yOf = rating => PT+IH-((rating-yMin)/Math.max(1,yMax-yMin))*IH;
+      const grid=[];
+      for(let i=0;i<=4;i++){const val=yMin+(yMax-yMin)*i/4, y=yOf(val);grid.push(`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="#3a3833" stroke-dasharray="3,3"/><text x="${PL-8}" y="${y+4}" fill="#7d7a72" font-size="11" text-anchor="end">${Math.round(val)}</text>`);}
+      const path=points.map((p,i)=>`${i?'L':'M'}${xOf(p.day).toFixed(1)},${yOf(p.rating).toFixed(1)}`).join(' ');
+      const labels=[];
+      for(let i=0;i<5;i++){const day=startDay+(endDay-startDay)*i/4;labels.push(`<text x="${xOf(day)}" y="${H-8}" fill="#7d7a72" font-size="11" text-anchor="middle">${new Date(day).toLocaleDateString('ru-RU',{day:'2-digit',month:'short'})}</text>`);}
+      const latest=points[points.length-1].rating, first=points[0].rating, delta=latest-first;
+      return `<section class="ratingMiniChart"><div class="ratingMiniChartTitle"><span style="background:${cat.color}"></span>${cat.label}<b>${latest}</b><em style="color:${delta>0?'#4ade80':delta<0?'#fb7185':'var(--muted)'}">${delta>0?'+':''}${delta}</em></div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="График рейтинга: ${esc(cat.label)}" style="width:100%;height:auto;display:block">${grid.join('')}<path d="${path}" fill="none" stroke="${cat.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${points.length===1?`<circle cx="${xOf(points[0].day)}" cy="${yOf(points[0].rating)}" r="3.5" fill="${cat.color}"/>`:''}${labels.join('')}</svg></section>`;
     });
-
-    const hasAnyPoints = series.some(s => s.points.length > 0);
-    if (!hasAnyPoints) { wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Недостаточно данных для графика</div>'; return; }
-
-    const allValues = [];
-    for (const s of series) for (const p of s.points) if (p.rating !== null) allValues.push(p.rating);
-    if (!allValues.length) { wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Недостаточно данных для графика</div>'; return; }
-    const minV = Math.min(...allValues);
-    const maxV = Math.max(...allValues);
-    const pad = Math.max(20, Math.round((maxV - minV) * 0.1));
-    const yMin = Math.floor((minV - pad) / 50) * 50;
-    const yMax = Math.ceil((maxV + pad) / 50) * 50;
-
-    const W = 900, H = 300, PL = 58, PR = 18, PT = 20, PB = 34;
-    const IW = W - PL - PR;
-    const IH = H - PT - PB;
-
-    const totalDays = Math.max(1, (endDay - startDay) / dayMs + 1);
-    const xOf = (day) => PL + ((day - startDay) / (totalDays - 1 || 1)) * IW;
-    const yOf = (rating) => PT + IH - ((rating - yMin) / Math.max(1, yMax - yMin)) * IH;
-
-    const gridLines = [];
-    const ySteps = 5;
-    for (let i = 0; i <= ySteps; i++) {
-      const val = yMin + (yMax - yMin) * (i / ySteps);
-      const yy = yOf(val);
-      gridLines.push(`<line x1="${PL}" y1="${yy}" x2="${W-PR}" y2="${yy}" stroke="#3a3833" stroke-width="1" stroke-dasharray="3,3"/>`);
-      gridLines.push(`<text x="${PL-8}" y="${yy+4}" fill="#7d7a72" font-size="11" text-anchor="end">${Math.round(val)}</text>`);
-    }
-
-    const xLabels = [];
-    const labelsCount = 6;
-    for (let i = 0; i < labelsCount; i++) {
-      const day = startDay + ((endDay - startDay) * i / (labelsCount - 1 || 1));
-      const xx = xOf(day);
-      const date = new Date(day);
-      const label = date.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' });
-      xLabels.push(`<text x="${xx}" y="${H - 10}" fill="#7d7a72" font-size="11" text-anchor="middle">${label}</text>`);
-    }
-
-    const paths = series.map(s => {
-      const pts = s.points.filter(p => p.rating !== null);
-      if (!pts.length) return '';
-      let d = '';
-      for (let i = 0; i < pts.length; i++) {
-        const p = pts[i];
-        const cmd = i === 0 ? 'M' : 'L';
-        d += `${cmd}${xOf(p.day).toFixed(1)},${yOf(p.rating).toFixed(1)} `;
-      }
-      return `<path d="${d.trim()}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
-    }).join('');
-
-    const legend = categories.map(c => {
-      const found = series.find(s => s.key === c.key && s.points.some(p => p.rating !== null));
-      return `<span class="chartLegendItem" style="color:${found ? c.color : '#555'};opacity:${found ? 1 : 0.4}"><i style="background:${c.color}"></i>${c.label}</span>`;
-    }).join('');
-
-    wrap.innerHTML = `
-      <div class="chartLegend">${legend}</div>
-      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;max-height:340px;display:block">
-        ${gridLines.join('')}
-        ${paths}
-        ${xLabels.join('')}
-      </svg>
-    `;
+    wrap.innerHTML = charts.join('');
   },
 
   renderGamesList(games, username) {
