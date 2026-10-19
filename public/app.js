@@ -226,7 +226,7 @@ const Chess = {
 };
 
 // ============================================================
-// AUTH (ЛОГИН / РЕГИСТРАЦИЯ)
+// AUTH
 // ============================================================
 const Auth = {
   mode: 'login',
@@ -329,7 +329,6 @@ const Auth = {
         const val = usernameInput.value.trim();
         usernameStatus.textContent = '';
         usernameStatus.className = '';
-        // Nickname availability is relevant only during registration.
         if (Auth.mode !== 'register' || val.length < 2) return;
         usernameTimeout = setTimeout(() => {
           if (Auth.mode !== 'register') return;
@@ -396,7 +395,6 @@ const App = {
   },
 
   showAuthenticatedUI() {
-    // Clear both the auth-only body class and inline hidden states.
     document.body.classList.remove('login-active');
     const header = document.getElementById('mainHeader');
     const main = document.getElementById('mainContent');
@@ -643,7 +641,12 @@ const Router = {
   },
   apply() {
     const { name, param } = this.current;
-    
+
+    if (App.me && App.gameActive && !App.gameEnded && (name === 'arenas' || name === 'arenaPage')) {
+      Router.go('lobby');
+      return;
+    }
+
     if (name === 'reset') {
       document.body.classList.add('login-active');
       Router.show('resetScreen');
@@ -658,11 +661,11 @@ const Router = {
     if (name === 'login' || name === 'autorize' || !App.me) {
       document.body.classList.add('login-active');
       Router.show('autorizeScreen');
-      
+
       if (name === 'autorize' && param && param.includes('verified=1')) {
         const urlParams = new URLSearchParams(location.hash.split('?')[1]);
         const un = urlParams.get('username');
-        
+
         if (un && App.socket) {
           App.socket.emit('register', { username: un, password: '' }, (res) => {
             const loginMsg = document.getElementById('loginMsg');
@@ -693,6 +696,7 @@ const Router = {
       if (opponent) opponent.textContent = App.opponentName || 'соперником';
       this.show('lobbyScreen');
       document.querySelectorAll('#mainNav a').forEach(a => a.classList.toggle('active', a.dataset.nav === 'lobby'));
+      Lobby.render();
       return;
     }
     const activeNotice = document.getElementById('activeGameNoticeScreen');
@@ -1024,6 +1028,10 @@ const Arena = {
   enterList() { this.refresh(true); },
   enterPage(arenaId) {
     if (!arenaId) { Router.go('arenas'); return; }
+    if (App.gameActive && !App.gameEnded) {
+      Router.go('lobby');
+      return;
+    }
     if (Watch.watchingGameId) Watch.stop();
     if (this.currentArenaId && this.currentArenaId !== arenaId) App.socket.emit('leaveArenaRoom', { arenaId: this.currentArenaId });
     this.currentArenaId = arenaId;
@@ -1082,12 +1090,17 @@ const Arena = {
     const toPx = (ts) => ((ts - startMs) / SLOT_MS) * SLOT_PX;
     const visible = this.cache.map(a => ({ ...a, clientStartsAt: toClient(a.startsAt), clientEndsAt: toClient(a.endsAt) })).filter(a => a.clientEndsAt > startMs && a.clientStartsAt < endMs).sort((a, b) => a.clientStartsAt - b.clientStartsAt);
     const rows = [];
-    for (const arena of visible) { let placed = false; for (const row of rows) { const last = row[row.length - 1]; if (last.clientEndsAt <= arena.clientStartsAt) { row.push(arena); placed = true; break; } } if (!placed) rows.push([arena]); }
+    for (const arena of visible) {
+      const lane = arena.lane || 0;
+      if (!rows[lane]) rows[lane] = [];
+      rows[lane].push(arena);
+    }
+    const finalRows = rows.filter(r => r && r.length);
     const rowWidth = COLS * SLOT_PX;
     let html = '<div class="arenasScroller"><div class="timeRow" style="width:' + rowWidth + 'px;">';
     for (let i = 0; i < COLS; i++) { const t = startMs + i * SLOT_MS; const isNow = t <= localNow && localNow < t + SLOT_MS; html += '<div class="timeCell' + (isNow ? ' now' : '') + '" style="width:' + SLOT_PX + 'px;min-width:' + SLOT_PX + 'px;">' + Utils.fmtMskHM(t) + '</div>'; }
     html += '</div>';
-    for (const row of rows) {
+    for (const row of finalRows) {
       html += '<div class="arenaRowGrid" style="width:' + rowWidth + 'px;">';
       for (const arena of row) {
         const left = toPx(arena.clientStartsAt); const width = toPx(arena.clientEndsAt) - left;
@@ -1099,7 +1112,10 @@ const Arena = {
         const participantsCount = (myState && myState.participantsCount) || 0;
         const showInfo = width >= 50; const dur = Math.round((arena.clientEndsAt - arena.clientStartsAt) / 60000);
         const botMark = arena.botFriendly ? '🤖 ' : '';
-        html += '<div class="' + cls + '" style="left:' + left.toFixed(2) + 'px; width:' + width.toFixed(2) + 'px; cursor:pointer" onclick="Router.go(\'arenaPage\', \'' + Utils.escapeHtml(arena.id) + '\')" title="' + Utils.escapeHtml(botMark + arena.name) + ' · ' + tinfo + ' · ' + Utils.fmtMskHM(arena.clientStartsAt) + '–' + Utils.fmtMskHM(arena.clientEndsAt) + ' МСК (' + dur + ' мин)"><div class="tname">' + botMark + Utils.escapeHtml(arena.name) + '</div>' + (showInfo ? '<div class="tinfo"><span>' + tinfo + '</span><span>👥 ' + participantsCount + '</span></div>' : '') + '</div>';
+        const isDisabled = App.gameActive && !App.gameEnded;
+        const clickHandler = isDisabled ? '' : `onclick="Router.go('arenaPage', '${Utils.escapeHtml(arena.id)}')"`;
+        const disabledClass = isDisabled ? ' disabled' : '';
+        html += '<div class="' + cls + disabledClass + '" style="left:' + left.toFixed(2) + 'px; width:' + width.toFixed(2) + 'px; cursor:' + (isDisabled?'not-allowed':'pointer') + '" ' + clickHandler + ' title="' + Utils.escapeHtml(botMark + arena.name) + ' · ' + tinfo + ' · ' + Utils.fmtMskHM(arena.clientStartsAt) + '–' + Utils.fmtMskHM(arena.clientEndsAt) + ' МСК (' + dur + ' мин)"><div class="tname">' + botMark + Utils.escapeHtml(arena.name) + '</div>' + (showInfo ? '<div class="tinfo"><span>' + tinfo + '</span><span>👥 ' + participantsCount + '</span></div>' : '') + '</div>';
       }
       html += '</div>';
     }
@@ -1145,6 +1161,11 @@ const Arena = {
   },
   updateJoinButton(state) {
     const wrap = document.getElementById('arenaJoinBtnWrap');
+    const isPlaying = App.gameActive && !App.gameEnded;
+    if (isPlaying) {
+      wrap.innerHTML = `<button class="secondary arenaJoinBtn" disabled style="width:180px; opacity:0.5; cursor:not-allowed;">ЗАНЯТЫ ИГРОЙ</button>`;
+      return;
+    }
     if (state.phase === 'finished') { wrap.innerHTML = `<button class="secondary" disabled style="width:180px;">ЗАВЕРШЕНА</button>`; return; }
     if (state.phase === 'waiting') { if (state.joined) wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.leaveCurrent()">ОТМЕНИТЬ</button>`; else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button>`; return; }
     if (state.joined) { if (state.paused) wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.pauseCurrent()">▶ ПРОДОЛЖИТЬ</button>`; else wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.pauseCurrent()">⏸ ПАУЗА</button>`; }
@@ -1259,29 +1280,41 @@ const Arena = {
 };
 
 // ============================================================
-// PROFILE
+// PROFILE (Lichess-стиль, график по всем контролям)
 // ============================================================
 const Profile = {
   gamesVisible: false,
+  selectedCategory: 'all',
+  chartRange: 'all',
+  chartData: null,
+  chartUserId: null,
+
   init() {},
+
   enter(username) {
     const target = username || (App.me && App.me.username); if (!target) return;
-    App.profileViewing = target; this.gamesVisible = false;
+    App.profileViewing = target; this.gamesVisible = false; this.selectedCategory = 'all'; this.chartRange = 'all';
     const wrap = document.getElementById('profileGamesWrap'); const btn = document.getElementById('showGamesBtn');
     if (wrap) wrap.classList.add('profileGamesHidden'); if (btn) btn.textContent = '📜 Показать партии';
-    App.socket.emit('getProfile', { username: target }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.render(res.user, res.games, res.history, res.categoryHistory); });
+    App.socket.emit('getProfile', { username: target }, (res) => {
+      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
+      this.render(res.user, res.games, res.history, res.categoryHistory);
+    });
   },
+
   writeMessage() {
     const target = App.profileViewing; if (!target) return;
     if (App.me && target === App.me.username) { alert('Это ваш профиль'); return; }
     Inbox.openWith(target);
   },
+
   toggleGames() {
     this.gamesVisible = !this.gamesVisible;
     const wrap = document.getElementById('profileGamesWrap'); const btn = document.getElementById('showGamesBtn');
     if (this.gamesVisible) { wrap.classList.remove('profileGamesHidden'); btn.textContent = '📜 Скрыть партии'; }
     else { wrap.classList.add('profileGamesHidden'); btn.textContent = '📜 Показать партии'; }
   },
+
   render(user, games, history, categoryHistory) {
     const avatarEl = document.getElementById('pAvatarBig');
     avatarEl.className = 'profileAvatar' + (user.isBot ? ' botAvatar' : '');
@@ -1304,7 +1337,12 @@ const Profile = {
     document.getElementById('pWinrate').textContent = (user.games ? Math.round((user.wins/user.games)*100) : 0) + '%';
     const catEl = document.getElementById('catRatingsGrid');
     if (user.categories) {
-      const cats = [ { key:'classical', name:'Классика', icon:'🐢' }, { key:'rapid', name:'Рапид', icon:'⏱' }, { key:'blitz', name:'Блиц', icon:'⚡' }, { key:'bullet', name:'Пуля', icon:'🔫' } ];
+      const cats = [
+        { key:'bullet', name:'Пуля', icon:'🔫', color:'#fb7185' },
+        { key:'blitz', name:'Блиц', icon:'⚡', color:'#4ade80' },
+        { key:'rapid', name:'Рапид', icon:'⏱', color:'#38bdf8' },
+        { key:'classical', name:'Классика', icon:'🐢', color:'#a78bfa' }
+      ];
       catEl.innerHTML = cats.map(c => {
         const r = user.categories[c.key] || { rating:user.rating, games:0 };
         return `<div class="catCard ${c.key}"><div class="catIcon">${c.icon}</div><div class="catName">${c.name}</div><div class="catRating">${r.rating}</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">${r.games||0} партий</div></div>`;
@@ -1312,38 +1350,156 @@ const Profile = {
     } else catEl.innerHTML = '';
     const writeBtn = document.getElementById('pWriteBtn');
     if (writeBtn) { if (App.me && user.username !== App.me.username && !user.isBot) writeBtn.style.display = ''; else writeBtn.style.display = 'none'; }
-    this.renderChart(history, categoryHistory || games, user.username);
+    this.chartData = { games, history, user, categoryHistory };
+    this.chartUserId = user.username;
+    this.renderChartControls();
+    this.renderChart();
     this.renderGamesList(games, user.username);
   },
-  renderChart(history, games, username) {
-    const wrap = document.getElementById('ratingChartWrap');
-    const categories = [ { key:'classical', label:'Классика', color:'#a78bfa' }, { key:'rapid', label:'Рапид', color:'#38bdf8' }, { key:'blitz', label:'Блиц', color:'#4ade80' }, { key:'bullet', label:'Пуля', color:'#fb7185' } ];
-    const usable = (games || []).filter(g => g.category && categories.some(c => c.key === g.category) && Number.isFinite(Number(g.finishedAt)));
-    const series = categories.map(c => {
-      const rows = usable.filter(g => g.category === c.key).sort((a,b) => Number(a.finishedAt) - Number(b.finishedAt)).map(g => ({ ts: Number(g.finishedAt), rating: Number(g.white === username ? g.whiteAfter : g.blackAfter) })).filter(p => Number.isFinite(p.rating));
-      return { ...c, rows };
-    }).filter(s => s.rows.length);
-    if (!series.length) { wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Недостаточно данных для графика</div>'; return; }
-    const W = 900, H = 300, PL = 58, PR = 18, PT = 28, PB = 34; const IW = W - PL - PR, IH = H - PT - PB;
-    const grid = [];
-    for (let i=0; i<=4; i++) { const yy = PT + IH*i/4; grid.push(`<line x1="${PL}" y1="${yy}" x2="${W-PR}" y2="${yy}" stroke="#3a3833" stroke-width="1"/>`); }
-    const paths = series.map(s => {
-      const vals = s.rows.map(p => p.rating); const lo = Math.floor((Math.min(...vals)-30)/50)*50; const hi = Math.ceil((Math.max(...vals)+30)/50)*50;
-      const span = Math.max(100, hi-lo);
-      const px = (p,i) => PL + (s.rows.length < 2 ? IW/2 : (i/(s.rows.length-1))*IW);
-      const py = p => PT + IH - ((p.rating-lo)/span)*IH;
-      const d = s.rows.map((p,i) => `${i?'L':'M'}${px(p,i).toFixed(1)},${py(p).toFixed(1)}`).join(' ');
-      const dash = s.key === 'classical' ? '' : ' stroke-dasharray="7 4"';
-      return `<g><path d="${d}" fill="none" stroke="${s.color}" stroke-width="2.2"${dash} stroke-linejoin="round" stroke-linecap="round"/></g>`;
-    }).join('');
-    const legend = categories.map(c => { const found = series.find(s => s.key === c.key); return `<span style="display:inline-flex;align-items:center;gap:5px;color:${found?c.color:'#777'};font-size:11px;opacity:${found?1:.45};white-space:nowrap"><i style="display:inline-block;width:18px;border-top:2px ${c.key==='classical'?'solid':'dashed'} ${c.color}"></i>${c.label}${found?' ('+found.rows.length+')':''}</span>`; }).join('');
-    wrap.innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap;margin:0 0 8px">${legend}</div><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;max-height:320px;display:block">${grid.join('')}${paths}</svg>`;
+
+  renderChartControls() {
+    const wrap = document.getElementById('chartControls');
+    if (!wrap) return;
+    const ranges = [
+      { key: '1m', label: '1М' },
+      { key: '3m', label: '3М' },
+      { key: '6m', label: '6М' },
+      { key: '1y', label: '1Г' },
+      { key: 'all', label: 'ALL' }
+    ];
+    wrap.innerHTML = ranges.map(r => `<button class="chartRangeBtn ${r.key === this.chartRange ? 'active' : ''}" onclick="Profile.setChartRange('${r.key}')">${r.label}</button>`).join('');
   },
+
+  setChartRange(range) {
+    this.chartRange = range;
+    this.renderChartControls();
+    this.renderChart();
+  },
+
+  renderChart() {
+    const wrap = document.getElementById('ratingChartWrap');
+    if (!wrap || !this.chartData) return;
+    const { games, user, categoryHistory } = this.chartData;
+
+    const categories = [
+      { key:'bullet', label:'Пуля', color:'#fb7185', dash:'' },
+      { key:'blitz', label:'Блиц', color:'#4ade80', dash:'' },
+      { key:'rapid', label:'Рапид', color:'#38bdf8', dash:'' },
+      { key:'classical', label:'Классика', color:'#a78bfa', dash:'' }
+    ];
+
+    const now = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    let startTs = user.createdAt;
+    if (this.chartRange === '1m') startTs = Math.max(startTs, now - 30*dayMs);
+    else if (this.chartRange === '3m') startTs = Math.max(startTs, now - 90*dayMs);
+    else if (this.chartRange === '6m') startTs = Math.max(startTs, now - 180*dayMs);
+    else if (this.chartRange === '1y') startTs = Math.max(startTs, now - 365*dayMs);
+    else startTs = user.createdAt;
+
+    const endTs = now;
+    const startDay = Math.floor(startTs / dayMs) * dayMs;
+    const endDay = Math.floor(endTs / dayMs) * dayMs;
+
+    const allGames = (categoryHistory && categoryHistory.length ? categoryHistory : games) || [];
+    const series = categories.map(cat => {
+      const relevant = allGames.filter(g => g.category === cat.key && Number(g.finishedAt) >= startDay && Number(g.finishedAt) <= endDay + dayMs);
+      const byDay = new Map();
+      for (const g of relevant) {
+        const day = Math.floor(Number(g.finishedAt) / dayMs) * dayMs;
+        const rating = Number(g.white === this.chartUserId ? g.whiteAfter : g.blackAfter);
+        if (Number.isFinite(rating)) byDay.set(day, rating);
+      }
+      const days = [];
+      for (let d = startDay; d <= endDay; d += dayMs) days.push(d);
+      const points = [];
+      let lastRating = null;
+      for (const d of days) {
+        if (byDay.has(d)) lastRating = byDay.get(d);
+        points.push({ day: d, rating: lastRating });
+      }
+      if (points.length && points[0].rating === null) {
+        const firstNonNull = points.find(p => p.rating !== null);
+        const fallback = user.categories && user.categories[cat.key] ? user.categories[cat.key].rating : 1200;
+        const startVal = firstNonNull ? firstNonNull.rating : fallback;
+        for (const p of points) if (p.rating === null) p.rating = startVal;
+      }
+      return { ...cat, points };
+    });
+
+    const hasAnyPoints = series.some(s => s.points.length > 0);
+    if (!hasAnyPoints) { wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Недостаточно данных для графика</div>'; return; }
+
+    const allValues = [];
+    for (const s of series) for (const p of s.points) if (p.rating !== null) allValues.push(p.rating);
+    if (!allValues.length) { wrap.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:20px 0;text-align:center">Недостаточно данных для графика</div>'; return; }
+    const minV = Math.min(...allValues);
+    const maxV = Math.max(...allValues);
+    const pad = Math.max(20, Math.round((maxV - minV) * 0.1));
+    const yMin = Math.floor((minV - pad) / 50) * 50;
+    const yMax = Math.ceil((maxV + pad) / 50) * 50;
+
+    const W = 900, H = 300, PL = 58, PR = 18, PT = 20, PB = 34;
+    const IW = W - PL - PR;
+    const IH = H - PT - PB;
+
+    const totalDays = Math.max(1, (endDay - startDay) / dayMs + 1);
+    const xOf = (day) => PL + ((day - startDay) / (totalDays - 1 || 1)) * IW;
+    const yOf = (rating) => PT + IH - ((rating - yMin) / Math.max(1, yMax - yMin)) * IH;
+
+    const gridLines = [];
+    const ySteps = 5;
+    for (let i = 0; i <= ySteps; i++) {
+      const val = yMin + (yMax - yMin) * (i / ySteps);
+      const yy = yOf(val);
+      gridLines.push(`<line x1="${PL}" y1="${yy}" x2="${W-PR}" y2="${yy}" stroke="#3a3833" stroke-width="1" stroke-dasharray="3,3"/>`);
+      gridLines.push(`<text x="${PL-8}" y="${yy+4}" fill="#7d7a72" font-size="11" text-anchor="end">${Math.round(val)}</text>`);
+    }
+
+    const xLabels = [];
+    const labelsCount = 6;
+    for (let i = 0; i < labelsCount; i++) {
+      const day = startDay + ((endDay - startDay) * i / (labelsCount - 1 || 1));
+      const xx = xOf(day);
+      const date = new Date(day);
+      const label = date.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' });
+      xLabels.push(`<text x="${xx}" y="${H - 10}" fill="#7d7a72" font-size="11" text-anchor="middle">${label}</text>`);
+    }
+
+    const paths = series.map(s => {
+      const pts = s.points.filter(p => p.rating !== null);
+      if (!pts.length) return '';
+      let d = '';
+      for (let i = 0; i < pts.length; i++) {
+        const p = pts[i];
+        const cmd = i === 0 ? 'M' : 'L';
+        d += `${cmd}${xOf(p.day).toFixed(1)},${yOf(p.rating).toFixed(1)} `;
+      }
+      return `<path d="${d.trim()}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    }).join('');
+
+    const legend = categories.map(c => {
+      const found = series.find(s => s.key === c.key && s.points.some(p => p.rating !== null));
+      return `<span class="chartLegendItem" style="color:${found ? c.color : '#555'};opacity:${found ? 1 : 0.4}"><i style="background:${c.color}"></i>${c.label}</span>`;
+    }).join('');
+
+    wrap.innerHTML = `
+      <div class="chartLegend">${legend}</div>
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;max-height:340px;display:block">
+        ${gridLines.join('')}
+        ${paths}
+        ${xLabels.join('')}
+      </svg>
+    `;
+  },
+
   renderGamesList(games, username) {
     const el = document.getElementById('gamesList');
     if (!games || !games.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px">Партий пока нет</div>'; return; }
+    const filtered = this.selectedCategory === 'all' ? games : games.filter(g => g.category === this.selectedCategory);
+    if (!filtered.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px">Нет партий в этой категории</div>'; return; }
     const frag = document.createDocumentFragment();
-    games.forEach(g => {
+    filtered.forEach(g => {
       const iAmWhite = g.white === username;
       const myBefore = iAmWhite ? g.whiteBefore : g.blackBefore; const myAfter = iAmWhite ? g.whiteAfter : g.blackAfter;
       const delta = myAfter - myBefore; const opp = iAmWhite ? g.black : g.white;
@@ -1381,7 +1537,7 @@ const Community = {
 };
 
 // ============================================================
-// INBOX (отдельная страница)
+// INBOX
 // ============================================================
 const Inbox = {
   dialogs: [],
@@ -2153,4 +2309,3 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('mouseover', e => { const n = e.target.closest && e.target.closest('[data-player]'); if (n) show(n); });
   document.addEventListener('mouseout', e => { const n = e.target.closest && e.target.closest('[data-player]'); if (n && !n.contains(e.relatedTarget)) { clearTimeout(hoverTimer); hoverName = ''; const c = document.getElementById('playerHoverCard'); if (c) c.style.display = 'none'; } });
 })();
-
