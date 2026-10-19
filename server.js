@@ -852,11 +852,13 @@ function nextStartFor(tpl, now) {
     return (slot + 1) * CYCLE_60;
   }
   if (isRapid10) {
-    const slot = Math.floor(now / CYCLE_120);
+    const CYCLE = 120 * 60 * 1000;        // 2 часа на слот
+    const BOT_OFFSET = 10 * 60 * 1000;    // сдвиг для ботов: +10 минут
+    const slot = Math.floor(now / CYCLE);
     const isBotVariant = tpl.repeat.endsWith('_bots');
     const slotIsBot = (slot % 2 === 1);
-    if (slotIsBot === isBotVariant) return slot * CYCLE_120;
-    return (slot + 1) * CYCLE_120;
+    const baseStart = (slotIsBot === isBotVariant) ? slot * CYCLE : (slot + 1) * CYCLE;
+    return isBotVariant ? baseStart + BOT_OFFSET : baseStart;
   }
   if (tpl.repeat === 'classical30') {
     const slot = Math.floor(now / (4 * 60 * 60 * 1000));
@@ -874,7 +876,7 @@ function stepFor(tpl) {
   const isRapid10 = (tpl.repeat === 'rapid10_human' || tpl.repeat === 'rapid10_bots');
   if (isOnePlusZero) return 60 * 60 * 1000;   // следующий такой же через час
   if (isBlitzOrBullet21) return 120 * 60 * 1000; // следующий такой же через 2 часа
-  if (isRapid10) return 240 * 60 * 1000;      // следующий такой же через 4 часа
+  if (isRapid10) return 240 * 60 * 1000;
   if (tpl.repeat === 'classical30') return 8 * 3600 * 1000; // классика только human, следующая через 8 часов
   return 3600 * 1000;
 }
