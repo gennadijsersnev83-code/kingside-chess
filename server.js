@@ -1873,11 +1873,20 @@ io.on('connection', (socket) => {
         whiteAfter: r.white_after, blackAfter: r.black_after,
         finishedAt: Number(r.finished_at), category: r.category || 'blitz', isBot: !!r.is_bot
       }));
-      const historyRes = await pool.query(`SELECT white, black, white_after, black_after, finished_at FROM games WHERE white = $1 OR black = $1 ORDER BY finished_at ASC`, [username]);
+      // Полная история рейтинга отдельно от последних 50 партий в списке профиля.
+      const historyRes = await pool.query(
+        `SELECT white, black, white_before, black_before, white_after, black_after, finished_at, category
+         FROM games WHERE white = $1 OR black = $1 ORDER BY finished_at ASC, id ASC`, [username]);
       const history = [{ ts: u.createdAt, rating: 1200 }];
+      const categoryHistory = historyRes.rows.map(r => ({
+        white: r.white, black: r.black,
+        whiteBefore: r.white_before, blackBefore: r.black_before,
+        whiteAfter: r.white_after, blackAfter: r.black_after,
+        finishedAt: Number(r.finished_at), category: r.category || 'blitz'
+      }));
       for (const r of historyRes.rows) history.push({ ts: Number(r.finished_at), rating: r.white === username ? r.white_after : r.black_after });
       const user = publicUser(username); user.online = isUserOnline(username) || !!u.isBot;
-      cb({ ok: true, user, games, history });
+      cb({ ok: true, user, games, history, categoryHistory });
     } catch (err) { cb({ ok: false, msg: 'Ошибка базы данных' }); }
   });
 
@@ -2864,3 +2873,4 @@ process.on('SIGTERM', async () => {
   process.exit(0);
 });
 process.on('uncaughtException', (err) => { console.error('[Server] Ошибка:', err); });
+
