@@ -1395,39 +1395,69 @@ const Profile = {
     const startDay = Math.floor(startTs / dayMs) * dayMs;
     const endDay = Math.floor(now / dayMs) * dayMs;
     const allGames = (Array.isArray(categoryHistory) ? categoryHistory : (games || []));
-    const W=900, H=240, PL=58, PR=18, PT=18, PB=32, IW=W-PL-PR, IH=H-PT-PB;
+    const W=900, H=300, PL=58, PR=18, PT=18, PB=34, IW=W-PL-PR, IH=H-PT-PB;
     const xOf = day => PL + ((day-startDay)/(Math.max(dayMs,endDay-startDay))) * IW;
     const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-    const charts = categories.map(cat => {
-      const relevant = allGames.filter(g => g.category === cat.key && Number(g.finishedAt) >= startDay && Number(g.finishedAt) <= endDay + dayMs)
+    // One shared timeline and one shared rating scale, with all time-control histories overlaid.
+    const series = categories.map(cat => {
+      const relevant = allGames.filter(g => g.category === cat.key)
         .sort((a,b) => Number(a.finishedAt)-Number(b.finishedAt));
-      // Берём фактический рейтинг после каждой партии; не подставляем текущий рейтинг
-      // на все дни — иначе получается ровная выдуманная линия.
       const byDay = new Map();
       for (const g of relevant) {
         const ts = Number(g.finishedAt);
-        const value = Number(g.white === this.chartUserId ? g.whiteAfter : g.blackAfter);
-        if (Number.isFinite(ts) && Number.isFinite(value)) byDay.set(Math.floor(ts/dayMs)*dayMs, value);
+        const rating = Number(g.white === this.chartUserId ? g.whiteAfter : g.blackAfter);
+        if (Number.isFinite(ts) && Number.isFinite(rating)) byDay.set(Math.floor(ts/dayMs)*dayMs, rating);
       }
-      if (!byDay.size) return `<section class="ratingMiniChart"><div class="ratingMiniChartTitle"><span style="background:${cat.color}"></span>${cat.label}</div><div class="ratingMiniChartEmpty">Нет партий в этом режиме за выбранный период</div></section>`;
+      if (!byDay.size) return { ...cat, points:[], latest:null, delta:null };
       let last = null;
+      // Seed the range with the latest known rating before its start, if one exists.
+      for (const [day, rating] of byDay) if (day < startDay) last = rating;
       const points=[];
-      for(let d=startDay; d<=endDay; d+=dayMs){ if(byDay.has(d)) last=byDay.get(d); if(last!==null) points.push({day:d,rating:last}); }
-      const values = points.map(p=>p.rating);
-      const minV=Math.min(...values), maxV=Math.max(...values);
-      const pad=Math.max(20,Math.ceil((maxV-minV)*.12));
-      const yMin=Math.floor((minV-pad)/50)*50, yMax=Math.ceil((maxV+pad)/50)*50 || minV+50;
-      const yOf = rating => PT+IH-((rating-yMin)/Math.max(1,yMax-yMin))*IH;
-      const grid=[];
-      for(let i=0;i<=4;i++){const val=yMin+(yMax-yMin)*i/4, y=yOf(val);grid.push(`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="#3a3833" stroke-dasharray="3,3"/><text x="${PL-8}" y="${y+4}" fill="#7d7a72" font-size="11" text-anchor="end">${Math.round(val)}</text>`);}
-      const path=points.map((p,i)=>`${i?'L':'M'}${xOf(p.day).toFixed(1)},${yOf(p.rating).toFixed(1)}`).join(' ');
-      const labels=[];
-      for(let i=0;i<5;i++){const day=startDay+(endDay-startDay)*i/4;labels.push(`<text x="${xOf(day)}" y="${H-8}" fill="#7d7a72" font-size="11" text-anchor="middle">${new Date(day).toLocaleDateString('ru-RU',{day:'2-digit',month:'short'})}</text>`);}
-      const latest=points[points.length-1].rating, first=points[0].rating, delta=latest-first;
-      return `<section class="ratingMiniChart"><div class="ratingMiniChartTitle"><span style="background:${cat.color}"></span>${cat.label}<b>${latest}</b><em style="color:${delta>0?'#4ade80':delta<0?'#fb7185':'var(--muted)'}">${delta>0?'+':''}${delta}</em></div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="График рейтинга: ${esc(cat.label)}" style="width:100%;height:auto;display:block">${grid.join('')}<path d="${path}" fill="none" stroke="${cat.color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>${points.length===1?`<circle cx="${xOf(points[0].day)}" cy="${yOf(points[0].rating)}" r="3.5" fill="${cat.color}"/>`:''}${labels.join('')}</svg></section>`;
+      for(let d=startDay; d<=endDay; d+=dayMs) {
+        if (byDay.has(d)) last=byDay.get(d);
+        if (last !== null) points.push({day:d,rating:last});
+      }
+      // If a category has only a game after the current day boundary, keep its exact game day visible.
+      for (const [day, rating] of byDay) {
+        if (day >= startDay && day <= endDay && !points.some(p=>p.day===day)) points.push({day,rating});
+      }
+      points.sort((a,b)=>a.day-b.day);
+      const inRange = [...byDay.entries()].filter(([day])=>day>=startDay && day<=endDay).map(([,rating])=>rating);
+      const latest = points.length ? points[points.length-1].rating : null;
+      const first = inRange.length ? inRange[0] : (points.length ? points[0].rating : null);
+      return { ...cat, points, latest, delta: first===null || latest===null ? null : latest-first };
     });
-    wrap.innerHTML = charts.join('');
+    const visible = series.filter(s=>s.points.length);
+    if (!visible.length) {
+      wrap.innerHTML = '<div class="ratingChartEmpty">Пока нет истории рейтинга за выбранный период</div>';
+      return;
+    }
+    const allValues = visible.flatMap(s=>s.points.map(p=>p.rating));
+    const minV=Math.min(...allValues), maxV=Math.max(...allValues);
+    const pad=Math.max(30,Math.ceil((maxV-minV)*.12));
+    const yMin=Math.floor((minV-pad)/50)*50, yMax=Math.ceil((maxV+pad)/50)*50;
+    const yOf = rating => PT+IH-((rating-yMin)/Math.max(1,yMax-yMin))*IH;
+    const grid=[];
+    for(let i=0;i<=5;i++) {
+      const val=yMin+(yMax-yMin)*i/5, y=yOf(val);
+      grid.push(`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="var(--border,#3a3833)" stroke-dasharray="3,4"/><text x="${PL-9}" y="${y+4}" fill="var(--muted,#7d7a72)" font-size="11" text-anchor="end">${Math.round(val)}</text>`);
+    }
+    const labels=[];
+    for(let i=0;i<5;i++) {
+      const day=startDay+(endDay-startDay)*i/4;
+      labels.push(`<text x="${xOf(day)}" y="${H-8}" fill="var(--muted,#7d7a72)" font-size="11" text-anchor="middle">${new Date(day).toLocaleDateString('ru-RU',{day:'2-digit',month:'short'})}</text>`);
+    }
+    const paths=visible.map(s=>{
+      const path=s.points.map((p,i)=>`${i?'L':'M'}${xOf(p.day).toFixed(1)},${yOf(p.rating).toFixed(1)}`).join(' ');
+      return `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>${s.points.length===1?`<circle cx="${xOf(s.points[0].day)}" cy="${yOf(s.points[0].rating)}" r="3.5" fill="${s.color}"/>`:''}`;
+    }).join('');
+    const legend=series.map(s=>{
+      const value=s.latest===null?'—':s.latest;
+      const delta=s.delta===null?'':` <em style="color:${s.delta>0?'#4ade80':s.delta<0?'#fb7185':'var(--muted)'}">${s.delta>0?'+':''}${s.delta}</em>`;
+      return `<span class="ratingOverlayLegendItem"><i style="background:${s.color}"></i>${esc(s.label)} <b>${value}</b>${delta}</span>`;
+    }).join('');
+    wrap.innerHTML = `<div class="ratingOverlayLegend">${legend}</div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="История рейтинга по всем режимам на одном графике" style="width:100%;height:auto;display:block">${grid.join('')}${paths}${labels.join('')}</svg>`;
   },
 
   renderGamesList(games, username) {
