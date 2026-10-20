@@ -42,7 +42,7 @@ const MAX_MISTAKES = 12000;
 function setPool(pool) { _pool = pool; }
 function positionKey(fen) { return String(fen || '').split(' ').slice(0, 4).join(' '); }
 function mistakeKey(pos, from, to) { return `${pos}|${from}|${to}`; }
-function squareFromRC(sq) { return sqName(sq[0], sq[1]); }
+
 function recordMistake(pos, from, to, penalty) {
   if (!pos || !from || !to || !(penalty > 0)) return;
   const key = mistakeKey(pos, from, to);
@@ -300,8 +300,32 @@ function allLegalMoves(state, white) {
 
 function sqName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
 
+// 🔧 FIX: проверка, что фигура связана (pinned) — её нельзя считать защитником
+function isPinned(state, r, c, white) {
+  const k = findKing(state, white);
+  if (!k) return false;
+  if (r === k[0] && c === k[1]) return false;
+  const p = state.board[r][c];
+  if (!p || isWhite(p) !== white) return false;
+  // временно убираем фигуру и смотрим, открылся ли шах
+  const copy = { board: state.board.map(row => row.slice()), turn: state.turn, castling: state.castling, ep: state.ep, half: state.half, full: state.full };
+  copy.board[r][c] = null;
+  return !isAttacked(state, k[0], k[1], !white) && isAttacked(copy, k[0], k[1], !white);
+}
+
+// 🔧 FIX: check defended with pin-awareness
+function isDefended(state, r, c, white) {
+  for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
+    if (rr === r && cc === c) continue;
+    const q = state.board[rr][cc]; if (!q || isWhite(q) !== white) continue;
+    if (isPinned(state, rr, cc, white)) continue;
+    if (pseudoMoves(state, rr, cc).some(([mr, mc]) => mr === r && mc === c)) return true;
+  }
+  return false;
+}
+
 // ============================================================
-// 🔥 ОЦЕНКА (с защитой короля и фигур)
+// 🔥 ОЦЕНКА
 // ============================================================
 function evaluate(state, forWhite) {
   let score = 0;
@@ -324,7 +348,6 @@ function evaluate(state, forWhite) {
     if (p === 'p') blackPawnsByFile[c]++;
   }
 
-  // Штраф за сдвоенные/изолированные пешки
   for (let f = 0; f < 8; f++) {
     if (whitePawnsByFile[f] > 1) score -= 10 * (whitePawnsByFile[f] - 1);
     if (blackPawnsByFile[f] > 1) score += 10 * (blackPawnsByFile[f] - 1);
@@ -342,7 +365,6 @@ function evaluate(state, forWhite) {
     }
   }
 
-  // Бонус за продвижение пешек
   for (let c = 0; c < 8; c++) {
     for (let r = 0; r < 8; r++) {
       if (state.board[r][c] === 'P') score += (6 - r) * 5;
@@ -350,13 +372,12 @@ function evaluate(state, forWhite) {
     }
   }
 
-  // 🔥 БЕЗОПАСНОСТЬ КОРОЛЯ (в миттельшпиле)
   if (whitePieces + blackPieces > 10) {
     if (whiteKing) {
-      if (whiteKing[1] === 4) score -= 300; // Ke1 — очень плохо
-      else if (whiteKing[1] === 3 || whiteKing[1] === 5) score -= 150; // Kd1, Kf1
-      else if (whiteKing[1] === 2 || whiteKing[1] === 6) score += 100; // Kc1, Kg1 — рокировка
-      if (whiteKing[0] < 7) score -= 200; // король вышел из дома
+      if (whiteKing[1] === 4) score -= 300;
+      else if (whiteKing[1] === 3 || whiteKing[1] === 5) score -= 150;
+      else if (whiteKing[1] === 2 || whiteKing[1] === 6) score += 100;
+      if (whiteKing[0] < 7) score -= 200;
     }
     if (blackKing) {
       if (blackKing[1] === 4) score += 300;
@@ -366,19 +387,14 @@ function evaluate(state, forWhite) {
     }
   }
 
-  // 🔥 ЗАЩИТА ФИГУР (висяки)
+  // 🔧 FIX: висяки — с учётом pinned-защитников
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     const isW = isWhite(p);
     const val = PIECE_VALUES[p.toLowerCase()] || 0;
     if (val < 300) continue;
     if (isAttacked(state, r, c, !isW)) {
-      let defended = false;
-      for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
-        if (rr === r && cc === c) continue;
-        const q = state.board[rr][cc]; if (!q || isWhite(q) !== isW) continue;
-        if (pseudoMoves(state, rr, cc).some(([mr, mc]) => mr === r && mc === c)) { defended = true; break; }
-      }
+      const defended = isDefended(state, r, c, isW);
       if (!defended) {
         score += isW ? -val : val;
       } else {
@@ -387,7 +403,6 @@ function evaluate(state, forWhite) {
     }
   }
 
-  // Эндшпиль: король идёт в центр
   if (whitePieces + blackPieces <= 5) {
     if (whiteKing && blackKing) {
       const dist = Math.abs(whiteKing[0] - blackKing[0]) + Math.abs(whiteKing[1] - blackKing[1]);
@@ -402,10 +417,13 @@ function evaluate(state, forWhite) {
   return forWhite ? score : -score;
 }
 
-function quiescence(state, alpha, beta, color) {
+// 🔧 FIX: quiescence с depth-лимитом и корректной проверкой шаха/мата
+function quiescence(state, alpha, beta, color, qdepth) {
   const standPat = evaluate(state, color === 1);
   if (standPat >= beta) return beta;
   if (alpha < standPat) alpha = standPat;
+
+  if (qdepth <= 0) return alpha;
 
   const legal = allLegalMoves(state, color === 1);
   if (legal.length === 0) {
@@ -426,7 +444,7 @@ function quiescence(state, alpha, beta, color) {
 
   for (const [from, to] of captures) {
     const next = applyMove(state, from, to);
-    const score = -quiescence(next, -beta, -alpha, -color);
+    const score = -quiescence(next, -beta, -alpha, -color, qdepth - 1);
     if (score >= beta) return beta;
     if (score > alpha) alpha = score;
   }
@@ -435,6 +453,7 @@ function quiescence(state, alpha, beta, color) {
 
 const killerMoves = [];
 
+// 🔧 FIX: negamax — штрафы safety/memory применяются на каждом узле, а не только в корне
 function negamax(state, depth, alpha, beta, color, deadline) {
   if (Date.now() >= deadline) return evaluate(state, color === 1);
 
@@ -444,7 +463,7 @@ function negamax(state, depth, alpha, beta, color, deadline) {
     return 0;
   }
 
-  if (depth === 0) return quiescence(state, alpha, beta, color);
+  if (depth === 0) return quiescence(state, alpha, beta, color, 4);
 
   const killers = killerMoves[depth] || [];
   const ordered = legal.slice().sort((a, b) => {
@@ -458,7 +477,12 @@ function negamax(state, depth, alpha, beta, color, deadline) {
   let best = -Infinity;
   for (const [from, to] of ordered) {
     const next = applyMove(state, from, to);
-    const score = -negamax(next, depth - 1, -beta, -alpha, -color, deadline);
+    let score = -negamax(next, depth - 1, -beta, -alpha, -color, deadline);
+    // 🔧 FIX: штраф за тактическую подставку применяется внутри negamax
+    const safetyPenalty = tacticalSafetyPenalty(state, from, to, color === 1);
+    if (safetyPenalty > 0) score -= safetyPenalty;
+    const memoryPenalty = learnedMistakePenalty(state, from, to);
+    if (memoryPenalty > 0) score -= memoryPenalty;
     if (score > best) best = score;
     if (score > alpha) alpha = score;
     if (alpha >= beta) {
@@ -500,6 +524,7 @@ function moveScore(state, from, to) {
   return score;
 }
 
+// 🔧 FIX: tacticalSafetyPenalty — проверяет реальный ответ соперника (взятие), а не только isAttacked
 function tacticalSafetyPenalty(state, from, to, moverWhite) {
   const piece = state.board[from[0]][from[1]];
   if (!piece) return 0;
@@ -507,20 +532,31 @@ function tacticalSafetyPenalty(state, from, to, moverWhite) {
   const moved = next.board[to[0]][to[1]];
   if (!moved) return 0;
   const value = PIECE_VALUES[moved.toLowerCase()] || 0;
-  if (value < 300) return 0;
-  const attacked = isAttacked(next, to[0], to[1], !moverWhite);
-  if (!attacked) return 0;
-  const defended = isAttacked(next, to[0], to[1], moverWhite);
+  if (value < 300) return 0; // пешки/кони/слоны-мелочь не штрафуем жёстко
+
+  // если ход даёт мат — штраф не нужен
+  const oppLegal = allLegalMoves(next, !moverWhite);
+  if (oppLegal.length === 0) return 0;
+
+  // ищем реальные взятия фигуры, которую мы только что поставили
+  let canBeCaptured = false;
   let cheapestAttacker = Infinity;
-  for (let r=0;r<8;r++) for (let c=0;c<8;c++) {
-    const p = next.board[r][c];
-    if (!p || isWhite(p) !== !moverWhite) continue;
-    if (pseudoMoves(next,r,c).some(([rr,cc]) => rr===to[0] && cc===to[1])) {
-      cheapestAttacker = Math.min(cheapestAttacker, PIECE_VALUES[p.toLowerCase()] || 0);
+  for (const [[fr, fc], [tr, tc]] of oppLegal) {
+    if (tr === to[0] && tc === to[1]) {
+      canBeCaptured = true;
+      cheapestAttacker = Math.min(cheapestAttacker, PIECE_VALUES[next.board[fr][fc].toLowerCase()] || 0);
     }
   }
-  if (!defended) return Math.round(value * 0.88);
-  if (Number.isFinite(cheapestAttacker) && cheapestAttacker < value) return Math.round((value - cheapestAttacker) * 0.45);
+  if (!canBeCaptured) return 0;
+
+  const defended = isDefended(next, to[0], to[1], moverWhite);
+  if (!defended) {
+    // фигура реально теряется — штраф почти полный
+    return Math.round(value * 0.92);
+  }
+  if (Number.isFinite(cheapestAttacker) && cheapestAttacker < value) {
+    return Math.round((value - cheapestAttacker) * 0.6);
+  }
   return 0;
 }
 
@@ -530,31 +566,30 @@ function learnedMistakePenalty(state, from, to) {
   return item ? Math.min(1800, item.penalty * Math.min(1.5, 1 + Math.log2(Math.max(1, item.seen)) * 0.08)) : 0;
 }
 
+// 🔧 FIX: pickMoveSearch — fallback на безопасный ход, без случайного legal[0]
 function pickMoveSearch(state, isWhiteTurn, timeMs) {
   const legal = allLegalMoves(state, isWhiteTurn);
   if (legal.length === 0) return null;
   if (legal.length === 1) return legal[0];
 
-  for (let i = legal.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [legal[i], legal[j]] = [legal[j], legal[i]];
-  }
-
   const color = isWhiteTurn ? 1 : -1;
   const deadline = Date.now() + Math.max(50, timeMs);
 
-  let bestMove = legal[0];
-  let maxDepth = 6;
+  // 🔧 FIX: сразу упорядочиваем по moveScore — при таймауте на depth=1 будет осмысленный ход
+  const orderedRoot = legal.slice().sort((a, b) => {
+    const sa = moveScore(state, a[0], a[1]) - tacticalSafetyPenalty(state, a[0], a[1], isWhiteTurn);
+    const sb = moveScore(state, b[0], b[1]) - tacticalSafetyPenalty(state, b[0], b[1], isWhiteTurn);
+    return sb - sa;
+  });
+
+  let bestMove = orderedRoot[0];
+  const maxDepth = 6;
 
   for (let depth = 1; depth <= maxDepth; depth++) {
     let alpha = -Infinity, beta = Infinity;
     let localBest = null, localBestScore = -Infinity;
 
-    const ordered = legal.slice().sort((a, b) => {
-      return moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]);
-    });
-
-    for (const [from, to] of ordered) {
+    for (const [from, to] of orderedRoot) {
       if (Date.now() >= deadline) break;
       const next = applyMove(state, from, to);
       let score = -negamax(next, depth - 1, -beta, -alpha, -color, deadline);
@@ -567,7 +602,8 @@ function pickMoveSearch(state, isWhiteTurn, timeMs) {
       if (score > alpha) alpha = score;
     }
 
-    if (localBest && Date.now() < deadline) bestMove = localBest;
+    // 🔧 FIX: используем лучший найденный, даже если время истекло
+    if (localBest) bestMove = localBest;
     if (Date.now() >= deadline) break;
   }
 
@@ -632,7 +668,8 @@ function playSelfPlayGame() {
     }
 
     const isW = state.turn === 'w';
-    const mv = pickMoveSearch(state, isW, 80);
+    // 🔧 FIX: увеличено время на ход в self-play (было 80 мс)
+    const mv = pickMoveSearch(state, isW, 400);
 
     if (!mv || !Array.isArray(mv) || mv.length !== 2) break;
     if (!Array.isArray(mv[0]) || !Array.isArray(mv[1])) break;
@@ -717,23 +754,21 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
 
   try {
     const state = parseFen(fen);
-    // 🔥 Теперь учитываем переданное время (timeLeft) и инкремент (inc)
     const myTime = timeInfo && typeof timeInfo.timeLeft === 'number' ? timeInfo.timeLeft : 5;
     const inc = timeInfo && typeof timeInfo.inc === 'number' ? timeInfo.inc : 0;
 
     let thinkMs;
-    // Адаптация под пулю (очень мало времени => быстрые ходы)
-    if (myTime < 2) thinkMs = 30;
-    else if (myTime < 5) thinkMs = 50;
-    else if (myTime < 10) thinkMs = 100;
-    else if (myTime < 30) thinkMs = 200;
-    else if (myTime < 60) thinkMs = 300;
-    else thinkMs = 400;
+    if (myTime < 2) thinkMs = 60;
+    else if (myTime < 5) thinkMs = 100;
+    else if (myTime < 10) thinkMs = 200;
+    else if (myTime < 30) thinkMs = 350;
+    else if (myTime < 60) thinkMs = 500;
+    else thinkMs = 700;
 
-    // Не тратим больше 10% остатка времени + учитываем инкремент
     const allowedByClock = (myTime + inc) * 0.1 * 1000;
     thinkMs = Math.min(thinkMs, allowedByClock);
-    thinkMs = Math.max(30, thinkMs); // минимум 30мс чтобы хоть что-то посчитать
+    // 🔧 FIX: минимум 80 мс (было 30), иначе negamax не успевает даже depth=1
+    thinkMs = Math.max(80, thinkMs);
 
     const move = pickMoveSearch(state, color === 'w', thinkMs);
     if (!move || !Array.isArray(move) || move.length !== 2) return null;
@@ -762,7 +797,7 @@ function learnFromObservedMove(prevFen, move, newFen, moverColor, timeControl, e
     let hanging = 0;
     const p = after.board[to[0]][to[1]];
     if (p && isWhite(p) === moverWhite && (PIECE_VALUES[p.toLowerCase()] || 0) >= 300 && isAttacked(after, to[0], to[1], !moverWhite)) {
-      const defended = isAttacked(after, to[0], to[1], moverWhite);
+      const defended = isDefended(after, to[0], to[1], moverWhite);
       if (!defended) hanging = Math.round((PIECE_VALUES[p.toLowerCase()] || 0) * 0.8);
     }
     const penalty = Math.max(drop > 220 ? drop : 0, hanging);
