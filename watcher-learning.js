@@ -1,7 +1,7 @@
 'use strict';
 
 let DATA = {
-  version: 5,
+  version: 6,
   weights: {},
   games: 0,
   wins: 0,
@@ -342,7 +342,61 @@ function developmentScore(state, white) {
 }
 
 // ============================================================
-// 🔥 ОЦЕНКА (чистая, без костылей)
+// 🔥 TRANSPOSITION TABLE
+// ============================================================
+const TT_SIZE = 1 << 20;
+const TT = {
+  keys: new Int32Array(TT_SIZE),
+  depths: new Int8Array(TT_SIZE),
+  scores: new Int32Array(TT_SIZE),
+  flags: new Int8Array(TT_SIZE),
+  moves: new Int32Array(TT_SIZE),
+  age: new Int32Array(TT_SIZE),
+};
+let ttAge = 0;
+
+function hashState(state) {
+  let h = 0;
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = state.board[r][c];
+    if (!p) continue;
+    const idx = 'PNBRQKpnbrqk'.indexOf(p);
+    h ^= (idx + 1) * (r * 8 + c + 1) * 0x9E3779B1;
+  }
+  h ^= state.turn === 'w' ? 0xABCD : 0x1234;
+  h ^= (state.castling.length << 16);
+  h ^= state.ep === '-' ? 0 : (state.ep.charCodeAt(0) << 20);
+  return h >>> 0;
+}
+
+function ttStore(key, depth, score, flag, move, age) {
+  const idx = key & (TT_SIZE - 1);
+  if (TT.depths[idx] > depth && TT.age[idx] === age) return;
+  TT.keys[idx] = key;
+  TT.depths[idx] = depth;
+  TT.scores[idx] = score;
+  TT.flags[idx] = flag;
+  TT.moves[idx] = move;
+  TT.age[idx] = age;
+}
+
+function ttProbe(key, depth, alpha, beta, age) {
+  const idx = key & (TT_SIZE - 1);
+  if (TT.keys[idx] !== key || TT.age[idx] !== age) return null;
+  if (TT.depths[idx] < depth) return null;
+  const score = TT.scores[idx];
+  const flag = TT.flags[idx];
+  if (flag === 0) return score;
+  if (flag === 1 && score >= beta) return beta;
+  if (flag === 2 && score <= alpha) return alpha;
+  return null;
+}
+
+function encodeMove(from, to) { return (from[0] << 12) | (from[1] << 8) | (to[0] << 4) | to[1]; }
+function decodeMove(m) { return [[ (m >> 12) & 15, (m >> 8) & 15 ], [ (m >> 4) & 15, m & 15 ]]; }
+
+// ============================================================
+// 🔥 ОЦЕНКА
 // ============================================================
 function evaluate(state, forWhite) {
   let score = 0;
@@ -350,6 +404,8 @@ function evaluate(state, forWhite) {
   let whiteKing = null, blackKing = null;
   let totalPieces = 0;
   let whiteQueens = 0, blackQueens = 0;
+  const wPawns = [0,0,0,0,0,0,0,0];
+  const bPawns = [0,0,0,0,0,0,0,0];
 
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
@@ -364,19 +420,29 @@ function evaluate(state, forWhite) {
     if (p === 'Q') whiteQueens++;
     if (p === 'q') blackQueens++;
     if (p !== 'K' && p !== 'k') { if (isW) whitePieces++; else blackPieces++; }
+    if (p === 'P') wPawns[c]++;
+    if (p === 'p') bPawns[c]++;
   }
 
-  // 🔧 Штраф за потерю ферзя (жёсткий, но не -50000)
+  // Потеря ферзя
   if (whiteQueens === 0 && blackQueens > 0) score -= 900;
   if (blackQueens === 0 && whiteQueens > 0) score += 900;
 
-  // 🔧 Бонус за развитие
+  // Пешечная структура
+  for (let f = 0; f < 8; f++) {
+    if (wPawns[f] > 1) score -= 15 * (wPawns[f] - 1);
+    if (bPawns[f] > 1) score += 15 * (bPawns[f] - 1);
+    if (wPawns[f] > 0 && (f === 0 || wPawns[f-1] === 0) && (f === 7 || wPawns[f+1] === 0)) score -= 20;
+    if (bPawns[f] > 0 && (f === 0 || bPawns[f-1] === 0) && (f === 7 || bPawns[f+1] === 0)) score += 20;
+  }
+
+  // Бонус за развитие
   if (totalPieces > 20) {
     score += developmentScore(state, true) * 30;
     score -= developmentScore(state, false) * 30;
   }
 
-  // 🔧 Безопасность короля (мягко)
+  // Безопасность короля
   if (whitePieces + blackPieces > 8) {
     if (whiteKing) {
       const isCastled = whiteKing[0] === 7 && (whiteKing[1] === 6 || whiteKing[1] === 2);
@@ -390,7 +456,19 @@ function evaluate(state, forWhite) {
     }
   }
 
-  // 🔧 Висяки (1.2x)
+  // Мобильность (миттельшпиль)
+  if (whitePieces + blackPieces > 10 && whitePieces + blackPieces < 25) {
+    let wMob = 0, bMob = 0;
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = state.board[r][c]; if (!p) continue;
+      if (p.toLowerCase() === 'k' || p.toLowerCase() === 'p') continue;
+      const mob = pseudoMoves(state, r, c).length;
+      if (isWhite(p)) wMob += mob; else bMob += mob;
+    }
+    score += (wMob - bMob) * 3;
+  }
+
+  // Висяки
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     const isW = isWhite(p);
@@ -406,7 +484,9 @@ function evaluate(state, forWhite) {
   return forWhite ? score : -score;
 }
 
-// 🔧 quiescence (видит шахи и взятия)
+// ============================================================
+// 🔥 QUIESCENCE
+// ============================================================
 function quiescence(state, alpha, beta, color, qdepth) {
   const standPat = evaluate(state, color === 1);
   if (standPat >= beta) return beta;
@@ -448,63 +528,72 @@ function quiescence(state, alpha, beta, color, qdepth) {
   return alpha;
 }
 
-const killerMoves = [];
-
-function negamax(state, depth, alpha, beta, color, deadline) {
+// ============================================================
+// 🔥 NEGAMAX с ТТ и Check Extension
+// ============================================================
+function negamax(state, depth, alpha, beta, color, deadline, ply = 0) {
   if (Date.now() >= deadline) return evaluate(state, color === 1);
+
+  const key = hashState(state);
+  const probe = ttProbe(key, depth, alpha, beta, ttAge);
+  if (probe !== null) return probe;
 
   const legal = allLegalMoves(state, color === 1);
   if (legal.length === 0) {
-    if (inCheck(state, color === 1)) return -MATE_SCORE + (10 - depth);
+    if (inCheck(state, color === 1)) return -MATE_SCORE + ply;
     return 0;
   }
 
-  if (depth === 0) return quiescence(state, alpha, beta, color, 4);
+  const inChk = inCheck(state, color === 1);
+  if (inChk && depth < 8) depth += 1;
 
-  const killers = killerMoves[depth] || [];
+  if (depth <= 0) return quiescence(state, alpha, beta, color, 4);
+
+  const ttMove = TT.moves[key & (TT_SIZE - 1)];
   const ordered = legal.slice().sort((a, b) => {
-    const aKiller = killers.some(k => k[0][0] === a[0][0] && k[0][1] === a[0][1] && k[1][0] === a[1][0] && k[1][1] === a[1][1]);
-    const bKiller = killers.some(k => k[0][0] === b[0][0] && k[0][1] === b[0][1] && k[1][0] === b[1][0] && k[1][1] === b[1][1]);
-    if (aKiller && !bKiller) return -1;
-    if (!aKiller && bKiller) return 1;
+    const aEnc = encodeMove(a[0], a[1]);
+    const bEnc = encodeMove(b[0], b[1]);
+    if (ttMove && aEnc === ttMove) return -1;
+    if (ttMove && bEnc === ttMove) return 1;
+    const aCap = state.board[a[1][0]][a[1][1]];
+    const bCap = state.board[b[1][0]][b[1][1]];
+    if (aCap && !bCap) return -1;
+    if (!aCap && bCap) return 1;
     return 0;
   });
 
   let best = -Infinity;
+  let bestMove = null;
+  let flag = 2;
+
   for (const [from, to] of ordered) {
     try {
       const next = applyMove(state, from, to);
-      let score = -negamax(next, depth - 1, -beta, -alpha, -color, deadline);
+      let score = -negamax(next, depth - 1, -beta, -alpha, -color, deadline, ply + 1);
       
-      // 🔧 Встроенная защита ферзя на каждом узле
       const piece = state.board[from[0]][from[1]];
       if (piece && piece.toLowerCase() === 'q') {
-        const nextW = next.board[to[0]][to[1]];
-        if (nextW && isWhite(nextW) === (color === 1)) {
-          const attacked = isAttacked(next, to[0], to[1], color !== 1);
-          const defended = isDefended(next, to[0], to[1], color === 1);
-          if (attacked && !defended) score -= 5000; // штраф за висящего ферзя
-        }
+        const attacked = isAttacked(next, to[0], to[1], color !== 1);
+        const defended = isDefended(next, to[0], to[1], color === 1);
+        if (attacked && !defended) score -= 5000;
       }
       
-      const safetyPenalty = tacticalSafetyPenalty(state, from, to, color === 1);
-      if (safetyPenalty > 0) score -= safetyPenalty;
-      const memoryPenalty = learnedMistakePenalty(state, from, to);
-      if (memoryPenalty > 0) score -= memoryPenalty;
-      if (score > best) best = score;
-      if (score > alpha) alpha = score;
-      if (alpha >= beta) {
-        if (!killerMoves[depth]) killerMoves[depth] = [];
-        killerMoves[depth].push([from, to]);
-        if (killerMoves[depth].length > 2) killerMoves[depth].shift();
-        break;
-      }
+      if (score > best) { best = score; bestMove = [from, to]; }
+      if (score > alpha) { alpha = score; flag = 0; }
+      if (alpha >= beta) { flag = 1; break; }
     } catch(e) {}
     if (Date.now() >= deadline) break;
+  }
+
+  if (bestMove) {
+    ttStore(key, depth, best, flag, encodeMove(bestMove[0], bestMove[1]), ttAge);
   }
   return best;
 }
 
+// ============================================================
+// 🔥 MOVE SCORE
+// ============================================================
 function moveScore(state, from, to) {
   try {
     const attacker = state.board[from[0]][from[1]];
@@ -518,7 +607,6 @@ function moveScore(state, from, to) {
       const victimVal = PIECE_VALUES[victim.toLowerCase()] || 0;
       score += 10000 + victimVal * 10 - attackerVal;
       
-      // 🔧 Если ферзь бьёт фигуру и может быть съеден — предупреждаем
       if (attacker.toLowerCase() === 'q') {
         const next = applyMove(state, from, to);
         const defended = isDefended(next, to[0], to[1], isW);
@@ -579,6 +667,9 @@ function learnedMistakePenalty(state, from, to) {
   } catch(e) { return 0; }
 }
 
+// ============================================================
+// 🔥 PICK MOVE (Iterative Deepening)
+// ============================================================
 function pickMoveSearch(state, isWhiteTurn, timeMs) {
   const legal = allLegalMoves(state, isWhiteTurn);
   if (legal.length === 0) return null;
@@ -586,38 +677,41 @@ function pickMoveSearch(state, isWhiteTurn, timeMs) {
 
   const color = isWhiteTurn ? 1 : -1;
   const deadline = Date.now() + Math.max(100, timeMs);
+  ttAge++;
+  if (ttAge > 255) ttAge = 0;
 
-  let orderedRoot;
-  try {
-    orderedRoot = legal.slice().sort((a, b) => {
+  let bestMove = legal[0];
+  let prevBest = null;
+
+  for (let depth = 1; depth <= 8; depth++) {
+    let alpha = -Infinity, beta = Infinity;
+    let localBest = null, localBestScore = -Infinity;
+
+    const ordered = legal.slice().sort((a, b) => {
+      if (prevBest && a[0][0] === prevBest[0][0] && a[0][1] === prevBest[0][1] && a[1][0] === prevBest[1][0] && a[1][1] === prevBest[1][1]) return -1;
+      if (prevBest && b[0][0] === prevBest[0][0] && b[0][1] === prevBest[0][1] && b[1][0] === prevBest[1][0] && b[1][1] === prevBest[1][1]) return 1;
       const sa = moveScore(state, a[0], a[1]);
       const sb = moveScore(state, b[0], b[1]);
       return sb - sa;
     });
-  } catch (e) { orderedRoot = legal; }
 
-  let bestMove = orderedRoot[0];
-  const maxDepth = 6;
-
-  for (let depth = 1; depth <= maxDepth; depth++) {
-    let alpha = -Infinity, beta = Infinity;
-    let localBest = null, localBestScore = -Infinity;
-
-    for (const [from, to] of orderedRoot) {
+    for (const [from, to] of ordered) {
       if (Date.now() >= deadline) break;
       try {
         const next = applyMove(state, from, to);
-        let score = -negamax(next, depth - 1, -beta, -alpha, -color, deadline);
+        let score = -negamax(next, depth - 1, -beta, -alpha, -color, deadline, 1);
+        
         const safetyPenalty = tacticalSafetyPenalty(state, from, to, isWhiteTurn);
         if (safetyPenalty > 0) score -= safetyPenalty;
         const memoryPenalty = learnedMistakePenalty(state, from, to);
         if (memoryPenalty > 0) score -= memoryPenalty;
+        
         if (score > localBestScore) { localBestScore = score; localBest = [from, to]; }
         if (score > alpha) alpha = score;
       } catch (e) {}
     }
 
-    if (localBest) bestMove = localBest;
+    if (localBest) { bestMove = localBest; prevBest = localBest; }
     if (Date.now() >= deadline) break;
   }
 
@@ -625,7 +719,7 @@ function pickMoveSearch(state, isWhiteTurn, timeMs) {
 }
 
 // ============================================================
-// SELF-PLAY & ОБУЧЕНИЕ
+// SELF-PLAY (для обучения весов)
 // ============================================================
 function playSelfPlayGame() {
   let state = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
@@ -698,12 +792,7 @@ function playSelfPlayGame() {
     state = nextState;
     finalEval = evaluate(state, state.turn === 'w');
 
-    moveLog.push({
-      from: mv[0],
-      to: mv[1],
-      byColor: isW ? 'w' : 'b',
-      fenAfter: toFen(state)
-    });
+    moveLog.push({ from: mv[0], to: mv[1], byColor: isW ? 'w' : 'b', fenAfter: toFen(state) });
   }
 
   let adjustedResult = result;
@@ -719,9 +808,12 @@ function playSelfPlayGame() {
   return { result, moveLog };
 }
 
+// ============================================================
+// ОБУЧЕНИЕ
+// ============================================================
 function trainOnHistory(history, result) {
   if (history.length === 0) return;
-  const lr = 0.01; // 🔧 Увеличен learning rate
+  const lr = 0.01;
 
   let whiteReward, blackReward;
   if (result === 1) { whiteReward = 1; blackReward = -1; }
@@ -732,15 +824,9 @@ function trainOnHistory(history, result) {
     const reward = move.white ? whiteReward : blackReward;
     const side = move.white ? 1 : -1;
 
-    // 🔧 Штраф за потерю ферзя — это главное, чему мы учим
-    let penalty = 0;
-    if (move.pieceMoved === 'q' && move.captured) {
-      // Если ферзь съел что-то, но потом погиб — он получит минус от результата
-    }
-    
     const checkBonus = move.causedCheck ? 0.1 : 0;
     const mateBonus = move.isMate ? 1.0 : 0;
-    const total = reward + checkBonus + mateBonus + penalty;
+    const total = reward + checkBonus + mateBonus;
 
     const keyFrom = `${move.pieceMoved}_${move.sqFrom}`;
     const keyTo = `${move.pieceMoved}_${move.sqTo}`;
