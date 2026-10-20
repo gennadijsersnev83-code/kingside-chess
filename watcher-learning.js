@@ -1,7 +1,7 @@
 'use strict';
 
 let DATA = {
-  version: 6,
+  version: 4,
   weights: {},
   games: 0,
   wins: 0,
@@ -42,7 +42,7 @@ const MAX_MISTAKES = 12000;
 function setPool(pool) { _pool = pool; }
 function positionKey(fen) { return String(fen || '').split(' ').slice(0, 4).join(' '); }
 function mistakeKey(pos, from, to) { return `${pos}|${from}|${to}`; }
-
+function squareFromRC(sq) { return sqName(sq[0], sq[1]); }
 function recordMistake(pos, from, to, penalty) {
   if (!pos || !from || !to || !(penalty > 0)) return;
   const key = mistakeKey(pos, from, to);
@@ -300,116 +300,18 @@ function allLegalMoves(state, white) {
 
 function sqName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
 
-function isPinned(state, r, c, white) {
-  const k = findKing(state, white);
-  if (!k) return false;
-  if (r === k[0] && c === k[1]) return false;
-  const p = state.board[r][c];
-  if (!p || isWhite(p) !== white) return false;
-  const copy = { board: state.board.map(row => row.slice()), turn: state.turn, castling: state.castling, ep: state.ep, half: state.half, full: state.full };
-  copy.board[r][c] = null;
-  return !isAttacked(state, k[0], k[1], !white) && isAttacked(copy, k[0], k[1], !white);
-}
-
-function isDefended(state, r, c, white) {
-  for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
-    if (rr === r && cc === c) continue;
-    const q = state.board[rr][cc]; if (!q || isWhite(q) !== white) continue;
-    if (isPinned(state, rr, cc, white)) continue;
-    if (pseudoMoves(state, rr, cc).some(([mr, mc]) => mr === r && mc === c)) return true;
-  }
-  return false;
-}
-
-function developmentScore(state, white) {
-  let dev = 0;
-  const startN = white ? [[7,1],[7,6]] : [[0,1],[0,6]];
-  for (const [r, c] of startN) {
-    if (state.board[r][c] !== (white ? 'N' : 'n')) dev += 1;
-  }
-  const startB = white ? [[7,2],[7,5]] : [[0,2],[0,5]];
-  for (const [r, c] of startB) {
-    if (state.board[r][c] !== (white ? 'B' : 'b')) dev += 1;
-  }
-  if (white) {
-    if (state.board[4][3] === 'P') dev += 1;
-    if (state.board[4][4] === 'P') dev += 1;
-  } else {
-    if (state.board[3][3] === 'p') dev += 1;
-    if (state.board[3][4] === 'p') dev += 1;
-  }
-  return dev;
-}
-
 // ============================================================
-// 🔥 TRANSPOSITION TABLE
-// ============================================================
-const TT_SIZE = 1 << 20;
-const TT = {
-  keys: new Int32Array(TT_SIZE),
-  depths: new Int8Array(TT_SIZE),
-  scores: new Int32Array(TT_SIZE),
-  flags: new Int8Array(TT_SIZE),
-  moves: new Int32Array(TT_SIZE),
-  age: new Int32Array(TT_SIZE),
-};
-let ttAge = 0;
-
-function hashState(state) {
-  let h = 0;
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = state.board[r][c];
-    if (!p) continue;
-    const idx = 'PNBRQKpnbrqk'.indexOf(p);
-    h ^= (idx + 1) * (r * 8 + c + 1) * 0x9E3779B1;
-  }
-  h ^= state.turn === 'w' ? 0xABCD : 0x1234;
-  h ^= (state.castling.length << 16);
-  h ^= state.ep === '-' ? 0 : (state.ep.charCodeAt(0) << 20);
-  return h >>> 0;
-}
-
-function ttStore(key, depth, score, flag, move, age) {
-  const idx = key & (TT_SIZE - 1);
-  if (TT.depths[idx] > depth && TT.age[idx] === age) return;
-  TT.keys[idx] = key;
-  TT.depths[idx] = depth;
-  TT.scores[idx] = score;
-  TT.flags[idx] = flag;
-  TT.moves[idx] = move;
-  TT.age[idx] = age;
-}
-
-function ttProbe(key, depth, alpha, beta, age) {
-  const idx = key & (TT_SIZE - 1);
-  if (TT.keys[idx] !== key || TT.age[idx] !== age) return null;
-  if (TT.depths[idx] < depth) return null;
-  const score = TT.scores[idx];
-  const flag = TT.flags[idx];
-  if (flag === 0) return score;
-  if (flag === 1 && score >= beta) return beta;
-  if (flag === 2 && score <= alpha) return alpha;
-  return null;
-}
-
-function encodeMove(from, to) { return (from[0] << 12) | (from[1] << 8) | (to[0] << 4) | to[1]; }
-function decodeMove(m) { return [[ (m >> 12) & 15, (m >> 8) & 15 ], [ (m >> 4) & 15, m & 15 ]]; }
-
-// ============================================================
-// 🔥 ОЦЕНКА
+// 🔥 ОЦЕНКА (с защитой короля и фигур)
 // ============================================================
 function evaluate(state, forWhite) {
   let score = 0;
   let whitePieces = 0, blackPieces = 0;
   let whiteKing = null, blackKing = null;
-  let totalPieces = 0;
-  let whiteQueens = 0, blackQueens = 0;
-  const wPawns = [0,0,0,0,0,0,0,0];
-  const bPawns = [0,0,0,0,0,0,0,0];
+  const whitePawnsByFile = [0,0,0,0,0,0,0,0];
+  const blackPawnsByFile = [0,0,0,0,0,0,0,0];
 
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
-    totalPieces++;
     const isW = isWhite(p);
     const material = PIECE_VALUES[p.toLowerCase()] || 0;
     const w = DATA.weights[`${p}_${sqName(r, c)}`] || 0;
@@ -417,81 +319,93 @@ function evaluate(state, forWhite) {
 
     if (p === 'K') whiteKing = [r, c];
     if (p === 'k') blackKing = [r, c];
-    if (p === 'Q') whiteQueens++;
-    if (p === 'q') blackQueens++;
     if (p !== 'K' && p !== 'k') { if (isW) whitePieces++; else blackPieces++; }
-    if (p === 'P') wPawns[c]++;
-    if (p === 'p') bPawns[c]++;
+    if (p === 'P') whitePawnsByFile[c]++;
+    if (p === 'p') blackPawnsByFile[c]++;
   }
 
-  // Потеря ферзя
-  if (whiteQueens === 0 && blackQueens > 0) score -= 900;
-  if (blackQueens === 0 && whiteQueens > 0) score += 900;
-
-  // Пешечная структура
+  // Штраф за сдвоенные/изолированные пешки
   for (let f = 0; f < 8; f++) {
-    if (wPawns[f] > 1) score -= 15 * (wPawns[f] - 1);
-    if (bPawns[f] > 1) score += 15 * (bPawns[f] - 1);
-    if (wPawns[f] > 0 && (f === 0 || wPawns[f-1] === 0) && (f === 7 || wPawns[f+1] === 0)) score -= 20;
-    if (bPawns[f] > 0 && (f === 0 || bPawns[f-1] === 0) && (f === 7 || bPawns[f+1] === 0)) score += 20;
+    if (whitePawnsByFile[f] > 1) score -= 10 * (whitePawnsByFile[f] - 1);
+    if (blackPawnsByFile[f] > 1) score += 10 * (blackPawnsByFile[f] - 1);
+  }
+  for (let f = 0; f < 8; f++) {
+    if (whitePawnsByFile[f] > 0) {
+      const left = f > 0 ? whitePawnsByFile[f-1] : 0;
+      const right = f < 7 ? whitePawnsByFile[f+1] : 0;
+      if (left === 0 && right === 0) score -= 15;
+    }
+    if (blackPawnsByFile[f] > 0) {
+      const left = f > 0 ? blackPawnsByFile[f-1] : 0;
+      const right = f < 7 ? blackPawnsByFile[f+1] : 0;
+      if (left === 0 && right === 0) score += 15;
+    }
   }
 
-  // Бонус за развитие
-  if (totalPieces > 20) {
-    score += developmentScore(state, true) * 30;
-    score -= developmentScore(state, false) * 30;
+  // Бонус за продвижение пешек
+  for (let c = 0; c < 8; c++) {
+    for (let r = 0; r < 8; r++) {
+      if (state.board[r][c] === 'P') score += (6 - r) * 5;
+      if (state.board[r][c] === 'p') score -= (r - 1) * 5;
+    }
   }
 
-  // Безопасность короля
-  if (whitePieces + blackPieces > 8) {
+  // 🔥 БЕЗОПАСНОСТЬ КОРОЛЯ (в миттельшпиле)
+  if (whitePieces + blackPieces > 10) {
     if (whiteKing) {
-      const isCastled = whiteKing[0] === 7 && (whiteKing[1] === 6 || whiteKing[1] === 2);
-      if (isCastled) score += 250;
-      else if (whiteKing[0] < 7) score -= 150;
+      if (whiteKing[1] === 4) score -= 300; // Ke1 — очень плохо
+      else if (whiteKing[1] === 3 || whiteKing[1] === 5) score -= 150; // Kd1, Kf1
+      else if (whiteKing[1] === 2 || whiteKing[1] === 6) score += 100; // Kc1, Kg1 — рокировка
+      if (whiteKing[0] < 7) score -= 200; // король вышел из дома
     }
     if (blackKing) {
-      const isCastled = blackKing[0] === 0 && (blackKing[1] === 6 || blackKing[1] === 2);
-      if (isCastled) score -= 250;
-      else if (blackKing[0] > 0) score += 150;
+      if (blackKing[1] === 4) score += 300;
+      else if (blackKing[1] === 3 || blackKing[1] === 5) score += 150;
+      else if (blackKing[1] === 2 || blackKing[1] === 6) score -= 100;
+      if (blackKing[0] > 0) score += 200;
     }
   }
 
-  // Мобильность (миттельшпиль)
-  if (whitePieces + blackPieces > 10 && whitePieces + blackPieces < 25) {
-    let wMob = 0, bMob = 0;
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-      const p = state.board[r][c]; if (!p) continue;
-      if (p.toLowerCase() === 'k' || p.toLowerCase() === 'p') continue;
-      const mob = pseudoMoves(state, r, c).length;
-      if (isWhite(p)) wMob += mob; else bMob += mob;
-    }
-    score += (wMob - bMob) * 3;
-  }
-
-  // Висяки
+  // 🔥 ЗАЩИТА ФИГУР (висяки)
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     const isW = isWhite(p);
     const val = PIECE_VALUES[p.toLowerCase()] || 0;
     if (val < 300) continue;
     if (isAttacked(state, r, c, !isW)) {
-      const defended = isDefended(state, r, c, isW);
-      if (!defended) score += isW ? -val * 1.2 : val * 1.2;
-      else score += isW ? -val * 0.1 : val * 0.1;
+      let defended = false;
+      for (let rr = 0; rr < 8; rr++) for (let cc = 0; cc < 8; cc++) {
+        if (rr === r && cc === c) continue;
+        const q = state.board[rr][cc]; if (!q || isWhite(q) !== isW) continue;
+        if (pseudoMoves(state, rr, cc).some(([mr, mc]) => mr === r && mc === c)) { defended = true; break; }
+      }
+      if (!defended) {
+        score += isW ? -val : val;
+      } else {
+        score += isW ? -val * 0.1 : val * 0.1;
+      }
+    }
+  }
+
+  // Эндшпиль: король идёт в центр
+  if (whitePieces + blackPieces <= 5) {
+    if (whiteKing && blackKing) {
+      const dist = Math.abs(whiteKing[0] - blackKing[0]) + Math.abs(whiteKing[1] - blackKing[1]);
+      score += (14 - dist) * 15;
+      const edgeDistB = Math.min(blackKing[0], 7 - blackKing[0], blackKing[1], 7 - blackKing[1]);
+      score -= edgeDistB * 30;
+      const edgeDistW = Math.min(whiteKing[0], 7 - whiteKing[0], whiteKing[1], 7 - whiteKing[1]);
+      score += edgeDistW * 10;
     }
   }
 
   return forWhite ? score : -score;
 }
 
-// ============================================================
-// 🔥 QUIESCENCE
-// ============================================================
-function quiescence(state, alpha, beta, color, qdepth) {
+function quiescence(state, alpha, beta, color) {
   const standPat = evaluate(state, color === 1);
   if (standPat >= beta) return beta;
   if (alpha < standPat) alpha = standPat;
-  if (qdepth <= 0) return alpha;
 
   const legal = allLegalMoves(state, color === 1);
   if (legal.length === 0) {
@@ -499,219 +413,161 @@ function quiescence(state, alpha, beta, color, qdepth) {
     return 0;
   }
 
-  const capturesAndChecks = legal.filter(([from, to]) => {
-    if (state.board[to[0]][to[1]]) return true;
-    try {
-      const next = applyMove(state, from, to);
-      return inCheck(next, color !== 1);
-    } catch(e) { return false; }
-  });
-
-  capturesAndChecks.sort((a, b) => {
+  const captures = legal.filter(([from, to]) => state.board[to[0]][to[1]]);
+  captures.sort((a, b) => {
     const attackerA = state.board[a[0][0]][a[0][1]].toLowerCase();
-    const victimA = state.board[a[1][0]][a[1][1]];
-    const scoreA = victimA ? (PIECE_VALUES[victimA.toLowerCase()] || 0) * 10 - (PIECE_VALUES[attackerA] || 0) : 0;
+    const victimA = state.board[a[1][0]][a[1][1]].toLowerCase();
+    const scoreA = (PIECE_VALUES[victimA] || 0) * 10 - (PIECE_VALUES[attackerA] || 0);
     const attackerB = state.board[b[0][0]][b[0][1]].toLowerCase();
-    const victimB = state.board[b[1][0]][b[1][1]];
-    const scoreB = victimB ? (PIECE_VALUES[victimB.toLowerCase()] || 0) * 10 - (PIECE_VALUES[attackerB] || 0) : 0;
+    const victimB = state.board[b[1][0]][b[1][1]].toLowerCase();
+    const scoreB = (PIECE_VALUES[victimB] || 0) * 10 - (PIECE_VALUES[attackerB] || 0);
     return scoreB - scoreA;
   });
 
-  for (const [from, to] of capturesAndChecks) {
-    try {
-      const next = applyMove(state, from, to);
-      const score = -quiescence(next, -beta, -alpha, -color, qdepth - 1);
-      if (score >= beta) return beta;
-      if (score > alpha) alpha = score;
-    } catch(e) {}
+  for (const [from, to] of captures) {
+    const next = applyMove(state, from, to);
+    const score = -quiescence(next, -beta, -alpha, -color);
+    if (score >= beta) return beta;
+    if (score > alpha) alpha = score;
   }
   return alpha;
 }
 
-// ============================================================
-// 🔥 NEGAMAX с ТТ и Check Extension
-// ============================================================
-function negamax(state, depth, alpha, beta, color, deadline, ply = 0) {
-  if (Date.now() >= deadline) return evaluate(state, color === 1);
+const killerMoves = [];
 
-  const key = hashState(state);
-  const probe = ttProbe(key, depth, alpha, beta, ttAge);
-  if (probe !== null) return probe;
+function negamax(state, depth, alpha, beta, color, deadline) {
+  if (Date.now() >= deadline) return evaluate(state, color === 1);
 
   const legal = allLegalMoves(state, color === 1);
   if (legal.length === 0) {
-    if (inCheck(state, color === 1)) return -MATE_SCORE + ply;
+    if (inCheck(state, color === 1)) return -MATE_SCORE + (10 - depth);
     return 0;
   }
 
-  const inChk = inCheck(state, color === 1);
-  if (inChk && depth < 8) depth += 1;
+  if (depth === 0) return quiescence(state, alpha, beta, color);
 
-  if (depth <= 0) return quiescence(state, alpha, beta, color, 4);
-
-  const ttMove = TT.moves[key & (TT_SIZE - 1)];
+  const killers = killerMoves[depth] || [];
   const ordered = legal.slice().sort((a, b) => {
-    const aEnc = encodeMove(a[0], a[1]);
-    const bEnc = encodeMove(b[0], b[1]);
-    if (ttMove && aEnc === ttMove) return -1;
-    if (ttMove && bEnc === ttMove) return 1;
-    const aCap = state.board[a[1][0]][a[1][1]];
-    const bCap = state.board[b[1][0]][b[1][1]];
-    if (aCap && !bCap) return -1;
-    if (!aCap && bCap) return 1;
+    const aKiller = killers.some(k => k[0][0] === a[0][0] && k[0][1] === a[0][1] && k[1][0] === a[1][0] && k[1][1] === a[1][1]);
+    const bKiller = killers.some(k => k[0][0] === b[0][0] && k[0][1] === b[0][1] && k[1][0] === b[1][0] && k[1][1] === b[1][1]);
+    if (aKiller && !bKiller) return -1;
+    if (!aKiller && bKiller) return 1;
     return 0;
   });
 
   let best = -Infinity;
-  let bestMove = null;
-  let flag = 2;
-
   for (const [from, to] of ordered) {
-    try {
-      const next = applyMove(state, from, to);
-      let score = -negamax(next, depth - 1, -beta, -alpha, -color, deadline, ply + 1);
-      
-      const piece = state.board[from[0]][from[1]];
-      if (piece && piece.toLowerCase() === 'q') {
-        const attacked = isAttacked(next, to[0], to[1], color !== 1);
-        const defended = isDefended(next, to[0], to[1], color === 1);
-        if (attacked && !defended) score -= 5000;
-      }
-      
-      if (score > best) { best = score; bestMove = [from, to]; }
-      if (score > alpha) { alpha = score; flag = 0; }
-      if (alpha >= beta) { flag = 1; break; }
-    } catch(e) {}
+    const next = applyMove(state, from, to);
+    const score = -negamax(next, depth - 1, -beta, -alpha, -color, deadline);
+    if (score > best) best = score;
+    if (score > alpha) alpha = score;
+    if (alpha >= beta) {
+      if (!killerMoves[depth]) killerMoves[depth] = [];
+      killerMoves[depth].push([from, to]);
+      if (killerMoves[depth].length > 2) killerMoves[depth].shift();
+      break;
+    }
     if (Date.now() >= deadline) break;
-  }
-
-  if (bestMove) {
-    ttStore(key, depth, best, flag, encodeMove(bestMove[0], bestMove[1]), ttAge);
   }
   return best;
 }
 
-// ============================================================
-// 🔥 MOVE SCORE
-// ============================================================
 function moveScore(state, from, to) {
-  try {
-    const attacker = state.board[from[0]][from[1]];
-    if (!attacker) return 0;
-    const victim = state.board[to[0]][to[1]];
-    const isW = isWhite(attacker);
-    let score = 0;
+  const attacker = state.board[from[0]][from[1]];
+  const victim = state.board[to[0]][to[1]];
+  let score = 0;
 
-    if (victim) {
-      const attackerVal = PIECE_VALUES[attacker.toLowerCase()] || 0;
-      const victimVal = PIECE_VALUES[victim.toLowerCase()] || 0;
-      score += 10000 + victimVal * 10 - attackerVal;
-      
-      if (attacker.toLowerCase() === 'q') {
-        const next = applyMove(state, from, to);
-        const defended = isDefended(next, to[0], to[1], isW);
-        const attacked = isAttacked(next, to[0], to[1], !isW);
-        if (attacked && !defended) score -= 5000;
-      }
-    }
+  if (victim) {
+    const attackerVal = PIECE_VALUES[attacker.toLowerCase()] || 0;
+    const victimVal = PIECE_VALUES[victim.toLowerCase()] || 0;
+    score += 10000 + victimVal * 10 - attackerVal;
+  }
 
-    if (attacker.toLowerCase() === 'p' && (to[0] === 0 || to[0] === 7)) score += 9000;
-    if (attacker.toLowerCase() === 'k' && Math.abs(to[1] - from[1]) === 2) return 50000;
+  if (attacker.toLowerCase() === 'p' && (to[0] === 0 || to[0] === 7)) {
+    score += 9000;
+  }
 
-    let totalPieces = 0;
-    for (let r=0; r<8; r++) for (let c=0; c<8; c++) if (state.board[r][c]) totalPieces++;
-    
-    if (attacker.toLowerCase() === 'k' && totalPieces > 20 && !inCheck(state, isW)) score -= 200;
-    if ((attacker === 'Q' || attacker === 'q') && totalPieces > 20) score -= 50;
-    if (totalPieces > 20 && (attacker === 'N' || attacker === 'n' || attacker === 'B' || attacker === 'b')) score += 80;
+  const oppKingChar = attacker === attacker.toUpperCase() ? 'k' : 'K';
+  let oppKingPos = null;
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    if (state.board[r][c] === oppKingChar) { oppKingPos = [r, c]; break; }
+  }
+  if (oppKingPos) {
+    const dist = Math.abs(to[0] - oppKingPos[0]) + Math.abs(to[1] - oppKingPos[1]);
+    if (dist <= 2) score += 100;
+  }
 
-    return score;
-  } catch(e) { return 0; }
+  return score;
 }
 
 function tacticalSafetyPenalty(state, from, to, moverWhite) {
-  try {
-    const piece = state.board[from[0]][from[1]];
-    if (!piece) return 0;
-    const next = applyMove(state, from, to);
-    const moved = next.board[to[0]][to[1]];
-    if (!moved) return 0;
-    const value = PIECE_VALUES[moved.toLowerCase()] || 0;
-    if (value < 300) return 0;
-
-    const oppLegal = allLegalMoves(next, !moverWhite);
-    if (oppLegal.length === 0) return 0;
-
-    let canBeCaptured = false;
-    let cheapestAttacker = Infinity;
-    for (const [[fr, fc], [tr, tc]] of oppLegal) {
-      if (tr === to[0] && tc === to[1]) {
-        canBeCaptured = true;
-        cheapestAttacker = Math.min(cheapestAttacker, PIECE_VALUES[next.board[fr][fc].toLowerCase()] || 0);
-      }
+  const piece = state.board[from[0]][from[1]];
+  if (!piece) return 0;
+  const next = applyMove(state, from, to);
+  const moved = next.board[to[0]][to[1]];
+  if (!moved) return 0;
+  const value = PIECE_VALUES[moved.toLowerCase()] || 0;
+  if (value < 300) return 0;
+  const attacked = isAttacked(next, to[0], to[1], !moverWhite);
+  if (!attacked) return 0;
+  const defended = isAttacked(next, to[0], to[1], moverWhite);
+  let cheapestAttacker = Infinity;
+  for (let r=0;r<8;r++) for (let c=0;c<8;c++) {
+    const p = next.board[r][c];
+    if (!p || isWhite(p) !== !moverWhite) continue;
+    if (pseudoMoves(next,r,c).some(([rr,cc]) => rr===to[0] && cc===to[1])) {
+      cheapestAttacker = Math.min(cheapestAttacker, PIECE_VALUES[p.toLowerCase()] || 0);
     }
-    if (!canBeCaptured) return 0;
-
-    const defended = isDefended(next, to[0], to[1], moverWhite);
-    if (!defended) return Math.round(value * 1.5);
-    if (Number.isFinite(cheapestAttacker) && cheapestAttacker < value) return Math.round((value - cheapestAttacker) * 0.8);
-    return 0;
-  } catch(e) { return 0; }
+  }
+  if (!defended) return Math.round(value * 0.88);
+  if (Number.isFinite(cheapestAttacker) && cheapestAttacker < value) return Math.round((value - cheapestAttacker) * 0.45);
+  return 0;
 }
 
 function learnedMistakePenalty(state, from, to) {
-  try {
-    const key = mistakeKey(positionKey(toFen(state)), sqName(from[0], from[1]), sqName(to[0], to[1]));
-    const item = mistakeMemory.get(key);
-    return item ? Math.min(1800, item.penalty * Math.min(1.5, 1 + Math.log2(Math.max(1, item.seen)) * 0.08)) : 0;
-  } catch(e) { return 0; }
+  const key = mistakeKey(positionKey(toFen(state)), sqName(from[0], from[1]), sqName(to[0], to[1]));
+  const item = mistakeMemory.get(key);
+  return item ? Math.min(1800, item.penalty * Math.min(1.5, 1 + Math.log2(Math.max(1, item.seen)) * 0.08)) : 0;
 }
 
-// ============================================================
-// 🔥 PICK MOVE (Iterative Deepening)
-// ============================================================
 function pickMoveSearch(state, isWhiteTurn, timeMs) {
   const legal = allLegalMoves(state, isWhiteTurn);
   if (legal.length === 0) return null;
   if (legal.length === 1) return legal[0];
 
+  for (let i = legal.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [legal[i], legal[j]] = [legal[j], legal[i]];
+  }
+
   const color = isWhiteTurn ? 1 : -1;
-  const deadline = Date.now() + Math.max(100, timeMs);
-  ttAge++;
-  if (ttAge > 255) ttAge = 0;
+  const deadline = Date.now() + Math.max(50, timeMs);
 
   let bestMove = legal[0];
-  let prevBest = null;
+  let maxDepth = 6;
 
-  for (let depth = 1; depth <= 8; depth++) {
+  for (let depth = 1; depth <= maxDepth; depth++) {
     let alpha = -Infinity, beta = Infinity;
     let localBest = null, localBestScore = -Infinity;
 
     const ordered = legal.slice().sort((a, b) => {
-      if (prevBest && a[0][0] === prevBest[0][0] && a[0][1] === prevBest[0][1] && a[1][0] === prevBest[1][0] && a[1][1] === prevBest[1][1]) return -1;
-      if (prevBest && b[0][0] === prevBest[0][0] && b[0][1] === prevBest[0][1] && b[1][0] === prevBest[1][0] && b[1][1] === prevBest[1][1]) return 1;
-      const sa = moveScore(state, a[0], a[1]);
-      const sb = moveScore(state, b[0], b[1]);
-      return sb - sa;
+      return moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]);
     });
 
     for (const [from, to] of ordered) {
       if (Date.now() >= deadline) break;
-      try {
-        const next = applyMove(state, from, to);
-        let score = -negamax(next, depth - 1, -beta, -alpha, -color, deadline, 1);
-        
-        const safetyPenalty = tacticalSafetyPenalty(state, from, to, isWhiteTurn);
-        if (safetyPenalty > 0) score -= safetyPenalty;
-        const memoryPenalty = learnedMistakePenalty(state, from, to);
-        if (memoryPenalty > 0) score -= memoryPenalty;
-        
-        if (score > localBestScore) { localBestScore = score; localBest = [from, to]; }
-        if (score > alpha) alpha = score;
-      } catch (e) {}
+      const next = applyMove(state, from, to);
+      let score = -negamax(next, depth - 1, -beta, -alpha, -color, deadline);
+      const safetyPenalty = tacticalSafetyPenalty(state, from, to, isWhiteTurn);
+      const memoryPenalty = learnedMistakePenalty(state, from, to);
+      const immediateGain = evaluate(next, isWhiteTurn) - evaluate(state, isWhiteTurn);
+      if (safetyPenalty > 0 && immediateGain < safetyPenalty * 0.8) score -= safetyPenalty;
+      score -= memoryPenalty;
+      if (score > localBestScore) { localBestScore = score; localBest = [from, to]; }
+      if (score > alpha) alpha = score;
     }
 
-    if (localBest) { bestMove = localBest; prevBest = localBest; }
+    if (localBest && Date.now() < deadline) bestMove = localBest;
     if (Date.now() >= deadline) break;
   }
 
@@ -719,7 +575,7 @@ function pickMoveSearch(state, isWhiteTurn, timeMs) {
 }
 
 // ============================================================
-// SELF-PLAY (для обучения весов)
+// SELF-PLAY
 // ============================================================
 function playSelfPlayGame() {
   let state = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
@@ -776,7 +632,7 @@ function playSelfPlayGame() {
     }
 
     const isW = state.turn === 'w';
-    const mv = pickMoveSearch(state, isW, 400);
+    const mv = pickMoveSearch(state, isW, 80);
 
     if (!mv || !Array.isArray(mv) || mv.length !== 2) break;
     if (!Array.isArray(mv[0]) || !Array.isArray(mv[1])) break;
@@ -792,11 +648,18 @@ function playSelfPlayGame() {
     state = nextState;
     finalEval = evaluate(state, state.turn === 'w');
 
-    moveLog.push({ from: mv[0], to: mv[1], byColor: isW ? 'w' : 'b', fenAfter: toFen(state) });
+    moveLog.push({
+      from: mv[0],
+      to: mv[1],
+      byColor: isW ? 'w' : 'b',
+      fenAfter: toFen(state)
+    });
   }
 
   let adjustedResult = result;
-  if (result === 0 && Math.abs(finalEval) > 300) adjustedResult = finalEval > 0 ? 1 : -1;
+  if (result === 0 && Math.abs(finalEval) > 300) {
+    adjustedResult = finalEval > 0 ? 1 : -1;
+  }
 
   trainOnHistory(history, adjustedResult);
 
@@ -813,19 +676,19 @@ function playSelfPlayGame() {
 // ============================================================
 function trainOnHistory(history, result) {
   if (history.length === 0) return;
-  const lr = 0.01;
+  const lr = 0.005;
 
   let whiteReward, blackReward;
   if (result === 1) { whiteReward = 1; blackReward = -1; }
   else if (result === -1) { whiteReward = -1; blackReward = 1; }
-  else { whiteReward = 0; blackReward = 0; }
+  else { whiteReward = 0.1; blackReward = 0.1; }
 
   for (const move of history) {
     const reward = move.white ? whiteReward : blackReward;
     const side = move.white ? 1 : -1;
 
-    const checkBonus = move.causedCheck ? 0.1 : 0;
-    const mateBonus = move.isMate ? 1.0 : 0;
+    const checkBonus = move.causedCheck ? 0.05 : 0;
+    const mateBonus = move.isMate ? 0.5 : 0;
     const total = reward + checkBonus + mateBonus;
 
     const keyFrom = `${move.pieceMoved}_${move.sqFrom}`;
@@ -833,8 +696,8 @@ function trainOnHistory(history, result) {
     if (typeof DATA.weights[keyTo] !== 'number') DATA.weights[keyTo] = 0;
     if (typeof DATA.weights[keyFrom] !== 'number') DATA.weights[keyFrom] = 0;
 
-    DATA.weights[keyTo] = Math.max(-3, Math.min(3, DATA.weights[keyTo] + lr * side * total));
-    DATA.weights[keyFrom] = Math.max(-3, Math.min(3, DATA.weights[keyFrom] - lr * side * total * 0.5));
+    DATA.weights[keyTo] = Math.max(-2, Math.min(2, DATA.weights[keyTo] + lr * side * total));
+    DATA.weights[keyFrom] = Math.max(-2, Math.min(2, DATA.weights[keyFrom] - lr * side * total * 0.3));
   }
 }
 
@@ -854,39 +717,31 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
 
   try {
     const state = parseFen(fen);
+    // 🔥 Теперь учитываем переданное время (timeLeft) и инкремент (inc)
     const myTime = timeInfo && typeof timeInfo.timeLeft === 'number' ? timeInfo.timeLeft : 5;
     const inc = timeInfo && typeof timeInfo.inc === 'number' ? timeInfo.inc : 0;
 
     let thinkMs;
-    if (myTime < 2) thinkMs = 100;
-    else if (myTime < 5) thinkMs = 200;
-    else if (myTime < 10) thinkMs = 300;
-    else if (myTime < 30) thinkMs = 500;
-    else if (myTime < 60) thinkMs = 700;
-    else thinkMs = 1000;
+    // Адаптация под пулю (очень мало времени => быстрые ходы)
+    if (myTime < 2) thinkMs = 30;
+    else if (myTime < 5) thinkMs = 50;
+    else if (myTime < 10) thinkMs = 100;
+    else if (myTime < 30) thinkMs = 200;
+    else if (myTime < 60) thinkMs = 300;
+    else thinkMs = 400;
 
+    // Не тратим больше 10% остатка времени + учитываем инкремент
     const allowedByClock = (myTime + inc) * 0.1 * 1000;
     thinkMs = Math.min(thinkMs, allowedByClock);
-    thinkMs = Math.max(100, thinkMs);
+    thinkMs = Math.max(30, thinkMs); // минимум 30мс чтобы хоть что-то посчитать
 
     const move = pickMoveSearch(state, color === 'w', thinkMs);
-    
-    if (!move || !Array.isArray(move) || move.length !== 2) {
-      const fallbackMoves = allLegalMoves(state, color === 'w');
-      if (fallbackMoves.length > 0) return { from: fallbackMoves[0][0], to: fallbackMoves[0][1] };
-      return null;
-    }
-    
+    if (!move || !Array.isArray(move) || move.length !== 2) return null;
     if (!Array.isArray(move[0]) || !Array.isArray(move[1])) return null;
     if (move[0].length !== 2 || move[1].length !== 2) return null;
     return { from: move[0], to: move[1] };
   } catch (e) {
     console.error('[Watcher] pickMoveForServer error:', e.message);
-    try {
-      const state = parseFen(fen);
-      const fallbackMoves = allLegalMoves(state, color === 'w');
-      if (fallbackMoves.length > 0) return { from: fallbackMoves[0][0], to: fallbackMoves[0][1] };
-    } catch (e2) {}
     return null;
   }
 }
@@ -907,12 +762,14 @@ function learnFromObservedMove(prevFen, move, newFen, moverColor, timeControl, e
     let hanging = 0;
     const p = after.board[to[0]][to[1]];
     if (p && isWhite(p) === moverWhite && (PIECE_VALUES[p.toLowerCase()] || 0) >= 300 && isAttacked(after, to[0], to[1], !moverWhite)) {
-      const defended = isDefended(after, to[0], to[1], moverWhite);
-      if (!defended) hanging = Math.round((PIECE_VALUES[p.toLowerCase()] || 0) * 1.5);
+      const defended = isAttacked(after, to[0], to[1], moverWhite);
+      if (!defended) hanging = Math.round((PIECE_VALUES[p.toLowerCase()] || 0) * 0.8);
     }
     const penalty = Math.max(drop > 220 ? drop : 0, hanging);
     if (penalty >= 250) recordMistake(positionKey(prevFen), sqName(from[0], from[1]), sqName(to[0], to[1]), penalty);
-  } catch (e) {}
+  } catch (e) {
+    console.error('[Watcher] Ошибка анализа обучающего хода:', e.message);
+  }
 }
 function finishEpisode() {}
 function loadWeights() { return loadFromDB(); }
