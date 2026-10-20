@@ -76,7 +76,7 @@ function updateGlicko2(rating, rd, vol, results) {
   for (const res of results) {
     const muJ = glicko2Scale(res.rating);
     const phiJ = res.rd / GLICKO2.SCALE;
-    const gPhiJ = glicko2G(phiJ);
+    const gPhiJ = glicko2PhiJ(phiJ);
     const e = glicko2E(mu, muJ, phiJ);
     v += gPhiJ * gPhiJ * e * (1 - e);
     deltaSum += gPhiJ * (res.score - e);
@@ -110,6 +110,7 @@ function updateGlicko2(rating, rd, vol, results) {
     vol: newSigma
   };
 }
+function glicko2PhiJ(phi) { return glicko2G(phi); }
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -147,7 +148,7 @@ async function initDB() {
     ['email','TEXT'], ['email_verified','BOOLEAN DEFAULT FALSE'], ['verify_token','TEXT'], ['verify_token_expires','BIGINT DEFAULT 0']
   ];
   for (const [name, type] of cols) await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${name} ${type};`);
-  
+
   await pool.query(`CREATE TABLE IF NOT EXISTS password_resets (
     id SERIAL PRIMARY KEY,
     username TEXT NOT NULL,
@@ -874,7 +875,7 @@ function stepFor(tpl) {
     tpl.repeat === 'blitz32_human' || tpl.repeat === 'blitz32_bots'
   );
   const isRapid10 = (tpl.repeat === 'rapid10_human' || tpl.repeat === 'rapid10_bots');
-  
+
   if (isOnePlusZero) return 60 * 60 * 1000;        // +1 час (следующий human/bots)
   if (isBlitzOrBullet21) return 120 * 60 * 1000;   // +2 часа
   if (isRapid10) return 240 * 60 * 1000;           // +4 часа
@@ -1516,6 +1517,22 @@ function clearMute(username) {
   return true;
 }
 
+function uciFromSquares(from, to) {
+  if (!from || !to) return null;
+  return String.fromCharCode(97 + from[1]) + (8 - from[0])
+       + String.fromCharCode(97 + to[1]) + (8 - to[0]);
+}
+function buildUciHistoryLine(lobby, maxMoves) {
+  if (!lobby || !Array.isArray(lobby.history)) return '';
+  const hist = maxMoves ? lobby.history.slice(-maxMoves) : lobby.history;
+  const parts = [];
+  for (const h of hist) {
+    const uci = uciFromSquares(h.from, h.to);
+    if (uci) parts.push(uci);
+  }
+  return parts.join(' ');
+}
+
 function scheduleBotMove(lobbyId) {
   const l = lobbies.get(lobbyId);
   if (!l || l.finished || !l.isBot) return;
@@ -1552,7 +1569,7 @@ function scheduleBotMove(lobbyId) {
       const nextState = botApplyMove(st, from, to);
       if (!cur.history) cur.history = [];
       cur.history.push({ from, to, captured: captured || null, byColor: botColor, ts: Date.now() });
-      if (cur.history.length > 10) cur.history.shift();
+      if (cur.history.length > 40) cur.history.shift();
       const now = Date.now();
       const elapsed = Math.floor((now - cur.lastTick) / 1000);
       if (botColor === 'w') cur.timeW = Math.max(0, cur.timeW - elapsed) + cur.inc;
@@ -1687,15 +1704,13 @@ function scheduleBotMove(lobbyId) {
     let mv;
     if (botName === WATCHER_NAME) {
       const availableMoves = botAllLegalMoves(st, botColor === 'w');
-      const line = (cur.history || []).slice(-12).map(h => {
-        if (!h.from || !h.to) return '';
-        return String.fromCharCode(97 + h.from[1]) + (8 - h.from[0]) + String.fromCharCode(97 + h.to[1]) + (8 - h.to[0]);
-      }).join('');
+      const line = buildUciHistoryLine(cur, 12);
       try {
         mv = watcherLearning.pickMove(cur.fen, botColor, { timeLeft: botTimeLeft, inc: inc }, availableMoves, line);
       } catch (e) { mv = null; }
     } else {
-      try { mv = await botPool.getMove(cur.fen, botRating, cur.time, botTimeLeft, inc); }
+      const historyLine = buildUciHistoryLine(cur, 40);
+      try { mv = await botPool.getMove(cur.fen, botRating, cur.time, botTimeLeft, inc, historyLine); }
       catch (err) { return; }
     }
     if (!mv) return;
@@ -1714,7 +1729,7 @@ function scheduleBotMove(lobbyId) {
     const nextState = botApplyMove(st2, from, to);
     if (!cur2.history) cur2.history = [];
     cur2.history.push({ from, to, captured: captured || null, byColor: botColor, ts: Date.now() });
-    if (cur2.history.length > 10) cur2.history.shift();
+    if (cur2.history.length > 40) cur2.history.shift();
     const now = Date.now();
     const elapsed = Math.floor((now - cur2.lastTick) / 1000);
     if (botColor === 'w') cur2.timeW = Math.max(0, cur2.timeW - elapsed) + cur2.inc;
@@ -1773,25 +1788,25 @@ async function unreadCount(username) {
 app.get('/api/verify', async (req, res) => {
   const { token } = req.query;
   if (!token) return res.status(400).send('Токен не указан');
-  
+
   try {
     const r = await pool.query('SELECT username, verify_token_expires FROM users WHERE verify_token = $1', [token]);
     if (!r.rows.length) return res.status(400).send('Неверный или устаревший токен');
-    
+
     const { username, verify_token_expires } = r.rows[0];
     if (Date.now() > Number(verify_token_expires)) {
       return res.status(400).send('Срок действия токена истек. Зарегистрируйтесь заново.');
     }
-    
+
     await pool.query(
       'UPDATE users SET email_verified = TRUE, verify_token = NULL, verify_token_expires = 0 WHERE username = $1',
       [username]
     );
-    
+
     if (db.users[username]) {
       db.users[username].emailVerified = true;
     }
-    
+
     res.redirect('/#/autorize?verified=1&username=' + encodeURIComponent(username));
   } catch (e) {
     console.error('[Verify] Ошибка:', e);
@@ -1834,7 +1849,7 @@ io.on('connection', (socket) => {
     if (!/^[a-zA-Zа-яА-Я0-9_\-]+$/.test(username)) return cb({ ok: false, msg: 'Логин: буквы, цифры, _ и -' });
     if (password.length < 3) return cb({ ok: false, msg: 'Пароль минимум 3 символа' });
     if (password.length > 128) return cb({ ok: false, msg: 'Пароль слишком длинный' });
-    
+
     let user = db.users[username];
     if (user) {
       if (!verifyPassword(password, user.salt, user.passwordHash)) return cb({ ok: false, msg: 'Неверный пароль' });
@@ -1861,13 +1876,13 @@ io.on('connection', (socket) => {
       if (emailCheck.rows.length > 0 && emailCheck.rows[0].username !== username) {
         return cb({ ok: false, msg: 'Этот email уже используется другим аккаунтом' });
       }
-      
-      const salt = newSalt(); 
+
+      const salt = newSalt();
       const passwordHash = hashPassword(password, salt);
       const base = 1200;
       const verifyToken = crypto.randomBytes(32).toString('hex');
       const verifyExpires = Date.now() + 24 * 60 * 60 * 1000;
-      
+
       db.users[username] = {
         passwordHash, salt, rating: base, rd: GLICKO2.DEFAULT_RD, vol: GLICKO2.DEFAULT_VOL,
         wins: 0, losses: 0, draws: 0, games: 0,
@@ -1875,7 +1890,7 @@ io.on('connection', (socket) => {
         email: email, emailVerified: false, verifyToken: verifyToken, verifyExpires: verifyExpires,
         categories: { classical: emptyRatingBlock(base), rapid: emptyRatingBlock(base), blitz: emptyRatingBlock(base), bullet: emptyRatingBlock(base) }
       };
-      
+
       try { await saveUser(username); } catch (err) { console.error(err); return cb({ ok: false, msg: 'Ошибка БД при создании' }); }
       try {
         await sendVerificationEmail(email, username, verifyToken);
@@ -1885,7 +1900,7 @@ io.on('connection', (socket) => {
         return cb({ ok: false, msg: 'Аккаунт создан, но письмо не отправлено. Попробуйте войти с тем же логином и паролем после настройки почты на сервере.', pending: true });
       }
     }
-    
+
     online.set(socket.id, username);
     socket.username = username;
     cb({ ok: true, user: publicUser(username) });
@@ -2195,7 +2210,7 @@ io.on('connection', (socket) => {
       }
       if (!l.history) l.history = [];
       l.history.push({ from: fromSq, to: toSq, captured, byColor: myColor, ts: Date.now() });
-      if (l.history.length > 10) l.history.shift();
+      if (l.history.length > 40) l.history.shift();
     } catch (e) {}
     const prevFenForWatcher = l.fen;
     const now = Date.now();
@@ -2743,22 +2758,22 @@ io.on('connection', (socket) => {
   socket.on('requestPasswordReset', async ({ email }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     if (!email) return cb({ ok: false, msg: 'Укажите email' });
-    
+
     try {
       const r = await pool.query('SELECT username FROM users WHERE email = $1', [email]);
       if (!r.rows.length) {
         return cb({ ok: true, msg: 'Если email зарегистрирован, письмо отправлено' });
       }
-      
+
       const username = r.rows[0].username;
       const token = crypto.randomBytes(32).toString('hex');
       const expires = Date.now() + 60 * 60 * 1000;
-      
+
       await pool.query(
         'INSERT INTO password_resets (username, token, expires_at) VALUES ($1, $2, $3)',
         [username, token, expires]
       );
-      
+
       try {
         await sendPasswordResetEmail(email, username, token);
         cb({ ok: true, msg: 'Если email зарегистрирован, письмо отправлено' });
@@ -2777,29 +2792,29 @@ io.on('connection', (socket) => {
     if (!token || !newPassword || newPassword.length < 3) {
       return cb({ ok: false, msg: 'Неверный токен или слишком короткий пароль' });
     }
-    
+
     try {
       const r = await pool.query(
         'SELECT username FROM password_resets WHERE token = $1 AND used = FALSE AND expires_at > $2',
         [token, Date.now()]
       );
-      
+
       if (!r.rows.length) {
         return cb({ ok: false, msg: 'Ссылка недействительна или истекла' });
       }
-      
+
       const username = r.rows[0].username;
       const salt = newSalt();
       const hash = hashPassword(newPassword, salt);
-      
+
       await pool.query('UPDATE users SET password_hash = $1, salt = $2 WHERE username = $3', [hash, salt, username]);
       await pool.query('UPDATE password_resets SET used = TRUE WHERE token = $1', [token]);
-      
+
       if (db.users[username]) {
         db.users[username].passwordHash = hash;
         db.users[username].salt = salt;
       }
-      
+
       cb({ ok: true });
     } catch (e) {
       console.error('[Reset] Ошибка:', e);
