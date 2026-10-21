@@ -1320,7 +1320,9 @@ function tryPair(state) {
 }
 
 function createArenaPairing(state, a, b) {
-  if (a.username === WATCHER_NAME && b.username === WATCHER_NAME) return;
+  // Never create a normal arena game with the same account on both sides.
+  // Watcher self-play is handled only by the dedicated isSelfPlay flow.
+  if (!a || !b || a.username === b.username) return;
   if (a.isPlaying || a.lobbyId || b.isPlaying || b.lobbyId) return;
   if (!a.inArenaRoom || !b.inArenaRoom) return;
   if (a.cooldownUntil && Date.now() < a.cooldownUntil) return;
@@ -2028,7 +2030,7 @@ io.on('connection', (socket) => {
       opponentOnline: isUserOnline(opponentName) || ALL_BOT_NAMES.has(opponentName),
       time: l.time, inc: l.inc, timeW: l.timeW, timeB: l.timeB, turn: l.turn,
       fen: l.fen, chat: l.chat, arenaId: l.arenaId, arenaName: l.arenaName,
-      finished: l.finished, isBot: !!l.isBot && l.host !== WATCHER_NAME && l.guest !== WATCHER_NAME,
+      finished: l.finished, isSelfPlay: !!l.isSelfPlay, isBot: !!l.isBot && !l.isSelfPlay && l.host !== WATCHER_NAME && l.guest !== WATCHER_NAME,
       watchersCount: watchersCountOf(l)
     }});
   });
