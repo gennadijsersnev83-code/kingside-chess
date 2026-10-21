@@ -43,16 +43,10 @@ body.login-active #mainContent { display: none !important; }
       <a href="#/reset" class="forgot-link" style="display:inline-block;margin-top:8px;font-size:12px;color:#4a9ce8;text-align:right;width:100%;">Забыли пароль?</a>
     </div>
 
-    <!-- Agreement and Honor checkbox -->
-    <label class="checkbox-row" style="margin-bottom:8px;">
-      <input type="checkbox" id="agreeCheckbox">
-      <span class="checkmark"></span>
-      <span>Я согласен с <a href="#" onclick="alert('Пользовательское соглашение: Играйте честно, не оскорбляйте других.')" style="color:#4a9ce8;">пользовательским соглашением</a></span>
-    </label>
     <label class="checkbox-row" style="margin-bottom:16px;">
       <input type="checkbox" id="honorCheckbox">
       <span class="checkmark"></span>
-      <span>Обещаю играть честно</span>
+      <span>Подтверждаю, что буду играть честно</span>
     </label>
 
     <button id="submitBtn" class="primary auth-submit" onclick="App.doLogin()">
@@ -127,7 +121,6 @@ body.login-active #mainContent { display: none !important; }
   </div>
   <div class="umDivider"></div>
   <a class="umItem" onclick="UserMenu.goProfile()"><span class="umIcon">👤</span><span class="umLabel">Профиль</span></a>
-  <a class="umItem" onclick="UserMenu.openSettings()"><span class="umIcon">⚙</span><span class="umLabel">Настройки</span></a>
   <a class="umItem" onclick="UserMenu.goInbox()"><span class="umIcon">✉</span><span class="umLabel">Входящие</span><span class="umCount" id="umInboxCount"></span></a>
   <a class="umItem" onclick="UserMenu.togglePing()"><span class="umIcon">📡</span><span class="umLabel">Соединение</span><span class="umCount" id="umPing"></span></a>
   <div class="umDivider"></div>
@@ -155,7 +148,7 @@ body.login-active #mainContent { display: none !important; }
       <aside class="homeRight">
         <div class="sideTitle">Действия</div>
         <div class="lobbyActions">
-          <button class="lobbyActionBtn challengeBtn" onclick="Lobby.openCustomGameModal()"><span class="laIcon">⚔</span><span class="laTitle">Создать запрос на игру</span></button>
+          <button class="lobbyActionBtn challengeBtn" onclick="Lobby.switchTab('create')"><span class="laIcon">⚔</span><span class="laTitle">Создать запрос на игру</span></button>
           <button class="lobbyActionBtn botBtn" onclick="Bot.openDialog()"><span class="laIcon">🤖</span><span class="laTitle">Сыграть с компьютером</span></button>
         </div>
         <div class="sideTitle" style="margin-top:16px">📊 Статистика</div>
@@ -237,7 +230,6 @@ body.login-active #mainContent { display: none !important; }
         <div class="nameBlock">
           <h2><span id="pName">—</span><span id="pRoleBadges"></span></h2>
           <div class="sub" id="pSub">—</div>
-          <div class="sub" id="pBio" style="margin-top: 4px; font-style: italic; color: var(--muted);"></div>
         </div>
         <div style="margin-left:auto; display:flex; gap:8px;">
           <button class="secondary" id="pWriteBtn" onclick="Profile.writeMessage()" style="display:none">✉ Написать</button>
@@ -368,83 +360,6 @@ body.login-active #mainContent { display: none !important; }
   </section>
 </main>
 
-<!-- Custom Game Modal -->
-<div id="customGameModal" class="botModal">
-  <div class="botModalBox">
-    <h3>Создать игру</h3>
-    <div class="botModalLabel">Вариант</div>
-    <select id="customVariant" class="auth-field" style="width:100%; padding:10px; background:#2d2c29; border:1px solid #3a3833; color:#e8e6e3; margin-bottom:12px;">
-      <option value="standard">Standard</option>
-    </select>
-    
-    <div class="botModalLabel">Контроль времени</div>
-    <select id="customTimeControl" class="auth-field" style="width:100%; padding:10px; background:#2d2c29; border:1px solid #3a3833; color:#e8e6e3; margin-bottom:12px;">
-      <option value="1">1 мин</option>
-      <option value="3">3 мин</option>
-      <option value="5" selected>5 мин</option>
-      <option value="10">10 мин</option>
-    </select>
-
-    <div class="botModalLabel">Добавление секунд на ход: <span id="incVal">3</span></div>
-    <input type="range" id="customInc" min="0" max="10" value="3" style="width:100%; margin-bottom:12px;" oninput="document.getElementById('incVal').innerText=this.value">
-
-    <div class="botModalLabel">Рейтинг соперника</div>
-    <div style="display:flex; gap:10px; margin-bottom:12px;">
-      <input type="range" id="ratingMin" min="400" max="3000" value="1000" style="flex:1;" oninput="document.getElementById('rMinVal').innerText=this.value">
-      <input type="range" id="ratingMax" min="400" max="3000" value="2000" style="flex:1;" oninput="document.getElementById('rMaxVal').innerText=this.value">
-    </div>
-    <div style="display:flex; justify-content:space-between; font-size:12px; color:#7d7a72; margin-bottom:16px;">
-      <span id="rMinVal">1000</span>
-      <span id="rMaxVal">2000</span>
-    </div>
-
-    <div class="botModalActions">
-      <button class="cancelBtn" onclick="Lobby.closeCustomGameModal()">Отмена</button>
-      <button class="startBtn" onclick="Lobby.createCustomGame()">Создать</button>
-    </div>
-  </div>
-</div>
-
-<!-- Settings Modal -->
-<div id="settingsModal" class="botModal">
-  <div class="botModalBox">
-    <h3>Настройки</h3>
-    <div class="auth-field">
-      <label>О себе</label>
-      <textarea id="settingsBio" style="width:100%; height:80px; background:#2d2c29; border:1px solid #3a3833; color:#e8e6e3; padding:8px; border-radius:4px; resize:none;" maxlength="500" placeholder="Расскажите о себе..."></textarea>
-    </div>
-    <label class="checkbox-row" style="margin:12px 0;">
-      <input type="checkbox" id="settingsSubseconds">
-      <span class="checkmark"></span>
-      <span>Показывать доли секунды на протяжении всей игры</span>
-    </label>
-    
-    <div id="adminSettings" style="display:none; border-top:1px solid #3a3833; padding-top:12px; margin-top:12px;">
-      <div class="botModalLabel" style="color:#e5484d;">Админ-панель</div>
-      <div class="auth-field">
-        <label>Действия с пользователем</label>
-        <input id="adminUserInput" placeholder="Логин игрока" style="width:100%; margin-bottom:8px;">
-        <div style="display:flex; gap:8px;">
-          <button onclick="Settings.adminAction('ban')" style="flex:1; background:#a53030; border:none; color:white; padding:8px; border-radius:4px; cursor:pointer;">Забанить</button>
-          <button onclick="Settings.adminAction('unban')" style="flex:1; background:#629924; border:none; color:white; padding:8px; border-radius:4px; cursor:pointer;">Разбанить</button>
-          <button onclick="Settings.adminAction('mute')" style="flex:1; background:#bf811d; border:none; color:black; padding:8px; border-radius:4px; cursor:pointer;">Мут (24ч)</button>
-          <button onclick="Settings.adminAction('delete')" style="flex:1; background:#e5484d; border:none; color:white; padding:8px; border-radius:4px; cursor:pointer;">Удалить</button>
-        </div>
-      </div>
-    </div>
-
-    <div style="border-top:1px solid #3a3833; padding-top:12px; margin-top:12px;">
-      <button onclick="Settings.deleteAccount()" style="width:100%; background:transparent; border:1px solid #a53030; color:#a53030; padding:8px; border-radius:4px; cursor:pointer;">Удалить аккаунт</button>
-      <div class="hint-text" style="margin-top:4px; color:#7d7a72;">Удаление доступно только через 10 дней после регистрации.</div>
-    </div>
-
-    <div class="botModalActions" style="margin-top:16px;">
-      <button class="cancelBtn" onclick="Settings.close()">Закрыть</button>
-      <button class="startBtn" onclick="Settings.save()">Сохранить</button>
-    </div>
-  </div>
-</div>
-
 <div id="botDialog" class="botModal">
   <div class="botModalBox">
     <h3>🤖 Игра с компьютером</h3>
@@ -475,3 +390,4 @@ body.login-active #mainContent { display: none !important; }
 <script src="/app.js"></script>
 </body>
 </html>
+
