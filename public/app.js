@@ -53,33 +53,40 @@ const Utils = {
 };
 
 // ============================================================
-// SOUNDS (Base64 MP3, реальные сэмплы Lichess)
+// SOUNDS
 // ============================================================
 const Sounds = (function() {
-  const sounds = {
-    move:    new Audio('data:audio/mp3;base64,//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA=='),
-    capture: new Audio('data:audio/mp3;base64,//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA=='),
-    check:   new Audio('data:audio/mp3;base64,//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA=='),
-    mate:    new Audio('data:audio/mp3;base64,//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA=='),
-    notify:  new Audio('data:audio/mp3;base64,//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA==')
-  };
-  Object.values(sounds).forEach(s => s.volume = 0.4);
-
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  let ctx = null;
+  function ensure() { if (!ctx) ctx = new AudioCtx(); if (ctx.state === 'suspended') ctx.resume(); return ctx; }
+  function playTone(freq, dur, type, vol, delay) {
+    try {
+      const c = ensure();
+      const t0 = c.currentTime + (delay || 0);
+      const osc = c.createOscillator(); const gain = c.createGain();
+      osc.type = type || 'sine';
+      osc.frequency.setValueAtTime(freq, t0);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(vol || 0.15, t0 + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(gain); gain.connect(c.destination);
+      osc.start(t0); osc.stop(t0 + dur + 0.02);
+    } catch (e) {}
+  }
   const last = { move:0, capture:0, check:0, mate:0, draw:0, win:0, lose:0, start:0, msg:0 };
   const COOLDOWN = 180;
   function can(key) { const now = performance.now(); if (now - last[key] < COOLDOWN) return false; last[key] = now; return true; }
   let lastSan = '', lastSanTime = 0;
-
   return {
-    move()    { if (can('move'))    sounds.move.play().catch(()=>{}); },
-    capture() { if (can('capture')) sounds.capture.play().catch(()=>{}); },
-    check()   { if (can('check'))   sounds.check.play().catch(()=>{}); },
-    mate()    { if (can('mate'))    sounds.mate.play().catch(()=>{}); },
-    draw()    { if (can('draw'))    sounds.notify.play().catch(()=>{}); },
-    win()     { if (can('win'))     sounds.mate.play().catch(()=>{}); },
-    lose()    { if (can('lose'))    sounds.notify.play().catch(()=>{}); },
-    start()   { if (can('start'))   sounds.notify.play().catch(()=>{}); },
-    msg()     { if (can('msg'))     sounds.notify.play().catch(()=>{}); },
+    move()    { if (can('move'))    playTone(360, 0.045, 'sine', 0.075); },
+    capture() { if (can('capture')) playTone(245, 0.065, 'triangle', 0.095); },
+    check()   { if (can('check'))   playTone(740, 0.085, 'sine', 0.10); },
+    mate()    { if (can('mate'))    { playTone(520, 0.12, 'sine', 0.10); playTone(390, 0.16, 'sine', 0.085, 0.12); } },
+    draw()    { if (can('draw'))    playTone(460, 0.11, 'sine', 0.075); },
+    win()     { if (can('win'))     { playTone(660, 0.09, 'sine', 0.09); playTone(880, 0.13, 'sine', 0.085, 0.10); } },
+    lose()    { if (can('lose'))    playTone(290, 0.15, 'triangle', 0.08); },
+    start()   { if (can('start'))   playTone(580, 0.10, 'sine', 0.075); },
+    msg()     { if (can('msg'))     playTone(880, 0.06, 'sine', 0.07); },
     moveBySan(san) {
       if (!san) return;
       const now = performance.now();
@@ -90,7 +97,7 @@ const Sounds = (function() {
       else if (san.includes('x')) this.capture();
       else                        this.move();
     },
-    initOnFirstClick() {}
+    initOnFirstClick() { window.addEventListener('pointerdown', () => ensure(), { once: true }); }
   };
 })();
 
@@ -245,11 +252,6 @@ const Auth = {
     document.getElementById('loginMsg').textContent = '';
     const usernameStatus = document.getElementById('usernameStatus');
     if (usernameStatus && mode === 'login') { usernameStatus.textContent = ''; usernameStatus.className = ''; }
-
-    const agree = document.getElementById('agreeCheckbox')?.parentElement;
-    const honor = document.getElementById('honorCheckbox')?.parentElement;
-    if (agree) agree.style.display = mode === 'register' ? 'flex' : 'none';
-    if (honor) honor.style.display = mode === 'register' ? 'flex' : 'none';
   },
 
   togglePassword() {
@@ -262,6 +264,55 @@ const Auth = {
       pw.type = 'password';
       icon.textContent = '👁';
     }
+  },
+
+  openResetModal() {
+    const modal = document.getElementById('resetRequestModal');
+    if (modal) modal.classList.add('show');
+    const input = document.getElementById('resetEmailInput');
+    if (input) input.value = '';
+  },
+
+  closeResetModal() {
+    const modal = document.getElementById('resetRequestModal');
+    if (modal) modal.classList.remove('show');
+  },
+
+  submitResetRequest() {
+    const email = document.getElementById('resetEmailInput').value.trim();
+    if (!email) { alert('Пожалуйста, введите email'); return; }
+    
+    this.closeResetModal();
+    
+    App.socket.emit('requestPasswordReset', { email }, (res) => {
+      alert(res?.msg || 'Если email зарегистрирован, письмо отправлено');
+    });
+  },
+
+  doResetPassword() {
+    const hashPart = location.hash.split('?')[1];
+    const token = hashPart ? new URLSearchParams(hashPart).get('token') : null;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    const msgEl = document.getElementById('resetMsg');
+
+    if (!token) { msgEl.textContent = 'Неверная ссылка для сброса'; msgEl.style.color = '#ff6b6b'; return; }
+    if (!newPassword || newPassword.length < 3) { msgEl.textContent = 'Пароль минимум 3 символа'; msgEl.style.color = '#ff6b6b'; return; }
+    if (newPassword !== confirmPassword) { msgEl.textContent = 'Пароли не совпадают'; msgEl.style.color = '#ff6b6b'; return; }
+
+    msgEl.textContent = 'Загрузка...';
+    msgEl.style.color = 'var(--text)';
+
+    App.socket.emit('resetPassword', { token, newPassword }, (res) => {
+      if (!res || !res.ok) {
+        msgEl.style.color = '#ff6b6b';
+        msgEl.textContent = res?.msg || 'Ошибка';
+        return;
+      }
+      msgEl.style.color = '#629924';
+      msgEl.textContent = 'Пароль успешно изменен!';
+      setTimeout(() => Router.go('autorize'), 2000);
+    });
   },
 
   init() {
@@ -339,7 +390,6 @@ const App = {
     TopArenas.init(); Stats.init(); Lobby.init(); Bot.init();
     Watch.init(); Arena.init(); Profile.init(); Community.init();
     Game.init(); Banners.init(); UserMenu.init(); Inbox.init(); Ping.init(); Auth.init();
-    Settings.init();
     this.tryAutoLogin();
     this.scheduleArenaClock();
   },
@@ -373,10 +423,7 @@ const App = {
 
     if (!username || !password) { msgEl.textContent = 'Введите логин и пароль'; return; }
     if (Auth.mode === 'register' && !email) { msgEl.textContent = 'Введите email'; return; }
-    
     if (Auth.mode === 'register') {
-      const agree = document.getElementById('agreeCheckbox');
-      if (agree && !agree.checked) { msgEl.textContent = 'Необходимо согласиться с пользовательским соглашением'; return; }
       const honor = document.getElementById('honorCheckbox');
       if (honor && !honor.checked) { msgEl.textContent = 'Подтвердите, что будете играть честно'; return; }
     }
@@ -523,73 +570,6 @@ const App = {
 };
 
 // ============================================================
-// SETTINGS MODAL
-// ============================================================
-const Settings = {
-  init() {
-    // nothing to init
-  },
-  open() {
-    if (!App.me) return;
-    App.socket.emit('getProfile', { username: App.me.username }, (res) => {
-      if (res && res.ok) {
-        document.getElementById('settingsBio').value = res.user.bio || '';
-        document.getElementById('settingsSubseconds').checked = !!res.user.showSubseconds;
-        document.getElementById('settingsModal').classList.add('show');
-        const isAdmin = App.me.username === 'PeshkaSasha';
-        document.getElementById('adminSettings').style.display = isAdmin ? 'block' : 'none';
-      }
-    });
-  },
-  close() {
-    document.getElementById('settingsModal').classList.remove('show');
-  },
-  save() {
-    const bio = document.getElementById('settingsBio').value;
-    const showSubseconds = document.getElementById('settingsSubseconds').checked;
-    App.socket.emit('updateSettings', { bio, showSubseconds }, (res) => {
-      if (res && res.ok) {
-        Settings.close();
-        alert('Настройки сохранены');
-        if (App.me) {
-          App.me.bio = bio;
-          App.me.showSubseconds = showSubseconds;
-        }
-      } else {
-        alert(res?.msg || 'Ошибка');
-      }
-    });
-  },
-  deleteAccount() {
-    if (!confirm('Вы уверены, что хотите удалить аккаунт? Это действие необратимо.')) return;
-    App.socket.emit('requestAccountDeletion', (res) => {
-      alert(res?.msg || 'Ошибка');
-      if (res && res.ok) {
-        Settings.close();
-      }
-    });
-  },
-  adminAction(action) {
-    const username = document.getElementById('adminUserInput').value.trim();
-    if (!username) {
-      alert('Введите логин');
-      return;
-    }
-    if (action === 'ban') {
-      App.socket.emit('adminBan', { username }, (res) => alert(res?.ok ? 'Пользователь забанен' : (res?.msg || 'Ошибка')));
-    } else if (action === 'unban') {
-      App.socket.emit('adminUnban', { username }, (res) => alert(res?.ok ? 'Пользователь разбанен' : (res?.msg || 'Ошибка')));
-    } else if (action === 'mute') {
-      App.socket.emit('modMuteUser', { username, minutes: 1440 }, (res) => alert(res?.ok ? 'Пользователь заглушен на 24 часа' : (res?.msg || 'Ошибка')));
-    } else if (action === 'delete') {
-      if (confirm('Вы уверены, что хотите удалить аккаунт ' + username + '?')) {
-        App.socket.emit('adminDeleteAccount', { username }, (res) => alert(res?.ok ? 'Аккаунт удалён' : (res?.msg || 'Ошибка')));
-      }
-    }
-  }
-};
-
-// ============================================================
 // USER MENU
 // ============================================================
 const UserMenu = {
@@ -613,7 +593,6 @@ const UserMenu = {
   close() { const m = document.getElementById('userMenu'); if (!m) return; m.style.display = 'none'; this.isOpen = false; },
   goProfile() { this.close(); Router.go('profile'); },
   goInbox() { this.close(); Router.go('inbox'); },
-  openSettings() { this.close(); Settings.open(); },
   togglePing() { Ping.refresh(); }
 };
 
@@ -877,18 +856,6 @@ const Lobby = {
     const m = +document.getElementById('customMin').value || 5;
     const i = +document.getElementById('customInc').value || 0;
     this.quickStart(m, i);
-  },
-  openCustomGameModal: () => {
-    document.getElementById('customGameModal').classList.add('show');
-  },
-  closeCustomGameModal: () => {
-    document.getElementById('customGameModal').classList.remove('show');
-  },
-  createCustomGame: () => {
-    const time = parseInt(document.getElementById('customTimeControl').value);
-    const inc = parseInt(document.getElementById('customInc').value);
-    Lobby.quickStart(time, inc);
-    Lobby.closeCustomGameModal();
   }
 };
 
@@ -924,7 +891,7 @@ const Bot = {
 };
 
 // ============================================================
-// WATCH (фигуры через <img>)
+// WATCH
 // ============================================================
 const Watch = {
   watchingGameId: null, watchingGame: null, lastHash: '', lastBoardHash: '',
@@ -941,7 +908,9 @@ const Watch = {
   refresh(force) { App.socket.emit('getLiveGames', (list) => { this.refreshFromList(list); }); },
   refreshFromList(list) {
     const box = document.getElementById('watchListBody'); if (!box) return;
+
     list = (list || []).filter(g => !g.isSelfPlay && !(g.id && g.id.startsWith('sp_')));
+
     const hash = JSON.stringify(list); if (hash === this.lastHash) return; this.lastHash = hash;
     if (!list.length) { box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>'; return; }
     box.innerHTML = list.map(g => {
@@ -987,22 +956,6 @@ const Watch = {
     const hash = g.id + '|' + g.fen + '|' + g.turn + '|' + flip + '|' + (g.watchersCount || 0) + '|' + (g.finished ? 'F' : 'A') + '|' + lmHash;
     if (hash === this.lastBoardHash) return;
     this.lastBoardHash = hash;
-
-    const PIECE_IMGS = {
-      'K': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22.5 11.63V6M20 8h5' stroke-linejoin='miter'/%3E%3Cpath d='M22.5 25s4.5-7.5 3-10.5c0 0-1-2.5-3-2.5s-3 2.5-3 2.5c-1.5 3 3 10.5 3 10.5' fill='%23fff' stroke-linecap='butt' stroke-linejoin='miter'/%3E%3Cpath d='M11.5 37c5.5 3.5 15.5 3.5 21 0v-7s9-4.5 6-10.5c-4-6.5-13.5-3.5-16 4V27v-3.5c-3.5-7.5-13-10.5-16-4-3 6 5 10 5 10V37z' fill='%23fff'/%3E%3Cpath d='M11.5 30c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0'/%3E%3C/g%3E%3C/svg%3E",
-      'Q': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='%23fff' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM24.5 7.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM41 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM16 8.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM33 9a2 2 0 1 1-4 0 2 2 0 1 1 4 0z'/%3E%3Cpath d='M9 26c8.5-1.5 21-1.5 27 0l2-12-7 11V11l-5.5 13.5-3-15-3 15-5.5-14V25L7 14l2 12z' stroke-linecap='butt'/%3E%3Cpath d='M9 26c0 2 1.5 2 2.5 4 1 1.5 1 1 .5 3.5-1.5 1-1.5 2.5-1.5 2.5-1.5 1.5.5 2.5.5 2.5 6.5 1 16.5 1 23 0 0 0 1.5-1 0-2.5 0 0 .5-1.5-1-2.5-.5-2.5-.5-2 .5-3.5 1-2 2.5-2 2.5-4-8.5-1.5-18.5-1.5-27 0z' stroke-linecap='butt'/%3E%3Cpath d='M11.5 30c3.5-1 18.5-1 22 0M12 33.5c6-1 15-1 21 0' fill='none'/%3E%3C/g%3E%3C/svg%3E",
-      'R': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='%23fff' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 39h27v-3H9v3zM12 36v-4h21v4H12zM11 14V9h4v2h5V9h5v2h5V9h4v5' stroke-linecap='butt'/%3E%3Cpath d='M34 14l-3 3H14l-3-3'/%3E%3Cpath d='M31 17v12.5H14V17' stroke-linecap='butt' stroke-linejoin='miter'/%3E%3Cpath d='M31 29.5l1.5 2.5h-20l1.5-2.5'/%3E%3Cpath d='M11 14h23' fill='none' stroke-linejoin='miter'/%3E%3C/g%3E%3C/svg%3E",
-      'B': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg fill='%23fff' stroke-linecap='butt'%3E%3Cpath d='M9 36c3.39-.97 10.11.43 13.5-2 3.39 2.43 10.11 1.03 13.5 2 0 0 1.65.54 3 2-.68.97-1.65.99-3 .5-3.39-.97-10.11.46-13.5-1-3.39 1.46-10.11.03-13.5 1-1.354.49-2.323.47-3-.5 1.354-1.94 3-2 3-2z'/%3E%3Cpath d='M15 32c2.5 2.5 12.5 2.5 15 0 .5-1.5 0-2 0-2 0-2.5-2.5-4-2.5-4 5.5-1.5 6-11.5-5-15.5-11 4-10.5 14-5 15.5 0 0-2.5 1.5-2.5 4 0 0-.5.5 0 2z'/%3E%3Cpath d='M25 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 1 1 5 0z'/%3E%3C/g%3E%3Cpath d='M17.5 26h10M15 30h15m-7.5-14.5v5M20 18h5' stroke-linejoin='miter'/%3E%3C/g%3E%3C/svg%3E",
-      'N': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 10c10.5 1 16.5 8 16 29H15c0-9 10-6.5 8-21' fill='%23fff'/%3E%3Cpath d='M24 18c.38 2.91-5.55 7.37-8 9-3 2-2.82 4.34-5 4-1.042-.94 1.41-3.04 0-3-1 0 .19 1.23-1 2-1 0-4.003 1-4-4 0-2 6-12 6-12s1.89-1.9 2-3.5c-.73-.994-.5-2-.5-3 1-1 3 2.5 3 2.5h2s.78-1.992 2.5-3c1 0 1 3 1 3' fill='%23fff'/%3E%3Cpath d='M9.5 25.5a.5.5 0 1 1-1 0 .5.5 0 1 1 1 0zm5.433-9.75a.5 1.5 30 1 1-.866-.5.5 1.5 30 1 1 .866.5z' fill='%23000'/%3E%3C/g%3E%3C/svg%3E",
-      'P': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cpath d='M22.5 9c-2.21 0-4 1.79-4 4 0 .89.29 1.71.78 2.38C17.33 16.5 16 18.59 16 21c0 2.03.94 3.84 2.41 5.03-3 1.06-7.41 5.55-7.41 13.47h23c0-7.92-4.41-12.41-7.41-13.47 1.47-1.19 2.41-3 2.41-5.03 0-2.41-1.33-4.5-3.28-5.62.49-.67.78-1.49.78-2.38 0-2.21-1.79-4-4-4z' fill='%23fff' stroke='%23000' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E",
-      'k': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22.5 11.63V6M20 8h5' stroke='%23fff' stroke-linejoin='miter'/%3E%3Cpath d='M22.5 25s4.5-7.5 3-10.5c0 0-1-2.5-3-2.5s-3 2.5-3 2.5c-1.5 3 3 10.5 3 10.5' fill='%23000' stroke-linecap='butt' stroke-linejoin='miter'/%3E%3Cpath d='M11.5 37c5.5 3.5 15.5 3.5 21 0v-7s9-4.5 6-10.5c-4-6.5-13.5-3.5-16 4V27v-3.5c-3.5-7.5-13-10.5-16-4-3 6 5 10 5 10V37z' fill='%23000'/%3E%3Cpath d='M11.5 30c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0' stroke='%23fff'/%3E%3C/g%3E%3C/svg%3E",
-      'q': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='%23000' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM24.5 7.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM41 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM16 8.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM33 9a2 2 0 1 1-4 0 2 2 0 1 1 4 0z'/%3E%3Cpath d='M9 26c8.5-1.5 21-1.5 27 0l2-12-7 11V11l-5.5 13.5-3-15-3 15-5.5-14V25L7 14l2 12z' stroke-linecap='butt'/%3E%3Cpath d='M9 26c0 2 1.5 2 2.5 4 1 1.5 1 1 .5 3.5-1.5 1-1.5 2.5-1.5 2.5-1.5 1.5.5 2.5.5 2.5 6.5 1 16.5 1 23 0 0 0 1.5-1 0-2.5 0 0 .5-1.5-1-2.5-.5-2.5-.5-2 .5-3.5 1-2 2.5-2 2.5-4-8.5-1.5-18.5-1.5-27 0z' stroke-linecap='butt'/%3E%3Cpath d='M11.5 30c3.5-1 18.5-1 22 0M12 33.5c6-1 15-1 21 0' fill='none' stroke='%23fff'/%3E%3C/g%3E%3C/svg%3E",
-      'r': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='%23000' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 39h27v-3H9v3zM12 36v-4h21v4H12zM11 14V9h4v2h5V9h5v2h5V9h4v5' stroke-linecap='butt'/%3E%3Cpath d='M34 14l-3 3H14l-3-3'/%3E%3Cpath d='M31 17v12.5H14V17' stroke-linecap='butt' stroke-linejoin='miter'/%3E%3Cpath d='M31 29.5l1.5 2.5h-20l1.5-2.5'/%3E%3Cpath d='M11 14h23' fill='none' stroke='%23fff' stroke-linejoin='miter'/%3E%3C/g%3E%3C/svg%3E",
-      'b': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg fill='%23000' stroke-linecap='butt'%3E%3Cpath d='M9 36c3.39-.97 10.11.43 13.5-2 3.39 2.43 10.11 1.03 13.5 2 0 0 1.65.54 3 2-.68.97-1.65.99-3 .5-3.39-.97-10.11.46-13.5-1-3.39 1.46-10.11.03-13.5 1-1.354.49-2.323.47-3-.5 1.354-1.94 3-2 3-2z'/%3E%3Cpath d='M15 32c2.5 2.5 12.5 2.5 15 0 .5-1.5 0-2 0-2 0-2.5-2.5-4-2.5-4 5.5-1.5 6-11.5-5-15.5-11 4-10.5 14-5 15.5 0 0-2.5 1.5-2.5 4 0 0-.5.5 0 2z'/%3E%3Cpath d='M25 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 1 1 5 0z'/%3E%3C/g%3E%3Cpath d='M17.5 26h10M15 30h15m-7.5-14.5v5M20 18h5' stroke='%23fff' stroke-linejoin='miter'/%3E%3C/g%3E%3C/svg%3E",
-      'n': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 10c10.5 1 16.5 8 16 29H15c0-9 10-6.5 8-21' fill='%23000'/%3E%3Cpath d='M24 18c.38 2.91-5.55 7.37-8 9-3 2-2.82 4.34-5 4-1.042-.94 1.41-3.04 0-3-1 0 .19 1.23-1 2-1 0-4.003 1-4-4 0-2 6-12 6-12s1.89-1.9 2-3.5c-.73-.994-.5-2-.5-3 1-1 3 2.5 3 2.5h2s.78-1.992 2.5-3c1 0 1 3 1 3' fill='%23000'/%3E%3Cpath d='M9.5 25.5a.5.5 0 1 1-1 0 .5.5 0 1 1 1 0zm5.433-9.75a.5 1.5 30 1 1-.866-.5.5 1.5 30 1 1 .866.5z' fill='%23fff' stroke='%23fff'/%3E%3C/g%3E%3C/svg%3E",
-      'p': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cpath d='M22.5 9c-2.21 0-4 1.79-4 4 0 .89.29 1.71.78 2.38C17.33 16.5 16 18.59 16 21c0 2.03.94 3.84 2.41 5.03-3 1.06-7.41 5.55-7.41 13.47h23c0-7.92-4.41-12.41-7.41-13.47 1.47-1.19 2.41-3 2.41-5.03 0-2.41-1.33-4.5-3.28-5.62.49-.67.78-1.49.78-2.38 0-2.21-1.79-4-4-4z' fill='%23000' stroke='%23000' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"
-    };
-
     const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
     let squares = '';
     const lm = g.lastMove;
@@ -1011,10 +964,7 @@ const Watch = {
       let cls = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
       if (lm && ((lm.from[0] === r && lm.from[1] === c) || (lm.to[0] === r && lm.to[1] === c))) cls += ' lastmove';
       const p = state.board[r][c]; let inner = '';
-      if (p) { 
-        const isW = p === p.toUpperCase(); 
-        inner = `<img src="${PIECE_IMGS[p]}" style="width:85%;height:85%;pointer-events:none;user-select:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.35));position:relative;z-index:1;" draggable="false" alt="${p}">`;
-      }
+      if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW?'w':'b'}">${Chess.EMOJI[p]}</span>`; }
       let coords = '';
       if (dr === 7) coords += `<span class="coord-f">${String.fromCharCode(97 + c)}</span>`;
       if (dc === 0) coords += `<span class="coord-r">${8 - r}</span>`;
@@ -1068,7 +1018,7 @@ const Watch = {
 };
 
 // ============================================================
-// ARENA (фигуры через <img> в топ-игре)
+// ARENA
 // ============================================================
 const Arena = {
   cache: [], statesCache: {}, serverOffsetMs: 0, currentArenaId: null, currentArenaState: null,
@@ -1078,7 +1028,10 @@ const Arena = {
   enterList() { this.refresh(true); },
   enterPage(arenaId) {
     if (!arenaId) { Router.go('arenas'); return; }
-    if (App.gameActive && !App.gameEnded) { Router.go('lobby'); return; }
+    if (App.gameActive && !App.gameEnded) {
+      Router.go('lobby');
+      return;
+    }
     if (Watch.watchingGameId) Watch.stop();
     if (this.currentArenaId && this.currentArenaId !== arenaId) App.socket.emit('leaveArenaRoom', { arenaId: this.currentArenaId });
     this.currentArenaId = arenaId;
@@ -1209,7 +1162,10 @@ const Arena = {
   updateJoinButton(state) {
     const wrap = document.getElementById('arenaJoinBtnWrap');
     const isPlaying = App.gameActive && !App.gameEnded;
-    if (isPlaying) { wrap.innerHTML = `<button class="secondary arenaJoinBtn" disabled style="width:180px; opacity:0.5; cursor:not-allowed;">ЗАНЯТЫ ИГРОЙ</button>`; return; }
+    if (isPlaying) {
+      wrap.innerHTML = `<button class="secondary arenaJoinBtn" disabled style="width:180px; opacity:0.5; cursor:not-allowed;">ЗАНЯТЫ ИГРОЙ</button>`;
+      return;
+    }
     if (state.phase === 'finished') { wrap.innerHTML = `<button class="secondary" disabled style="width:180px;">ЗАВЕРШЕНА</button>`; return; }
     if (state.phase === 'waiting') { if (state.joined) wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.leaveCurrent()">ОТМЕНИТЬ</button>`; else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button>`; return; }
     if (state.joined) { if (state.paused) wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.pauseCurrent()">▶ ПРОДОЛЖИТЬ</button>`; else wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.pauseCurrent()">⏸ ПАУЗА</button>`; }
@@ -1271,27 +1227,7 @@ const Arena = {
   },
   renderTopGame(g) {
     const state = Chess.parseFen(g.fen); let squares = '';
-    const PIECE_IMGS = {
-      'K': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22.5 11.63V6M20 8h5' stroke-linejoin='miter'/%3E%3Cpath d='M22.5 25s4.5-7.5 3-10.5c0 0-1-2.5-3-2.5s-3 2.5-3 2.5c-1.5 3 3 10.5 3 10.5' fill='%23fff' stroke-linecap='butt' stroke-linejoin='miter'/%3E%3Cpath d='M11.5 37c5.5 3.5 15.5 3.5 21 0v-7s9-4.5 6-10.5c-4-6.5-13.5-3.5-16 4V27v-3.5c-3.5-7.5-13-10.5-16-4-3 6 5 10 5 10V37z' fill='%23fff'/%3E%3Cpath d='M11.5 30c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0'/%3E%3C/g%3E%3C/svg%3E",
-      'Q': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='%23fff' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM24.5 7.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM41 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM16 8.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM33 9a2 2 0 1 1-4 0 2 2 0 1 1 4 0z'/%3E%3Cpath d='M9 26c8.5-1.5 21-1.5 27 0l2-12-7 11V11l-5.5 13.5-3-15-3 15-5.5-14V25L7 14l2 12z' stroke-linecap='butt'/%3E%3Cpath d='M9 26c0 2 1.5 2 2.5 4 1 1.5 1 1 .5 3.5-1.5 1-1.5 2.5-1.5 2.5-1.5 1.5.5 2.5.5 2.5 6.5 1 16.5 1 23 0 0 0 1.5-1 0-2.5 0 0 .5-1.5-1-2.5-.5-2.5-.5-2 .5-3.5 1-2 2.5-2 2.5-4-8.5-1.5-18.5-1.5-27 0z' stroke-linecap='butt'/%3E%3Cpath d='M11.5 30c3.5-1 18.5-1 22 0M12 33.5c6-1 15-1 21 0' fill='none'/%3E%3C/g%3E%3C/svg%3E",
-      'R': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='%23fff' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 39h27v-3H9v3zM12 36v-4h21v4H12zM11 14V9h4v2h5V9h5v2h5V9h4v5' stroke-linecap='butt'/%3E%3Cpath d='M34 14l-3 3H14l-3-3'/%3E%3Cpath d='M31 17v12.5H14V17' stroke-linecap='butt' stroke-linejoin='miter'/%3E%3Cpath d='M31 29.5l1.5 2.5h-20l1.5-2.5'/%3E%3Cpath d='M11 14h23' fill='none' stroke-linejoin='miter'/%3E%3C/g%3E%3C/svg%3E",
-      'B': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg fill='%23fff' stroke-linecap='butt'%3E%3Cpath d='M9 36c3.39-.97 10.11.43 13.5-2 3.39 2.43 10.11 1.03 13.5 2 0 0 1.65.54 3 2-.68.97-1.65.99-3 .5-3.39-.97-10.11.46-13.5-1-3.39 1.46-10.11.03-13.5 1-1.354.49-2.323.47-3-.5 1.354-1.94 3-2 3-2z'/%3E%3Cpath d='M15 32c2.5 2.5 12.5 2.5 15 0 .5-1.5 0-2 0-2 0-2.5-2.5-4-2.5-4 5.5-1.5 6-11.5-5-15.5-11 4-10.5 14-5 15.5 0 0-2.5 1.5-2.5 4 0 0-.5.5 0 2z'/%3E%3Cpath d='M25 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 1 1 5 0z'/%3E%3C/g%3E%3Cpath d='M17.5 26h10M15 30h15m-7.5-14.5v5M20 18h5' stroke-linejoin='miter'/%3E%3C/g%3E%3C/svg%3E",
-      'N': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 10c10.5 1 16.5 8 16 29H15c0-9 10-6.5 8-21' fill='%23fff'/%3E%3Cpath d='M24 18c.38 2.91-5.55 7.37-8 9-3 2-2.82 4.34-5 4-1.042-.94 1.41-3.04 0-3-1 0 .19 1.23-1 2-1 0-4.003 1-4-4 0-2 6-12 6-12s1.89-1.9 2-3.5c-.73-.994-.5-2-.5-3 1-1 3 2.5 3 2.5h2s.78-1.992 2.5-3c1 0 1 3 1 3' fill='%23fff'/%3E%3Cpath d='M9.5 25.5a.5.5 0 1 1-1 0 .5.5 0 1 1 1 0zm5.433-9.75a.5 1.5 30 1 1-.866-.5.5 1.5 30 1 1 .866.5z' fill='%23000'/%3E%3C/g%3E%3C/svg%3E",
-      'P': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cpath d='M22.5 9c-2.21 0-4 1.79-4 4 0 .89.29 1.71.78 2.38C17.33 16.5 16 18.59 16 21c0 2.03.94 3.84 2.41 5.03-3 1.06-7.41 5.55-7.41 13.47h23c0-7.92-4.41-12.41-7.41-13.47 1.47-1.19 2.41-3 2.41-5.03 0-2.41-1.33-4.5-3.28-5.62.49-.67.78-1.49.78-2.38 0-2.21-1.79-4-4-4z' fill='%23fff' stroke='%23000' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E",
-      'k': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22.5 11.63V6M20 8h5' stroke='%23fff' stroke-linejoin='miter'/%3E%3Cpath d='M22.5 25s4.5-7.5 3-10.5c0 0-1-2.5-3-2.5s-3 2.5-3 2.5c-1.5 3 3 10.5 3 10.5' fill='%23000' stroke-linecap='butt' stroke-linejoin='miter'/%3E%3Cpath d='M11.5 37c5.5 3.5 15.5 3.5 21 0v-7s9-4.5 6-10.5c-4-6.5-13.5-3.5-16 4V27v-3.5c-3.5-7.5-13-10.5-16-4-3 6 5 10 5 10V37z' fill='%23000'/%3E%3Cpath d='M11.5 30c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0' stroke='%23fff'/%3E%3C/g%3E%3C/svg%3E",
-      'q': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='%23000' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM24.5 7.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM41 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM16 8.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM33 9a2 2 0 1 1-4 0 2 2 0 1 1 4 0z'/%3E%3Cpath d='M9 26c8.5-1.5 21-1.5 27 0l2-12-7 11V11l-5.5 13.5-3-15-3 15-5.5-14V25L7 14l2 12z' stroke-linecap='butt'/%3E%3Cpath d='M9 26c0 2 1.5 2 2.5 4 1 1.5 1 1 .5 3.5-1.5 1-1.5 2.5-1.5 2.5-1.5 1.5.5 2.5.5 2.5 6.5 1 16.5 1 23 0 0 0 1.5-1 0-2.5 0 0 .5-1.5-1-2.5-.5-2.5-.5-2 .5-3.5 1-2 2.5-2 2.5-4-8.5-1.5-18.5-1.5-27 0z' stroke-linecap='butt'/%3E%3Cpath d='M11.5 30c3.5-1 18.5-1 22 0M12 33.5c6-1 15-1 21 0' fill='none' stroke='%23fff'/%3E%3C/g%3E%3C/svg%3E",
-      'r': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='%23000' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 39h27v-3H9v3zM12 36v-4h21v4H12zM11 14V9h4v2h5V9h5v2h5V9h4v5' stroke-linecap='butt'/%3E%3Cpath d='M34 14l-3 3H14l-3-3'/%3E%3Cpath d='M31 17v12.5H14V17' stroke-linecap='butt' stroke-linejoin='miter'/%3E%3Cpath d='M31 29.5l1.5 2.5h-20l1.5-2.5'/%3E%3Cpath d='M11 14h23' fill='none' stroke='%23fff' stroke-linejoin='miter'/%3E%3C/g%3E%3C/svg%3E",
-      'b': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg fill='%23000' stroke-linecap='butt'%3E%3Cpath d='M9 36c3.39-.97 10.11.43 13.5-2 3.39 2.43 10.11 1.03 13.5 2 0 0 1.65.54 3 2-.68.97-1.65.99-3 .5-3.39-.97-10.11.46-13.5-1-3.39 1.46-10.11.03-13.5 1-1.354.49-2.323.47-3-.5 1.354-1.94 3-2 3-2z'/%3E%3Cpath d='M15 32c2.5 2.5 12.5 2.5 15 0 .5-1.5 0-2 0-2 0-2.5-2.5-4-2.5-4 5.5-1.5 6-11.5-5-15.5-11 4-10.5 14-5 15.5 0 0-2.5 1.5-2.5 4 0 0-.5.5 0 2z'/%3E%3Cpath d='M25 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 1 1 5 0z'/%3E%3C/g%3E%3Cpath d='M17.5 26h10M15 30h15m-7.5-14.5v5M20 18h5' stroke='%23fff' stroke-linejoin='miter'/%3E%3C/g%3E%3C/svg%3E",
-      'n': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 10c10.5 1 16.5 8 16 29H15c0-9 10-6.5 8-21' fill='%23000'/%3E%3Cpath d='M24 18c.38 2.91-5.55 7.37-8 9-3 2-2.82 4.34-5 4-1.042-.94 1.41-3.04 0-3-1 0 .19 1.23-1 2-1 0-4.003 1-4-4 0-2 6-12 6-12s1.89-1.9 2-3.5c-.73-.994-.5-2-.5-3 1-1 3 2.5 3 2.5h2s.78-1.992 2.5-3c1 0 1 3 1 3' fill='%23000'/%3E%3Cpath d='M9.5 25.5a.5.5 0 1 1-1 0 .5.5 0 1 1 1 0zm5.433-9.75a.5 1.5 30 1 1-.866-.5.5 1.5 30 1 1 .866.5z' fill='%23fff' stroke='%23fff'/%3E%3C/g%3E%3C/svg%3E",
-      'p': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cpath d='M22.5 9c-2.21 0-4 1.79-4 4 0 .89.29 1.71.78 2.38C17.33 16.5 16 18.59 16 21c0 2.03.94 3.84 2.41 5.03-3 1.06-7.41 5.55-7.41 13.47h23c0-7.92-4.41-12.41-7.41-13.47 1.47-1.19 2.41-3 2.41-5.03 0-2.41-1.33-4.5-3.28-5.62.49-.67.78-1.49.78-2.38 0-2.21-1.79-4-4-4z' fill='%23000' stroke='%23000' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"
-    };
-    for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) {
-      const cls = 'sq ' + ((dr + dc) % 2 ? 'dark' : 'light');
-      const p = state.board[dr][dc];
-      let inner = '';
-      if (p) { inner = `<img src="${PIECE_IMGS[p]}" style="width:90%;height:90%;pointer-events:none;user-select:none;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.35));position:relative;z-index:1;" draggable="false" alt="${p}">`; }
-      squares += `<div class="${cls}">${inner}</div>`;
-    }
+    for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) { const cls = 'sq ' + ((dr + dc) % 2 ? 'dark' : 'light'); const p = state.board[dr][dc]; let inner = ''; if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW ? 'w' : 'b'}">${Chess.EMOJI[p]}</span>`; } squares += `<div class="${cls}">${inner}</div>`; }
     const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
     const wR = g.whiteRating ? `<span class="prat">${g.whiteRating}</span>` : ''; const bR = g.blackRating ? `<span class="prat">${g.blackRating}</span>` : '';
     return `<div class="arenaTopGamePlayers"><span class="playerRow">⚫ <span class="name">${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span><span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeB)}</span></div><div class="arenaTopGameBoard">${squares}</div><div class="arenaTopGamePlayers"><span class="playerRow">⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div><div class="arenaTopGameLink">▶ – Смотреть партию</div>`;
@@ -1463,6 +1399,7 @@ const Profile = {
     const xOf = day => PL + ((day-startDay)/(Math.max(dayMs,endDay-startDay))) * IW;
     const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+    // One shared timeline and one shared rating scale, with all time-control histories overlaid.
     const series = categories.map(cat => {
       const relevant = allGames.filter(g => g.category === cat.key)
         .sort((a,b) => Number(a.finishedAt)-Number(b.finishedAt));
@@ -1474,12 +1411,14 @@ const Profile = {
       }
       if (!byDay.size) return { ...cat, points:[], latest:null, delta:null };
       let last = null;
+      // Seed the range with the latest known rating before its start, if one exists.
       for (const [day, rating] of byDay) if (day < startDay) last = rating;
       const points=[];
       for(let d=startDay; d<=endDay; d+=dayMs) {
         if (byDay.has(d)) last=byDay.get(d);
         if (last !== null) points.push({day:d,rating:last});
       }
+      // If a category has only a game after the current day boundary, keep its exact game day visible.
       for (const [day, rating] of byDay) {
         if (day >= startDay && day <= endDay && !points.some(p=>p.day===day)) points.push({day,rating});
       }
@@ -1808,7 +1747,7 @@ const Banners = {
 };
 
 // ============================================================
-// GAME (фигуры через <img>, перетаскивание)
+// GAME
 // ============================================================
 const Game = {
   selected: null, legalMoves: [], moveHistory: [], moveFens: [], viewIndex: -1,
@@ -1963,22 +1902,6 @@ const Game = {
     boardEl.innerHTML = '';
     const flip = (App.myColor === 'b') !== this.boardFlipped;
     const interactive = App.gameActive && !App.gameEnded && this.viewIndex === -1;
-    
-    const PIECE_IMGS = {
-      'K': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22.5 11.63V6M20 8h5' stroke-linejoin='miter'/%3E%3Cpath d='M22.5 25s4.5-7.5 3-10.5c0 0-1-2.5-3-2.5s-3 2.5-3 2.5c-1.5 3 3 10.5 3 10.5' fill='%23fff' stroke-linecap='butt' stroke-linejoin='miter'/%3E%3Cpath d='M11.5 37c5.5 3.5 15.5 3.5 21 0v-7s9-4.5 6-10.5c-4-6.5-13.5-3.5-16 4V27v-3.5c-3.5-7.5-13-10.5-16-4-3 6 5 10 5 10V37z' fill='%23fff'/%3E%3Cpath d='M11.5 30c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0'/%3E%3C/g%3E%3C/svg%3E",
-      'Q': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='%23fff' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM24.5 7.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM41 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM16 8.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM33 9a2 2 0 1 1-4 0 2 2 0 1 1 4 0z'/%3E%3Cpath d='M9 26c8.5-1.5 21-1.5 27 0l2-12-7 11V11l-5.5 13.5-3-15-3 15-5.5-14V25L7 14l2 12z' stroke-linecap='butt'/%3E%3Cpath d='M9 26c0 2 1.5 2 2.5 4 1 1.5 1 1 .5 3.5-1.5 1-1.5 2.5-1.5 2.5-1.5 1.5.5 2.5.5 2.5 6.5 1 16.5 1 23 0 0 0 1.5-1 0-2.5 0 0 .5-1.5-1-2.5-.5-2.5-.5-2 .5-3.5 1-2 2.5-2 2.5-4-8.5-1.5-18.5-1.5-27 0z' stroke-linecap='butt'/%3E%3Cpath d='M11.5 30c3.5-1 18.5-1 22 0M12 33.5c6-1 15-1 21 0' fill='none'/%3E%3C/g%3E%3C/svg%3E",
-      'R': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='%23fff' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 39h27v-3H9v3zM12 36v-4h21v4H12zM11 14V9h4v2h5V9h5v2h5V9h4v5' stroke-linecap='butt'/%3E%3Cpath d='M34 14l-3 3H14l-3-3'/%3E%3Cpath d='M31 17v12.5H14V17' stroke-linecap='butt' stroke-linejoin='miter'/%3E%3Cpath d='M31 29.5l1.5 2.5h-20l1.5-2.5'/%3E%3Cpath d='M11 14h23' fill='none' stroke-linejoin='miter'/%3E%3C/g%3E%3C/svg%3E",
-      'B': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg fill='%23fff' stroke-linecap='butt'%3E%3Cpath d='M9 36c3.39-.97 10.11.43 13.5-2 3.39 2.43 10.11 1.03 13.5 2 0 0 1.65.54 3 2-.68.97-1.65.99-3 .5-3.39-.97-10.11.46-13.5-1-3.39 1.46-10.11.03-13.5 1-1.354.49-2.323.47-3-.5 1.354-1.94 3-2 3-2z'/%3E%3Cpath d='M15 32c2.5 2.5 12.5 2.5 15 0 .5-1.5 0-2 0-2 0-2.5-2.5-4-2.5-4 5.5-1.5 6-11.5-5-15.5-11 4-10.5 14-5 15.5 0 0-2.5 1.5-2.5 4 0 0-.5.5 0 2z'/%3E%3Cpath d='M25 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 1 1 5 0z'/%3E%3C/g%3E%3Cpath d='M17.5 26h10M15 30h15m-7.5-14.5v5M20 18h5' stroke-linejoin='miter'/%3E%3C/g%3E%3C/svg%3E",
-      'N': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 10c10.5 1 16.5 8 16 29H15c0-9 10-6.5 8-21' fill='%23fff'/%3E%3Cpath d='M24 18c.38 2.91-5.55 7.37-8 9-3 2-2.82 4.34-5 4-1.042-.94 1.41-3.04 0-3-1 0 .19 1.23-1 2-1 0-4.003 1-4-4 0-2 6-12 6-12s1.89-1.9 2-3.5c-.73-.994-.5-2-.5-3 1-1 3 2.5 3 2.5h2s.78-1.992 2.5-3c1 0 1 3 1 3' fill='%23fff'/%3E%3Cpath d='M9.5 25.5a.5.5 0 1 1-1 0 .5.5 0 1 1 1 0zm5.433-9.75a.5 1.5 30 1 1-.866-.5.5 1.5 30 1 1 .866.5z' fill='%23000'/%3E%3C/g%3E%3C/svg%3E",
-      'P': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cpath d='M22.5 9c-2.21 0-4 1.79-4 4 0 .89.29 1.71.78 2.38C17.33 16.5 16 18.59 16 21c0 2.03.94 3.84 2.41 5.03-3 1.06-7.41 5.55-7.41 13.47h23c0-7.92-4.41-12.41-7.41-13.47 1.47-1.19 2.41-3 2.41-5.03 0-2.41-1.33-4.5-3.28-5.62.49-.67.78-1.49.78-2.38 0-2.21-1.79-4-4-4z' fill='%23fff' stroke='%23000' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E",
-      'k': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22.5 11.63V6M20 8h5' stroke='%23fff' stroke-linejoin='miter'/%3E%3Cpath d='M22.5 25s4.5-7.5 3-10.5c0 0-1-2.5-3-2.5s-3 2.5-3 2.5c-1.5 3 3 10.5 3 10.5' fill='%23000' stroke-linecap='butt' stroke-linejoin='miter'/%3E%3Cpath d='M11.5 37c5.5 3.5 15.5 3.5 21 0v-7s9-4.5 6-10.5c-4-6.5-13.5-3.5-16 4V27v-3.5c-3.5-7.5-13-10.5-16-4-3 6 5 10 5 10V37z' fill='%23000'/%3E%3Cpath d='M11.5 30c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0' stroke='%23fff'/%3E%3C/g%3E%3C/svg%3E",
-      'q': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='%23000' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM24.5 7.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM41 12a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM16 8.5a2 2 0 1 1-4 0 2 2 0 1 1 4 0zM33 9a2 2 0 1 1-4 0 2 2 0 1 1 4 0z'/%3E%3Cpath d='M9 26c8.5-1.5 21-1.5 27 0l2-12-7 11V11l-5.5 13.5-3-15-3 15-5.5-14V25L7 14l2 12z' stroke-linecap='butt'/%3E%3Cpath d='M9 26c0 2 1.5 2 2.5 4 1 1.5 1 1 .5 3.5-1.5 1-1.5 2.5-1.5 2.5-1.5 1.5.5 2.5.5 2.5 6.5 1 16.5 1 23 0 0 0 1.5-1 0-2.5 0 0 .5-1.5-1-2.5-.5-2.5-.5-2 .5-3.5 1-2 2.5-2 2.5-4-8.5-1.5-18.5-1.5-27 0z' stroke-linecap='butt'/%3E%3Cpath d='M11.5 30c3.5-1 18.5-1 22 0M12 33.5c6-1 15-1 21 0' fill='none' stroke='%23fff'/%3E%3C/g%3E%3C/svg%3E",
-      'r': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='%23000' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 39h27v-3H9v3zM12 36v-4h21v4H12zM11 14V9h4v2h5V9h5v2h5V9h4v5' stroke-linecap='butt'/%3E%3Cpath d='M34 14l-3 3H14l-3-3'/%3E%3Cpath d='M31 17v12.5H14V17' stroke-linecap='butt' stroke-linejoin='miter'/%3E%3Cpath d='M31 29.5l1.5 2.5h-20l1.5-2.5'/%3E%3Cpath d='M11 14h23' fill='none' stroke='%23fff' stroke-linejoin='miter'/%3E%3C/g%3E%3C/svg%3E",
-      'b': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg fill='%23000' stroke-linecap='butt'%3E%3Cpath d='M9 36c3.39-.97 10.11.43 13.5-2 3.39 2.43 10.11 1.03 13.5 2 0 0 1.65.54 3 2-.68.97-1.65.99-3 .5-3.39-.97-10.11.46-13.5-1-3.39 1.46-10.11.03-13.5 1-1.354.49-2.323.47-3-.5 1.354-1.94 3-2 3-2z'/%3E%3Cpath d='M15 32c2.5 2.5 12.5 2.5 15 0 .5-1.5 0-2 0-2 0-2.5-2.5-4-2.5-4 5.5-1.5 6-11.5-5-15.5-11 4-10.5 14-5 15.5 0 0-2.5 1.5-2.5 4 0 0-.5.5 0 2z'/%3E%3Cpath d='M25 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 1 1 5 0z'/%3E%3C/g%3E%3Cpath d='M17.5 26h10M15 30h15m-7.5-14.5v5M20 18h5' stroke='%23fff' stroke-linejoin='miter'/%3E%3C/g%3E%3C/svg%3E",
-      'n': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cg fill='none' fill-rule='evenodd' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M22 10c10.5 1 16.5 8 16 29H15c0-9 10-6.5 8-21' fill='%23000'/%3E%3Cpath d='M24 18c.38 2.91-5.55 7.37-8 9-3 2-2.82 4.34-5 4-1.042-.94 1.41-3.04 0-3-1 0 .19 1.23-1 2-1 0-4.003 1-4-4 0-2 6-12 6-12s1.89-1.9 2-3.5c-.73-.994-.5-2-.5-3 1-1 3 2.5 3 2.5h2s.78-1.992 2.5-3c1 0 1 3 1 3' fill='%23000'/%3E%3Cpath d='M9.5 25.5a.5.5 0 1 1-1 0 .5.5 0 1 1 1 0zm5.433-9.75a.5 1.5 30 1 1-.866-.5.5 1.5 30 1 1 .866.5z' fill='%23fff' stroke='%23fff'/%3E%3C/g%3E%3C/svg%3E",
-      'p': "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 45 45'%3E%3Cpath d='M22.5 9c-2.21 0-4 1.79-4 4 0 .89.29 1.71.78 2.38C17.33 16.5 16 18.59 16 21c0 2.03.94 3.84 2.41 5.03-3 1.06-7.41 5.55-7.41 13.47h23c0-7.92-4.41-12.41-7.41-13.47 1.47-1.19 2.41-3 2.41-5.03 0-2.41-1.33-4.5-3.28-5.62.49-.67.78-1.49.78-2.38 0-2.21-1.79-4-4-4z' fill='%23000' stroke='%23000' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"
-    };
-
     for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) {
       const r = flip ? 7 - dr : dr; const c = flip ? 7 - dc : dc;
       const sq = document.createElement('div');
@@ -1990,24 +1913,14 @@ const Game = {
       if (this.selected && this.selected[0] === r && this.selected[1] === c) sq.classList.add('sel');
       if (interactive) { const isLegal = this.legalMoves.some(([mr, mc]) => mr === r && mc === c); if (isLegal) { sq.classList.add('hint'); if (state.board[r][c]) sq.classList.add('capture'); } }
       if (this.premove) { if (this.premove.to[0] === r && this.premove.to[1] === c) sq.classList.add('premove-target'); if (this.premove.from[0] === r && this.premove.from[1] === c) sq.classList.add('premove-from'); }
-      
       const p = state.board[r][c];
       if (p) {
-        const img = document.createElement('img');
-        img.src = PIECE_IMGS[p];
-        img.style.width = '85%';
-        img.style.height = '85%';
-        img.style.pointerEvents = 'none';
-        img.style.userSelect = 'none';
-        img.style.filter = 'drop-shadow(0 1px 2px rgba(0,0,0,0.35))';
-        img.style.position = 'relative';
-        img.style.zIndex = '1';
-        img.alt = p;
-        img.draggable = false;
-        if (this.dragging && this.dragging.from[0] === r && this.dragging.from[1] === c) img.style.opacity = '0.35';
-        sq.appendChild(img);
+        const piece = document.createElement('span');
+        piece.className = 'piece ' + (Chess.isWhite(p) ? 'w' : 'b');
+        piece.textContent = Chess.EMOJI[p];
+        if (this.dragging && this.dragging.from[0] === r && this.dragging.from[1] === c) piece.classList.add('dragging');
+        sq.appendChild(piece);
       }
-      
       if (dr === 7) { const e = document.createElement('span'); e.className='coord-f'; e.textContent = String.fromCharCode(97 + c); sq.appendChild(e); }
       if (dc === 0) { const e = document.createElement('span'); e.className='coord-r'; e.textContent = 8 - r; sq.appendChild(e); }
       boardEl.appendChild(sq);
@@ -2336,7 +2249,6 @@ document.addEventListener('DOMContentLoaded', () => {
   window.Watch = Watch; window.Arena = Arena; window.Profile = Profile; window.Community = Community;
   window.Game = Game; window.Banners = Banners; window.Mod = Mod; window.Utils = Utils;
   window.UserMenu = UserMenu; window.Inbox = Inbox; window.Ping = Ping; window.Auth = Auth;
-  window.Settings = Settings;
   App.init();
 });
 
