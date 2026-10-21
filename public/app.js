@@ -3,41 +3,6 @@
 'use strict';
 
 // ============================================================
-// SOUNDS (Base64 MP3, стиль Lichess)
-// ============================================================
-const Sounds = (function() {
-  const sounds = {
-    move:    new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA=='), // Заглушка
-    capture: new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA=='),
-    check:   new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA=='),
-    mate:    new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA=='),
-    notify:  new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA==')
-  };
-  // Устанавливаем громкость
-  Object.values(sounds).forEach(s => s.volume = 0.4);
-
-  return {
-    move()    { sounds.move.play().catch(()=>{}); },
-    capture() { sounds.capture.play().catch(()=>{}); },
-    check()   { sounds.check.play().catch(()=>{}); },
-    mate()    { sounds.mate.play().catch(()=>{}); },
-    draw()    { sounds.notify.play().catch(()=>{}); },
-    win()     { sounds.mate.play().catch(()=>{}); },
-    lose()    { sounds.notify.play().catch(()=>{}); },
-    start()   { sounds.notify.play().catch(()=>{}); },
-    msg()     { sounds.notify.play().catch(()=>{}); },
-    moveBySan(san) {
-      if (!san) return;
-      if (san.includes('#'))      this.mate();
-      else if (san.includes('+')) this.check();
-      else if (san.includes('x')) this.capture();
-      else                        this.move();
-    },
-    initOnFirstClick() {} // Уже не нужно, Audio API работает по клику
-  };
-})();
-
-// ============================================================
 // UTILS
 // ============================================================
 const Utils = {
@@ -88,10 +53,43 @@ const Utils = {
 };
 
 // ============================================================
-// CHESS (Логика фигур)
+// SOUNDS (Base64, стиль Lichess)
+// ============================================================
+const Sounds = (function() {
+  const sounds = {
+    move:    new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA=='),
+    capture: new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA=='),
+    check:   new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA=='),
+    mate:    new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA=='),
+    notify:  new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA==')
+  };
+  Object.values(sounds).forEach(s => s.volume = 0.4);
+
+  return {
+    move()    { sounds.move.play().catch(()=>{}); },
+    capture() { sounds.capture.play().catch(()=>{}); },
+    check()   { sounds.check.play().catch(()=>{}); },
+    mate()    { sounds.mate.play().catch(()=>{}); },
+    draw()    { sounds.notify.play().catch(()=>{}); },
+    win()     { sounds.mate.play().catch(()=>{}); },
+    lose()    { sounds.notify.play().catch(()=>{}); },
+    start()   { sounds.notify.play().catch(()=>{}); },
+    msg()     { sounds.notify.play().catch(()=>{}); },
+    moveBySan(san) {
+      if (!san) return;
+      if (san.includes('#'))      this.mate();
+      else if (san.includes('+')) this.check();
+      else if (san.includes('x')) this.capture();
+      else                        this.move();
+    },
+    initOnFirstClick() {}
+  };
+})();
+
+// ============================================================
+// CHESS
 // ============================================================
 const Chess = {
-  // EMOJI больше не нужен для отрисовки на доске (используем CSS), но оставим для чата/логов
   EMOJI: { 'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙','k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟' },
   parseFen(fen) {
     const parts = fen.split(' ');
@@ -240,7 +238,6 @@ const Auth = {
     const usernameStatus = document.getElementById('usernameStatus');
     if (usernameStatus && mode === 'login') { usernameStatus.textContent = ''; usernameStatus.className = ''; }
 
-    // Show/hide agreement checkboxes
     const agree = document.getElementById('agreeCheckbox')?.parentElement;
     const honor = document.getElementById('honorCheckbox')?.parentElement;
     if (agree) agree.style.display = mode === 'register' ? 'flex' : 'none';
@@ -257,55 +254,6 @@ const Auth = {
       pw.type = 'password';
       icon.textContent = '👁';
     }
-  },
-
-  openResetModal() {
-    const modal = document.getElementById('resetRequestModal');
-    if (modal) modal.classList.add('show');
-    const input = document.getElementById('resetEmailInput');
-    if (input) input.value = '';
-  },
-
-  closeResetModal() {
-    const modal = document.getElementById('resetRequestModal');
-    if (modal) modal.classList.remove('show');
-  },
-
-  submitResetRequest() {
-    const email = document.getElementById('resetEmailInput').value.trim();
-    if (!email) { alert('Пожалуйста, введите email'); return; }
-    
-    this.closeResetModal();
-    
-    App.socket.emit('requestPasswordReset', { email }, (res) => {
-      alert(res?.msg || 'Если email зарегистрирован, письмо отправлено');
-    });
-  },
-
-  doResetPassword() {
-    const hashPart = location.hash.split('?')[1];
-    const token = hashPart ? new URLSearchParams(hashPart).get('token') : null;
-    const newPassword = document.getElementById('newPassword').value;
-    const confirmPassword = document.getElementById('confirmPassword').value;
-    const msgEl = document.getElementById('resetMsg');
-
-    if (!token) { msgEl.textContent = 'Неверная ссылка для сброса'; msgEl.style.color = '#ff6b6b'; return; }
-    if (!newPassword || newPassword.length < 3) { msgEl.textContent = 'Пароль минимум 3 символа'; msgEl.style.color = '#ff6b6b'; return; }
-    if (newPassword !== confirmPassword) { msgEl.textContent = 'Пароли не совпадают'; msgEl.style.color = '#ff6b6b'; return; }
-
-    msgEl.textContent = 'Загрузка...';
-    msgEl.style.color = 'var(--text)';
-
-    App.socket.emit('resetPassword', { token, newPassword }, (res) => {
-      if (!res || !res.ok) {
-        msgEl.style.color = '#ff6b6b';
-        msgEl.textContent = res?.msg || 'Ошибка';
-        return;
-      }
-      msgEl.style.color = '#629924';
-      msgEl.textContent = 'Пароль успешно изменен!';
-      setTimeout(() => Router.go('autorize'), 2000);
-    });
   },
 
   init() {
@@ -583,11 +531,9 @@ const Settings = {
   },
   enter() {
     if (!App.me) { Router.go('autorize'); return; }
-    // Показываем вкладку админа только для PeshkaSasha
     const adminTab = document.getElementById('settingsAdminTab');
     if (App.me.username === 'PeshkaSasha') adminTab.style.display = 'block';
     else adminTab.style.display = 'none';
-
     this.switchTab(this.currentTab);
   },
   switchTab(tab) {
@@ -807,14 +753,22 @@ const Router = {
   apply() {
     const { name, param } = this.current;
 
-    // Термс (пользовательское соглашение) — доступно всем
     if (name === 'terms') {
-      document.body.classList.add('login-active'); // Скрываем шапку
+      document.body.classList.add('login-active');
       Router.show('termsScreen');
       return;
     }
 
-    if (name === 'reset') { document.body.classList.add('login-active'); Router.show('resetScreen'); return; }
+    if (name === 'reset') {
+      document.body.classList.add('login-active');
+      Router.show('resetScreen');
+      return;
+    }
+
+    if (name === 'verify') {
+      Router.go('autorize');
+      return;
+    }
 
     if (name === 'login' || name === 'autorize' || !App.me) {
       document.body.classList.add('login-active');
@@ -830,11 +784,10 @@ const Router = {
 
     if (name === 'settings') {
       Router.show('settingsScreen');
-      Settings.enter(); // Инициализация страницы настроек
+      Settings.enter();
       return;
     }
 
-    // Остальные страницы
     if (name === 'lobby') { Router.show('lobbyScreen'); Lobby.enter(); }
     else if (name === 'watch') { Router.show('watchScreen'); Watch.enter(param); }
     else if (name === 'arenas') { Router.show('arenasScreen'); Arena.enterList(); }
@@ -1002,7 +955,7 @@ const Bot = {
   openDialog() {
     const dlg = document.getElementById('botDialog'); if (!dlg) return;
     App.socket.emit('getBots', (list) => {
-      if (Array.isArray(list)) App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.initialRating, games: b.games || 0, isMaster: b.level === 4 }));
+      if (Array.isArray(list)) App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.rating, games: b.games || 0, isMaster: b.level === 4 }));
       this.render(); dlg.classList.add('show');
     });
   },
@@ -1010,7 +963,7 @@ const Bot = {
   render() {
     const levelsEl = document.getElementById('botLevels'); const timesEl = document.getElementById('botTimes');
     if (!levelsEl || !timesEl) return;
-    if (!App.botLevels.length) { App.socket.emit('getBots', (list) => { if (Array.isArray(list)) { App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.initialRating, games: b.games || 0, isMaster: b.level === 4 })); this.render(); } }); return; }
+    if (!App.botLevels.length) { App.socket.emit('getBots', (list) => { if (Array.isArray(list)) { App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.rating, games: b.games || 0, isMaster: b.level === 4 })); this.render(); } }); return; }
     const st = App.botDialogState;
     levelsEl.innerHTML = App.botLevels.map(l => { const active = st.level === l.level; const cls = active ? 'active' : ''; const extra = l.isMaster ? 'masterBtn' : ''; return `<button data-level="${l.level}" class="${cls} ${extra}"><div class="btitle">${l.title}</div><div class="brating">${l.rating}</div></button>`; }).join('');
     timesEl.innerHTML = App.botTimes.map(t => { const active = st.time === t.t && st.inc === t.i; return `<button data-t="${t.t}" data-i="${t.i}" class="${active ? 'active' : ''}">${t.label}</button>`; }).join('');
@@ -1026,7 +979,7 @@ const Bot = {
 };
 
 // ============================================================
-// WATCH
+// WATCH (ИЗМЕНЕНО: классы фигур)
 // ============================================================
 const Watch = {
   watchingGameId: null, watchingGame: null, lastHash: '', lastBoardHash: '',
@@ -1043,9 +996,7 @@ const Watch = {
   refresh(force) { App.socket.emit('getLiveGames', (list) => { this.refreshFromList(list); }); },
   refreshFromList(list) {
     const box = document.getElementById('watchListBody'); if (!box) return;
-
     list = (list || []).filter(g => !g.isSelfPlay && !(g.id && g.id.startsWith('sp_')));
-
     const hash = JSON.stringify(list); if (hash === this.lastHash) return; this.lastHash = hash;
     if (!list.length) { box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>'; return; }
     box.innerHTML = list.map(g => {
@@ -1099,11 +1050,7 @@ const Watch = {
       let cls = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
       if (lm && ((lm.from[0] === r && lm.from[1] === c) || (lm.to[0] === r && lm.to[1] === c))) cls += ' lastmove';
       const p = state.board[r][c]; let inner = '';
-      if (p) { 
-        const isW = p === p.toUpperCase(); 
-        // Используем CSS-классы для SVG фигур
-        inner = `<span class="piece ${isW?'w':'b'} ${p.toLowerCase()}"></span>`; 
-      }
+      if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW?'w':'b'} ${p.toLowerCase()}"></span>`; }
       let coords = '';
       if (dr === 7) coords += `<span class="coord-f">${String.fromCharCode(97 + c)}</span>`;
       if (dc === 0) coords += `<span class="coord-r">${8 - r}</span>`;
@@ -1157,7 +1104,7 @@ const Watch = {
 };
 
 // ============================================================
-// ARENA
+// ARENA (ИЗМЕНЕНО: классы фигур в renderTopGame)
 // ============================================================
 const Arena = {
   cache: [], statesCache: {}, serverOffsetMs: 0, currentArenaId: null, currentArenaState: null,
@@ -1167,10 +1114,7 @@ const Arena = {
   enterList() { this.refresh(true); },
   enterPage(arenaId) {
     if (!arenaId) { Router.go('arenas'); return; }
-    if (App.gameActive && !App.gameEnded) {
-      Router.go('lobby');
-      return;
-    }
+    if (App.gameActive && !App.gameEnded) { Router.go('lobby'); return; }
     if (Watch.watchingGameId) Watch.stop();
     if (this.currentArenaId && this.currentArenaId !== arenaId) App.socket.emit('leaveArenaRoom', { arenaId: this.currentArenaId });
     this.currentArenaId = arenaId;
@@ -1301,10 +1245,7 @@ const Arena = {
   updateJoinButton(state) {
     const wrap = document.getElementById('arenaJoinBtnWrap');
     const isPlaying = App.gameActive && !App.gameEnded;
-    if (isPlaying) {
-      wrap.innerHTML = `<button class="secondary arenaJoinBtn" disabled style="width:180px; opacity:0.5; cursor:not-allowed;">ЗАНЯТЫ ИГРОЙ</button>`;
-      return;
-    }
+    if (isPlaying) { wrap.innerHTML = `<button class="secondary arenaJoinBtn" disabled style="width:180px; opacity:0.5; cursor:not-allowed;">ЗАНЯТЫ ИГРОЙ</button>`; return; }
     if (state.phase === 'finished') { wrap.innerHTML = `<button class="secondary" disabled style="width:180px;">ЗАВЕРШЕНА</button>`; return; }
     if (state.phase === 'waiting') { if (state.joined) wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.leaveCurrent()">ОТМЕНИТЬ</button>`; else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button>`; return; }
     if (state.joined) { if (state.paused) wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.pauseCurrent()">▶ ПРОДОЛЖИТЬ</button>`; else wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.pauseCurrent()">⏸ ПАУЗА</button>`; }
@@ -1366,15 +1307,12 @@ const Arena = {
   },
   renderTopGame(g) {
     const state = Chess.parseFen(g.fen); let squares = '';
-    for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) { 
-      const cls = 'sq ' + ((dr + dc) % 2 ? 'dark' : 'light'); 
-      const p = state.board[dr][dc]; 
-      let inner = ''; 
-      if (p) { 
-        const isW = p === p.toUpperCase(); 
-        inner = `<span class="piece ${isW ? 'w' : 'b'} ${p.toLowerCase()}"></span>`; 
-      } 
-      squares += `<div class="${cls}">${inner}</div>`; 
+    for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) {
+      const cls = 'sq ' + ((dr + dc) % 2 ? 'dark' : 'light');
+      const p = state.board[dr][dc];
+      let inner = '';
+      if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW ? 'w' : 'b'} ${p.toLowerCase()}"></span>`; }
+      squares += `<div class="${cls}">${inner}</div>`;
     }
     const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
     const wR = g.whiteRating ? `<span class="prat">${g.whiteRating}</span>` : ''; const bR = g.blackRating ? `<span class="prat">${g.blackRating}</span>` : '';
@@ -1428,7 +1366,7 @@ const Arena = {
 };
 
 // ============================================================
-// PROFILE
+// PROFILE (с проверкой бана)
 // ============================================================
 const Profile = {
   gamesVisible: false,
@@ -1464,7 +1402,6 @@ const Profile = {
   },
 
   render(user, games, history, categoryHistory) {
-    // Проверка на бан
     const bannedBlock = document.getElementById('profileBannedBlock');
     const mainBlock = document.getElementById('profileMainBlock');
     const showGamesBtn = document.getElementById('showGamesBtn');
@@ -1521,10 +1458,7 @@ const Profile = {
       }).join('');
     } else catEl.innerHTML = '';
     const writeBtn = document.getElementById('pWriteBtn');
-    if (writeBtn) { 
-      if (App.me && user.username !== App.me.username && !user.isBot) writeBtn.style.display = ''; 
-      else writeBtn.style.display = 'none'; 
-    }
+    if (writeBtn) { if (App.me && user.username !== App.me.username && !user.isBot) writeBtn.style.display = ''; else writeBtn.style.display = 'none'; }
     this.chartData = { games, history, user, categoryHistory };
     this.chartUserId = user.username;
     this.renderChartControls();
@@ -1919,7 +1853,7 @@ const Banners = {
 };
 
 // ============================================================
-// GAME
+// GAME (ИЗМЕНЕНО: классы фигур и перетаскивание)
 // ============================================================
 const Game = {
   selected: null, legalMoves: [], moveHistory: [], moveFens: [], viewIndex: -1,
@@ -2232,14 +2166,6 @@ const Game = {
     if (this.ghostEl) { this.ghostEl.remove(); this.ghostEl = null; }
     this.ghostEl = document.createElement('div');
     this.ghostEl.className = 'dragGhost ' + (Chess.isWhite(piece) ? 'w' : 'b') + ' ' + piece.toLowerCase();
-    // Добавляем фон для драга
-    const svgBg = getComputedStyle(document.documentElement).getPropertyValue(`--piece-${Chess.isWhite(piece)?'w':'b'}-${piece.toLowerCase()}`);
-    if (svgBg) {
-        this.ghostEl.style.backgroundImage = svgBg;
-    } else {
-        // Фоллбэк на CSS классы, если getComputedStyle не сработает
-        this.ghostEl.style.backgroundImage = `url("data:image/svg+xml,...")`; // Тут сложно достать URL, проще просто скрыть, если нет фона
-    }
     this.ghostEl.style.left = x + 'px'; this.ghostEl.style.top = y + 'px'; this.ghostEl.style.display = 'none';
     document.body.appendChild(this.ghostEl);
   },
