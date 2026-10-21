@@ -106,6 +106,21 @@ const Sounds = (function() {
 // ============================================================
 const Chess = {
   EMOJI: { 'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙','k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟' },
+  pieceSvg(piece) {
+    const white = piece === piece.toUpperCase();
+    const kind = piece.toLowerCase();
+    const paths = {
+      k:'<path d="M50 10V24M43 17H57"/><path d="M31 29Q22 38 29 47L22 67H78L71 47Q78 38 69 29Z"/><path d="M27 48H73M22 67H78L83 76H17Z"/>',
+      q:'<path d="M20 28L29 49H71L80 28L69 42L62 20L50 39L38 20L31 42Z"/><circle cx="20" cy="23" r="5"/><circle cx="38" cy="15" r="5"/><circle cx="62" cy="15" r="5"/><circle cx="80" cy="23" r="5"/><path d="M29 53H71L77 70H23Z M18 76H82"/>',
+      r:'<path d="M25 20H37V29H45V20H55V29H63V20H75V40L68 48V67H32V48L25 40Z"/><path d="M32 49H68M23 72H77L82 78H18Z"/>',
+      b:'<path d="M50 15C32 25 33 38 47 45L34 62H66L53 45C67 38 68 25 50 15Z"/><path d="M43 32L57 46M29 66H71L78 77H22Z"/>',
+      n:'<path d="M26 67Q20 53 31 42L40 24L56 18L70 30L76 47L67 57L72 68Z"/><path d="M40 24L49 39L64 45M29 68H77L82 77H18Z"/><circle cx="59" cy="30" r="2.5" fill="currentColor"/>',
+      p:'<circle cx="50" cy="26" r="13"/><path d="M40 39Q31 47 37 57L30 68H70L63 57Q69 47 60 39Z"/><path d="M25 72H75L81 78H19Z"/>'
+    };
+    const fill = white ? '#fffdf7' : '#292c32';
+    const stroke = white ? '#333943' : '#e8e8e8';
+    return `<svg class="pieceSvg" viewBox="0 0 100 100" aria-hidden="true"><g fill="${fill}" stroke="${stroke}" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round">${paths[kind]}</g></svg>`;
+  },
   parseFen(fen) {
     const parts = fen.split(' ');
     const board = Array.from({length:8}, () => Array(8).fill(null));
@@ -1917,7 +1932,7 @@ const Game = {
       if (p) {
         const piece = document.createElement('span');
         piece.className = 'piece ' + (Chess.isWhite(p) ? 'w' : 'b');
-        piece.textContent = Chess.EMOJI[p];
+        piece.innerHTML = Chess.pieceSvg(p);
         if (this.dragging && this.dragging.from[0] === r && this.dragging.from[1] === c) piece.classList.add('dragging');
         sq.appendChild(piece);
       }
@@ -2061,7 +2076,7 @@ const Game = {
     if (this.ghostEl) { this.ghostEl.remove(); this.ghostEl = null; }
     this.ghostEl = document.createElement('div');
     this.ghostEl.className = 'dragGhost ' + (Chess.isWhite(piece) ? 'w' : 'b');
-    this.ghostEl.textContent = Chess.EMOJI[piece];
+    this.ghostEl.innerHTML = Chess.pieceSvg(piece);
     this.ghostEl.style.left = x + 'px'; this.ghostEl.style.top = y + 'px'; this.ghostEl.style.display = 'none';
     document.body.appendChild(this.ghostEl);
   },
@@ -2083,6 +2098,17 @@ const Game = {
     if (!target) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); return; }
     if (target[0] === from[0] && target[1] === from[1]) { this.selected = from; this.legalMoves = Chess.legalMovesFor(Chess.parseFen(App.currentFen), from[0], from[1]); this.lastBoardHash = ''; this.renderBoard(); return; }
     if (wasPremove) { this.premove = { from, to: target, san: '' }; this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); return; }
+    const latestState = Chess.parseFen(App.currentFen);
+    const latestPiece = latestState.board[from[0]][from[1]];
+    const latestIsMine = latestPiece && Chess.isWhite(latestPiece) === (App.myColor === 'w');
+    if (latestState.turn !== App.myColor) {
+      // The opponent may have moved while the pointer was held. Only queue a premove
+      // if the exact source square still contains one of our pieces.
+      if (latestIsMine) this.premove = { from, to: target, san: '' };
+      else this.premove = null;
+      this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard();
+      return;
+    }
     const ok = this.applyUserMove(from, target, false);
     if (!ok) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); }
   },
