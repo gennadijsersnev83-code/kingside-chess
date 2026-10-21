@@ -67,6 +67,25 @@ async function sendPasswordResetEmail(toEmail, username, token) {
   });
 }
 
-module.exports = { sendVerificationEmail, sendPasswordResetEmail };
+async function sendAccountDeletionEmail(toEmail, username, token) {
+  const link = `${BASE_URL}/api/delete-account?token=${encodeURIComponent(token)}`;
+  await sendEmail({
+    subject: 'Подтверждение удаления аккаунта Kingside',
+    htmlContent: `
+      <div style="font-family: sans-serif; color: #333; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+        <h2 style="color: #a53030;">Удаление аккаунта</h2>
+        <p>Привет, <b>${username}</b>.</p>
+        <p>Вы запросили удаление аккаунта. Это действие необратимо.</p>
+        <p>Помните, что удаление возможно только через 10 дней после создания аккаунта. Если вы уверены, подтвердите действие:</p>
+        <p style="text-align: center; margin: 30px 0;">
+          <a href="${link}" style="padding: 12px 24px; background: #a53030; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold;">Удалить аккаунт</a>
+        </p>
+        <p style="font-size: 12px; color: #777;">Ссылка: <br> ${link}</p>
+      </div>
+    `,
+    sender: { name: process.env.BREVO_SENDER_NAME || 'Kingside', email: process.env.BREVO_SENDER_EMAIL },
+    to: [{ email: toEmail }]
+  });
+}
 
-
+module.exports = { sendVerificationEmail, sendPasswordResetEmail, sendAccountDeletionEmail };
