@@ -43,10 +43,11 @@ body.login-active #mainContent { display: none !important; }
       <a href="#/reset" class="forgot-link" style="display:inline-block;margin-top:8px;font-size:12px;color:#4a9ce8;text-align:right;width:100%;">Забыли пароль?</a>
     </div>
 
+    <!-- Agreement and Honor checkbox -->
     <label class="checkbox-row" style="margin-bottom:8px;">
       <input type="checkbox" id="agreeCheckbox">
       <span class="checkmark"></span>
-      <span>Я согласен с <a href="#/terms" onclick="Router.go('terms')" style="color:#4a9ce8;">пользовательским соглашением</a></span>
+      <span>Я согласен с <a href="#" onclick="alert('Пользовательское соглашение: Играйте честно, не оскорбляйте других.')" style="color:#4a9ce8;">пользовательским соглашением</a></span>
     </label>
     <label class="checkbox-row" style="margin-bottom:16px;">
       <input type="checkbox" id="honorCheckbox">
@@ -93,33 +94,6 @@ body.login-active #mainContent { display: none !important; }
 
     <div style="text-align:center;margin-top:16px;">
       <a href="#/autorize" class="forgot-link" style="display:inline-block;font-size:12px;color:#4a9ce8;">← Вернуться ко входу</a>
-    </div>
-  </div>
-</section>
-
-<!-- ЭКРАН ПОЛЬЗОВАТЕЛЬСКОГО СОГЛАШЕНИЯ (#/terms) -->
-<section id="termsScreen" class="screen" style="display: none; max-width: 800px; margin: 40px auto; padding: 0 20px;">
-  <div style="background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 30px; color: var(--text-bright);">
-    <h1 style="margin-top:0; color: var(--accent);">Пользовательское соглашение</h1>
-    <p style="color: var(--muted); font-size: 13px;">Последнее обновление: 2026 г.</p>
-    
-    <h3>1. Общие положения</h3>
-    <p>Используя сайт Kingside, вы соглашаетесь с настоящими правилами. Если вы не согласны — пожалуйста, покиньте сайт.</p>
-    
-    <h3>2. Правила честной игры</h3>
-    <p>Запрещается использовать любые программы, скрипты, базы данных или подсказки во время партий. Запрещено намеренное падение рейтинга (sandbagging) и договорные партии.</p>
-    
-    <h3>3. Поведение</h3>
-    <p>Запрещены оскорбления, спам, разжигание ненависти и реклама сторонних ресурсов в чатах и личных сообщениях.</p>
-    
-    <h3>4. Модерация</h3>
-    <p>Администрация оставляет за собой право блокировать аккаунты за нарушение правил без предварительного уведомления. Вы можете подать апелляцию, написав администратору <b>PeshkaSasha</b>.</p>
-    
-    <h3>5. Ответственность</h3>
-    <p>Сайт предоставляется «как есть». Администрация не несёт ответственности за возможные сбои, потерю рейтинга или данных.</p>
-    
-    <div style="margin-top: 30px; text-align: center;">
-      <button class="primary" onclick="Router.go('autorize')" style="padding: 10px 30px;">Вернуться к регистрации</button>
     </div>
   </div>
 </section>
@@ -271,7 +245,8 @@ body.login-active #mainContent { display: none !important; }
         </div>
       </div>
 
-      <div class="profileMain" id="profileMainBlock">
+      <!-- Профиль в стиле Lichess: слева контролы графика, справа статистика -->
+      <div class="profileMain">
         <div class="profileMainLeft">
           <div class="chartControlsWrap">
             <div class="chartTitle">📈 Рейтинг по дням</div>
@@ -288,15 +263,6 @@ body.login-active #mainContent { display: none !important; }
             <div class="statBox"><div class="v" id="pWinrate">—</div><div class="l">Winrate</div></div>
           </div>
         </div>
-      </div>
-
-      <!-- Блок для забаненных -->
-      <div id="profileBannedBlock" style="display:none; background: rgba(165,48,48,0.1); border: 2px solid #a53030; border-radius: 8px; padding: 30px; text-align: center; margin: 20px 0;">
-        <h2 style="color: #ff6b6b; margin-top: 0;">Этот игрок нарушил правила сайта</h2>
-        <p style="color: var(--text-bright); font-size: 16px;">Аккаунт заблокирован.</p>
-        <p style="color: var(--muted);" id="banReasonText">Причина: нарушение правил</p>
-        <p style="color: var(--muted);" id="banUntilText"></p>
-        <p style="margin-top: 20px; font-size: 13px;">Если вы считаете это ошибкой, напишите администратору <b>PeshkaSasha</b> в личные сообщения для подачи апелляции.</p>
       </div>
 
       <button class="profileShowGamesBtn" id="showGamesBtn" onclick="Profile.toggleGames()">📜 Показать партии</button>
@@ -343,24 +309,6 @@ body.login-active #mainContent { display: none !important; }
           <button type="submit">→</button>
         </form>
       </section>
-    </div>
-  </section>
-
-  <!-- НОВАЯ СЕКЦИЯ НАСТРОЕК (#/settings) -->
-  <section id="settingsScreen" class="screen">
-    <div class="settings-wrap">
-      <aside class="settings-sidebar">
-        <div class="settings-sidebar-header">Настройки</div>
-        <nav class="settings-nav">
-          <a href="#/settings/profile" class="settings-nav-item" data-tab="profile">Редактировать профиль</a>
-          <a href="#/settings/display" class="settings-nav-item" data-tab="display">Отображение</a>
-          <a href="#/settings/security" class="settings-nav-item" data-tab="security">Безопасность</a>
-          <a href="#/settings/admin" class="settings-nav-item" data-tab="admin" id="settingsAdminTab" style="display:none;">Админ-панель</a>
-        </nav>
-      </aside>
-      <main class="settings-content" id="settingsContent">
-        <!-- Содержимое будет рендериться в JS -->
-      </main>
     </div>
   </section>
 
@@ -420,6 +368,7 @@ body.login-active #mainContent { display: none !important; }
   </section>
 </main>
 
+<!-- Custom Game Modal -->
 <div id="customGameModal" class="botModal">
   <div class="botModalBox">
     <h3>Создать игру</h3>
@@ -452,6 +401,46 @@ body.login-active #mainContent { display: none !important; }
     <div class="botModalActions">
       <button class="cancelBtn" onclick="Lobby.closeCustomGameModal()">Отмена</button>
       <button class="startBtn" onclick="Lobby.createCustomGame()">Создать</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div id="settingsModal" class="botModal">
+  <div class="botModalBox">
+    <h3>Настройки</h3>
+    <div class="auth-field">
+      <label>О себе</label>
+      <textarea id="settingsBio" style="width:100%; height:80px; background:#2d2c29; border:1px solid #3a3833; color:#e8e6e3; padding:8px; border-radius:4px; resize:none;" maxlength="500" placeholder="Расскажите о себе..."></textarea>
+    </div>
+    <label class="checkbox-row" style="margin:12px 0;">
+      <input type="checkbox" id="settingsSubseconds">
+      <span class="checkmark"></span>
+      <span>Показывать доли секунды на протяжении всей игры</span>
+    </label>
+    
+    <div id="adminSettings" style="display:none; border-top:1px solid #3a3833; padding-top:12px; margin-top:12px;">
+      <div class="botModalLabel" style="color:#e5484d;">Админ-панель</div>
+      <div class="auth-field">
+        <label>Действия с пользователем</label>
+        <input id="adminUserInput" placeholder="Логин игрока" style="width:100%; margin-bottom:8px;">
+        <div style="display:flex; gap:8px;">
+          <button onclick="Settings.adminAction('ban')" style="flex:1; background:#a53030; border:none; color:white; padding:8px; border-radius:4px; cursor:pointer;">Забанить</button>
+          <button onclick="Settings.adminAction('unban')" style="flex:1; background:#629924; border:none; color:white; padding:8px; border-radius:4px; cursor:pointer;">Разбанить</button>
+          <button onclick="Settings.adminAction('mute')" style="flex:1; background:#bf811d; border:none; color:black; padding:8px; border-radius:4px; cursor:pointer;">Мут (24ч)</button>
+          <button onclick="Settings.adminAction('delete')" style="flex:1; background:#e5484d; border:none; color:white; padding:8px; border-radius:4px; cursor:pointer;">Удалить</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="border-top:1px solid #3a3833; padding-top:12px; margin-top:12px;">
+      <button onclick="Settings.deleteAccount()" style="width:100%; background:transparent; border:1px solid #a53030; color:#a53030; padding:8px; border-radius:4px; cursor:pointer;">Удалить аккаунт</button>
+      <div class="hint-text" style="margin-top:4px; color:#7d7a72;">Удаление доступно только через 10 дней после регистрации.</div>
+    </div>
+
+    <div class="botModalActions" style="margin-top:16px;">
+      <button class="cancelBtn" onclick="Settings.close()">Закрыть</button>
+      <button class="startBtn" onclick="Settings.save()">Сохранить</button>
     </div>
   </div>
 </div>
