@@ -252,6 +252,12 @@ const Auth = {
     document.getElementById('loginMsg').textContent = '';
     const usernameStatus = document.getElementById('usernameStatus');
     if (usernameStatus && mode === 'login') { usernameStatus.textContent = ''; usernameStatus.className = ''; }
+
+    // Show/hide agreement checkboxes
+    const agree = document.getElementById('agreeCheckbox')?.parentElement;
+    const honor = document.getElementById('honorCheckbox')?.parentElement;
+    if (agree) agree.style.display = mode === 'register' ? 'flex' : 'none';
+    if (honor) honor.style.display = mode === 'register' ? 'flex' : 'none';
   },
 
   togglePassword() {
@@ -390,6 +396,7 @@ const App = {
     TopArenas.init(); Stats.init(); Lobby.init(); Bot.init();
     Watch.init(); Arena.init(); Profile.init(); Community.init();
     Game.init(); Banners.init(); UserMenu.init(); Inbox.init(); Ping.init(); Auth.init();
+    Settings.init();
     this.tryAutoLogin();
     this.scheduleArenaClock();
   },
@@ -423,7 +430,10 @@ const App = {
 
     if (!username || !password) { msgEl.textContent = 'Введите логин и пароль'; return; }
     if (Auth.mode === 'register' && !email) { msgEl.textContent = 'Введите email'; return; }
+    
     if (Auth.mode === 'register') {
+      const agree = document.getElementById('agreeCheckbox');
+      if (agree && !agree.checked) { msgEl.textContent = 'Необходимо согласиться с пользовательским соглашением'; return; }
       const honor = document.getElementById('honorCheckbox');
       if (honor && !honor.checked) { msgEl.textContent = 'Подтвердите, что будете играть честно'; return; }
     }
@@ -570,6 +580,73 @@ const App = {
 };
 
 // ============================================================
+// SETTINGS MODAL
+// ============================================================
+const Settings = {
+  init() {
+    // nothing to init
+  },
+  open() {
+    if (!App.me) return;
+    App.socket.emit('getProfile', { username: App.me.username }, (res) => {
+      if (res && res.ok) {
+        document.getElementById('settingsBio').value = res.user.bio || '';
+        document.getElementById('settingsSubseconds').checked = !!res.user.showSubseconds;
+        document.getElementById('settingsModal').classList.add('show');
+        const isAdmin = App.me.username === 'PeshkaSasha';
+        document.getElementById('adminSettings').style.display = isAdmin ? 'block' : 'none';
+      }
+    });
+  },
+  close() {
+    document.getElementById('settingsModal').classList.remove('show');
+  },
+  save() {
+    const bio = document.getElementById('settingsBio').value;
+    const showSubseconds = document.getElementById('settingsSubseconds').checked;
+    App.socket.emit('updateSettings', { bio, showSubseconds }, (res) => {
+      if (res && res.ok) {
+        Settings.close();
+        alert('Настройки сохранены');
+        if (App.me) {
+          App.me.bio = bio;
+          App.me.showSubseconds = showSubseconds;
+        }
+      } else {
+        alert(res?.msg || 'Ошибка');
+      }
+    });
+  },
+  deleteAccount() {
+    if (!confirm('Вы уверены, что хотите удалить аккаунт? Это действие необратимо.')) return;
+    App.socket.emit('requestAccountDeletion', (res) => {
+      alert(res?.msg || 'Ошибка');
+      if (res && res.ok) {
+        Settings.close();
+      }
+    });
+  },
+  adminAction(action) {
+    const username = document.getElementById('adminUserInput').value.trim();
+    if (!username) {
+      alert('Введите логин');
+      return;
+    }
+    if (action === 'ban') {
+      App.socket.emit('adminBan', { username }, (res) => alert(res?.ok ? 'Пользователь забанен' : (res?.msg || 'Ошибка')));
+    } else if (action === 'unban') {
+      App.socket.emit('adminUnban', { username }, (res) => alert(res?.ok ? 'Пользователь разбанен' : (res?.msg || 'Ошибка')));
+    } else if (action === 'mute') {
+      App.socket.emit('modMuteUser', { username, minutes: 1440 }, (res) => alert(res?.ok ? 'Пользователь заглушен на 24 часа' : (res?.msg || 'Ошибка')));
+    } else if (action === 'delete') {
+      if (confirm('Вы уверены, что хотите удалить аккаунт ' + username + '?')) {
+        App.socket.emit('adminDeleteAccount', { username }, (res) => alert(res?.ok ? 'Аккаунт удалён' : (res?.msg || 'Ошибка')));
+      }
+    }
+  }
+};
+
+// ============================================================
 // USER MENU
 // ============================================================
 const UserMenu = {
@@ -593,6 +670,7 @@ const UserMenu = {
   close() { const m = document.getElementById('userMenu'); if (!m) return; m.style.display = 'none'; this.isOpen = false; },
   goProfile() { this.close(); Router.go('profile'); },
   goInbox() { this.close(); Router.go('inbox'); },
+  openSettings() { this.close(); Settings.open(); },
   togglePing() { Ping.refresh(); }
 };
 
@@ -856,6 +934,18 @@ const Lobby = {
     const m = +document.getElementById('customMin').value || 5;
     const i = +document.getElementById('customInc').value || 0;
     this.quickStart(m, i);
+  },
+  openCustomGameModal: () => {
+    document.getElementById('customGameModal').classList.add('show');
+  },
+  closeCustomGameModal: () => {
+    document.getElementById('customGameModal').classList.remove('show');
+  },
+  createCustomGame: () => {
+    const time = parseInt(document.getElementById('customTimeControl').value);
+    const inc = parseInt(document.getElementById('customInc').value);
+    Lobby.quickStart(time, inc);
+    Lobby.closeCustomGameModal();
   }
 };
 
@@ -1399,7 +1489,6 @@ const Profile = {
     const xOf = day => PL + ((day-startDay)/(Math.max(dayMs,endDay-startDay))) * IW;
     const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-    // One shared timeline and one shared rating scale, with all time-control histories overlaid.
     const series = categories.map(cat => {
       const relevant = allGames.filter(g => g.category === cat.key)
         .sort((a,b) => Number(a.finishedAt)-Number(b.finishedAt));
@@ -1411,14 +1500,12 @@ const Profile = {
       }
       if (!byDay.size) return { ...cat, points:[], latest:null, delta:null };
       let last = null;
-      // Seed the range with the latest known rating before its start, if one exists.
       for (const [day, rating] of byDay) if (day < startDay) last = rating;
       const points=[];
       for(let d=startDay; d<=endDay; d+=dayMs) {
         if (byDay.has(d)) last=byDay.get(d);
         if (last !== null) points.push({day:d,rating:last});
       }
-      // If a category has only a game after the current day boundary, keep its exact game day visible.
       for (const [day, rating] of byDay) {
         if (day >= startDay && day <= endDay && !points.some(p=>p.day===day)) points.push({day,rating});
       }
@@ -2249,6 +2336,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.Watch = Watch; window.Arena = Arena; window.Profile = Profile; window.Community = Community;
   window.Game = Game; window.Banners = Banners; window.Mod = Mod; window.Utils = Utils;
   window.UserMenu = UserMenu; window.Inbox = Inbox; window.Ping = Ping; window.Auth = Auth;
+  window.Settings = Settings;
   App.init();
 });
 
