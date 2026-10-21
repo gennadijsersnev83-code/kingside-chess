@@ -53,36 +53,51 @@ const Utils = {
 };
 
 // ============================================================
-// SOUNDS (Base64, стиль Lichess)
+// SOUNDS
 // ============================================================
 const Sounds = (function() {
-  const sounds = {
-    move:    new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA=='),
-    capture: new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA=='),
-    check:   new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA=='),
-    mate:    new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA=='),
-    notify:  new Audio('data:audio/mp3;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjI5LjEwMAAAAAAAAAAAAAAA//tQxAADB8AhSmxhIIEVCSiRo5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fC8AhSmho5dUfXwvAIUpoaOXVH18LwCFKaGjl1R9fA==')
-  };
-  Object.values(sounds).forEach(s => s.volume = 0.4);
-
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  let ctx = null;
+  function ensure() { if (!ctx) ctx = new AudioCtx(); if (ctx.state === 'suspended') ctx.resume(); return ctx; }
+  function playTone(freq, dur, type, vol, delay) {
+    try {
+      const c = ensure();
+      const t0 = c.currentTime + (delay || 0);
+      const osc = c.createOscillator(); const gain = c.createGain();
+      osc.type = type || 'sine';
+      osc.frequency.setValueAtTime(freq, t0);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(vol || 0.15, t0 + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(gain); gain.connect(c.destination);
+      osc.start(t0); osc.stop(t0 + dur + 0.02);
+    } catch (e) {}
+  }
+  const last = { move:0, capture:0, check:0, mate:0, draw:0, win:0, lose:0, start:0, msg:0 };
+  const COOLDOWN = 180;
+  function can(key) { const now = performance.now(); if (now - last[key] < COOLDOWN) return false; last[key] = now; return true; }
+  let lastSan = '', lastSanTime = 0;
   return {
-    move()    { sounds.move.play().catch(()=>{}); },
-    capture() { sounds.capture.play().catch(()=>{}); },
-    check()   { sounds.check.play().catch(()=>{}); },
-    mate()    { sounds.mate.play().catch(()=>{}); },
-    draw()    { sounds.notify.play().catch(()=>{}); },
-    win()     { sounds.mate.play().catch(()=>{}); },
-    lose()    { sounds.notify.play().catch(()=>{}); },
-    start()   { sounds.notify.play().catch(()=>{}); },
-    msg()     { sounds.notify.play().catch(()=>{}); },
+    move()    { if (can('move'))    playTone(360, 0.045, 'sine', 0.075); },
+    capture() { if (can('capture')) playTone(245, 0.065, 'triangle', 0.095); },
+    check()   { if (can('check'))   playTone(740, 0.085, 'sine', 0.10); },
+    mate()    { if (can('mate'))    { playTone(520, 0.12, 'sine', 0.10); playTone(390, 0.16, 'sine', 0.085, 0.12); } },
+    draw()    { if (can('draw'))    playTone(460, 0.11, 'sine', 0.075); },
+    win()     { if (can('win'))     { playTone(660, 0.09, 'sine', 0.09); playTone(880, 0.13, 'sine', 0.085, 0.10); } },
+    lose()    { if (can('lose'))    playTone(290, 0.15, 'triangle', 0.08); },
+    start()   { if (can('start'))   playTone(580, 0.10, 'sine', 0.075); },
+    msg()     { if (can('msg'))     playTone(880, 0.06, 'sine', 0.07); },
     moveBySan(san) {
       if (!san) return;
+      const now = performance.now();
+      if (san === lastSan && now - lastSanTime < 300) return;
+      lastSan = san; lastSanTime = now;
       if (san.includes('#'))      this.mate();
       else if (san.includes('+')) this.check();
       else if (san.includes('x')) this.capture();
       else                        this.move();
     },
-    initOnFirstClick() {}
+    initOnFirstClick() { window.addEventListener('pointerdown', () => ensure(), { once: true }); }
   };
 })();
 
@@ -238,6 +253,7 @@ const Auth = {
     const usernameStatus = document.getElementById('usernameStatus');
     if (usernameStatus && mode === 'login') { usernameStatus.textContent = ''; usernameStatus.className = ''; }
 
+    // Show/hide agreement checkboxes
     const agree = document.getElementById('agreeCheckbox')?.parentElement;
     const honor = document.getElementById('honorCheckbox')?.parentElement;
     if (agree) agree.style.display = mode === 'register' ? 'flex' : 'none';
@@ -254,6 +270,55 @@ const Auth = {
       pw.type = 'password';
       icon.textContent = '👁';
     }
+  },
+
+  openResetModal() {
+    const modal = document.getElementById('resetRequestModal');
+    if (modal) modal.classList.add('show');
+    const input = document.getElementById('resetEmailInput');
+    if (input) input.value = '';
+  },
+
+  closeResetModal() {
+    const modal = document.getElementById('resetRequestModal');
+    if (modal) modal.classList.remove('show');
+  },
+
+  submitResetRequest() {
+    const email = document.getElementById('resetEmailInput').value.trim();
+    if (!email) { alert('Пожалуйста, введите email'); return; }
+    
+    this.closeResetModal();
+    
+    App.socket.emit('requestPasswordReset', { email }, (res) => {
+      alert(res?.msg || 'Если email зарегистрирован, письмо отправлено');
+    });
+  },
+
+  doResetPassword() {
+    const hashPart = location.hash.split('?')[1];
+    const token = hashPart ? new URLSearchParams(hashPart).get('token') : null;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    const msgEl = document.getElementById('resetMsg');
+
+    if (!token) { msgEl.textContent = 'Неверная ссылка для сброса'; msgEl.style.color = '#ff6b6b'; return; }
+    if (!newPassword || newPassword.length < 3) { msgEl.textContent = 'Пароль минимум 3 символа'; msgEl.style.color = '#ff6b6b'; return; }
+    if (newPassword !== confirmPassword) { msgEl.textContent = 'Пароли не совпадают'; msgEl.style.color = '#ff6b6b'; return; }
+
+    msgEl.textContent = 'Загрузка...';
+    msgEl.style.color = 'var(--text)';
+
+    App.socket.emit('resetPassword', { token, newPassword }, (res) => {
+      if (!res || !res.ok) {
+        msgEl.style.color = '#ff6b6b';
+        msgEl.textContent = res?.msg || 'Ошибка';
+        return;
+      }
+      msgEl.style.color = '#629924';
+      msgEl.textContent = 'Пароль успешно изменен!';
+      setTimeout(() => Router.go('autorize'), 2000);
+    });
   },
 
   init() {
@@ -515,167 +580,69 @@ const App = {
 };
 
 // ============================================================
-// SETTINGS (СТРАНИЦА #/settings)
+// SETTINGS MODAL
 // ============================================================
 const Settings = {
-  currentTab: 'profile',
   init() {
-    document.querySelectorAll('.settings-nav-item').forEach(a => {
-      a.addEventListener('click', (e) => {
-        e.preventDefault();
-        const tab = a.dataset.tab;
-        if (tab === 'admin' && (!App.me || App.me.username !== 'PeshkaSasha')) return;
-        this.switchTab(tab);
-      });
+    // nothing to init
+  },
+  open() {
+    if (!App.me) return;
+    App.socket.emit('getProfile', { username: App.me.username }, (res) => {
+      if (res && res.ok) {
+        document.getElementById('settingsBio').value = res.user.bio || '';
+        document.getElementById('settingsSubseconds').checked = !!res.user.showSubseconds;
+        document.getElementById('settingsModal').classList.add('show');
+        const isAdmin = App.me.username === 'PeshkaSasha';
+        document.getElementById('adminSettings').style.display = isAdmin ? 'block' : 'none';
+      }
     });
   },
-  enter() {
-    if (!App.me) { Router.go('autorize'); return; }
-    const adminTab = document.getElementById('settingsAdminTab');
-    if (App.me.username === 'PeshkaSasha') adminTab.style.display = 'block';
-    else adminTab.style.display = 'none';
-    this.switchTab(this.currentTab);
+  close() {
+    document.getElementById('settingsModal').classList.remove('show');
   },
-  switchTab(tab) {
-    this.currentTab = tab;
-    document.querySelectorAll('.settings-nav-item').forEach(a => {
-      a.classList.toggle('active', a.dataset.tab === tab);
-    });
-    this.renderContent(tab);
-  },
-  renderContent(tab) {
-    const content = document.getElementById('settingsContent');
-    if (!content) return;
-
-    if (tab === 'profile') {
-      content.innerHTML = `
-        <h2>Редактировать профиль</h2>
-        <p class="sub">Вся указываемая здесь информация будет доступна публично.</p>
-        <div class="settings-form-group">
-          <label>О себе</label>
-          <textarea id="settingsBio" placeholder="Расскажите о себе, свои любимые дебюты, партии..." maxlength="500"></textarea>
-        </div>
-        <div class="settings-form-group">
-          <label>Отображение времени</label>
-          <label class="settings-checkbox-row">
-            <input type="checkbox" id="settingsSubseconds">
-            <span>Показывать доли секунды на протяжении всей игры</span>
-          </label>
-        </div>
-        <button class="settings-btn" onclick="Settings.saveProfile()">Сохранить</button>
-      `;
-      App.socket.emit('getProfile', { username: App.me.username }, (res) => {
-        if (res && res.ok) {
-          document.getElementById('settingsBio').value = res.user.bio || '';
-          document.getElementById('settingsSubseconds').checked = !!res.user.showSubseconds;
-        }
-      });
-    } else if (tab === 'security') {
-      content.innerHTML = `
-        <h2>Безопасность</h2>
-        <p class="sub">Управление вашим аккаунтом.</p>
-        <div class="admin-card">
-          <h3 style="color:var(--red)">Удаление аккаунта</h3>
-          <p style="font-size:13px; color:var(--muted); margin-bottom:15px;">Удаление доступно только через 10 дней после регистрации. После удаления восстановить аккаунт невозможно.</p>
-          <button class="settings-btn danger" onclick="Settings.deleteAccount()">Удалить аккаунт</button>
-        </div>
-      `;
-    } else if (tab === 'admin') {
-      content.innerHTML = `
-        <h2>Админ-панель</h2>
-        <p class="sub">Управление пользователями. Доступно только главному администратору.</p>
-        <div class="admin-search-box">
-          <input id="adminUserSearch" placeholder="Введите логин игрока..." autocomplete="off">
-          <button class="settings-btn" onclick="Settings.searchUser()">Найти</button>
-        </div>
-        <div id="adminSearchResult"></div>
-      `;
-    }
-  },
-  saveProfile() {
+  save() {
     const bio = document.getElementById('settingsBio').value;
     const showSubseconds = document.getElementById('settingsSubseconds').checked;
     App.socket.emit('updateSettings', { bio, showSubseconds }, (res) => {
       if (res && res.ok) {
+        Settings.close();
         alert('Настройки сохранены');
-        App.me.bio = bio;
-        App.me.showSubseconds = showSubseconds;
-      } else alert(res?.msg || 'Ошибка');
+        if (App.me) {
+          App.me.bio = bio;
+          App.me.showSubseconds = showSubseconds;
+        }
+      } else {
+        alert(res?.msg || 'Ошибка');
+      }
     });
   },
   deleteAccount() {
-    if (!confirm('Вы уверены? Это необратимо.')) return;
+    if (!confirm('Вы уверены, что хотите удалить аккаунт? Это действие необратимо.')) return;
     App.socket.emit('requestAccountDeletion', (res) => {
       alert(res?.msg || 'Ошибка');
+      if (res && res.ok) {
+        Settings.close();
+      }
     });
   },
-  searchUser() {
-    const input = document.getElementById('adminUserSearch');
-    const username = input.value.trim();
-    if (!username) return;
-    App.socket.emit('getPlayerCard', { username }, (res) => {
-      const box = document.getElementById('adminSearchResult');
-      if (!res || !res.ok) { box.innerHTML = '<p style="color:var(--red)">Игрок не найден</p>'; return; }
-      const u = res.user;
-      box.innerHTML = `
-        <div class="admin-card">
-          <h3>👤 ${Utils.escapeHtml(u.username)}</h3>
-          <p style="font-size:13px; color:var(--muted); margin-bottom:10px;">
-            Рейтинг: ${u.rating} · Партий: ${u.games} · Винрейт: ${u.games ? Math.round(u.wins/u.games*100) : 0}%
-          </p>
-          <div class="admin-action-row">
-            <input type="text" id="adminBanReason" placeholder="Причина бана" value="Нарушение правил">
-            <input type="number" id="adminBanDays" value="30" min="1" max="3650" style="width:80px;">
-            <span style="color:var(--muted); font-size:12px;">дней</span>
-            <button class="settings-btn danger" onclick="Settings.adminBan('${Utils.escapeHtml(u.username)}')">Забанить</button>
-            <button class="settings-btn" style="background:var(--green); color:white;" onclick="Settings.adminUnban('${Utils.escapeHtml(u.username)}')">Разбанить</button>
-          </div>
-          <div class="admin-action-row">
-            <input type="number" id="adminMuteMins" value="1440" min="1" style="width:100px;">
-            <span style="color:var(--muted); font-size:12px;">минут</span>
-            <label class="settings-checkbox-row" style="margin-bottom:0;">
-              <input type="checkbox" id="adminMuteAllowAppeal" checked>
-              <span>Разрешить писать админу</span>
-            </label>
-            <button class="settings-btn" style="background:var(--accent); color:black;" onclick="Settings.adminMute('${Utils.escapeHtml(u.username)}')">Заглушить</button>
-            <button class="settings-btn" style="background:var(--panel-hover);" onclick="Settings.adminUnmute('${Utils.escapeHtml(u.username)}')">Снять мут</button>
-          </div>
-          <div class="admin-action-row" style="margin-top:20px; border-top:1px solid var(--border); padding-top:15px;">
-            <button class="settings-btn danger" onclick="Settings.adminDelete('${Utils.escapeHtml(u.username)}')">Удалить аккаунт навсегда</button>
-          </div>
-        </div>
-      `;
-    });
-  },
-  adminBan(username) {
-    const reason = document.getElementById('adminBanReason').value;
-    const days = parseInt(document.getElementById('adminBanDays').value) || 30;
-    App.socket.emit('adminBan', { username, reason, days }, (res) => {
-      alert(res?.ok ? 'Пользователь забанен' : res?.msg || 'Ошибка');
-    });
-  },
-  adminUnban(username) {
-    App.socket.emit('adminUnban', { username }, (res) => {
-      alert(res?.ok ? 'Пользователь разбанен' : res?.msg || 'Ошибка');
-    });
-  },
-  adminMute(username) {
-    const minutes = parseInt(document.getElementById('adminMuteMins').value) || 1440;
-    const allowAppeal = document.getElementById('adminMuteAllowAppeal').checked;
-    App.socket.emit('adminMute', { username, minutes, allowAppeal }, (res) => {
-      alert(res?.ok ? 'Пользователь заглушен' : res?.msg || 'Ошибка');
-    });
-  },
-  adminUnmute(username) {
-    App.socket.emit('adminUnmute', { username }, (res) => {
-      alert(res?.ok ? 'Мут снят' : res?.msg || 'Ошибка');
-    });
-  },
-  adminDelete(username) {
-    if (!confirm(`Удалить аккаунт ${username}? Это необратимо.`)) return;
-    App.socket.emit('adminDeleteAccount', { username }, (res) => {
-      alert(res?.ok ? 'Аккаунт удален' : res?.msg || 'Ошибка');
-    });
+  adminAction(action) {
+    const username = document.getElementById('adminUserInput').value.trim();
+    if (!username) {
+      alert('Введите логин');
+      return;
+    }
+    if (action === 'ban') {
+      App.socket.emit('adminBan', { username }, (res) => alert(res?.ok ? 'Пользователь забанен' : (res?.msg || 'Ошибка')));
+    } else if (action === 'unban') {
+      App.socket.emit('adminUnban', { username }, (res) => alert(res?.ok ? 'Пользователь разбанен' : (res?.msg || 'Ошибка')));
+    } else if (action === 'mute') {
+      App.socket.emit('modMuteUser', { username, minutes: 1440 }, (res) => alert(res?.ok ? 'Пользователь заглушен на 24 часа' : (res?.msg || 'Ошибка')));
+    } else if (action === 'delete') {
+      if (confirm('Вы уверены, что хотите удалить аккаунт ' + username + '?')) {
+        App.socket.emit('adminDeleteAccount', { username }, (res) => alert(res?.ok ? 'Аккаунт удалён' : (res?.msg || 'Ошибка')));
+      }
+    }
   }
 };
 
@@ -703,7 +670,7 @@ const UserMenu = {
   close() { const m = document.getElementById('userMenu'); if (!m) return; m.style.display = 'none'; this.isOpen = false; },
   goProfile() { this.close(); Router.go('profile'); },
   goInbox() { this.close(); Router.go('inbox'); },
-  openSettings() { this.close(); Router.go('settings'); },
+  openSettings() { this.close(); Settings.open(); },
   togglePing() { Ping.refresh(); }
 };
 
@@ -753,9 +720,8 @@ const Router = {
   apply() {
     const { name, param } = this.current;
 
-    if (name === 'terms') {
-      document.body.classList.add('login-active');
-      Router.show('termsScreen');
+    if (App.me && App.gameActive && !App.gameEnded && (name === 'arenas' || name === 'arenaPage')) {
+      Router.go('lobby');
       return;
     }
 
@@ -773,30 +739,66 @@ const Router = {
     if (name === 'login' || name === 'autorize' || !App.me) {
       document.body.classList.add('login-active');
       Router.show('autorizeScreen');
+
+      if (name === 'autorize' && param && param.includes('verified=1')) {
+        const urlParams = new URLSearchParams(location.hash.split('?')[1]);
+        const un = urlParams.get('username');
+
+        if (un && App.socket) {
+          App.socket.emit('register', { username: un, password: '' }, (res) => {
+            const loginMsg = document.getElementById('loginMsg');
+            loginMsg.textContent = 'Email подтвержден! Теперь войдите.';
+            loginMsg.style.color = '#629924';
+            const usernameInput = document.getElementById('username');
+            if (usernameInput) usernameInput.value = un;
+          });
+        } else {
+          const loginMsg = document.getElementById('loginMsg');
+          loginMsg.textContent = 'Email подтвержден! Теперь войдите.';
+          loginMsg.style.color = '#629924';
+        }
+      }
       return;
     }
 
-    if (App.me) {
+    if (App.me && name !== 'reset' && name !== 'verify' && name !== 'login' && name !== 'autorize') {
       document.body.classList.remove('login-active');
-      document.getElementById('mainHeader').style.display = '';
-      document.getElementById('mainContent').style.display = '';
+      const header = document.getElementById('mainHeader');
+      const main = document.getElementById('mainContent');
+      if (header) header.style.display = '';
+      if (main) main.style.display = '';
     }
 
-    if (name === 'settings') {
-      Router.show('settingsScreen');
-      Settings.enter();
+    if (App.me && App.gameActive && !App.gameEnded && App.lobbyId && name === 'lobby') {
+      const opponent = document.getElementById('activeGameOpponent');
+      if (opponent) opponent.textContent = App.opponentName || 'соперником';
+      this.show('lobbyScreen');
+      document.querySelectorAll('#mainNav a').forEach(a => a.classList.toggle('active', a.dataset.nav === 'lobby'));
+      Lobby.render();
       return;
     }
-
-    if (name === 'lobby') { Router.show('lobbyScreen'); Lobby.enter(); }
-    else if (name === 'watch') { Router.show('watchScreen'); Watch.enter(param); }
-    else if (name === 'arenas') { Router.show('arenasScreen'); Arena.enterList(); }
-    else if (name === 'arenaPage') { Router.show('arenaPageScreen'); Arena.enterPage(param); }
-    else if (name === 'profile') { Router.show('profileScreen'); Profile.enter(param); }
-    else if (name === 'community') { Router.show('communityScreen'); Community.enter(); }
-    else if (name === 'game') { Router.show('gameScreen'); Game.enter(param); }
-    else if (name === 'inbox') { Router.show('inboxScreen'); Inbox.enter(param); }
-    else { Router.show('lobbyScreen'); Lobby.enter(); }
+    const activeNotice = document.getElementById('activeGameNoticeScreen');
+    if (activeNotice) activeNotice.classList.remove('active');
+    if (name !== 'watch' && Watch.autoRefreshHandle) { clearInterval(Watch.autoRefreshHandle); Watch.autoRefreshHandle = null; }
+    if (name !== 'arenaPage' && Arena.currentArenaId) Arena.leaveRoom();
+    const map = { login: 'autorizeScreen', lobby: 'lobbyScreen', watch: 'watchScreen', arenas: 'arenasScreen', arenaPage: 'arenaPageScreen', profile: 'profileScreen', community: 'communityScreen', game: 'gameScreen', inbox: 'inboxScreen' };
+    const screenId = map[name];
+    if (!screenId) { this.show('lobbyScreen'); return; }
+    this.show(screenId);
+    document.querySelectorAll('#mainNav a').forEach(a => {
+      const nav = a.dataset.nav;
+      a.classList.toggle('active', nav === name || (name === 'arenaPage' && nav === 'arenas'));
+    });
+    switch (name) {
+      case 'lobby': Lobby.enter(); break;
+      case 'watch': Watch.enter(param); break;
+      case 'arenas': Arena.enterList(); break;
+      case 'arenaPage': Arena.enterPage(param); break;
+      case 'profile': Profile.enter(param); break;
+      case 'community': Community.enter(); break;
+      case 'game': Game.enter(param); break;
+      case 'inbox': Inbox.enter(param); break;
+    }
   },
   show(screenId) {
     document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -955,7 +957,7 @@ const Bot = {
   openDialog() {
     const dlg = document.getElementById('botDialog'); if (!dlg) return;
     App.socket.emit('getBots', (list) => {
-      if (Array.isArray(list)) App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.rating, games: b.games || 0, isMaster: b.level === 4 }));
+      if (Array.isArray(list)) App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.initialRating, games: b.games || 0, isMaster: b.level === 4 }));
       this.render(); dlg.classList.add('show');
     });
   },
@@ -963,7 +965,7 @@ const Bot = {
   render() {
     const levelsEl = document.getElementById('botLevels'); const timesEl = document.getElementById('botTimes');
     if (!levelsEl || !timesEl) return;
-    if (!App.botLevels.length) { App.socket.emit('getBots', (list) => { if (Array.isArray(list)) { App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.rating, games: b.games || 0, isMaster: b.level === 4 })); this.render(); } }); return; }
+    if (!App.botLevels.length) { App.socket.emit('getBots', (list) => { if (Array.isArray(list)) { App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.initialRating, games: b.games || 0, isMaster: b.level === 4 })); this.render(); } }); return; }
     const st = App.botDialogState;
     levelsEl.innerHTML = App.botLevels.map(l => { const active = st.level === l.level; const cls = active ? 'active' : ''; const extra = l.isMaster ? 'masterBtn' : ''; return `<button data-level="${l.level}" class="${cls} ${extra}"><div class="btitle">${l.title}</div><div class="brating">${l.rating}</div></button>`; }).join('');
     timesEl.innerHTML = App.botTimes.map(t => { const active = st.time === t.t && st.inc === t.i; return `<button data-t="${t.t}" data-i="${t.i}" class="${active ? 'active' : ''}">${t.label}</button>`; }).join('');
@@ -979,7 +981,7 @@ const Bot = {
 };
 
 // ============================================================
-// WATCH (ИЗМЕНЕНО: классы фигур)
+// WATCH
 // ============================================================
 const Watch = {
   watchingGameId: null, watchingGame: null, lastHash: '', lastBoardHash: '',
@@ -996,7 +998,9 @@ const Watch = {
   refresh(force) { App.socket.emit('getLiveGames', (list) => { this.refreshFromList(list); }); },
   refreshFromList(list) {
     const box = document.getElementById('watchListBody'); if (!box) return;
+
     list = (list || []).filter(g => !g.isSelfPlay && !(g.id && g.id.startsWith('sp_')));
+
     const hash = JSON.stringify(list); if (hash === this.lastHash) return; this.lastHash = hash;
     if (!list.length) { box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>'; return; }
     box.innerHTML = list.map(g => {
@@ -1050,7 +1054,7 @@ const Watch = {
       let cls = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
       if (lm && ((lm.from[0] === r && lm.from[1] === c) || (lm.to[0] === r && lm.to[1] === c))) cls += ' lastmove';
       const p = state.board[r][c]; let inner = '';
-      if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW?'w':'b'} ${p.toLowerCase()}"></span>`; }
+      if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW?'w':'b'}">${Chess.EMOJI[p]}</span>`; }
       let coords = '';
       if (dr === 7) coords += `<span class="coord-f">${String.fromCharCode(97 + c)}</span>`;
       if (dc === 0) coords += `<span class="coord-r">${8 - r}</span>`;
@@ -1104,7 +1108,7 @@ const Watch = {
 };
 
 // ============================================================
-// ARENA (ИЗМЕНЕНО: классы фигур в renderTopGame)
+// ARENA
 // ============================================================
 const Arena = {
   cache: [], statesCache: {}, serverOffsetMs: 0, currentArenaId: null, currentArenaState: null,
@@ -1114,7 +1118,10 @@ const Arena = {
   enterList() { this.refresh(true); },
   enterPage(arenaId) {
     if (!arenaId) { Router.go('arenas'); return; }
-    if (App.gameActive && !App.gameEnded) { Router.go('lobby'); return; }
+    if (App.gameActive && !App.gameEnded) {
+      Router.go('lobby');
+      return;
+    }
     if (Watch.watchingGameId) Watch.stop();
     if (this.currentArenaId && this.currentArenaId !== arenaId) App.socket.emit('leaveArenaRoom', { arenaId: this.currentArenaId });
     this.currentArenaId = arenaId;
@@ -1245,7 +1252,10 @@ const Arena = {
   updateJoinButton(state) {
     const wrap = document.getElementById('arenaJoinBtnWrap');
     const isPlaying = App.gameActive && !App.gameEnded;
-    if (isPlaying) { wrap.innerHTML = `<button class="secondary arenaJoinBtn" disabled style="width:180px; opacity:0.5; cursor:not-allowed;">ЗАНЯТЫ ИГРОЙ</button>`; return; }
+    if (isPlaying) {
+      wrap.innerHTML = `<button class="secondary arenaJoinBtn" disabled style="width:180px; opacity:0.5; cursor:not-allowed;">ЗАНЯТЫ ИГРОЙ</button>`;
+      return;
+    }
     if (state.phase === 'finished') { wrap.innerHTML = `<button class="secondary" disabled style="width:180px;">ЗАВЕРШЕНА</button>`; return; }
     if (state.phase === 'waiting') { if (state.joined) wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.leaveCurrent()">ОТМЕНИТЬ</button>`; else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button>`; return; }
     if (state.joined) { if (state.paused) wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.pauseCurrent()">▶ ПРОДОЛЖИТЬ</button>`; else wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.pauseCurrent()">⏸ ПАУЗА</button>`; }
@@ -1307,13 +1317,7 @@ const Arena = {
   },
   renderTopGame(g) {
     const state = Chess.parseFen(g.fen); let squares = '';
-    for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) {
-      const cls = 'sq ' + ((dr + dc) % 2 ? 'dark' : 'light');
-      const p = state.board[dr][dc];
-      let inner = '';
-      if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW ? 'w' : 'b'} ${p.toLowerCase()}"></span>`; }
-      squares += `<div class="${cls}">${inner}</div>`;
-    }
+    for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) { const cls = 'sq ' + ((dr + dc) % 2 ? 'dark' : 'light'); const p = state.board[dr][dc]; let inner = ''; if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW ? 'w' : 'b'}">${Chess.EMOJI[p]}</span>`; } squares += `<div class="${cls}">${inner}</div>`; }
     const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
     const wR = g.whiteRating ? `<span class="prat">${g.whiteRating}</span>` : ''; const bR = g.blackRating ? `<span class="prat">${g.blackRating}</span>` : '';
     return `<div class="arenaTopGamePlayers"><span class="playerRow">⚫ <span class="name">${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span><span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeB)}</span></div><div class="arenaTopGameBoard">${squares}</div><div class="arenaTopGamePlayers"><span class="playerRow">⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div><div class="arenaTopGameLink">▶ – Смотреть партию</div>`;
@@ -1366,7 +1370,7 @@ const Arena = {
 };
 
 // ============================================================
-// PROFILE (с проверкой бана)
+// PROFILE (Lichess-стиль, график по всем контролям)
 // ============================================================
 const Profile = {
   gamesVisible: false,
@@ -1402,27 +1406,6 @@ const Profile = {
   },
 
   render(user, games, history, categoryHistory) {
-    const bannedBlock = document.getElementById('profileBannedBlock');
-    const mainBlock = document.getElementById('profileMainBlock');
-    const showGamesBtn = document.getElementById('showGamesBtn');
-    const gamesWrap = document.getElementById('profileGamesWrap');
-
-    if (user.isBanned) {
-      if (bannedBlock) {
-        bannedBlock.style.display = 'block';
-        document.getElementById('banReasonText').textContent = 'Причина: ' + (user.banReason || 'Нарушение правил сайта');
-        document.getElementById('banUntilText').textContent = user.bannedUntil ? 'Заблокирован до: ' + new Date(user.bannedUntil).toLocaleString() : 'Навсегда';
-      }
-      if (mainBlock) mainBlock.style.display = 'none';
-      if (showGamesBtn) showGamesBtn.style.display = 'none';
-      if (gamesWrap) gamesWrap.style.display = 'none';
-    } else {
-      if (bannedBlock) bannedBlock.style.display = 'none';
-      if (mainBlock) mainBlock.style.display = 'grid';
-      if (showGamesBtn) showGamesBtn.style.display = 'block';
-      if (gamesWrap) gamesWrap.style.display = this.gamesVisible ? 'block' : 'none';
-    }
-
     const avatarEl = document.getElementById('pAvatarBig');
     avatarEl.className = 'profileAvatar' + (user.isBot ? ' botAvatar' : '');
     avatarEl.innerHTML = (user.isAdmin ? '<span class="pCrown">👑</span>' : '') + (user.isBot ? '🤖' : user.username.charAt(0).toUpperCase());
@@ -1433,13 +1416,11 @@ const Profile = {
     if (user.role === 'admin') badges.push('<span class="roleBadge admin">👑 – Админ</span>');
     if (user.role === 'moderator') badges.push('<span class="roleBadge mod">🛡 – Модератор</span>');
     if (user.isDev) badges.push('<span class="roleBadge dev">⚙ – Разраб</span>');
-    if (user.isBanned) badges.push('<span class="roleBadge admin" style="background:#a53030; color:white;">БАН</span>');
     if (user.mutedUntil && user.mutedUntil > Date.now()) { const mins = Math.ceil((user.mutedUntil - Date.now())/60000); badges.push(`<span class="muteBadge">🔇 – Мут ${mins} мин</span>`); }
     if (user.online) badges.push('<span class="roleBadge" style="color:var(--green-2)">● – В сети</span>');
     document.getElementById('pRoleBadges').innerHTML = badges.join(' ');
     const date = new Date(user.createdAt);
     document.getElementById('pSub').textContent = `На сайте с ${date.toLocaleDateString('ru-RU')} · ${user.games} партий`;
-    document.getElementById('pBio').textContent = user.bio || '';
     document.getElementById('pRating').textContent = user.rating;
     document.getElementById('pGames').textContent = user.games;
     document.getElementById('pWins').textContent = user.wins;
@@ -1853,7 +1834,7 @@ const Banners = {
 };
 
 // ============================================================
-// GAME (ИЗМЕНЕНО: классы фигур и перетаскивание)
+// GAME
 // ============================================================
 const Game = {
   selected: null, legalMoves: [], moveHistory: [], moveFens: [], viewIndex: -1,
@@ -2022,7 +2003,8 @@ const Game = {
       const p = state.board[r][c];
       if (p) {
         const piece = document.createElement('span');
-        piece.className = 'piece ' + (Chess.isWhite(p) ? 'w' : 'b') + ' ' + p.toLowerCase();
+        piece.className = 'piece ' + (Chess.isWhite(p) ? 'w' : 'b');
+        piece.textContent = Chess.EMOJI[p];
         if (this.dragging && this.dragging.from[0] === r && this.dragging.from[1] === c) piece.classList.add('dragging');
         sq.appendChild(piece);
       }
@@ -2165,7 +2147,8 @@ const Game = {
   startDragGhost(piece, x, y) {
     if (this.ghostEl) { this.ghostEl.remove(); this.ghostEl = null; }
     this.ghostEl = document.createElement('div');
-    this.ghostEl.className = 'dragGhost ' + (Chess.isWhite(piece) ? 'w' : 'b') + ' ' + piece.toLowerCase();
+    this.ghostEl.className = 'dragGhost ' + (Chess.isWhite(piece) ? 'w' : 'b');
+    this.ghostEl.textContent = Chess.EMOJI[piece];
     this.ghostEl.style.left = x + 'px'; this.ghostEl.style.top = y + 'px'; this.ghostEl.style.display = 'none';
     document.body.appendChild(this.ghostEl);
   },
@@ -2381,3 +2364,4 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('mouseover', e => { const n = e.target.closest && e.target.closest('[data-player]'); if (n) show(n); });
   document.addEventListener('mouseout', e => { const n = e.target.closest && e.target.closest('[data-player]'); if (n && !n.contains(e.relatedTarget)) { clearTimeout(hoverTimer); hoverName = ''; const c = document.getElementById('playerHoverCard'); if (c) c.style.display = 'none'; } });
 })();
+
