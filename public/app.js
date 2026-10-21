@@ -107,19 +107,21 @@ const Sounds = (function() {
 const Chess = {
   EMOJI: { 'K':'♔','Q':'♕','R':'♖','B':'♗','N':'♘','P':'♙','k':'♚','q':'♛','r':'♜','b':'♝','n':'♞','p':'♟' },
   pieceSvg(piece) {
+    // Classic Staunton-style chessmen, rendered as vector shapes (not Unicode glyphs).
     const white = piece === piece.toUpperCase();
     const kind = piece.toLowerCase();
     const paths = {
-      k:'<path d="M50 10V24M43 17H57"/><path d="M31 29Q22 38 29 47L22 67H78L71 47Q78 38 69 29Z"/><path d="M27 48H73M22 67H78L83 76H17Z"/>',
-      q:'<path d="M20 28L29 49H71L80 28L69 42L62 20L50 39L38 20L31 42Z"/><circle cx="20" cy="23" r="5"/><circle cx="38" cy="15" r="5"/><circle cx="62" cy="15" r="5"/><circle cx="80" cy="23" r="5"/><path d="M29 53H71L77 70H23Z M18 76H82"/>',
-      r:'<path d="M25 20H37V29H45V20H55V29H63V20H75V40L68 48V67H32V48L25 40Z"/><path d="M32 49H68M23 72H77L82 78H18Z"/>',
-      b:'<path d="M50 15C32 25 33 38 47 45L34 62H66L53 45C67 38 68 25 50 15Z"/><path d="M43 32L57 46M29 66H71L78 77H22Z"/>',
-      n:'<path d="M26 67Q20 53 31 42L40 24L56 18L70 30L76 47L67 57L72 68Z"/><path d="M40 24L49 39L64 45M29 68H77L82 77H18Z"/><circle cx="59" cy="30" r="2.5" fill="currentColor"/>',
-      p:'<circle cx="50" cy="26" r="13"/><path d="M40 39Q31 47 37 57L30 68H70L63 57Q69 47 60 39Z"/><path d="M25 72H75L81 78H19Z"/>'
+      k: '<path d="M21 5h3v5h5v3h-5v5h-3v-5h-5v-3h5z"/><path d="M15 20c-1-3 1-5 3-6h9c2 1 4 3 3 6l-2 4 4 10H12l4-10z"/><path d="M14 25h17M12 34h21l3 4H9z"/><path d="M17 20c1 2 3 3 6 3s5-1 6-3" fill="none"/>',
+      q: '<path d="M8 11l8 7 6-11 6 11 8-7-4 15H12z"/><circle cx="8" cy="8" r="3"/><circle cx="22" cy="5" r="3"/><circle cx="36" cy="8" r="3"/><path d="M13 28h18l3 7H10zM8 38h28l2 3H6z"/><path d="M13 27h18" fill="none"/>',
+      r: '<path d="M9 8h6v5h4V8h6v5h4V8h6v12l-4 4v9H13v-9l-4-4z"/><path d="M13 24h18M12 33h20l3 5H9zM7 39h31v3H7z"/><path d="M14 27v5m17-5v5" fill="none"/>',
+      b: '<path d="M22 5c-5 4-7 8-5 12 1 2 3 3 5 5-5 3-8 6-8 10h16c0-4-3-7-8-10 2-2 4-3 5-5 2-4 0-8-5-12z"/><path d="M18 13l8 8M14 33h16l4 5H10zM8 40h28v2H8z"/><path d="M22 8l-2 5" fill="none"/>',
+      n: '<path d="M11 33c1-6 2-10 5-14l3-8 7-3 2 5 5 3 2 8-4 5 2 5H11z"/><path d="M19 12l3 9 9 4M14 28c5-1 10 0 15 3M9 35h25l4 5H6z"/><circle cx="27" cy="14" r="1.5" fill="currentColor" stroke="none"/>',
+      p: '<circle cx="22" cy="12" r="6"/><path d="M17 19c-3 2-4 5-3 8l2 5-4 3h20l-4-3 2-5c1-3 0-6-3-8z"/><path d="M12 35h20l3 4H9zM7 40h30v2H7z"/><path d="M16 26h12" fill="none"/>'
     };
-    const fill = white ? '#fffdf7' : '#292c32';
-    const stroke = white ? '#333943' : '#e8e8e8';
-    return `<svg class="pieceSvg" viewBox="0 0 100 100" aria-hidden="true"><g fill="${fill}" stroke="${stroke}" stroke-width="3.2" stroke-linejoin="round" stroke-linecap="round">${paths[kind]}</g></svg>`;
+    const fill = white ? '#f7f7f5' : '#30343b';
+    const stroke = white ? '#34383f' : '#f0f0ed';
+    const inner = white ? '#d6d8da' : '#4b5058';
+    return `<svg class="pieceSvg ${white ? 'pieceWhite' : 'pieceBlack'}" viewBox="0 0 44 44" role="img" aria-label="${({k:'король',q:'ферзь',r:'ладья',b:'слон',n:'конь',p:'пешка'})[kind]}" focusable="false"><g fill="${fill}" stroke="${stroke}" stroke-width="1.25" stroke-linejoin="round" stroke-linecap="round">${paths[kind]}</g><path d="${kind === 'p' ? 'M16 35h12' : kind === 'n' ? 'M14 35h18' : 'M13 35h18'}" stroke="${inner}" stroke-width="1" fill="none" stroke-linecap="round"/></svg>`;
   },
   parseFen(fen) {
     const parts = fen.split(' ');
@@ -979,7 +981,7 @@ const Watch = {
       let cls = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
       if (lm && ((lm.from[0] === r && lm.from[1] === c) || (lm.to[0] === r && lm.to[1] === c))) cls += ' lastmove';
       const p = state.board[r][c]; let inner = '';
-      if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW?'w':'b'}">${Chess.EMOJI[p]}</span>`; }
+      if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW?'w':'b'}">${Chess.pieceSvg(p)}</span>`; }
       let coords = '';
       if (dr === 7) coords += `<span class="coord-f">${String.fromCharCode(97 + c)}</span>`;
       if (dc === 0) coords += `<span class="coord-r">${8 - r}</span>`;
@@ -1242,7 +1244,7 @@ const Arena = {
   },
   renderTopGame(g) {
     const state = Chess.parseFen(g.fen); let squares = '';
-    for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) { const cls = 'sq ' + ((dr + dc) % 2 ? 'dark' : 'light'); const p = state.board[dr][dc]; let inner = ''; if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW ? 'w' : 'b'}">${Chess.EMOJI[p]}</span>`; } squares += `<div class="${cls}">${inner}</div>`; }
+    for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) { const cls = 'sq ' + ((dr + dc) % 2 ? 'dark' : 'light'); const p = state.board[dr][dc]; let inner = ''; if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW ? 'w' : 'b'}">${Chess.pieceSvg(p)}</span>`; } squares += `<div class="${cls}">${inner}</div>`; }
     const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
     const wR = g.whiteRating ? `<span class="prat">${g.whiteRating}</span>` : ''; const bR = g.blackRating ? `<span class="prat">${g.blackRating}</span>` : '';
     return `<div class="arenaTopGamePlayers"><span class="playerRow">⚫ <span class="name">${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span><span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeB)}</span></div><div class="arenaTopGameBoard">${squares}</div><div class="arenaTopGamePlayers"><span class="playerRow">⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div><div class="arenaTopGameLink">▶ – Смотреть партию</div>`;
