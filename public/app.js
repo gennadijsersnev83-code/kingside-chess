@@ -111,7 +111,7 @@ const Chess = {
     const white = piece === piece.toUpperCase();
     const kind = piece.toLowerCase();
     const fill = white ? '#fff' : '#000';
-    const stroke = '#000';
+    const stroke = white ? '#000' : '#fff';
     const inner = white ? '#000' : '#fff';
     const common = `fill="${fill}" stroke="${stroke}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"`;
     const paths = {
