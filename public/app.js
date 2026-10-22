@@ -1002,58 +1002,24 @@ const Arena = {
   },
   filterParticipants() { if (this.currentArenaState && this.currentArenaId) { const arena = this.cache.find(a => a.id === this.currentArenaId); if (arena) this.renderParticipants(arena, this.currentArenaState); } },
 
+  // --- overlay-карточка поверх панели партий ---
   _ensureOverlay() {
-    const panel = document.querySelector('.arenaGamesPanel') || document.querySelector('.arenaRightCol');
-    if (!panel) return null;
-
-    panel.style.position = 'relative';
-    panel.style.display = 'flex';
-    panel.style.flexDirection = 'column';
-    panel.style.overflow = 'hidden';
-    if (!panel.style.height) panel.style.height = '600px';
-    if (!panel.style.maxHeight) panel.style.maxHeight = '600px';
-
-    let body = panel.querySelector('.arenaGamesBody');
-    if (!body) {
-      body = document.createElement('div');
-      body.className = 'arenaGamesBody';
-      body.style.cssText = 'position:relative; flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column;';
-      panel.appendChild(body);
-    }
-
-    // Ищем шапки и элементы. Используем наиболее вероятные селекторы.
-    const headerEl = document.getElementById('arenaGamesHeader') || document.querySelector('.arenaGamesHeader');
-    const statsEl = document.querySelector('.arenaGamesStats') || document.querySelector('.arenaStatsBox'); 
-    const topEl = document.getElementById('arenaTopGame');
     const listEl = document.getElementById('arenaGamesList');
-
-    const moveToBody = (el, beforeEl = null) => {
-      if (el && (el.parentElement !== body || (beforeEl && el.nextElementSibling !== beforeEl))) {
-        if (beforeEl) body.insertBefore(el, beforeEl);
-        else body.appendChild(el);
-      }
-    };
-
-    // Порядок: Шапка -> Счётчики -> Партия лидеров -> Список
-    moveToBody(headerEl, statsEl || topEl || listEl);
-    moveToBody(statsEl, topEl || listEl);
-    moveToBody(topEl, listEl);
-    moveToBody(listEl, document.getElementById('arenaPlayerOverlay'));
-
-    // Overlay поверх всего
+    if (!listEl) return null;
+    const parent = listEl.parentElement;
+    if (!parent) return null;
+    parent.style.position = 'relative';
+    // ограничиваем высоту панели, чтобы не выпирало вниз
+    if (!parent.style.maxHeight) parent.style.maxHeight = 'none';
     let ov = document.getElementById('arenaPlayerOverlay');
     if (!ov) {
       ov = document.createElement('div');
       ov.id = 'arenaPlayerOverlay';
-      ov.style.cssText = 'position:absolute; inset:0; background:var(--panel, #1e1d1a); z-index:20; display:none; overflow-y:auto; overflow-x:hidden; padding:10px 12px 16px; border-radius:6px;';
-      body.appendChild(ov);
-    } else if (ov.parentElement !== body) {
-      body.appendChild(ov);
+      ov.style.cssText = 'position:absolute; inset:0; background:var(--panel, #1e1d1a); z-index:20; display:none; overflow-y:auto; padding:10px 12px 16px; border-radius:6px;';
+      parent.appendChild(ov);
     }
-
     return ov;
   },
-
   _hideLeaderPanel(hide) {
     const topEl = document.getElementById('arenaTopGame');
     const listEl = document.getElementById('arenaGamesList');
@@ -1179,11 +1145,12 @@ const Arena = {
       <div class="arenaTopGamePlayers"><span class="playerRow">${wPlaceHtml}⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div>`;
   },
 
+  // Открывает overlay-карточку поверх панели партий
   openPlayer(username) {
     this.openPlayerName = username;
-    const ov = this._ensureOverlay();
-    if (ov) { ov.style.display = 'block'; ov.scrollTop = 0; }
     this._hideLeaderPanel(true);
+    const ov = this._ensureOverlay();
+    if (ov) ov.style.display = 'block';
     this.renderPlayerCard();
   },
 
@@ -1195,7 +1162,7 @@ const Arena = {
     this.lastGamesHash = '';
     this.renderGamesList();
   },
-  
+
   renderPlayerCard() {
     const ov = this._ensureOverlay(); if (!ov) return;
     if (!this.openPlayerName) { ov.style.display = 'none'; ov.innerHTML = ''; return; }
