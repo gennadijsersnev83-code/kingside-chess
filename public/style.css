@@ -739,3 +739,43 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
   *, *::before, *::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
 }
 :focus-visible { outline:2px solid var(--accent-2); outline-offset:2px; }
+/* Панель «Партии» на странице арены */
+.arenaGamesPanel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 600px;            /* нужная вам высота */
+  max-height: 600px;
+  overflow: hidden;         /* ключ: не даём выпирать вниз */
+}
+
+.arenaGamesPanel > .arenaGamesBody {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;            /* критично для flex-скролла */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Список партий внутри body */
+#arenaGamesList {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Партия лидеров — не растягивать */
+#arenaTopGame {
+  flex: 0 0 auto;
+}
+
+/* Overlay-карточка игрока */
+#arenaPlayerOverlay {
+  position: absolute;
+  inset: 0;
+  background: var(--panel, #1e1d1a);
+  z-index: 20;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 12px 16px;
+  border-radius: 6px;
+}
