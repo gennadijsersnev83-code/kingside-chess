@@ -419,16 +419,6 @@ function createSelfPlayLobby(moveLog) {
   return lobby;
 }
 
-function updateSelfPlayLobby(lobby, moveLog) {
-  if (!lobby || !moveLog || !moveLog.length) return;
-  const last = moveLog[moveLog.length - 1];
-  lobby.fen = last.fenAfter;
-  lobby.turn = last.fenAfter.split(' ')[1];
-  lobby.lastTick = Date.now();
-  lobby.history = [{ from: last.from, to: last.to, byColor: last.byColor, ts: Date.now() }];
-  lobby.selfPlayHistory = moveLog;
-}
-
 function finishSelfPlayLobby(lobby, result) {
   if (!lobby) return;
   lobby.finished = true;
@@ -531,9 +521,7 @@ function buildGamesList() {
       const blackName = SELF_PLAY_BOT_ID;
       const lastHist = (l.history && l.history.length) ? l.history[l.history.length - 1] : null;
       list.push({
-        id,
-        white: whiteName,
-        black: blackName,
+        id, white: whiteName, black: blackName,
         whiteRating: db.users[WATCHER_NAME] ? db.users[WATCHER_NAME].rating : 1500,
         blackRating: db.users[WATCHER_NAME] ? db.users[WATCHER_NAME].rating : 1500,
         whiteIsAdmin: false, blackIsAdmin: false,
@@ -1165,8 +1153,15 @@ setTimeout(botBehaviorTick, 3000);
 function watcherTick() {
   const now = Date.now();
   const beh = botInitBehavior(WATCHER_NAME);
+
+  // === ГЛАВНЫЙ ФИКС ===
+  // Если Watcher уже играет ИЛИ уже в любом лобби (даже waiting) — ничего не делаем.
   if (beh.state === 'playing' || watcherHasActiveLobby()) return;
   if (watcherInAnyArena()) return;
+  for (const l of lobbies.values()) {
+    if (!l.finished && !l.isSelfPlay && (l.host === WATCHER_NAME || l.guest === WATCHER_NAME)) return;
+  }
+
   if (Math.random() < 0.4 || !beh.watchingLobbyId) {
     const liveGames = [];
     for (const [id, l] of lobbies.entries()) {
@@ -1269,6 +1264,8 @@ function tryPair(state) {
         const b = available[j];
         if (used.has(b.username) || b.isPlaying || b.lobbyId) continue;
         if (a.username === b.username) continue;
+
+        // === ЖЁСТКИЙ ЗАПРЕТ ===
         if (a.username === WATCHER_NAME && b.username === WATCHER_NAME) continue;
 
         const aWatcher = a.username === WATCHER_NAME;
@@ -1316,7 +1313,10 @@ function tryPair(state) {
 }
 
 function createArenaPairing(state, a, b) {
-  if (!a || !b || a.username === b.username) return;
+  if (!a || !b) return;
+  if (a.username === b.username) return;
+  // === ЖЁСТКИЙ ЗАПРЕТ ===
+  if (a.username === WATCHER_NAME && b.username === WATCHER_NAME) return;
   if (a.isPlaying || a.lobbyId || b.isPlaying || b.lobbyId) return;
   if (!a.inArenaRoom || !b.inArenaRoom) return;
   if (a.cooldownUntil && Date.now() < a.cooldownUntil) return;
@@ -1550,7 +1550,9 @@ function buildUciHistoryLine(lobby, maxMoves) {
   return parts.join(' ');
 }
 
-// === ПАТЧ: scheduleBotMove с fallback для Watcher ===
+// ============================================================
+// scheduleBotMove — с fallback для Watcher и повторным вызовом
+// ============================================================
 function scheduleBotMove(lobbyId) {
   const l = lobbies.get(lobbyId);
   if (!l || l.finished || !l.isBot) return;
@@ -1721,7 +1723,6 @@ function scheduleBotMove(lobbyId) {
     }
     let mv;
     if (botName === WATCHER_NAME) {
-      // ПАТЧ: не передаём availableMoves (несовместимый формат), передаём полную историю и positionCounts
       const line = buildUciHistoryLine(cur, 40);
       const posCounts = cur.positionCounts || new Map();
       try {
@@ -1737,7 +1738,7 @@ function scheduleBotMove(lobbyId) {
         console.error('[Watcher] pickMove error:', e.message);
         mv = null;
       }
-      // ПАТЧ: fallback — если pickMove вернул null, играем любой легальный ход
+      // === FALLBACK ===
       if (!mv) {
         const legal = botAllLegalMoves(st, botColor === 'w');
         if (legal.length > 0) {
@@ -1753,48 +1754,17 @@ function scheduleBotMove(lobbyId) {
       try { mv = await botPool.getMove(cur.fen, botRating, cur.time, botTimeLeft, inc, historyLine); }
       catch (err) { return; }
     }
-    if (!mv) return;
-    const from = Array.isArray(mv.from) ? mv.from : (Array.isArray(mv[0]) ? mv[0] : null);
-    const to = Array.isArray(mv.to) ? mv.to : (Array.isArray(mv[1]) ? mv[1] : null);
-    if (!from || !to || from.length !== 2 || to.length !== 2) {
-      // ПАТЧ: fallback для любого бота, если координаты битые
+    if (!mv) {
+      // === FALLBACK для любого бота ===
       const legal = botAllLegalMoves(st, botColor === 'w');
       if (legal.length > 0) {
         const pick = legal[Math.floor(Math.random() * legal.length)];
-        const fromFb = pick[0], toFb = pick[1];
-        const capturedFb = st.board[toFb[0]][toFb[1]];
-        const nextStateFb = botApplyMove(st, fromFb, toFb);
-        const cur2 = lobbies.get(lobbyId);
-        if (!cur2 || cur2.finished || cur2.turn !== botColor) return;
-        const stillBot2 = (cur2.botColor === botColor && cur2.botName === botName) || (cur2.botColor2 === botColor && cur2.botName2 === botName);
-        if (!stillBot2 || cur2.fen !== cur.fen) return;
-        if (!cur2.history) cur2.history = [];
-        cur2.history.push({ from: fromFb, to: toFb, captured: capturedFb || null, byColor: botColor, ts: Date.now() });
-        if (cur2.history.length > 40) cur2.history.shift();
-        const nowFb = Date.now();
-        const elapsedFb = Math.floor((nowFb - cur2.lastTick) / 1000);
-        if (botColor === 'w') cur2.timeW = Math.max(0, cur2.timeW - elapsedFb) + cur2.inc;
-        else cur2.timeB = Math.max(0, cur2.timeB - elapsedFb) + cur2.inc;
-        cur2.lastTick = nowFb;
-        cur2.fen = botToFen(nextStateFb); cur2.turn = nextStateFb.turn;
-        cur2.drawOffer = null; cur2.botDrawOffered = false;
-        registerPosition(cur2);
-        emitToGameAndWatchers(lobbyId, 'boardUpdate', { fen: cur2.fen, turn: cur2.turn, san: null, from: fromFb, to: toFb });
-        emitToGameAndWatchers(lobbyId, 'timeUpdate', { timeW: cur2.timeW, timeB: cur2.timeB, serverNow: nowFb });
-        broadcastLiveGames();
-        if (checkAutoDraw(lobbyId)) return;
-        const sideToMoveWhiteFb = cur2.turn === 'w';
-        const hasMovesFb = botAllLegalMoves(botParseFen(cur2.fen), sideToMoveWhiteFb).length > 0;
-        if (!hasMovesFb) {
-          if (botInCheck(botParseFen(cur2.fen), sideToMoveWhiteFb)) finishGame(lobbyId, sideToMoveWhiteFb ? 'b' : 'w', 'Мат');
-          else finishGame(lobbyId, 'draw', 'Пат');
-        } else if (cur2.isBot && ((cur2.botColor && cur2.turn === cur2.botColor) || (cur2.botColor2 && cur2.turn === cur2.botColor2))) {
-          const nextDelayFb = isBotVsBot ? (400 + Math.random() * 600) : (250 + Math.random() * 400);
-          setTimeout(() => scheduleBotMove(lobbyId), nextDelayFb);
-        }
-      }
-      return;
+        mv = { from: pick[0], to: pick[1] };
+      } else return;
     }
+    const from = Array.isArray(mv.from) ? mv.from : (Array.isArray(mv[0]) ? mv[0] : null);
+    const to = Array.isArray(mv.to) ? mv.to : (Array.isArray(mv[1]) ? mv[1] : null);
+    if (!from || !to || from.length !== 2 || to.length !== 2) return;
     const cur2 = lobbies.get(lobbyId);
     if (!cur2 || cur2.finished || cur2.turn !== botColor) return;
     const stillBot2 = (cur2.botColor === botColor && cur2.botName === botName) || (cur2.botColor2 === botColor && cur2.botName2 === botName);
@@ -1802,7 +1772,7 @@ function scheduleBotMove(lobbyId) {
     const st2 = botParseFen(cur2.fen);
     const legal = botLegalMovesFor(st2, from[0], from[1]);
     if (!legal.some(([r, c]) => r === to[0] && c === to[1])) {
-      // ПАТЧ: ход нелегален — fallback
+      // === FALLBACK: ход нелегален ===
       const allLegal = botAllLegalMoves(st2, botColor === 'w');
       if (allLegal.length === 0) return;
       const pick = allLegal[Math.floor(Math.random() * allLegal.length)];
