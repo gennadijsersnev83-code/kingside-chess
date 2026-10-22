@@ -5,8 +5,8 @@
 // ============================================================
 let DATA = {
   version: 5,
-  weights: {},          // PST-веса (только чтение; не обучаем)
-  params: {             // обучаемые скалярные параметры
+  weights: {},
+  params: {
     doubledPawn: 10,
     isolatedPawn: 15,
     passedPawnBase: 20,
@@ -200,7 +200,8 @@ function startAutoSave() {
 // CHESS PRIMITIVES
 // ============================================================
 const PIECE_VALUES = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
-const MATE_SCORE = 100000;
+// MATE_SCORE должен доминировать над любым eval (max eval ~ 30000)
+const MATE_SCORE = 1000000;
 const isWhite = p => !!p && p === p.toUpperCase();
 const inBoard = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
 
@@ -227,12 +228,11 @@ function toFen(state) {
 function sqName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
 
 // ============================================================
-// FAST isAttacked (no pseudoMoves)
+// FAST isAttacked
 // ============================================================
 function isAttacked(state, r, c, byWhite) {
   const b = state.board;
-  // Pawns
-  const pdir = byWhite ? 1 : -1; // от атакующего к цели
+  const pdir = byWhite ? 1 : -1;
   const pr = r + pdir;
   if (inBoard(pr, c - 1)) {
     const p = b[pr][c - 1];
@@ -242,7 +242,6 @@ function isAttacked(state, r, c, byWhite) {
     const p = b[pr][c + 1];
     if (p && isWhite(p) === byWhite && p.toLowerCase() === 'p') return true;
   }
-  // Knights
   const knightDirs = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
   for (const [dr, dc] of knightDirs) {
     const rr = r + dr, cc = c + dc;
@@ -250,7 +249,6 @@ function isAttacked(state, r, c, byWhite) {
     const p = b[rr][cc];
     if (p && isWhite(p) === byWhite && p.toLowerCase() === 'n') return true;
   }
-  // King
   for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
     if (!dr && !dc) continue;
     const rr = r + dr, cc = c + dc;
@@ -258,7 +256,6 @@ function isAttacked(state, r, c, byWhite) {
     const p = b[rr][cc];
     if (p && isWhite(p) === byWhite && p.toLowerCase() === 'k') return true;
   }
-  // Sliding: rook/queen
   const rookDirs = [[-1,0],[1,0],[0,-1],[0,1]];
   for (const [dr, dc] of rookDirs) {
     let rr = r + dr, cc = c + dc;
@@ -271,7 +268,6 @@ function isAttacked(state, r, c, byWhite) {
       rr += dr; cc += dc;
     }
   }
-  // Sliding: bishop/queen
   const bishopDirs = [[-1,-1],[-1,1],[1,-1],[1,1]];
   for (const [dr, dc] of bishopDirs) {
     let rr = r + dr, cc = c + dc;
@@ -410,7 +406,7 @@ function applyMove(state, from, to) {
 }
 
 // ============================================================
-// EVALUATION (fast: no isAttacked in hot path)
+// EVALUATION
 // ============================================================
 const KING_ENDGAME_PST = [
   [-50,-40,-30,-20,-20,-30,-40,-50],
@@ -456,11 +452,9 @@ function evaluate(state, forWhite) {
 
   const endgame = totalMat <= 2400;
 
-  // Bishop pair
   if (wB >= 2) score += DATA.params.bishopPair;
   if (bB >= 2) score -= DATA.params.bishopPair;
 
-  // Doubled / isolated
   for (let f = 0; f < 8; f++) {
     if (wpFile[f] > 1) score -= DATA.params.doubledPawn * (wpFile[f] - 1);
     if (bpFile[f] > 1) score += DATA.params.doubledPawn * (bpFile[f] - 1);
@@ -478,7 +472,6 @@ function evaluate(state, forWhite) {
     }
   }
 
-  // Passed pawns
   for (const [r, c] of wPawns) {
     let passed = true;
     for (const [br, bc] of bPawns) {
@@ -502,7 +495,6 @@ function evaluate(state, forWhite) {
     }
   }
 
-  // Rooks on open/semi-open files
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     if (p.toLowerCase() !== 'r') continue;
@@ -513,7 +505,6 @@ function evaluate(state, forWhite) {
     else if (own[c] === 0) score += isW ? DATA.params.openFileRook * 0.5 : -DATA.params.openFileRook * 0.5;
   }
 
-  // King safety (middlegame)
   if (!endgame) {
     if (whiteKing) {
       const [kr, kc] = whiteKing;
@@ -523,7 +514,6 @@ function evaluate(state, forWhite) {
         if (inBoard(rr, cc) && state.board[rr][cc] === 'P') shield++;
       }
       score += shield * DATA.params.kingShield;
-      // Penalty for central king in middlegame
       if (kc === 4 && kr >= 6) score -= 40;
       if (kr < 6) score -= 30;
     }
@@ -539,7 +529,6 @@ function evaluate(state, forWhite) {
       if (kr > 1) score += 30;
     }
   } else {
-    // Endgame: king centralization
     if (whiteKing) {
       const [kr, kc] = whiteKing;
       score += KING_ENDGAME_PST[kr][kc];
@@ -548,7 +537,6 @@ function evaluate(state, forWhite) {
       const [kr, kc] = blackKing;
       score -= KING_ENDGAME_PST[7 - kr][kc];
     }
-    // Mate drive: push opponent king to edge
     if (whiteKing && blackKing && totalMat <= 1500) {
       const wc = whiteKing, bc = blackKing;
       const dist = Math.abs(wc[0] - bc[0]) + Math.abs(wc[1] - bc[1]);
@@ -558,7 +546,6 @@ function evaluate(state, forWhite) {
     }
   }
 
-  // Mobility (cheap: count pseudo moves)
   let wm = 0, bm = 0;
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
@@ -567,10 +554,8 @@ function evaluate(state, forWhite) {
   }
   score += (wm - bm) * DATA.params.mobility;
 
-  // Tempo
   score += state.turn === 'w' ? DATA.params.tempo : -DATA.params.tempo;
 
-  // 50-move rule
   if (state.half >= 100) score = 0;
 
   return forWhite ? score : -score;
@@ -623,7 +608,6 @@ const TT = new Map();
 const TT_MAX = 500000;
 
 function ttKeyOf(state) {
-  // Компактный ключ: доска + turn + castling + ep
   let s = '';
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
@@ -649,7 +633,7 @@ function quiescence(state, alpha, beta, color, qdepth) {
   if (qdepth > 6) return evaluate(state, color === 1);
   const standPat = evaluate(state, color === 1);
   if (standPat >= beta) return beta;
-  if (standPat + 200 < alpha) return alpha; // delta pruning
+  if (standPat + 200 < alpha) return alpha;
   if (alpha < standPat) alpha = standPat;
 
   const isW = color === 1;
@@ -756,12 +740,10 @@ function negamax(state, depth, alpha, beta, color, ply) {
                     state.board[from[0]][from[1]].toLowerCase() === 'p' &&
                     (to[0] === 0 || to[0] === 7);
 
-    // Extensions
     let extension = 0;
     if (givesCheck && depth >= 3) extension = 1;
     else if (isPromo) extension = 1;
 
-    // LMR
     let reduction = 0;
     if (isQuiet && !givesCheck && !isPromo && i >= 4 && depth >= 3) reduction = 1;
 
@@ -771,7 +753,6 @@ function negamax(state, depth, alpha, beta, color, ply) {
     } else {
       score = -negamax(next, depth - 1 + extension - reduction, -alpha - 1, -alpha, -color, ply + 1);
       if (score > alpha && score < beta) {
-        // re-search with full window
         score = -negamax(next, depth - 1 + extension, -beta, -alpha, -color, ply + 1);
       }
     }
@@ -799,6 +780,48 @@ function negamax(state, depth, alpha, beta, color, ply) {
   ttSet(key, depth, best, flag, bestMove);
 
   return best;
+}
+
+// ============================================================
+// MATE SEARCH (явный, до основного negamax)
+// ============================================================
+function isMateAfterMove(state, from, to, moverWhite) {
+  const next = applyMove(state, from, to);
+  const oppWhite = !moverWhite;
+  return inCheck(next, oppWhite) && allLegalMoves(next, oppWhite).length === 0;
+}
+
+function findMateInOne(state, white) {
+  const moves = allLegalMoves(state, white);
+  for (const [from, to] of moves) {
+    if (isMateAfterMove(state, from, to, white)) return [from, to];
+  }
+  return null;
+}
+
+function findMateInTwo(state, white) {
+  const moves = allLegalMoves(state, white);
+  for (const [from, to] of moves) {
+    const next = applyMove(state, from, to);
+    const oppWhite = !white;
+    // если это мат в 1 — уже обработано
+    if (inCheck(next, oppWhite) && allLegalMoves(next, oppWhite).length === 0) continue;
+    const oppMoves = allLegalMoves(next, oppWhite);
+    if (oppMoves.length === 0) continue;
+    let allLeadToMate = true;
+    for (const [of, ot] of oppMoves) {
+      const after = applyMove(next, of, ot);
+      // после ответа противника — есть ли у нас мат в 1?
+      const myMoves = allLegalMoves(after, white);
+      let foundMate = false;
+      for (const [mf, mt] of myMoves) {
+        if (isMateAfterMove(after, mf, mt, white)) { foundMate = true; break; }
+      }
+      if (!foundMate) { allLeadToMate = false; break; }
+    }
+    if (allLeadToMate) return [from, to];
+  }
+  return null;
 }
 
 // ============================================================
@@ -919,6 +942,12 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
     if (bm) return bm;
   }
 
+  // *** Явный поиск мата — ДО основного negamax ***
+  const mateIn1 = findMateInOne(state, isWhiteTurn);
+  if (mateIn1) return mateIn1;
+  const mateIn2 = findMateInTwo(state, isWhiteTurn);
+  if (mateIn2) return mateIn2;
+
   // Adaptive depth from time
   let maxDepth = 6;
   if (myTime < 3) maxDepth = 3;
@@ -937,7 +966,6 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
     let alpha = -Infinity, beta = Infinity;
     let localBest = null, localBestScore = -Infinity;
 
-    // Move PV first
     if (prevPv) {
       const idx = ordered.findIndex(([f, t]) =>
         f[0] === prevPv[0][0] && f[1] === prevPv[0][1] &&
@@ -954,19 +982,22 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
       let score = -negamax(next, depth - 1, -beta, -alpha, -color, 1);
       if (SEARCH_ABORTED) break;
 
-      // Safety + memory penalty (only at root, only for own moves)
-      const safetyPenalty = tacticalSafetyPenalty(state, from, to, isWhiteTurn);
-      const memoryPenalty = learnedMistakePenalty(state, from, to);
-      const immediateGain = evaluate(next, isWhiteTurn) - evaluate(state, isWhiteTurn);
-      if (safetyPenalty > 0 && immediateGain < safetyPenalty * 0.8) score -= safetyPenalty;
-      score -= memoryPenalty;
+      // *** Определяем, ведёт ли ход к мату — если да, не штрафуем ***
+      const nextIsMate = inCheck(next, !isWhiteTurn) && allLegalMoves(next, !isWhiteTurn).length === 0;
 
-      // Repetition penalty
-      if (positionCounts) {
-        const nextKey = positionKey(toFen(next));
-        const c = positionCounts.get(nextKey) || 0;
-        if (c >= 1) score -= 30;
-        if (c >= 2) score -= 120;
+      if (!nextIsMate) {
+        const safetyPenalty = tacticalSafetyPenalty(state, from, to, isWhiteTurn);
+        const memoryPenalty = learnedMistakePenalty(state, from, to);
+        const immediateGain = evaluate(next, isWhiteTurn) - evaluate(state, isWhiteTurn);
+        if (safetyPenalty > 0 && immediateGain < safetyPenalty * 0.8) score -= safetyPenalty;
+        score -= memoryPenalty;
+
+        if (positionCounts) {
+          const nextKey = positionKey(toFen(next));
+          const c = positionCounts.get(nextKey) || 0;
+          if (c >= 1) score -= 30;
+          if (c >= 2) score -= 120;
+        }
       }
 
       if (score > localBestScore) { localBestScore = score; localBest = [from, to]; }
@@ -984,7 +1015,7 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
 }
 
 // ============================================================
-// SELF-PLAY (fixed depth, quality over speed)
+// SELF-PLAY
 // ============================================================
 function playSelfPlayGame() {
   let state = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
@@ -1044,7 +1075,6 @@ function playSelfPlayGame() {
     }
 
     const isW = state.turn === 'w';
-    // fixed depth 4 with wide window (more quality, slower)
     const mv = pickMoveSearch(state, isW, 2000, null, positionCounts);
     if (!mv || mv.length !== 2) break;
 
@@ -1069,7 +1099,6 @@ function playSelfPlayGame() {
     adjustedResult = finalEval > 0 ? 1 : -1;
   }
 
-  // No PST training — only stats
   DATA.games++;
   if (adjustedResult === 1) DATA.wins++;
   else if (adjustedResult === -1) DATA.losses++;
@@ -1092,65 +1121,89 @@ function getStats() {
   };
 }
 
-function pickMoveForServer(fen, color, timeInfo, availableMoves, line) {
+function pickMoveForServer(fen, color, timeInfo, availableMoves, line, positionCounts) {
   if (!fen || typeof fen !== 'string') return null;
 
   try {
     const state = parseFen(fen);
-    const myTime = timeInfo && typeof timeInfo.timeLeft === 'number' ? timeInfo.timeLeft : 5;
-    const inc = timeInfo && typeof timeInfo.inc === 'number' ? timeInfo.inc : 0;
+
+    const myTime = Number(timeInfo && timeInfo.timeLeft);
+    const inc = Number(timeInfo && timeInfo.inc);
+    const total = Number(timeInfo && timeInfo.total);
+
+    const safeMyTime = Number.isFinite(myTime) ? myTime : 5;
+    const safeInc = Number.isFinite(inc) ? inc : 0;
+    const safeTotal = Number.isFinite(total) ? total : safeMyTime;
 
     let thinkMs;
-    if (myTime < 2) thinkMs = 30;
-    else if (myTime < 5) thinkMs = 60;
-    else if (myTime < 10) thinkMs = 120;
-    else if (myTime < 30) thinkMs = 300;
-    else if (myTime < 60) thinkMs = 600;
-    else if (myTime < 180) thinkMs = 1200;
+    if (safeTotal <= 1) thinkMs = 50;
+    else if (safeTotal <= 3) thinkMs = 150;
+    else if (safeTotal <= 5) thinkMs = 300;
+    else if (safeTotal <= 10) thinkMs = 600;
+    else if (safeTotal <= 30) thinkMs = 1200;
     else thinkMs = 2000;
 
-    const allowedByClock = (myTime + inc) * 0.08 * 1000;
+    const allowedByClock = (safeMyTime + safeInc) * 0.08 * 1000;
     thinkMs = Math.min(thinkMs, allowedByClock);
     thinkMs = Math.max(30, thinkMs);
 
     const historyLine = line || null;
-    const move = pickMoveSearch(state, color === 'w', thinkMs, historyLine, null);
+    const posCounts = positionCounts instanceof Map ? positionCounts : null;
+    const move = pickMoveSearch(state, color === 'w', thinkMs, historyLine, posCounts);
 
-    if (!move || !Array.isArray(move) || move.length !== 2) return null;
-    if (!Array.isArray(move[0]) || !Array.isArray(move[1])) return null;
-    if (move[0].length !== 2 || move[1].length !== 2) return null;
+    if (!move || !Array.isArray(move) || move.length !== 2) {
+      // fallback: первый легальный ход — бот НИКОГДА не должен "замирать"
+      const legal = allLegalMoves(state, color === 'w');
+      if (legal.length > 0) {
+        return { from: legal[0][0], to: legal[0][1] };
+      }
+      return null;
+    }
+    if (!Array.isArray(move[0]) || !Array.isArray(move[1])) {
+      const legal = allLegalMoves(state, color === 'w');
+      if (legal.length > 0) return { from: legal[0][0], to: legal[0][1] };
+      return null;
+    }
+    if (move[0].length !== 2 || move[1].length !== 2) {
+      const legal = allLegalMoves(state, color === 'w');
+      if (legal.length > 0) return { from: legal[0][0], to: legal[0][1] };
+      return null;
+    }
 
-    // Validate against availableMoves if provided
+    // Validate against availableMoves (только если формат совместим — строки UCI или {from,to})
     if (Array.isArray(availableMoves) && availableMoves.length > 0) {
       const uci = uciFromTo(move[0], move[1]);
       const ok = availableMoves.some(m => {
         if (typeof m === 'string') return m === uci;
-        if (m && typeof m === 'object') {
+        if (m && typeof m === 'object' && !Array.isArray(m)) {
           const from = m.from || m.fromSq;
           const to = m.to || m.toSq;
           if (typeof from === 'string' && typeof to === 'string') {
             return from + to === uci;
           }
-          if (Array.isArray(from) && Array.isArray(to)) {
-            return from[0] === move[0][0] && from[1] === move[0][1] &&
-                   to[0] === move[1][0] && to[1] === move[1][1];
-          }
         }
         return false;
       });
       if (!ok) {
-        // fallback: play first available
-        const first = availableMoves[0];
-        if (typeof first === 'string' && first.length >= 4) {
-          const fallback = uciToMove(first);
-          if (fallback) return { from: fallback[0], to: fallback[1] };
+        // Ход не найден в availableMoves — играем первый доступный (строку UCI)
+        for (const m of availableMoves) {
+          if (typeof m === 'string' && m.length >= 4) {
+            const fallback = uciToMove(m);
+            if (fallback) return { from: fallback[0], to: fallback[1] };
+          }
         }
+        // если availableMoves — не строки, просто играем свой
       }
     }
 
     return { from: move[0], to: move[1] };
   } catch (e) {
     console.error('[Watcher] pickMoveForServer error:', e.message);
+    try {
+      const state = parseFen(fen);
+      const legal = allLegalMoves(state, color === 'w');
+      if (legal.length > 0) return { from: legal[0][0], to: legal[0][1] };
+    } catch (_) {}
     return null;
   }
 }
@@ -1178,6 +1231,10 @@ function learnFromObservedMove(prevFen, move, newFen, moverColor, timeControl, e
     const to = parseSq(move.to);
     if (!from || !to) return;
     if (!before.board[from[0]] || !before.board[from[0]][from[1]]) return;
+
+    // *** Не запоминать ошибки, если позиция матовая — это шум ***
+    const afterIsMate = inCheck(after, !moverWhite) && allLegalMoves(after, !moverWhite).length === 0;
+    if (afterIsMate) return;
 
     const beforeEval = evaluate(before, moverWhite);
     const afterEval = evaluate(after, moverWhite);
