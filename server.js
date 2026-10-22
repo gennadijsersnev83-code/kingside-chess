@@ -1154,8 +1154,6 @@ function watcherTick() {
   const now = Date.now();
   const beh = botInitBehavior(WATCHER_NAME);
 
-  // === ГЛАВНЫЙ ФИКС ===
-  // Если Watcher уже играет ИЛИ уже в любом лобби (даже waiting) — ничего не делаем.
   if (beh.state === 'playing' || watcherHasActiveLobby()) return;
   if (watcherInAnyArena()) return;
   for (const l of lobbies.values()) {
@@ -1265,7 +1263,6 @@ function tryPair(state) {
         if (used.has(b.username) || b.isPlaying || b.lobbyId) continue;
         if (a.username === b.username) continue;
 
-        // === ЖЁСТКИЙ ЗАПРЕТ ===
         if (a.username === WATCHER_NAME && b.username === WATCHER_NAME) continue;
 
         const aWatcher = a.username === WATCHER_NAME;
@@ -1315,7 +1312,6 @@ function tryPair(state) {
 function createArenaPairing(state, a, b) {
   if (!a || !b) return;
   if (a.username === b.username) return;
-  // === ЖЁСТКИЙ ЗАПРЕТ ===
   if (a.username === WATCHER_NAME && b.username === WATCHER_NAME) return;
   if (a.isPlaying || a.lobbyId || b.isPlaying || b.lobbyId) return;
   if (!a.inArenaRoom || !b.inArenaRoom) return;
@@ -1550,9 +1546,6 @@ function buildUciHistoryLine(lobby, maxMoves) {
   return parts.join(' ');
 }
 
-// ============================================================
-// scheduleBotMove — с fallback для Watcher и повторным вызовом
-// ============================================================
 function scheduleBotMove(lobbyId) {
   const l = lobbies.get(lobbyId);
   if (!l || l.finished || !l.isBot) return;
@@ -1738,7 +1731,6 @@ function scheduleBotMove(lobbyId) {
         console.error('[Watcher] pickMove error:', e.message);
         mv = null;
       }
-      // === FALLBACK ===
       if (!mv) {
         const legal = botAllLegalMoves(st, botColor === 'w');
         if (legal.length > 0) {
@@ -1751,11 +1743,11 @@ function scheduleBotMove(lobbyId) {
       }
     } else {
       const historyLine = buildUciHistoryLine(cur, 40);
-      try { mv = await botPool.getMove(cur.fen, botRating, cur.time, botTimeLeft, inc, historyLine); }
+      const safeTimeLeft = Math.max(botTimeLeft, 3); // <--- ФИКС: гарантируем минимум 3 секунды
+      try { mv = await botPool.getMove(cur.fen, botRating, cur.time, safeTimeLeft, inc, historyLine); }
       catch (err) { return; }
     }
     if (!mv) {
-      // === FALLBACK для любого бота ===
       const legal = botAllLegalMoves(st, botColor === 'w');
       if (legal.length > 0) {
         const pick = legal[Math.floor(Math.random() * legal.length)];
@@ -1772,7 +1764,6 @@ function scheduleBotMove(lobbyId) {
     const st2 = botParseFen(cur2.fen);
     const legal = botLegalMovesFor(st2, from[0], from[1]);
     if (!legal.some(([r, c]) => r === to[0] && c === to[1])) {
-      // === FALLBACK: ход нелегален ===
       const allLegal = botAllLegalMoves(st2, botColor === 'w');
       if (allLegal.length === 0) return;
       const pick = allLegal[Math.floor(Math.random() * allLegal.length)];
