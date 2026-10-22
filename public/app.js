@@ -364,6 +364,7 @@ const App = {
     { t: 15, i: 10, label: '15+10' }, { t: 30, i: 0,  label: '30+0' }
   ],
   _autoLoginAttempts: 0,
+  restoring: false,
 
   init() {
     this.socket = io({ transports: ['websocket', 'polling'], upgrade: true, reconnection: true, reconnectionAttempts: 10, reconnectionDelay: 1000 });
@@ -381,10 +382,17 @@ const App = {
       this.updateTopbarUser();
     }
 
-    Router.init();
-    
+    // ВАЖНО: сначала восстанавливаем сессию и активную игру, и только затем
+    // разрешаем роутеру обрабатывать hash — иначе после F5 пользователя
+    // «выбрасывает» из партии (роутер успевает применить hash до applyGameStateFromServer).
     if (saved) {
-      this._restoreSession(saved);
+      this.restoring = true;
+      this._restoreSession(saved, () => {
+        this.restoring = false;
+        Router.init();
+      });
+    } else {
+      Router.init();
     }
     this.scheduleArenaClock();
   },
@@ -397,41 +405,68 @@ const App = {
     return null;
   },
 
-  _restoreSession(saved) {
-    const hash = location.hash.replace(/^#\/?/, '');
-    const parts = hash.split('/').filter(Boolean);
-    if (!parts.length) {
-      let activeLobby = localStorage.getItem('kingside_active_lobby');
-      let lastArena = localStorage.getItem('kingside_last_arena');
-      if (activeLobby && !activeLobby.startsWith('sp_')) Router.go('game', activeLobby);
-      else if (lastArena) Router.go('arenaPage', lastArena);
-      else Router.go('lobby');
-    }
+  _restoreSession(saved, done) {
+    const finish = () => { if (typeof done === 'function') done(); };
 
     this.socket.emit('register', { username: saved.username, password: saved.password }, (res) => {
-      if (res && res.ok) {
-        this.me = res.user;
-        this._autoLoginAttempts = 0;
-        this.updateTopbarUser();
-        
-        let activeLobby = localStorage.getItem('kingside_active_lobby');
-        if (activeLobby && !activeLobby.startsWith('sp_') && Router.current.name === 'lobby') {
-          this.lobbyId = activeLobby;
-          this.socket.emit('getGameState', { lobbyId: activeLobby }, (r) => {
-             if (r && r.ok) Game.applyGameStateFromServer(r.state, activeLobby);
-          });
-        } else if (Router.current.name === 'lobby') {
-          Lobby.enter();
-        }
-      } else {
+      if (!res || !res.ok) {
         this._autoLoginAttempts++;
         if (this._autoLoginAttempts >= 3) {
-          localStorage.removeItem('kingside_login');
+          try { localStorage.removeItem('kingside_login'); } catch (e) {}
           this.me = null;
-          Router.go('autorize');
         }
+        this.restoring = false;
+        finish();
+        return;
       }
+
+      this.me = res.user;
+      this._autoLoginAttempts = 0;
+      this.updateTopbarUser();
+
+      // Приоритет: активная партия из localStorage
+      let activeLobby = null;
+      try { activeLobby = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
+
+      if (activeLobby && !activeLobby.startsWith('sp_')) {
+        this.socket.emit('getGameState', { lobbyId: activeLobby }, (r) => {
+          if (r && r.ok && r.state && !r.state.isSelfPlay) {
+            App.lobbyId = activeLobby;
+            Game.applyGameStateFromServer(r.state, activeLobby);
+            // даём отработать hashchange, который выставит Router.current = game/<id>
+            setTimeout(() => { this.restoring = false; finish(); }, 0);
+          } else {
+            try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
+            this._afterRestoreFallback();
+            finish();
+          }
+        });
+        return;
+      }
+
+      this._afterRestoreFallback();
+      finish();
     });
+  },
+
+  _afterRestoreFallback() {
+    const hash = location.hash.replace(/^#\/?/, '');
+    const parts = hash.split('/').filter(Boolean);
+    const name = parts[0];
+
+    // Активной партии нет — если hash указывает на игру, уводим на lobby,
+    // иначе оставляем роутеру разобрать hash самому.
+    if (name === 'game') {
+      try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
+      Router.go('lobby');
+      return;
+    }
+    if (!name) {
+      let lastArena = null;
+      try { lastArena = localStorage.getItem('kingside_last_arena'); } catch (e) {}
+      if (lastArena) Router.go('arenaPage', lastArena);
+      else Router.go('lobby');
+    }
   },
 
   showAuthenticatedUI() {
@@ -504,6 +539,7 @@ const App = {
   },
 
   tryResumeGame() {
+    if (this.restoring) return; // не дублируем getGameState во время восстановления
     let saved = null;
     try { saved = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
     if (!saved) return;
@@ -684,6 +720,10 @@ const Router = {
   },
   apply() {
     const { name, param } = this.current;
+
+    // Пока идёт восстановление сессии/активной партии — не переключаем экраны,
+    // иначе после refresh пользователя «выбрасывает» с игры.
+    if (App.restoring) return;
 
     if (App.me && App.gameActive && !App.gameEnded && (name === 'arenas' || name === 'arenaPage')) {
       Router.go('lobby');
@@ -1806,6 +1846,13 @@ const Game = {
 
   enter(lobbyId) {
     if (lobbyId && lobbyId.startsWith('sp_')) { Router.go('lobby'); return; }
+
+    // Если партия уже активна и совпадает — просто перерисовать, не перезапрашивать.
+    if (lobbyId && App.lobbyId === lobbyId && (App.gameActive || App.gameEnded)) {
+      this.renderBoard(); this.renderMoves(); this.updateTimers();
+      return;
+    }
+
     if (lobbyId && (!App.lobbyId || App.lobbyId !== lobbyId)) {
       App.lobbyId = lobbyId;
       App.socket.emit('getGameState', { lobbyId }, (res) => {
@@ -1928,7 +1975,14 @@ const Game = {
     this.updateTimers();
     const cm = document.getElementById('chatMessages'); if (cm) cm.innerHTML = '';
     if (Array.isArray(s.chat)) s.chat.forEach(m => this.onChatMessage(m));
-    Router.go('game', lobbyId);
+
+    // Не дёргаем Router.go повторно, если уже на нужном экране/параметре —
+    // иначе возможен повторный getGameState и «Партия не найдена».
+    const cur = Router.current;
+    if (!(cur && cur.name === 'game' && cur.param === lobbyId)) {
+      Router.go('game', lobbyId);
+    }
+
     this.renderBoard(); this.renderMoves(); this.updateTurnIndicator();
     if (s.finished) this.hideResultBar();
     this.updateBackToGameBtn();
