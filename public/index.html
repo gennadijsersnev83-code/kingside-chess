@@ -14,26 +14,22 @@ body.login-active #mainContent { display: none !important; }
 </head>
 <body>
 
-<!-- ЭКРАН АВТОРИЗАЦИИ (#/autorize) -->
 <section id="autorizeScreen" class="screen login-page" style="display: none;">
   <div class="auth-card">
     <div class="auth-tabs">
       <button class="auth-tab active" id="tabLoginBtn" onclick="Auth.switchTab('login')">Войти</button>
       <button class="auth-tab" id="tabRegisterBtn" onclick="Auth.switchTab('register')">Регистрация</button>
     </div>
-
     <div class="auth-field">
       <label>Логин</label>
       <input id="username" placeholder="PeshkaSasha" autocomplete="username">
       <div id="usernameStatus" style="font-size:12px; margin-top:4px; min-height:16px;"></div>
     </div>
-
     <div class="auth-field" id="emailField" style="display: none;">
       <label>Email</label>
       <input id="email" type="email" placeholder="you@example.com" autocomplete="email">
       <div id="emailStatus" style="font-size:12px; margin-top:4px; min-height:16px;"></div>
     </div>
-
     <div class="auth-field">
       <label>Пароль</label>
       <div class="password-wrap">
@@ -42,57 +38,36 @@ body.login-active #mainContent { display: none !important; }
       </div>
       <a href="#/reset" class="forgot-link" style="display:inline-block;margin-top:8px;font-size:12px;color:#4a9ce8;text-align:right;width:100%;">Забыли пароль?</a>
     </div>
-
     <label class="checkbox-row" style="margin-bottom:16px;">
       <input type="checkbox" id="honorCheckbox">
       <span class="checkmark"></span>
       <span>Подтверждаю, что буду играть честно</span>
     </label>
-
-    <button id="submitBtn" class="primary auth-submit" onclick="App.doLogin()">
-      <span id="btnText">Войти</span>
-    </button>
-
+    <button id="submitBtn" class="primary auth-submit" onclick="App.doLogin()"><span id="btnText">Войти</span></button>
     <div id="loginMsg" class="auth-msg"></div>
   </div>
 </section>
 
-<!-- ЭКРАН СБРОСА ПАРОЛЯ (#/reset) -->
 <section id="resetScreen" class="screen login-page" style="display: none;">
   <div class="auth-card">
     <h2 style="margin-top:0;color:var(--text-bright);text-align:center;">Сброс пароля</h2>
-
     <div id="resetStep1">
       <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">Введите вашу электронную почту, мы отправим вам письмо с ссылкой на сброс пароля.</p>
-      <div class="auth-field">
-        <label>Email</label>
-        <input id="resetEmailInput" type="email" placeholder="you@example.com">
-      </div>
+      <div class="auth-field"><label>Email</label><input id="resetEmailInput" type="email" placeholder="you@example.com"></div>
       <button class="primary auth-submit" onclick="Auth.requestReset()">Сбросить пароль</button>
       <div id="resetMsg1" class="auth-msg"></div>
     </div>
-
     <div id="resetStep2" style="display: none;">
       <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">Введите новый пароль дважды.</p>
-      <div class="auth-field">
-        <label>Новый пароль</label>
-        <input id="newPassword" type="password" placeholder="••••••••••••" autocomplete="new-password">
-      </div>
-      <div class="auth-field">
-        <label>Повторите пароль</label>
-        <input id="confirmPassword" type="password" placeholder="••••••••••••" autocomplete="new-password">
-      </div>
+      <div class="auth-field"><label>Новый пароль</label><input id="newPassword" type="password" placeholder="••••••••••••" autocomplete="new-password"></div>
+      <div class="auth-field"><label>Повторите пароль</label><input id="confirmPassword" type="password" placeholder="••••••••••••" autocomplete="new-password"></div>
       <button class="primary auth-submit" onclick="Auth.doReset()">Обновить пароль</button>
       <div id="resetMsg2" class="auth-msg"></div>
     </div>
-
-    <div style="text-align:center;margin-top:16px;">
-      <a href="#/autorize" class="forgot-link" style="display:inline-block;font-size:12px;color:#4a9ce8;">← Вернуться ко входу</a>
-    </div>
+    <div style="text-align:center;margin-top:16px;"><a href="#/autorize" class="forgot-link" style="display:inline-block;font-size:12px;color:#4a9ce8;">← Вернуться ко входу</a></div>
   </div>
 </section>
 
-<!-- Основной интерфейс (Скрыт, пока не авторизован) -->
 <header class="topbar" id="mainHeader" style="display: none;">
   <div class="logo" onclick="Router.go('lobby')"><span class="mark">♔</span> Kingside</div>
   <nav id="mainNav">
@@ -115,10 +90,7 @@ body.login-active #mainContent { display: none !important; }
 </header>
 
 <div id="userMenu" class="userMenu" style="display:none;">
-  <div class="umHeader">
-    <div class="umAvatar" id="umAvatar">?</div>
-    <div class="umName" id="umName">—</div>
-  </div>
+  <div class="umHeader"><div class="umAvatar" id="umAvatar">?</div><div class="umName" id="umName">—</div></div>
   <div class="umDivider"></div>
   <a class="umItem" onclick="UserMenu.goProfile()"><span class="umIcon">👤</span><span class="umLabel">Профиль</span></a>
   <a class="umItem" onclick="UserMenu.goInbox()"><span class="umIcon">✉</span><span class="umLabel">Входящие</span><span class="umCount" id="umInboxCount"></span></a>
@@ -134,10 +106,7 @@ body.login-active #mainContent { display: none !important; }
 <main id="mainContent" style="display: none;">
   <section id="lobbyScreen" class="screen">
     <div class="homeWrap">
-      <aside class="homeLeft">
-        <div class="sideTitle">🔥 Идут сейчас</div>
-        <div id="topArenasBox"><div class="arenaEmpty" style="padding:20px 0">Загрузка...</div></div>
-      </aside>
+      <aside class="homeLeft"><div class="sideTitle">🔥 Идут сейчас</div><div id="topArenasBox"><div class="arenaEmpty" style="padding:20px 0">Загрузка...</div></div></aside>
       <div class="lobbyCenter">
         <div class="tabs">
           <button class="active" data-tab="create" onclick="Lobby.switchTab('create')">Быстрый старт</button>
@@ -213,7 +182,10 @@ body.login-active #mainContent { display: none !important; }
       </main>
       <aside class="arenaRight">
         <div class="arenaRightCol">
-          <div class="arenaGamesList" id="arenaGamesList"><div class="arenasEmpty" style="padding:20px 10px;">Загрузка…</div></div>
+          <div class="arenaGamesHeader">🎯 ПАРТИЯ ЛИДЕРОВ</div>
+          <div class="arenaTopGame" id="arenaTopGame"><div class="arenaTopGameEmpty">Сейчас никто не играет</div></div>
+          <div class="arenaGamesHeader" style="border-top:1px solid var(--border);">🏆 ПРОШЛЫЕ ПАРТИИ ЛИДЕРОВ</div>
+          <div class="arenaGamesList" id="arenaGamesList"><div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div></div>
           <div class="arenaStatsBox" id="arenaStatsBox"><span>👥 Участников: <b id="arenaParticipantsCount">0</b></span><span>👁 Зрителей: <b id="arenaViewersCount">0</b></span></div>
         </div>
       </aside>
@@ -224,22 +196,15 @@ body.login-active #mainContent { display: none !important; }
     <div class="profilePage">
       <div class="profileHead">
         <div class="profileAvatar" id="pAvatarBig">?</div>
-        <div class="nameBlock">
-          <h2><span id="pName">—</span><span id="pRoleBadges"></span></h2>
-          <div class="sub" id="pSub">—</div>
-        </div>
+        <div class="nameBlock"><h2><span id="pName">—</span><span id="pRoleBadges"></span></h2><div class="sub" id="pSub">—</div></div>
         <div style="margin-left:auto; display:flex; gap:8px;">
           <button class="secondary" id="pWriteBtn" onclick="Profile.writeMessage()" style="display:none">✉ Написать</button>
           <button class="secondary" onclick="Router.go('lobby')">← На главную</button>
         </div>
       </div>
-
       <div class="profileMain">
         <div class="profileMainLeft">
-          <div class="chartControlsWrap">
-            <div class="chartTitle">📈 Рейтинг по дням</div>
-            <div class="chartControls" id="chartControls"></div>
-          </div>
+          <div class="chartControlsWrap"><div class="chartTitle">📈 Рейтинг по дням</div><div class="chartControls" id="chartControls"></div></div>
           <div class="ratingChartWrap" id="ratingChartWrap"></div>
         </div>
         <div class="profileMainRight">
@@ -252,7 +217,6 @@ body.login-active #mainContent { display: none !important; }
           </div>
         </div>
       </div>
-
       <button class="profileShowGamesBtn" id="showGamesBtn" onclick="Profile.toggleGames()">📜 Показать партии</button>
       <div class="profileGamesHidden" id="profileGamesWrap">
         <h3 style="margin:16px 0 8px; color:var(--text-bright); font-weight:500">Последние партии</h3>
@@ -273,14 +237,8 @@ body.login-active #mainContent { display: none !important; }
   <section id="inboxScreen" class="screen">
     <div class="inboxWrap">
       <aside class="inboxSidebar">
-        <div class="inboxSidebarHead">
-          <span>Сообщения</span>
-          <button class="msgNewBtn" onclick="Inbox.newDialog()" title="Написать игроку">＋</button>
-        </div>
-        <div class="msgNewRow" id="msgNewRow" style="display:none;">
-          <input id="msgNewInput" placeholder="Логин игрока…" autocomplete="off">
-          <button onclick="Inbox.startWithInput()">→</button>
-        </div>
+        <div class="inboxSidebarHead"><span>Сообщения</span><button class="msgNewBtn" onclick="Inbox.newDialog()" title="Написать игроку">＋</button></div>
+        <div class="msgNewRow" id="msgNewRow" style="display:none;"><input id="msgNewInput" placeholder="Логин игрока…" autocomplete="off"><button onclick="Inbox.startWithInput()">→</button></div>
         <div class="msgDialogs" id="msgDialogs"></div>
       </aside>
       <section class="inboxChat">
@@ -292,10 +250,7 @@ body.login-active #mainContent { display: none !important; }
           </div>
         </div>
         <div class="inboxChatBody" id="inboxChatBody"><div class="msgEmpty">Выберите диалог слева или начните новый</div></div>
-        <form class="inboxChatForm" id="inboxChatForm" onsubmit="Inbox.send(event)">
-          <input id="inboxChatInput" placeholder="Сообщение…" maxlength="2000" autocomplete="off">
-          <button type="submit">→</button>
-        </form>
+        <form class="inboxChatForm" id="inboxChatForm" onsubmit="Inbox.send(event)"><input id="inboxChatInput" placeholder="Сообщение…" maxlength="2000" autocomplete="off"><button type="submit">→</button></form>
       </section>
     </div>
   </section>
