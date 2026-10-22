@@ -849,8 +849,7 @@ const ARENA_TEMPLATES = [
 function nextStartFor(tpl, now) {
   const CYCLE_30 = 30 * 60 * 1000;
   const CYCLE_60 = 60 * 60 * 1000;
-  const CYCLE_120 = 120 * 60 * 1000; // 2 часа (120 мин) — идеально для рапида
-
+  const CYCLE_120 = 120 * 60 * 1000;
   const isOnePlusZero = (tpl.repeat === 'bullet1_human' || tpl.repeat === 'bullet1_bots');
   const isBlitzOrBullet21 = (
     tpl.repeat === 'bullet21_human' || tpl.repeat === 'bullet21_bots' ||
@@ -873,8 +872,6 @@ function nextStartFor(tpl, now) {
     return (slot + 1) * CYCLE_60;
   }
   if (isRapid10) {
-    // Рапид: human в чётные 2-часовки, bots в нечётные 2-часовки.
-    // Длительность 117 мин, зазор 3 мин до старта следующего (ровно в 120).
     const slot = Math.floor(now / CYCLE_120);
     const isBotVariant = tpl.repeat.endsWith('_bots');
     const slotIsBot = (slot % 2 === 1);
@@ -882,7 +879,6 @@ function nextStartFor(tpl, now) {
     return (slot + 1) * CYCLE_120;
   }
   if (tpl.repeat === 'classical30') {
-    // Классика: длится 237 мин, поэтому сетка 4 часа (240 мин).
     const slot = Math.floor(now / (4 * 60 * 60 * 1000));
     return slot * 4 * 60 * 60 * 1000;
   }
@@ -897,10 +893,10 @@ function stepFor(tpl) {
   );
   const isRapid10 = (tpl.repeat === 'rapid10_human' || tpl.repeat === 'rapid10_bots');
 
-  if (isOnePlusZero) return 60 * 60 * 1000;        // +1 час (следующий human/bots)
-  if (isBlitzOrBullet21) return 120 * 60 * 1000;   // +2 часа
-  if (isRapid10) return 240 * 60 * 1000;           // +4 часа
-  if (tpl.repeat === 'classical30') return 4 * 3600 * 1000; // +4 часа (следующая классика)
+  if (isOnePlusZero) return 60 * 60 * 1000;
+  if (isBlitzOrBullet21) return 120 * 60 * 1000;
+  if (isRapid10) return 240 * 60 * 1000;
+  if (tpl.repeat === 'classical30') return 4 * 3600 * 1000;
   return 3600 * 1000;
 }
 
@@ -1320,8 +1316,6 @@ function tryPair(state) {
 }
 
 function createArenaPairing(state, a, b) {
-  // Never create a normal arena game with the same account on both sides.
-  // Watcher self-play is handled only by the dedicated isSelfPlay flow.
   if (!a || !b || a.username === b.username) return;
   if (a.isPlaying || a.lobbyId || b.isPlaying || b.lobbyId) return;
   if (!a.inArenaRoom || !b.inArenaRoom) return;
@@ -1556,6 +1550,7 @@ function buildUciHistoryLine(lobby, maxMoves) {
   return parts.join(' ');
 }
 
+// === ПАТЧ: scheduleBotMove с fallback для Watcher ===
 function scheduleBotMove(lobbyId) {
   const l = lobbies.get(lobbyId);
   if (!l || l.finished || !l.isBot) return;
@@ -1726,11 +1721,33 @@ function scheduleBotMove(lobbyId) {
     }
     let mv;
     if (botName === WATCHER_NAME) {
-      const availableMoves = botAllLegalMoves(st, botColor === 'w');
-      const line = buildUciHistoryLine(cur, 12);
+      // ПАТЧ: не передаём availableMoves (несовместимый формат), передаём полную историю и positionCounts
+      const line = buildUciHistoryLine(cur, 40);
+      const posCounts = cur.positionCounts || new Map();
       try {
-        mv = watcherLearning.pickMove(cur.fen, botColor, { timeLeft: botTimeLeft, inc: inc }, availableMoves, line);
-      } catch (e) { mv = null; }
+        mv = watcherLearning.pickMove(
+          cur.fen,
+          botColor,
+          { timeLeft: botTimeLeft, inc: inc, total: cur.time },
+          null,
+          line,
+          posCounts
+        );
+      } catch (e) {
+        console.error('[Watcher] pickMove error:', e.message);
+        mv = null;
+      }
+      // ПАТЧ: fallback — если pickMove вернул null, играем любой легальный ход
+      if (!mv) {
+        const legal = botAllLegalMoves(st, botColor === 'w');
+        if (legal.length > 0) {
+          const pick = legal[Math.floor(Math.random() * legal.length)];
+          mv = { from: pick[0], to: pick[1] };
+          console.warn('[Watcher] pickMove вернул null, играю fallback:', mv);
+        } else {
+          return;
+        }
+      }
     } else {
       const historyLine = buildUciHistoryLine(cur, 40);
       try { mv = await botPool.getMove(cur.fen, botRating, cur.time, botTimeLeft, inc, historyLine); }
@@ -1739,14 +1756,85 @@ function scheduleBotMove(lobbyId) {
     if (!mv) return;
     const from = Array.isArray(mv.from) ? mv.from : (Array.isArray(mv[0]) ? mv[0] : null);
     const to = Array.isArray(mv.to) ? mv.to : (Array.isArray(mv[1]) ? mv[1] : null);
-    if (!from || !to || from.length !== 2 || to.length !== 2) return;
+    if (!from || !to || from.length !== 2 || to.length !== 2) {
+      // ПАТЧ: fallback для любого бота, если координаты битые
+      const legal = botAllLegalMoves(st, botColor === 'w');
+      if (legal.length > 0) {
+        const pick = legal[Math.floor(Math.random() * legal.length)];
+        const fromFb = pick[0], toFb = pick[1];
+        const capturedFb = st.board[toFb[0]][toFb[1]];
+        const nextStateFb = botApplyMove(st, fromFb, toFb);
+        const cur2 = lobbies.get(lobbyId);
+        if (!cur2 || cur2.finished || cur2.turn !== botColor) return;
+        const stillBot2 = (cur2.botColor === botColor && cur2.botName === botName) || (cur2.botColor2 === botColor && cur2.botName2 === botName);
+        if (!stillBot2 || cur2.fen !== cur.fen) return;
+        if (!cur2.history) cur2.history = [];
+        cur2.history.push({ from: fromFb, to: toFb, captured: capturedFb || null, byColor: botColor, ts: Date.now() });
+        if (cur2.history.length > 40) cur2.history.shift();
+        const nowFb = Date.now();
+        const elapsedFb = Math.floor((nowFb - cur2.lastTick) / 1000);
+        if (botColor === 'w') cur2.timeW = Math.max(0, cur2.timeW - elapsedFb) + cur2.inc;
+        else cur2.timeB = Math.max(0, cur2.timeB - elapsedFb) + cur2.inc;
+        cur2.lastTick = nowFb;
+        cur2.fen = botToFen(nextStateFb); cur2.turn = nextStateFb.turn;
+        cur2.drawOffer = null; cur2.botDrawOffered = false;
+        registerPosition(cur2);
+        emitToGameAndWatchers(lobbyId, 'boardUpdate', { fen: cur2.fen, turn: cur2.turn, san: null, from: fromFb, to: toFb });
+        emitToGameAndWatchers(lobbyId, 'timeUpdate', { timeW: cur2.timeW, timeB: cur2.timeB, serverNow: nowFb });
+        broadcastLiveGames();
+        if (checkAutoDraw(lobbyId)) return;
+        const sideToMoveWhiteFb = cur2.turn === 'w';
+        const hasMovesFb = botAllLegalMoves(botParseFen(cur2.fen), sideToMoveWhiteFb).length > 0;
+        if (!hasMovesFb) {
+          if (botInCheck(botParseFen(cur2.fen), sideToMoveWhiteFb)) finishGame(lobbyId, sideToMoveWhiteFb ? 'b' : 'w', 'Мат');
+          else finishGame(lobbyId, 'draw', 'Пат');
+        } else if (cur2.isBot && ((cur2.botColor && cur2.turn === cur2.botColor) || (cur2.botColor2 && cur2.turn === cur2.botColor2))) {
+          const nextDelayFb = isBotVsBot ? (400 + Math.random() * 600) : (250 + Math.random() * 400);
+          setTimeout(() => scheduleBotMove(lobbyId), nextDelayFb);
+        }
+      }
+      return;
+    }
     const cur2 = lobbies.get(lobbyId);
     if (!cur2 || cur2.finished || cur2.turn !== botColor) return;
     const stillBot2 = (cur2.botColor === botColor && cur2.botName === botName) || (cur2.botColor2 === botColor && cur2.botName2 === botName);
     if (!stillBot2 || cur2.fen !== cur.fen) return;
     const st2 = botParseFen(cur2.fen);
     const legal = botLegalMovesFor(st2, from[0], from[1]);
-    if (!legal.some(([r, c]) => r === to[0] && c === to[1])) return;
+    if (!legal.some(([r, c]) => r === to[0] && c === to[1])) {
+      // ПАТЧ: ход нелегален — fallback
+      const allLegal = botAllLegalMoves(st2, botColor === 'w');
+      if (allLegal.length === 0) return;
+      const pick = allLegal[Math.floor(Math.random() * allLegal.length)];
+      const fromFb = pick[0], toFb = pick[1];
+      const capturedFb = st2.board[toFb[0]][toFb[1]];
+      const nextStateFb = botApplyMove(st2, fromFb, toFb);
+      if (!cur2.history) cur2.history = [];
+      cur2.history.push({ from: fromFb, to: toFb, captured: capturedFb || null, byColor: botColor, ts: Date.now() });
+      if (cur2.history.length > 40) cur2.history.shift();
+      const nowFb = Date.now();
+      const elapsedFb = Math.floor((nowFb - cur2.lastTick) / 1000);
+      if (botColor === 'w') cur2.timeW = Math.max(0, cur2.timeW - elapsedFb) + cur2.inc;
+      else cur2.timeB = Math.max(0, cur2.timeB - elapsedFb) + cur2.inc;
+      cur2.lastTick = nowFb;
+      cur2.fen = botToFen(nextStateFb); cur2.turn = nextStateFb.turn;
+      cur2.drawOffer = null; cur2.botDrawOffered = false;
+      registerPosition(cur2);
+      emitToGameAndWatchers(lobbyId, 'boardUpdate', { fen: cur2.fen, turn: cur2.turn, san: null, from: fromFb, to: toFb });
+      emitToGameAndWatchers(lobbyId, 'timeUpdate', { timeW: cur2.timeW, timeB: cur2.timeB, serverNow: nowFb });
+      broadcastLiveGames();
+      if (checkAutoDraw(lobbyId)) return;
+      const sideToMoveWhiteFb = cur2.turn === 'w';
+      const hasMovesFb = botAllLegalMoves(botParseFen(cur2.fen), sideToMoveWhiteFb).length > 0;
+      if (!hasMovesFb) {
+        if (botInCheck(botParseFen(cur2.fen), sideToMoveWhiteFb)) finishGame(lobbyId, sideToMoveWhiteFb ? 'b' : 'w', 'Мат');
+        else finishGame(lobbyId, 'draw', 'Пат');
+      } else if (cur2.isBot && ((cur2.botColor && cur2.turn === cur2.botColor) || (cur2.botColor2 && cur2.turn === cur2.botColor2))) {
+        const nextDelayFb = isBotVsBot ? (400 + Math.random() * 600) : (250 + Math.random() * 400);
+        setTimeout(() => scheduleBotMove(lobbyId), nextDelayFb);
+      }
+      return;
+    }
     const captured = st2.board[to[0]][to[1]];
     const prevFen = cur2.fen;
     const nextState = botApplyMove(st2, from, to);
@@ -2902,15 +2990,13 @@ io.on('connection', (socket) => {
     }
   });
 
-  // --- ADMIN ACTIONS ---
   socket.on('adminBan', async ({ username }, cb) => {
     if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
     const u = db.users[username];
     if (!u) return cb({ ok: false, msg: 'Не найден' });
     u.isBanned = true;
-    u.bannedUntil = Date.now() + 365 * 24 * 3600 * 1000; // Ban for a year for example
+    u.bannedUntil = Date.now() + 365 * 24 * 3600 * 1000;
     await saveUser(username);
-    // Kick
     for (const [sid, name] of online.entries()) {
       if (name === username) {
         const s = io.sockets.sockets.get(sid);
