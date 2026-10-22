@@ -172,38 +172,52 @@ const Chess = {
   applyMove(state, from, to) {
     const copy = { board: state.board.map(row => row.slice()), turn: state.turn, castling: state.castling, ep: state.ep, half: state.half, full: state.full };
     const [fr, fc] = from, [tr, tc] = to;
-    const p = copy.board[fr][fc];
+    const p = copy.board[fr][fc]; 
     if (!p) return copy;
     const white = this.isWhite(p); const type = p.toLowerCase();
-    if (type === 'p' && copy.ep) {
-      const target = String.fromCharCode(97 + tc) + (8 - tr);
-      if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null;
+    
+    if (type === 'p' && copy.ep) { 
+      const target = String.fromCharCode(97 + tc) + (8 - tr); 
+      if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null; 
     }
-    copy.board[tr][tc] = p;
+    
+    copy.board[tr][tc] = p; 
     copy.board[fr][fc] = null;
+    
     if (type === 'p' && (tr === 0 || tr === 7)) copy.board[tr][tc] = white ? 'Q' : 'q';
-    if (type === 'k' && Math.abs(tc - fc) === 2) {
-      const row = fr;
-      if (tc > fc) { copy.board[row][5] = copy.board[row][7]; copy.board[row][7] = null; }
-      else { copy.board[row][3] = copy.board[row][0]; copy.board[row][0] = null; }
+    
+    if (type === 'k' && Math.abs(tc - fc) === 2) { 
+      const row = fr; 
+      if (tc > fc) { 
+        copy.board[row][5] = copy.board[row][7]; 
+        copy.board[row][7] = null; 
+      } else { 
+        copy.board[row][3] = copy.board[row][0]; 
+        copy.board[row][0] = null; 
+      } 
     }
+    
     let cast = copy.castling;
     if (type === 'k') cast = cast.replace(white ? /[KQ]/g : /[kq]/g, '');
-    if (type === 'r') {
-      if (fr === 7 && fc === 0) cast = cast.replace('Q', '');
-      if (fr === 7 && fc === 7) cast = cast.replace('K', '');
-      if (fr === 0 && fc === 0) cast = cast.replace('q', '');
-      if (fr === 0 && fc === 7) cast = cast.replace('k', '');
+    if (type === 'r') { 
+      if (fr === 7 && fc === 0) cast = cast.replace('Q', ''); 
+      if (fr === 7 && fc === 7) cast = cast.replace('K', ''); 
+      if (fr === 0 && fc === 0) cast = cast.replace('q', ''); 
+      if (fr === 0 && fc === 7) cast = cast.replace('k', ''); 
     }
     if (!cast || cast === '') cast = '-';
-    let ep = '-';
+    
+    let ep = '-'; 
     if (type === 'p' && Math.abs(tr - fr) === 2) ep = String.fromCharCode(97 + fc) + (8 - (fr + (tr - fr) / 2));
-    copy.castling = cast;
-    copy.ep = ep;
-    copy.turn = white ? 'b' : 'w';
+    
+    copy.castling = cast; 
+    copy.ep = ep; 
+    copy.turn = white ? 'b' : 'w'; 
     copy.full += 1;
+    
     const wasCapture = !!state.board[tr][tc] || (type === 'p' && fc !== tc);
     copy.half = (type === 'p' || wasCapture) ? 0 : (state.half + 1);
+    
     return copy;
   },
   legalMovesFor(state, r, c) {
@@ -384,6 +398,7 @@ const App = {
 
   _restoreSession(saved, done) {
     const finish = () => { if (typeof done === 'function') done(); };
+
     this.socket.emit('register', { username: saved.username, password: saved.password }, (res) => {
       if (!res || !res.ok) {
         this._autoLoginAttempts++;
@@ -395,11 +410,14 @@ const App = {
         finish();
         return;
       }
+
       this.me = res.user;
       this._autoLoginAttempts = 0;
       this.updateTopbarUser();
+
       let activeLobby = null;
       try { activeLobby = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
+
       if (activeLobby && !activeLobby.startsWith('sp_')) {
         this.socket.emit('getGameState', { lobbyId: activeLobby }, (r) => {
           if (r && r.ok && r.state && !r.state.isSelfPlay) {
@@ -414,6 +432,7 @@ const App = {
         });
         return;
       }
+
       this._afterRestoreFallback();
       finish();
     });
@@ -423,6 +442,7 @@ const App = {
     const hash = location.hash.replace(/^#\/?/, '');
     const parts = hash.split('/').filter(Boolean);
     const name = parts[0];
+
     if (name === 'game') {
       try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
       Router.go('lobby');
@@ -510,11 +530,13 @@ const App = {
     let saved = null;
     try { saved = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
     if (!saved) return;
+
     if (saved.startsWith('sp_')) {
       try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
       Game.updateBackToGameBtn();
       return;
     }
+
     this.socket.emit('getGameState', { lobbyId: saved }, (res) => {
       if (!res || !res.ok) {
         try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
@@ -730,17 +752,17 @@ const Router = {
     if (activeNotice) activeNotice.classList.remove('active');
     if (name !== 'watch' && Watch.autoRefreshHandle) { clearInterval(Watch.autoRefreshHandle); Watch.autoRefreshHandle = null; }
     if (name !== 'arenaPage' && Arena.currentArenaId) Arena.leaveRoom();
-
+    
     const map = { login: 'autorizeScreen', lobby: 'lobbyScreen', watch: 'watchScreen', arenas: 'arenasScreen', arenaPage: 'arenaPageScreen', profile: 'profileScreen', community: 'communityScreen', game: 'gameScreen', inbox: 'inboxScreen' };
     const screenId = map[name];
     if (!screenId) { this.show('lobbyScreen'); return; }
     this.show(screenId);
-
+    
     document.querySelectorAll('#mainNav a').forEach(a => {
       const nav = a.dataset.nav;
       a.classList.toggle('active', nav === name || (name === 'arenaPage' && nav === 'arenas'));
     });
-
+    
     switch (name) {
       case 'lobby': Lobby.enter(); break;
       case 'watch': Watch.enter(param); break;
@@ -1233,19 +1255,53 @@ const Arena = {
     }).join('');
   },
   filterParticipants() { if (this.currentArenaState && this.currentArenaId) { const arena = this.cache.find(a => a.id === this.currentArenaId); if (arena) this.renderParticipants(arena, this.currentArenaState); } },
+
   renderGamesList() {
-    const box = document.getElementById('arenaGamesList'); if (!box) return;
+    const topEl = document.getElementById('arenaTopGame');
+    const listEl = document.getElementById('arenaGamesList');
+    if (!listEl) return;
     App.socket.emit('getArenaGames', { arenaId: this.currentArenaId }, (res) => {
       if (!res || typeof res !== 'object') return;
       const live = res.live || [], done = res.done || [];
-      const pcEl = document.getElementById('arenaParticipantsCount'); const vcEl = document.getElementById('arenaViewersCount');
-      if (pcEl) pcEl.textContent = res.participantsCount || 0; if (vcEl) vcEl.textContent = res.chatViewersCount || 0;
-      const hash = JSON.stringify({ live: live.map(g => [g.lobbyId, g.fen, g.timeW, g.timeB]), done: done.slice(0, 30).map(g => [g.white, g.black, g.result, g.finishedAt]) });
-      if (hash === this.lastGamesHash) return; this.lastGamesHash = hash;
+      const pcEl = document.getElementById('arenaParticipantsCount');
+      const vcEl = document.getElementById('arenaViewersCount');
+      if (pcEl) pcEl.textContent = res.participantsCount || 0;
+      if (vcEl) vcEl.textContent = res.chatViewersCount || 0;
       this.lastLiveGames = live;
       this.lastDoneGames = done;
+
+      // ---- Блок лидера: без заголовка ----
+      if (topEl) {
+        const myName = App.me ? App.me.username : null;
+        const myLive = myName ? live.find(g => g.white === myName || g.black === myName) : null;
+        const topGame = myLive || live[0] || null;
+        if (topGame) {
+          topEl.innerHTML = this.renderTopGame(topGame);
+          const link = topEl.querySelector('.arenaTopGameLink');
+          if (link) link.onclick = () => Watch.watch(topGame.lobbyId);
+        } else {
+          const phase = this.currentArenaState && this.currentArenaState.phase;
+          if (phase === 'live' || phase === 'waiting') {
+            topEl.innerHTML = this.renderTopGamePlaceholder(phase);
+          } else {
+            topEl.innerHTML = '<div class="arenaTopGameEmpty">Сейчас никто не играет</div>';
+          }
+        }
+      }
+
+      // Если открыта карточка игрока — рисуем её вместо нижнего списка
       if (this.openPlayerName) { this.renderPlayerCard(); return; }
-      if (!done.length && !live.length) { box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>'; return; }
+
+      const hash = JSON.stringify({
+        live: live.map(g => [g.lobbyId, g.fen, g.timeW, g.timeB]),
+        done: done.slice(0, 30).map(g => [g.white, g.black, g.result, g.finishedAt])
+      });
+      if (hash === this.lastGamesHash) return;
+      this.lastGamesHash = hash;
+      if (!done.length && !live.length) {
+        listEl.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>';
+        return;
+      }
       let html = '';
       for (const g of live) {
         const wR = g.whiteRating || ''; const bR = g.blackRating || '';
@@ -1265,22 +1321,57 @@ const Arena = {
           <span class="agl-players"><span class="${wCls}">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${wR?`<span class="agl-r">(${wR})</span>`:''}</span> <span class="agl-vs">vs</span> <span class="${bCls}">${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${bR?`<span class="agl-r">(${bR})</span>`:''}</span></span>
         </div>`;
       }
-      box.innerHTML = html;
+      listEl.innerHTML = html;
     });
   },
+
+  renderTopGamePlaceholder(phase) {
+    const fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    const state = Chess.parseFen(fen);
+    let squares = '';
+    for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) {
+      const cls = 'sq ' + ((dr + dc) % 2 ? 'dark' : 'light');
+      const p = state.board[dr][dc];
+      let inner = '';
+      if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW ? 'w' : 'b'}">${Chess.pieceSvg(p)}</span>`; }
+      squares += `<div class="${cls}">${inner}</div>`;
+    }
+    const label = phase === 'waiting' ? 'Ожидание старта арены' : 'Ожидание первой партии';
+    return `<div class="arenaTopGamePlayers"><span class="playerRow">⚫ <span class="name" style="opacity:.6;">—</span></span><span class="time">—</span></div>
+      <div class="arenaTopGameBoard">${squares}</div>
+      <div class="arenaTopGamePlayers"><span class="playerRow">⚪ <span class="name" style="opacity:.6;">—</span></span><span class="time">—</span></div>
+      <div class="arenaTopGameLink" style="cursor:default; opacity:.55;">${label}</div>`;
+  },
+
+  renderTopGame(g) {
+    const state = Chess.parseFen(g.fen); let squares = '';
+    for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) {
+      const cls = 'sq ' + ((dr + dc) % 2 ? 'dark' : 'light');
+      const p = state.board[dr][dc];
+      let inner = '';
+      if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW ? 'w' : 'b'}">${Chess.pieceSvg(p)}</span>`; }
+      squares += `<div class="${cls}">${inner}</div>`;
+    }
+    const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
+    const wR = g.whiteRating ? `<span class="prat">${g.whiteRating}</span>` : '';
+    const bR = g.blackRating ? `<span class="prat">${g.blackRating}</span>` : '';
+    return `<div class="arenaTopGamePlayers"><span class="playerRow">⚫ <span class="name">${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span><span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeB)}</span></div><div class="arenaTopGameBoard">${squares}</div><div class="arenaTopGamePlayers"><span class="playerRow">⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div><div class="arenaTopGameLink">▶ – Смотреть партию</div>`;
+  },
+
   openPlayer(username) {
     this.openPlayerName = username;
     this.renderPlayerCard();
   },
   closePlayerCard() {
     this.openPlayerName = null;
+    this.lastGamesHash = '';
     this.renderGamesList();
   },
   renderPlayerCard() {
     const box = document.getElementById('arenaGamesList'); if (!box) return;
     if (!this.openPlayerName) { this.renderGamesList(); return; }
     const state = this.currentArenaState;
-    const p = (state.participants || []).find(x => x.username === this.openPlayerName);
+    const p = (state && state.participants || []).find(x => x.username === this.openPlayerName);
     const done = this.lastDoneGames || [];
     const live = this.lastLiveGames || [];
     const myGames = done.filter(g => g.white === this.openPlayerName || g.black === this.openPlayerName);
@@ -1289,7 +1380,6 @@ const Arena = {
     let wins = 0, draws = 0, losses = 0, oppRatingSum = 0, oppRatingCount = 0, perfSum = 0, perfCount = 0;
     for (const g of myGames) {
       const iAmWhite = g.white === this.openPlayerName;
-      const myR = iAmWhite ? g.whiteRating : g.blackRating;
       const oppR = iAmWhite ? g.blackRating : g.whiteRating;
       if (oppR) { oppRatingSum += oppR; oppRatingCount++; }
       let score = 0.5;
@@ -1334,6 +1424,7 @@ const Arena = {
     html += `</div></div>`;
     box.innerHTML = html;
   },
+
   showWinnerBanner(top3) {
     const banner = document.getElementById('arenaWinnerBanner'); const podium = document.getElementById('awbPodium');
     if (!banner || !podium) return;
