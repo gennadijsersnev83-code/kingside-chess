@@ -318,12 +318,9 @@ const App = {
   profileViewing: null, botLevels: [],
   botDialogState: { level: 2, time: 5, inc: 0 },
   botTimes: [
-    { t: 1,  i: 0,  label: '1+0' },
-    { t: 3,  i: 0,  label: '3+0' },
-    { t: 5,  i: 0,  label: '5+0' },
-    { t: 10, i: 0,  label: '10+0' },
-    { t: 15, i: 10, label: '15+10' },
-    { t: 30, i: 0,  label: '30+0' }
+    { t: 1,  i: 0,  label: '1+0' }, { t: 3,  i: 0,  label: '3+0' },
+    { t: 5,  i: 0,  label: '5+0' }, { t: 10, i: 0,  label: '10+0' },
+    { t: 15, i: 10, label: '15+10' }, { t: 30, i: 0,  label: '30+0' }
   ],
   _autoLoginAttempts: 0,
 
@@ -332,31 +329,26 @@ const App = {
     Sounds.initOnFirstClick();
     this.bindSocket();
 
-    // Инициализируем модули ДО роутера, чтобы Router.handle()
-    // мог вызвать Lobby.enter / Game.enter / Arena.enterPage.
+    // 1. Инициализация всех модулей (они готовы принимать данные)
     TopArenas.init(); Stats.init(); Lobby.init(); Bot.init();
     Watch.init(); Arena.init(); Profile.init(); Community.init();
     Game.init(); Banners.init(); UserMenu.init(); Inbox.init(); Ping.init(); Auth.init();
 
+    // 2. Если есть сохраненный логин — оптимистично показываем UI
     const saved = this._readSavedLogin();
-
     if (saved) {
-      // Оптимистично ставим me — сразу рендерим нужный экран.
       this.me = { username: saved.username, rating: 1200, isAdmin: false, isMod: false, isBot: false, _restored: true };
       this.showAuthenticatedUI();
       this.updateTopbarUser();
-
-      Router.init();                        // подписка на hashchange + первый handle()
-      this._setTargetHash();                // выставит #/game/... / #/arenaPage/... / #/lobby
-      Router.handle();                      // синхронно активирует экран (скелет рисуется сразу)
-
-      this._restoreSession(saved);          // async: register → обновит me → _postRestoreLoad()
-    } else {
-      Router.init();
-      Router.handle();                      // покажет autorizeScreen
     }
 
-    this.scheduleArenaClock();
+    // 3. Инициализируем роутер. Если App.me уже есть, он сам откроет нужный экран (lobby, game или arena)
+    Router.init();
+    
+    // 4. Если есть сохраненный логин, отправляем запрос на сервер для синхронизации
+    if (saved) {
+      this._restoreSession(saved);
+    }
   },
 
   _readSavedLogin() {
@@ -367,71 +359,43 @@ const App = {
     return null;
   },
 
-  _setTargetHash() {
-    let activeLobby = null, lastArena = null;
-    try { activeLobby = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
-    try { lastArena = localStorage.getItem('kingside_last_arena'); } catch (e) {}
-    if (activeLobby && !activeLobby.startsWith('sp_')) {
-      location.hash = '#/game/' + encodeURIComponent(activeLobby);
-      return;
+  _restoreSession(saved) {
+    // Определяем, куда должен попасть пользователь
+    const hash = location.hash.replace(/^#\/?/, '');
+    const parts = hash.split('/').filter(Boolean);
+    if (!parts.length) {
+      let activeLobby = localStorage.getItem('kingside_active_lobby');
+      let lastArena = localStorage.getItem('kingside_last_arena');
+      if (activeLobby && !activeLobby.startsWith('sp_')) Router.go('game', activeLobby);
+      else if (lastArena) Router.go('arenaPage', lastArena);
+      else Router.go('lobby');
     }
-    if (lastArena) {
-      location.hash = '#/arenaPage/' + encodeURIComponent(lastArena);
-      return;
-    }
-    if (!location.hash || location.hash === '#' || location.hash === '#/') {
-      location.hash = '#/lobby';
-    }
-  },
 
-  async _restoreSession(saved) {
-    try {
-      await new Promise((resolve) => {
-        let done = false;
-        const finish = () => { if (done) return; done = true; resolve(); };
-        const doEmit = () => {
-          this.socket.emit('register', { username: saved.username, password: saved.password }, (res) => {
-            if (res && res.ok) {
-              this.me = res.user;
-              this._autoLoginAttempts = 0;
-              this.showAuthenticatedUI();
-              this.updateTopbarUser();
-              // Данные для текущего экрана запрашиваем только после ok.
-              this._postRestoreLoad();
-              finish();
-            } else {
-              this._autoLoginAttempts++;
-              if (this._autoLoginAttempts >= 3) {
-                try { localStorage.removeItem('kingside_login'); } catch (e) {}
-                this.me = null;
-                Router.go('autorize');
-                finish();
-              } else {
-                // Оставляем оптимистичный UI, попробуем позже при reconnect.
-                finish();
-              }
-            }
+    this.socket.emit('register', { username: saved.username, password: saved.password }, (res) => {
+      if (res && res.ok) {
+        this.me = res.user;
+        this._autoLoginAttempts = 0;
+        this.updateTopbarUser();
+        
+        // Если мы на странице лобби, и есть активная игра — возвращаем в неё
+        let activeLobby = localStorage.getItem('kingside_active_lobby');
+        if (activeLobby && !activeLobby.startsWith('sp_') && Router.current.name === 'lobby') {
+          this.lobbyId = activeLobby;
+          this.socket.emit('getGameState', { lobbyId: activeLobby }, (r) => {
+             if (r && r.ok) Game.applyGameStateFromServer(r.state, activeLobby);
           });
-        };
-        if (this.socket.connected) doEmit();
-        else this.socket.once('connect', doEmit);
-        setTimeout(finish, 4000);
-      });
-    } catch (e) {}
-  },
-
-  _postRestoreLoad() {
-    let activeLobby = null;
-    try { activeLobby = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
-    if (activeLobby && !activeLobby.startsWith('sp_')) {
-      this.tryResumeGame();
-    }
-    if (Router.current && Router.current.name === 'arenaPage' && Router.current.param) {
-      Arena.enterPage(Router.current.param);
-    }
-    if (Router.current && Router.current.name === 'lobby') {
-      Lobby.enter();
-    }
+        } else if (Router.current.name === 'lobby') {
+          Lobby.enter();
+        }
+      } else {
+        this._autoLoginAttempts++;
+        if (this._autoLoginAttempts >= 3) {
+          localStorage.removeItem('kingside_login');
+          this.me = null;
+          Router.go('autorize');
+        }
+      }
+    });
   },
 
   showAuthenticatedUI() {
@@ -440,7 +404,6 @@ const App = {
     const main = document.getElementById('mainContent');
     if (header) header.style.display = '';
     if (main) main.style.display = '';
-    // НЕ трогаем .active — Router.show() сам выставит нужный экран.
   },
 
   updateTopbarUser() {
@@ -467,14 +430,18 @@ const App = {
     const password = document.getElementById('password').value;
     const email = document.getElementById('email').value.trim();
     const msgEl = document.getElementById('loginMsg');
+
     if (!username || !password) { msgEl.textContent = 'Введите логин и пароль'; return; }
     if (Auth.mode === 'register' && !email) { msgEl.textContent = 'Введите email'; return; }
     if (Auth.mode === 'register') {
       const honor = document.getElementById('honorCheckbox');
       if (honor && !honor.checked) { msgEl.textContent = 'Подтвердите, что будете играть честно'; return; }
     }
-    msgEl.textContent = 'Загрузка...'; msgEl.style.color = 'var(--text)';
-    App.socket.emit('register', { username, password, email: Auth.mode === 'register' ? email : undefined }, (res) => {
+
+    msgEl.textContent = 'Загрузка...';
+    msgEl.style.color = 'var(--text)';
+
+    this.socket.emit('register', { username, password, email: Auth.mode === 'register' ? email : undefined }, (res) => {
       if (!res || !res.ok) {
         msgEl.style.color = '#ff6b6b';
         msgEl.textContent = (res && res.msg) || 'Ошибка';
@@ -488,14 +455,13 @@ const App = {
       try { localStorage.setItem('kingside_login', JSON.stringify({ username, password })); } catch (e) {}
       this.showAuthenticatedUI();
       this.updateTopbarUser();
-      this._setTargetHash();
-      Router.handle();
-      setTimeout(() => this.tryResumeGame(), 100);
+      Router.go('lobby');
+      this.tryResumeGame();
     });
   },
 
   logout() {
-    try { localStorage.removeItem('kingside_login'); localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
+    try { localStorage.removeItem('kingside_login'); localStorage.removeItem('kingside_active_lobby'); localStorage.removeItem('kingside_last_arena'); } catch (e) {}
     this.me = null;
     location.hash = '#/autorize';
     location.reload();
@@ -505,11 +471,13 @@ const App = {
     let saved = null;
     try { saved = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
     if (!saved) return;
+
     if (saved.startsWith('sp_')) {
       try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
       Game.updateBackToGameBtn();
       return;
     }
+
     this.socket.emit('getGameState', { lobbyId: saved }, (res) => {
       if (!res || !res.ok) {
         try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
@@ -564,10 +532,6 @@ const App = {
     s.on('connect', () => {
       s.emit('stats', () => {});
       Ping.onReconnect();
-      if (!this.me) {
-        const saved = this._readSavedLogin();
-        if (saved) this._restoreSession(saved);
-      }
     });
     s.on('stats', (st) => Stats.onStats(st));
     s.on('communityOnline', (players) => Community.render(players));
@@ -667,7 +631,10 @@ const Ping = {
 // ============================================================
 const Router = {
   current: { name: 'lobby', param: null },
-  init() { window.addEventListener('hashchange', () => this.handle()); this.handle(); },
+  init() {
+    window.addEventListener('hashchange', () => this.handle());
+    this.handle();
+  },
   go(name, param) {
     const path = param ? `#/${name}/${encodeURIComponent(param)}` : `#/${name}`;
     if (location.hash === path) this.handle(); else location.hash = path;
@@ -693,7 +660,10 @@ const Router = {
       return;
     }
 
-    if (name === 'verify') { Router.go('autorize'); return; }
+    if (name === 'verify') {
+      Router.go('autorize');
+      return;
+    }
 
     if (name === 'login' || name === 'autorize' || !App.me) {
       document.body.classList.add('login-active');
@@ -721,14 +691,17 @@ const Router = {
     if (activeNotice) activeNotice.classList.remove('active');
     if (name !== 'watch' && Watch.autoRefreshHandle) { clearInterval(Watch.autoRefreshHandle); Watch.autoRefreshHandle = null; }
     if (name !== 'arenaPage' && Arena.currentArenaId) Arena.leaveRoom();
+    
     const map = { login: 'autorizeScreen', lobby: 'lobbyScreen', watch: 'watchScreen', arenas: 'arenasScreen', arenaPage: 'arenaPageScreen', profile: 'profileScreen', community: 'communityScreen', game: 'gameScreen', inbox: 'inboxScreen' };
     const screenId = map[name];
     if (!screenId) { this.show('lobbyScreen'); return; }
     this.show(screenId);
+    
     document.querySelectorAll('#mainNav a').forEach(a => {
       const nav = a.dataset.nav;
       a.classList.toggle('active', nav === name || (name === 'arenaPage' && nav === 'arenas'));
     });
+    
     switch (name) {
       case 'lobby': Lobby.enter(); break;
       case 'watch': Watch.enter(param); break;
@@ -815,10 +788,10 @@ const Lobby = {
   },
   renderWaiting() {
     const el = document.getElementById('lobbyTabContent'); if (!el) return;
-    el.innerHTML = '<div class="arenaEmpty" style="padding:30px 20px;">Загрузка...</div>';
     App.socket.emit('getLobbies', (res) => {
       let list = Array.isArray(res) ? res : ((res && Array.isArray(res.list)) ? res.list : []);
       list = list.filter(l => !l.isSelfPlay);
+
       el.innerHTML = '';
       const current = new Map();
       if (list.length) for (const l of list) if (l.status === 'waiting') current.set(l.id, l);
@@ -1049,8 +1022,8 @@ const Arena = {
     if (Watch.watchingGameId) Watch.stop();
     if (this.currentArenaId && this.currentArenaId !== arenaId) App.socket.emit('leaveArenaRoom', { arenaId: this.currentArenaId });
     this.currentArenaId = arenaId;
-    try { localStorage.setItem('kingside_last_arena', arenaId); } catch (e) {}
-    this.renderSkeleton();
+    const chatEl = document.getElementById('arenaChatMessages');
+    if (chatEl) chatEl.innerHTML = '';
     this.lastStateHash = ''; this.lastGamesHash = '';
     App.socket.emit('joinArenaRoom', { arenaId }, (res) => { if (res && res.ok && Array.isArray(res.chat)) { const box = document.getElementById('arenaChatMessages'); if (box) { box.innerHTML = ''; res.chat.forEach(m => this.renderChatMsg(m)); } } });
     this.loadPage();
@@ -1060,34 +1033,6 @@ const Arena = {
     this.statusTickHandle = setInterval(() => this.tickStatus(), 1000);
     if (this.gamesRefreshHandle) clearInterval(this.gamesRefreshHandle);
     this.gamesRefreshHandle = setInterval(() => { const aps = document.getElementById('arenaPageScreen'); if (aps && aps.classList.contains('active')) this.renderGamesList(); }, 3000);
-  },
-  renderSkeleton() {
-    const nameEl = document.getElementById('arenaPageName');
-    const subEl = document.getElementById('arenaPageSub');
-    const infoTitle = document.getElementById('aInfoTitle');
-    const infoTime = document.getElementById('aInfoTime');
-    const statusLabel = document.getElementById('arenaStatusLabel');
-    const statusTime = document.getElementById('arenaStatusTime');
-    const cached = this.cache.find(a => a.id === this.currentArenaId);
-    if (cached) {
-      if (nameEl) nameEl.textContent = cached.name;
-      if (subEl) subEl.textContent = `${cached.timeControl}+${cached.increment} · Синхронизация…`;
-      if (infoTitle) infoTitle.textContent = cached.name;
-      if (infoTime) infoTime.textContent = Utils.fmtMskHM(cached.startsAt) + ' – ' + Utils.fmtMskHM(cached.endsAt) + ' МСК';
-    } else {
-      if (nameEl) nameEl.textContent = 'Загрузка…';
-      if (subEl) subEl.textContent = '';
-      if (infoTitle) infoTitle.textContent = 'Загрузка…';
-      if (infoTime) infoTime.textContent = '';
-    }
-    if (statusLabel) statusLabel.textContent = 'Синхронизация:';
-    if (statusTime) statusTime.textContent = '--:--';
-    const pt = document.getElementById('arenaTableBody');
-    if (pt) pt.innerHTML = '<div class="arenasEmpty">Загрузка участников…</div>';
-    const tg = document.getElementById('arenaTopGame');
-    if (tg) tg.innerHTML = '<div class="arenaTopGameEmpty">Загрузка…</div>';
-    const gl = document.getElementById('arenaGamesList');
-    if (gl) gl.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Загрузка…</div>';
   },
   leaveRoom() {
     if (Watch.watchingGameId) Watch.stop();
@@ -1135,7 +1080,11 @@ const Arena = {
     const toPx = (ts) => ((ts - startMs) / SLOT_MS) * SLOT_PX;
     const visible = this.cache.map(a => ({ ...a, clientStartsAt: toClient(a.startsAt), clientEndsAt: toClient(a.endsAt) })).filter(a => a.clientEndsAt > startMs && a.clientStartsAt < endMs).sort((a, b) => a.clientStartsAt - b.clientStartsAt);
     const rows = [];
-    for (const arena of visible) { const lane = arena.lane || 0; if (!rows[lane]) rows[lane] = []; rows[lane].push(arena); }
+    for (const arena of visible) {
+      const lane = arena.lane || 0;
+      if (!rows[lane]) rows[lane] = [];
+      rows[lane].push(arena);
+    }
     const finalRows = rows.filter(r => r && r.length);
     const rowWidth = COLS * SLOT_PX;
     let html = '<div class="arenasScroller"><div class="timeRow" style="width:' + rowWidth + 'px;">';
@@ -1330,8 +1279,14 @@ const Arena = {
 // PROFILE
 // ============================================================
 const Profile = {
-  gamesVisible: false, selectedCategory: 'all', chartRange: 'all', chartData: null, chartUserId: null,
+  gamesVisible: false,
+  selectedCategory: 'all',
+  chartRange: 'all',
+  chartData: null,
+  chartUserId: null,
+
   init() {},
+
   enter(username) {
     const target = username || (App.me && App.me.username); if (!target) return;
     App.profileViewing = target; this.gamesVisible = false; this.selectedCategory = 'all'; this.chartRange = 'all';
@@ -1342,11 +1297,13 @@ const Profile = {
       this.render(res.user, res.games, res.history, res.categoryHistory);
     });
   },
+
   writeMessage() {
     const target = App.profileViewing; if (!target) return;
     if (App.me && target === App.me.username) { alert('Это ваш профиль'); return; }
     Inbox.openWith(target);
   },
+
   toggleGames() {
     this.gamesVisible = !this.gamesVisible;
     const wrap = document.getElementById('profileGamesWrap'); const btn = document.getElementById('showGamesBtn');
@@ -1354,8 +1311,10 @@ const Profile = {
     if (this.gamesVisible) { wrap.classList.remove('profileGamesHidden'); btn.textContent = '📜 Скрыть партии'; }
     else { wrap.classList.add('profileGamesHidden'); btn.textContent = '📜 Показать партии'; }
   },
+
   render(user, games, history, categoryHistory) {
-    const avatarEl = document.getElementById('pAvatarBig'); if (!avatarEl) return;
+    const avatarEl = document.getElementById('pAvatarBig');
+    if (!avatarEl) return;
     avatarEl.className = 'profileAvatar' + (user.isBot ? ' botAvatar' : '');
     avatarEl.innerHTML = (user.isAdmin ? '<span class="pCrown">👑</span>' : '') + (user.isBot ? '🤖' : user.username.charAt(0).toUpperCase());
     const onlinePrefix = Utils.onlineDotHtml(user.online);
@@ -1378,10 +1337,10 @@ const Profile = {
     if (catEl) {
       if (user.categories) {
         const cats = [
-          { key:'bullet', name:'Пуля', icon:'🔫' },
-          { key:'blitz', name:'Блиц', icon:'⚡' },
-          { key:'rapid', name:'Рапид', icon:'⏱' },
-          { key:'classical', name:'Классика', icon:'🐢' }
+          { key:'bullet', name:'Пуля', icon:'🔫', color:'#fb7185' },
+          { key:'blitz', name:'Блиц', icon:'⚡', color:'#4ade80' },
+          { key:'rapid', name:'Рапид', icon:'⏱', color:'#38bdf8' },
+          { key:'classical', name:'Классика', icon:'🐢', color:'#a78bfa' }
         ];
         catEl.innerHTML = cats.map(c => {
           const r = user.categories[c.key] || { rating:user.rating, games:0 };
@@ -1397,29 +1356,52 @@ const Profile = {
     this.renderChart();
     this.renderGamesList(games, user.username);
   },
+
   renderChartControls() {
-    const wrap = document.getElementById('chartControls'); if (!wrap) return;
-    const ranges = [ { key: '1m', label: '1М' }, { key: '3m', label: '3М' }, { key: '6m', label: '6М' }, { key: '1y', label: '1Г' }, { key: 'all', label: 'ALL' } ];
+    const wrap = document.getElementById('chartControls');
+    if (!wrap) return;
+    const ranges = [
+      { key: '1m', label: '1М' },
+      { key: '3m', label: '3М' },
+      { key: '6m', label: '6М' },
+      { key: '1y', label: '1Г' },
+      { key: 'all', label: 'ALL' }
+    ];
     wrap.innerHTML = ranges.map(r => `<button class="chartRangeBtn ${r.key === this.chartRange ? 'active' : ''}" onclick="Profile.setChartRange('${r.key}')">${r.label}</button>`).join('');
   },
-  setChartRange(range) { this.chartRange = range; this.renderChartControls(); this.renderChart(); },
+
+  setChartRange(range) {
+    this.chartRange = range;
+    this.renderChartControls();
+    this.renderChart();
+  },
+
   renderChart() {
-    const wrap = document.getElementById('ratingChartWrap'); if (!wrap || !this.chartData) return;
+    const wrap = document.getElementById('ratingChartWrap');
+    if (!wrap || !this.chartData) return;
     const { games, user, categoryHistory } = this.chartData;
-    const categories = [ { key:'bullet', label:'Пуля', color:'#fb7185' }, { key:'blitz', label:'Блиц', color:'#4ade80' }, { key:'rapid', label:'Рапид', color:'#38bdf8' }, { key:'classical', label:'Классика', color:'#a78bfa' } ];
+    const categories = [
+      { key:'bullet', label:'Пуля', color:'#fb7185' },
+      { key:'blitz', label:'Блиц', color:'#4ade80' },
+      { key:'rapid', label:'Рапид', color:'#38bdf8' },
+      { key:'classical', label:'Классика', color:'#a78bfa' }
+    ];
     const now = Date.now(), dayMs = 86400000;
     let startTs = Number(user.createdAt) || now;
     if (this.chartRange === '1m') startTs = Math.max(startTs, now - 30*dayMs);
     else if (this.chartRange === '3m') startTs = Math.max(startTs, now - 90*dayMs);
     else if (this.chartRange === '6m') startTs = Math.max(startTs, now - 180*dayMs);
     else if (this.chartRange === '1y') startTs = Math.max(startTs, now - 365*dayMs);
-    const startDay = Math.floor(startTs / dayMs) * dayMs; const endDay = Math.floor(now / dayMs) * dayMs;
+    const startDay = Math.floor(startTs / dayMs) * dayMs;
+    const endDay = Math.floor(now / dayMs) * dayMs;
     const allGames = (Array.isArray(categoryHistory) ? categoryHistory : (games || []));
     const W=900, H=300, PL=58, PR=18, PT=18, PB=34, IW=W-PL-PR, IH=H-PT-PB;
     const xOf = day => PL + ((day-startDay)/(Math.max(dayMs,endDay-startDay))) * IW;
     const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
     const series = categories.map(cat => {
-      const relevant = allGames.filter(g => g.category === cat.key).sort((a,b) => Number(a.finishedAt)-Number(b.finishedAt));
+      const relevant = allGames.filter(g => g.category === cat.key)
+        .sort((a,b) => Number(a.finishedAt)-Number(b.finishedAt));
       const byDay = new Map();
       for (const g of relevant) {
         const ts = Number(g.finishedAt);
@@ -1430,8 +1412,13 @@ const Profile = {
       let last = null;
       for (const [day, rating] of byDay) if (day < startDay) last = rating;
       const points=[];
-      for(let d=startDay; d<=endDay; d+=dayMs) { if (byDay.has(d)) last=byDay.get(d); if (last !== null) points.push({day:d,rating:last}); }
-      for (const [day, rating] of byDay) if (day >= startDay && day <= endDay && !points.some(p=>p.day===day)) points.push({day,rating});
+      for(let d=startDay; d<=endDay; d+=dayMs) {
+        if (byDay.has(d)) last=byDay.get(d);
+        if (last !== null) points.push({day:d,rating:last});
+      }
+      for (const [day, rating] of byDay) {
+        if (day >= startDay && day <= endDay && !points.some(p=>p.day===day)) points.push({day,rating});
+      }
       points.sort((a,b)=>a.day-b.day);
       const inRange = [...byDay.entries()].filter(([day])=>day>=startDay && day<=endDay).map(([,rating])=>rating);
       const latest = points.length ? points[points.length-1].rating : null;
@@ -1439,16 +1426,25 @@ const Profile = {
       return { ...cat, points, latest, delta: first===null || latest===null ? null : latest-first };
     });
     const visible = series.filter(s=>s.points.length);
-    if (!visible.length) { wrap.innerHTML = '<div class="ratingChartEmpty">Пока нет истории рейтинга за выбранный период</div>'; return; }
+    if (!visible.length) {
+      wrap.innerHTML = '<div class="ratingChartEmpty">Пока нет истории рейтинга за выбранный период</div>';
+      return;
+    }
     const allValues = visible.flatMap(s=>s.points.map(p=>p.rating));
     const minV=Math.min(...allValues), maxV=Math.max(...allValues);
     const pad=Math.max(30,Math.ceil((maxV-minV)*.12));
     const yMin=Math.floor((minV-pad)/50)*50, yMax=Math.ceil((maxV+pad)/50)*50;
     const yOf = rating => PT+IH-((rating-yMin)/Math.max(1,yMax-yMin))*IH;
     const grid=[];
-    for(let i=0;i<=5;i++) { const val=yMin+(yMax-yMin)*i/5, y=yOf(val); grid.push(`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="var(--border,#3a3833)" stroke-dasharray="3,4"/><text x="${PL-9}" y="${y+4}" fill="var(--muted,#7d7a72)" font-size="11" text-anchor="end">${Math.round(val)}</text>`); }
+    for(let i=0;i<=5;i++) {
+      const val=yMin+(yMax-yMin)*i/5, y=yOf(val);
+      grid.push(`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="var(--border,#3a3833)" stroke-dasharray="3,4"/><text x="${PL-9}" y="${y+4}" fill="var(--muted,#7d7a72)" font-size="11" text-anchor="end">${Math.round(val)}</text>`);
+    }
     const labels=[];
-    for(let i=0;i<5;i++) { const day=startDay+(endDay-startDay)*i/4; labels.push(`<text x="${xOf(day)}" y="${H-8}" fill="var(--muted,#7d7a72)" font-size="11" text-anchor="middle">${new Date(day).toLocaleDateString('ru-RU',{day:'2-digit',month:'short'})}</text>`); }
+    for(let i=0;i<5;i++) {
+      const day=startDay+(endDay-startDay)*i/4;
+      labels.push(`<text x="${xOf(day)}" y="${H-8}" fill="var(--muted,#7d7a72)" font-size="11" text-anchor="middle">${new Date(day).toLocaleDateString('ru-RU',{day:'2-digit',month:'short'})}</text>`);
+    }
     const paths=visible.map(s=>{
       const path=s.points.map((p,i)=>`${i?'L':'M'}${xOf(p.day).toFixed(1)},${yOf(p.rating).toFixed(1)}`).join(' ');
       return `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>${s.points.length===1?`<circle cx="${xOf(s.points[0].day)}" cy="${yOf(s.points[0].rating)}" r="3.5" fill="${s.color}"/>`:''}`;
@@ -1460,8 +1456,10 @@ const Profile = {
     }).join('');
     wrap.innerHTML = `<div class="ratingOverlayLegend">${legend}</div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="История рейтинга по всем режимам на одном графике" style="width:100%;height:auto;display:block">${grid.join('')}${paths}${labels.join('')}</svg>`;
   },
+
   renderGamesList(games, username) {
-    const el = document.getElementById('gamesList'); if (!el) return;
+    const el = document.getElementById('gamesList');
+    if (!el) return;
     if (!games || !games.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px">Партий пока нет</div>'; return; }
     const filtered = this.selectedCategory === 'all' ? games : games.filter(g => g.category === this.selectedCategory);
     if (!filtered.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px">Нет партий в этой категории</div>'; return; }
@@ -1507,25 +1505,36 @@ const Community = {
 // INBOX
 // ============================================================
 const Inbox = {
-  dialogs: [], activeWith: null, history: [], unread: 0, loaded: false,
+  dialogs: [],
+  activeWith: null,
+  history: [],
+  unread: 0,
+  loaded: false,
+
   init() {},
   enter(param) {
     if (param) this.selectDialog(param, true);
     else if (!this.loaded) this.loadDialogs();
     else this.renderDialogs();
   },
+
   loadDialogs() {
     App.socket.emit('msgGetDialogs', (res) => {
       if (!res || !res.ok) return;
-      this.dialogs = res.dialogs || []; this.loaded = true; this.renderDialogs();
+      this.dialogs = res.dialogs || [];
+      this.loaded = true;
+      this.renderDialogs();
     });
   },
+
   renderDialogs() {
     const box = document.getElementById('msgDialogs'); if (!box) return;
     if (!this.dialogs.length) { box.innerHTML = '<div class="msgEmpty">Диалогов пока нет</div>'; return; }
     const frag = document.createDocumentFragment();
     for (const d of this.dialogs) {
-      const other = d.other; const lastText = (d.last_text || '').slice(0, 50); const unread = d.unread || 0;
+      const other = d.other;
+      const lastText = (d.last_text || '').slice(0, 50);
+      const unread = d.unread || 0;
       const row = document.createElement('div');
       row.className = 'msgDialogRow' + (this.activeWith === other ? ' active' : '') + (unread ? ' unread' : '');
       row.dataset.with = other;
@@ -1534,14 +1543,17 @@ const Inbox = {
       row.addEventListener('click', () => this.selectDialog(other));
       frag.appendChild(row);
     }
-    box.innerHTML = ''; box.appendChild(frag);
+    box.innerHTML = '';
+    box.appendChild(frag);
   },
+
   newDialog() {
     const row = document.getElementById('msgNewRow'); if (!row) return;
     row.style.display = row.style.display === 'none' ? 'flex' : 'none';
     const inp = document.getElementById('msgNewInput');
     if (inp && row.style.display !== 'none') { inp.value = ''; inp.focus(); }
   },
+
   startWithInput() {
     const inp = document.getElementById('msgNewInput'); if (!inp) return;
     const name = inp.value.trim(); if (!name) return;
@@ -1553,6 +1565,7 @@ const Inbox = {
       this.selectDialog(name);
     });
   },
+
   selectDialog(other, open) {
     this.activeWith = other;
     const nameEl = document.getElementById('inboxChatName');
@@ -1565,13 +1578,20 @@ const Inbox = {
     document.querySelectorAll('.msgDialogRow').forEach(r => r.classList.toggle('active', r.dataset.with === other));
     const wrap = document.querySelector('.inboxWrap'); if (wrap) wrap.classList.add('chatOpen');
   },
-  openWith(username) { Router.go('inbox'); setTimeout(() => this.selectDialog(username), 50); },
+
+  openWith(username) {
+    Router.go('inbox');
+    setTimeout(() => this.selectDialog(username), 50);
+  },
+
   loadHistory(other) {
     App.socket.emit('msgGetHistory', { with: other, markRead: true }, (res) => {
       if (!res || !res.ok) return;
-      this.history = res.history || []; this.renderHistory();
+      this.history = res.history || [];
+      this.renderHistory();
     });
   },
+
   renderHistory() {
     const box = document.getElementById('inboxChatBody'); if (!box) return;
     if (!this.activeWith) { box.innerHTML = '<div class="msgEmpty">Выберите диалог</div>'; return; }
@@ -1581,43 +1601,61 @@ const Inbox = {
     for (const m of this.history) {
       const ts = Number(m.created_at || m.createdAt || m.ts);
       const dateStr = Utils.fmtDate(ts);
-      if (dateStr !== lastDate) { const div = document.createElement('div'); div.className = 'msgDateDivider'; div.textContent = dateStr; frag.appendChild(div); lastDate = dateStr; }
+      if (dateStr !== lastDate) {
+        const div = document.createElement('div'); div.className = 'msgDateDivider'; div.textContent = dateStr;
+        frag.appendChild(div); lastDate = dateStr;
+      }
       const mine = (m.from_user === App.me.username);
-      const div = document.createElement('div'); div.className = 'msgBubble ' + (mine ? 'me' : 'them');
+      const div = document.createElement('div');
+      div.className = 'msgBubble ' + (mine ? 'me' : 'them');
       div.textContent = m.text;
       const time = document.createElement('span'); time.className = 'msgTime'; time.textContent = Utils.fmtTimeHM(ts);
-      div.appendChild(time); frag.appendChild(div);
+      div.appendChild(time);
+      frag.appendChild(div);
     }
-    box.innerHTML = ''; box.appendChild(frag); box.scrollTop = box.scrollHeight;
+    box.innerHTML = '';
+    box.appendChild(frag);
+    box.scrollTop = box.scrollHeight;
   },
+
   send(e) {
     e.preventDefault();
-    const inp = document.getElementById('inboxChatInput'); if (!inp || !this.activeWith) return;
+    const inp = document.getElementById('inboxChatInput');
+    if (!inp || !this.activeWith) return;
     const text = inp.value.trim(); if (!text) return;
     App.socket.emit('msgSend', { to: this.activeWith, text }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
       inp.value = '';
     });
   },
+
   onNew(msg) {
     const other = (msg.from === App.me.username) ? msg.to : msg.from;
     if (Router.current.name === 'inbox' && this.activeWith === other) {
       this.history.push({ id: msg.id, from_user: msg.from, to_user: msg.to, text: msg.text, created_at: msg.ts, read_at: msg.readAt });
       this.renderHistory();
       if (msg.from !== App.me.username) {
-        App.socket.emit('msgGetHistory', { with: other, markRead: true }, (res) => { if (res && res.ok) { this.history = res.history; this.renderHistory(); } });
+        App.socket.emit('msgGetHistory', { with: other, markRead: true }, (res) => {
+          if (res && res.ok) { this.history = res.history; this.renderHistory(); }
+        });
       }
-    } else if (msg.from !== App.me.username) Sounds.msg();
+    } else if (msg.from !== App.me.username) {
+      Sounds.msg();
+    }
     this.loadDialogs();
   },
+
   onDialogDeleted(other) {
-    this.dialogs = this.dialogs.filter(d => d.other !== other); this.renderDialogs();
+    this.dialogs = this.dialogs.filter(d => d.other !== other);
+    this.renderDialogs();
     if (this.activeWith === other) {
-      this.activeWith = null; this.history = []; this.renderHistory();
+      this.activeWith = null; this.history = [];
+      this.renderHistory();
       const n = document.getElementById('inboxChatName'); if (n) n.textContent = 'Выберите диалог';
       const wrap = document.querySelector('.inboxWrap'); if (wrap) wrap.classList.remove('chatOpen');
     }
   },
+
   deleteCurrent() {
     if (!this.activeWith) return;
     if (!confirm('Удалить чат с ' + this.activeWith + '?')) return;
@@ -1627,7 +1665,9 @@ const Inbox = {
       this.onDialogDeleted(other);
     });
   },
+
   openProfile() { if (!this.activeWith) return; const other = this.activeWith; Router.go('profile', other); },
+
   setUnread(count) {
     this.unread = count || 0;
     const badge = document.getElementById('msgBadge'); const um = document.getElementById('umInboxCount');
@@ -1713,7 +1753,6 @@ const Game = {
   lastBoardHash: '', dragging: null, dragStartPos: null, premove: null, ghostEl: null,
   clockLoopRunning: false, clockSyncedAt: 0, clockMyAtSync: 0, clockOppAtSync: 0, clockTurn: 'w',
   chatMsgIds: new Set(), rematchSpinnerTimer: null,
-  _skeletonShown: false,
 
   init() {
     const board = document.getElementById('board'); if (!board) return;
@@ -1729,25 +1768,13 @@ const Game = {
     const pw = document.getElementById('password'); if (pw) pw.addEventListener('keydown', (e) => { if (e.key === 'Enter') App.doLogin(); });
   },
 
-  _renderSkeleton() {
-    if (this._skeletonShown) return;
-    this._skeletonShown = true;
-    const bar = document.getElementById('statusBar');
-    if (bar) { bar.className = 'statusYellow'; bar.textContent = 'Синхронизация с сервером…'; }
-    if (!App.currentFen) App.currentFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-    this.renderBoard();
-    this.renderMoves();
-  },
-
   enter(lobbyId) {
     if (lobbyId && lobbyId.startsWith('sp_')) { Router.go('lobby'); return; }
-    this._renderSkeleton();
     if (lobbyId && (!App.lobbyId || App.lobbyId !== lobbyId)) {
       App.lobbyId = lobbyId;
       App.socket.emit('getGameState', { lobbyId }, (res) => {
         if (!res || !res.ok) { alert((res && res.msg) || 'Партия не найдена'); Router.go('lobby'); return; }
         if (res.state && res.state.isSelfPlay) { Router.go('lobby'); return; }
-        this._skeletonShown = false;
         this.applyGameStateFromServer(res.state, lobbyId);
       });
       return;
@@ -1761,7 +1788,6 @@ const Game = {
     this.pendingDrawOffer = false; this.rematchRequested = false;
     this.chatMsgIds.clear(); this.stopRematchSpinner();
     const box = document.getElementById('chatMessages'); if (box) box.innerHTML = '';
-    this._skeletonShown = false;
   },
   resetUI() {
     const tn = document.getElementById('topName'); if (tn) tn.textContent = '—';
