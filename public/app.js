@@ -1,5 +1,4 @@
 /* app.js — вся клиентская логика Kingside */
-
 'use strict';
 
 // ============================================================
@@ -7,23 +6,15 @@
 // ============================================================
 const Utils = {
   MSK_TZ: 'Europe/Moscow',
-  fmtMskHM(ts) {
-    return new Intl.DateTimeFormat('ru-RU', { timeZone: this.MSK_TZ, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ts));
-  },
-  fmtTimeHM(ts) {
-    const d = new Date(ts);
-    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
-  },
+  fmtMskHM(ts) { return new Intl.DateTimeFormat('ru-RU', { timeZone: this.MSK_TZ, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ts)); },
+  fmtTimeHM(ts) { const d = new Date(ts); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); },
   fmtDate(ts) {
-    const d = new Date(ts);
-    const today = new Date(); const yest = new Date(); yest.setDate(today.getDate() - 1);
+    const d = new Date(ts); const today = new Date(); const yest = new Date(); yest.setDate(today.getDate() - 1);
     if (d.toDateString() === today.toDateString()) return 'Сегодня';
     if (d.toDateString() === yest.toDateString()) return 'Вчера';
     return d.toLocaleDateString('ru-RU');
   },
-  escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-  },
+  escapeHtml(s) { return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch])); },
   nickHtml(username, isAdminFlag, isModFlag, isBotFlag) {
     if (!username) return '';
     const admin = (typeof isAdminFlag === 'boolean') ? isAdminFlag : (username === 'PeshkaSasha' || username === 'admin');
@@ -34,21 +25,10 @@ const Utils = {
     const botTag = bot ? '<span class="botBadge" style="margin-right:4px">🤖 BOT</span>' : '';
     return `<span class="playerNick" data-player="${this.escapeHtml(username)}">${botTag}${crown}${mark}${this.escapeHtml(username)}</span>`;
   },
-  onlineDotHtml(online) {
-    return online ? '<span class="onlineDot" title="В сети"></span>' : '<span class="offlineDot" title="Не в сети"></span>';
-  },
-  watchersHtml(n) {
-    if (!n || n <= 0) return '';
-    return `<span class="watchersBadge" title="Зрителей">👁 <b>${n}</b></span>`;
-  },
-  formatTime(s) {
-    s = Math.max(0, Math.floor(s));
-    return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
-  },
-  formatMMSS(ms) {
-    const t = Math.max(0, Math.floor(ms/1000));
-    return String(Math.floor(t/60)).padStart(2,'0') + ':' + String(t%60).padStart(2,'0');
-  },
+  onlineDotHtml(online) { return online ? '<span class="onlineDot" title="В сети"></span>' : '<span class="offlineDot" title="Не в сети"></span>'; },
+  watchersHtml(n) { if (!n || n <= 0) return ''; return `<span class="watchersBadge" title="Зрителей">👁 <b>${n}</b></span>`; },
+  formatTime(s) { s = Math.max(0, Math.floor(s)); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; },
+  formatMMSS(ms) { const t = Math.max(0, Math.floor(ms/1000)); return String(Math.floor(t/60)).padStart(2,'0') + ':' + String(t%60).padStart(2,'0'); },
   genId() { return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6); }
 };
 
@@ -61,16 +41,12 @@ const Sounds = (function() {
   function ensure() { if (!ctx) ctx = new AudioCtx(); if (ctx.state === 'suspended') ctx.resume(); return ctx; }
   function playTone(freq, dur, type, vol, delay) {
     try {
-      const c = ensure();
-      const t0 = c.currentTime + (delay || 0);
+      const c = ensure(); const t0 = c.currentTime + (delay || 0);
       const osc = c.createOscillator(); const gain = c.createGain();
-      osc.type = type || 'sine';
-      osc.frequency.setValueAtTime(freq, t0);
-      gain.gain.setValueAtTime(0.0001, t0);
-      gain.gain.exponentialRampToValueAtTime(vol || 0.15, t0 + 0.008);
+      osc.type = type || 'sine'; osc.frequency.setValueAtTime(freq, t0);
+      gain.gain.setValueAtTime(0.0001, t0); gain.gain.exponentialRampToValueAtTime(vol || 0.15, t0 + 0.008);
       gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-      osc.connect(gain); gain.connect(c.destination);
-      osc.start(t0); osc.stop(t0 + dur + 0.02);
+      osc.connect(gain); gain.connect(c.destination); osc.start(t0); osc.stop(t0 + dur + 0.02);
     } catch (e) {}
   }
   const last = { move:0, capture:0, check:0, mate:0, draw:0, win:0, lose:0, start:0, msg:0 };
@@ -78,24 +54,24 @@ const Sounds = (function() {
   function can(key) { const now = performance.now(); if (now - last[key] < COOLDOWN) return false; last[key] = now; return true; }
   let lastSan = '', lastSanTime = 0;
   return {
-    move()    { if (can('move'))    playTone(360, 0.045, 'sine', 0.075); },
+    move() { if (can('move')) playTone(360, 0.045, 'sine', 0.075); },
     capture() { if (can('capture')) playTone(245, 0.065, 'triangle', 0.095); },
-    check()   { if (can('check'))   playTone(740, 0.085, 'sine', 0.10); },
-    mate()    { if (can('mate'))    { playTone(520, 0.12, 'sine', 0.10); playTone(390, 0.16, 'sine', 0.085, 0.12); } },
-    draw()    { if (can('draw'))    playTone(460, 0.11, 'sine', 0.075); },
-    win()     { if (can('win'))     { playTone(660, 0.09, 'sine', 0.09); playTone(880, 0.13, 'sine', 0.085, 0.10); } },
-    lose()    { if (can('lose'))    playTone(290, 0.15, 'triangle', 0.08); },
-    start()   { if (can('start'))   playTone(580, 0.10, 'sine', 0.075); },
-    msg()     { if (can('msg'))     playTone(880, 0.06, 'sine', 0.07); },
+    check() { if (can('check')) playTone(740, 0.085, 'sine', 0.10); },
+    mate() { if (can('mate')) { playTone(520, 0.12, 'sine', 0.10); playTone(390, 0.16, 'sine', 0.085, 0.12); } },
+    draw() { if (can('draw')) playTone(460, 0.11, 'sine', 0.075); },
+    win() { if (can('win')) { playTone(660, 0.09, 'sine', 0.09); playTone(880, 0.13, 'sine', 0.085, 0.10); } },
+    lose() { if (can('lose')) playTone(290, 0.15, 'triangle', 0.08); },
+    start() { if (can('start')) playTone(580, 0.10, 'sine', 0.075); },
+    msg() { if (can('msg')) playTone(880, 0.06, 'sine', 0.07); },
     moveBySan(san) {
       if (!san) return;
       const now = performance.now();
       if (san === lastSan && now - lastSanTime < 300) return;
       lastSan = san; lastSanTime = now;
-      if (san.includes('#'))      this.mate();
+      if (san.includes('#')) this.mate();
       else if (san.includes('+')) this.check();
       else if (san.includes('x')) this.capture();
-      else                        this.move();
+      else this.move();
     },
     initOnFirstClick() { window.addEventListener('pointerdown', () => ensure(), { once: true }); }
   };
@@ -172,52 +148,27 @@ const Chess = {
   applyMove(state, from, to) {
     const copy = { board: state.board.map(row => row.slice()), turn: state.turn, castling: state.castling, ep: state.ep, half: state.half, full: state.full };
     const [fr, fc] = from, [tr, tc] = to;
-    const p = copy.board[fr][fc]; 
+    const p = copy.board[fr][fc];
     if (!p) return copy;
     const white = this.isWhite(p); const type = p.toLowerCase();
-    
-    if (type === 'p' && copy.ep) { 
-      const target = String.fromCharCode(97 + tc) + (8 - tr); 
-      if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null; 
-    }
-    
-    copy.board[tr][tc] = p; 
-    copy.board[fr][fc] = null;
-    
+    if (type === 'p' && copy.ep) { const target = String.fromCharCode(97 + tc) + (8 - tr); if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null; }
+    copy.board[tr][tc] = p; copy.board[fr][fc] = null;
     if (type === 'p' && (tr === 0 || tr === 7)) copy.board[tr][tc] = white ? 'Q' : 'q';
-    
-    if (type === 'k' && Math.abs(tc - fc) === 2) { 
-      const row = fr; 
-      if (tc > fc) { 
-        copy.board[row][5] = copy.board[row][7]; 
-        copy.board[row][7] = null; 
-      } else { 
-        copy.board[row][3] = copy.board[row][0]; 
-        copy.board[row][0] = null; 
-      } 
-    }
-    
+    if (type === 'k' && Math.abs(tc - fc) === 2) { const row = fr; if (tc > fc) { copy.board[row][5] = copy.board[row][7]; copy.board[row][7] = null; } else { copy.board[row][3] = copy.board[row][0]; copy.board[row][0] = null; } }
     let cast = copy.castling;
     if (type === 'k') cast = cast.replace(white ? /[KQ]/g : /[kq]/g, '');
-    if (type === 'r') { 
-      if (fr === 7 && fc === 0) cast = cast.replace('Q', ''); 
-      if (fr === 7 && fc === 7) cast = cast.replace('K', ''); 
-      if (fr === 0 && fc === 0) cast = cast.replace('q', ''); 
-      if (fr === 0 && fc === 7) cast = cast.replace('k', ''); 
+    if (type === 'r') {
+      if (fr === 7 && fc === 0) cast = cast.replace('Q', '');
+      if (fr === 7 && fc === 7) cast = cast.replace('K', '');
+      if (fr === 0 && fc === 0) cast = cast.replace('q', '');
+      if (fr === 0 && fc === 7) cast = cast.replace('k', '');
     }
     if (!cast || cast === '') cast = '-';
-    
-    let ep = '-'; 
+    let ep = '-';
     if (type === 'p' && Math.abs(tr - fr) === 2) ep = String.fromCharCode(97 + fc) + (8 - (fr + (tr - fr) / 2));
-    
-    copy.castling = cast; 
-    copy.ep = ep; 
-    copy.turn = white ? 'b' : 'w'; 
-    copy.full += 1;
-    
+    copy.castling = cast; copy.ep = ep; copy.turn = white ? 'b' : 'w'; copy.full += 1;
     const wasCapture = !!state.board[tr][tc] || (type === 'p' && fc !== tc);
     copy.half = (type === 'p' || wasCapture) ? 0 : (state.half + 1);
-    
     return copy;
   },
   legalMovesFor(state, r, c) {
@@ -248,11 +199,7 @@ const Chess = {
       for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
         if (r === fr && c === fc) continue;
         const q = state.board[r][c]; if (!q || q !== p) continue;
-        if (this.legalMovesFor(state, r, c).some(([mr,mc]) => mr === tr && mc === tc)) {
-          ambiguous = true;
-          if (c === fc) sameFile = true;
-          if (r === fr) sameRank = true;
-        }
+        if (this.legalMovesFor(state, r, c).some(([mr,mc]) => mr === tr && mc === tc)) { ambiguous = true; if (c === fc) sameFile = true; if (r === fr) sameRank = true; }
       }
       if (ambiguous) {
         if (!sameFile) san += String.fromCharCode(97 + fc);
@@ -278,32 +225,21 @@ const Auth = {
   mode: 'login',
   switchTab(mode) {
     this.mode = mode;
-    const tabLogin = document.getElementById('tabLoginBtn');
-    const tabReg = document.getElementById('tabRegisterBtn');
-    const emailField = document.getElementById('emailField');
-    const btnText = document.getElementById('btnText');
-    if (mode === 'login') {
-      tabLogin.classList.add('active'); tabReg.classList.remove('active');
-      emailField.style.display = 'none'; btnText.textContent = 'Войти';
-    } else {
-      tabReg.classList.add('active'); tabLogin.classList.remove('active');
-      emailField.style.display = 'block'; btnText.textContent = 'Зарегистрироваться';
-    }
+    const tabLogin = document.getElementById('tabLoginBtn'); const tabReg = document.getElementById('tabRegisterBtn');
+    const emailField = document.getElementById('emailField'); const btnText = document.getElementById('btnText');
+    if (mode === 'login') { tabLogin.classList.add('active'); tabReg.classList.remove('active'); emailField.style.display = 'none'; btnText.textContent = 'Войти'; }
+    else { tabReg.classList.add('active'); tabLogin.classList.remove('active'); emailField.style.display = 'block'; btnText.textContent = 'Зарегистрироваться'; }
     document.getElementById('loginMsg').textContent = '';
     const usernameStatus = document.getElementById('usernameStatus');
     if (usernameStatus && mode === 'login') { usernameStatus.textContent = ''; usernameStatus.className = ''; }
   },
   togglePassword() {
-    const pw = document.getElementById('password');
-    const icon = document.getElementById('eyeIcon');
-    if (pw.type === 'password') { pw.type = 'text'; icon.textContent = '🙈'; }
-    else { pw.type = 'password'; icon.textContent = '👁'; }
+    const pw = document.getElementById('password'); const icon = document.getElementById('eyeIcon');
+    if (pw.type === 'password') { pw.type = 'text'; icon.textContent = '🙈'; } else { pw.type = 'password'; icon.textContent = '👁'; }
   },
   init() {
-    const usernameInput = document.getElementById('username');
-    const emailInput = document.getElementById('email');
-    const usernameStatus = document.getElementById('usernameStatus');
-    const emailStatus = document.getElementById('emailStatus');
+    const usernameInput = document.getElementById('username'); const emailInput = document.getElementById('email');
+    const usernameStatus = document.getElementById('usernameStatus'); const emailStatus = document.getElementById('emailStatus');
     let usernameTimeout = null, emailTimeout = null;
     if (usernameInput && usernameStatus) {
       usernameInput.addEventListener('input', () => {
@@ -352,13 +288,8 @@ const App = {
   currentGameIsArena: false, currentArenaId: null, currentArenaName: null,
   profileViewing: null, botLevels: [],
   botDialogState: { level: 2, time: 5, inc: 0 },
-  botTimes: [
-    { t: 1,  i: 0,  label: '1+0' }, { t: 3,  i: 0,  label: '3+0' },
-    { t: 5,  i: 0,  label: '5+0' }, { t: 10, i: 0,  label: '10+0' },
-    { t: 15, i: 10, label: '15+10' }, { t: 30, i: 0,  label: '30+0' }
-  ],
-  _autoLoginAttempts: 0,
-  restoring: false,
+  botTimes: [{ t:1,i:0,label:'1+0' },{ t:3,i:0,label:'3+0' },{ t:5,i:0,label:'5+0' },{ t:10,i:0,label:'10+0' },{ t:15,i:10,label:'15+10' },{ t:30,i:0,label:'30+0' }],
+  _autoLoginAttempts: 0, restoring: false,
 
   init() {
     this.socket = io({ transports: ['websocket', 'polling'], upgrade: true, reconnection: true, reconnectionAttempts: 10, reconnectionDelay: 1000 });
@@ -372,114 +303,61 @@ const App = {
     const saved = this._readSavedLogin();
     if (saved) {
       this.me = { username: saved.username, rating: 1200, isAdmin: false, isMod: false, isBot: false, _restored: true };
-      this.showAuthenticatedUI();
-      this.updateTopbarUser();
+      this.showAuthenticatedUI(); this.updateTopbarUser();
     }
-
     if (saved) {
       this.restoring = true;
-      this._restoreSession(saved, () => {
-        this.restoring = false;
-        Router.init();
-      });
-    } else {
-      Router.init();
-    }
+      this._restoreSession(saved, () => { this.restoring = false; Router.init(); });
+    } else { Router.init(); }
     this.scheduleArenaClock();
   },
 
-  _readSavedLogin() {
-    try {
-      const s = JSON.parse(localStorage.getItem('kingside_login') || 'null');
-      if (s && s.username && s.password) return s;
-    } catch (e) {}
-    return null;
-  },
+  _readSavedLogin() { try { const s = JSON.parse(localStorage.getItem('kingside_login') || 'null'); if (s && s.username && s.password) return s; } catch (e) {} return null; },
 
   _restoreSession(saved, done) {
     const finish = () => { if (typeof done === 'function') done(); };
-
     this.socket.emit('register', { username: saved.username, password: saved.password }, (res) => {
       if (!res || !res.ok) {
         this._autoLoginAttempts++;
-        if (this._autoLoginAttempts >= 3) {
-          try { localStorage.removeItem('kingside_login'); } catch (e) {}
-          this.me = null;
-        }
-        this.restoring = false;
-        finish();
-        return;
+        if (this._autoLoginAttempts >= 3) { try { localStorage.removeItem('kingside_login'); } catch (e) {} this.me = null; }
+        this.restoring = false; finish(); return;
       }
-
-      this.me = res.user;
-      this._autoLoginAttempts = 0;
-      this.updateTopbarUser();
-
-      let activeLobby = null;
-      try { activeLobby = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
-
+      this.me = res.user; this._autoLoginAttempts = 0; this.updateTopbarUser();
+      let activeLobby = null; try { activeLobby = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
       if (activeLobby && !activeLobby.startsWith('sp_')) {
         this.socket.emit('getGameState', { lobbyId: activeLobby }, (r) => {
           if (r && r.ok && r.state && !r.state.isSelfPlay) {
-            App.lobbyId = activeLobby;
-            Game.applyGameStateFromServer(r.state, activeLobby);
+            App.lobbyId = activeLobby; Game.applyGameStateFromServer(r.state, activeLobby);
             setTimeout(() => { this.restoring = false; finish(); }, 0);
-          } else {
-            try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
-            this._afterRestoreFallback();
-            finish();
-          }
+          } else { try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {} this._afterRestoreFallback(); finish(); }
         });
         return;
       }
-
-      this._afterRestoreFallback();
-      finish();
+      this._afterRestoreFallback(); finish();
     });
   },
 
   _afterRestoreFallback() {
     const hash = location.hash.replace(/^#\/?/, '');
-    const parts = hash.split('/').filter(Boolean);
-    const name = parts[0];
-
-    if (name === 'game') {
-      try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
-      Router.go('lobby');
-      return;
-    }
+    const parts = hash.split('/').filter(Boolean); const name = parts[0];
+    if (name === 'game') { try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {} Router.go('lobby'); return; }
     if (!name) {
-      let lastArena = null;
-      try { lastArena = localStorage.getItem('kingside_last_arena'); } catch (e) {}
-      if (lastArena) Router.go('arenaPage', lastArena);
-      else Router.go('lobby');
+      let lastArena = null; try { lastArena = localStorage.getItem('kingside_last_arena'); } catch (e) {}
+      if (lastArena) Router.go('arenaPage', lastArena); else Router.go('lobby');
     }
   },
 
-  showAuthenticatedUI() {
-    document.body.classList.remove('login-active');
-    const header = document.getElementById('mainHeader');
-    const main = document.getElementById('mainContent');
-    if (header) header.style.display = '';
-    if (main) main.style.display = '';
-  },
+  showAuthenticatedUI() { document.body.classList.remove('login-active'); const header = document.getElementById('mainHeader'); const main = document.getElementById('mainContent'); if (header) header.style.display = ''; if (main) main.style.display = ''; },
 
   updateTopbarUser() {
     if (!this.me) return;
-    const userBtn = document.getElementById('userBtn');
-    if (userBtn) userBtn.style.display = 'flex';
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) logoutBtn.style.display = 'none';
-    const bell = document.getElementById('msgBellBtn');
-    if (bell) bell.style.display = 'flex';
-    const un = document.getElementById('userName');
-    if (un) un.innerHTML = Utils.nickHtml(this.me.username, this.me.isAdmin, this.me.isMod, this.me.isBot) + ' (' + this.me.rating + ')';
-    const ua = document.getElementById('userAvatar');
-    if (ua) ua.textContent = this.me.username.charAt(0).toUpperCase();
-    const uma = document.getElementById('umAvatar');
-    if (uma) uma.textContent = this.me.username.charAt(0).toUpperCase();
-    const umn = document.getElementById('umName');
-    if (umn) umn.textContent = this.me.username;
+    const userBtn = document.getElementById('userBtn'); if (userBtn) userBtn.style.display = 'flex';
+    const logoutBtn = document.getElementById('logoutBtn'); if (logoutBtn) logoutBtn.style.display = 'none';
+    const bell = document.getElementById('msgBellBtn'); if (bell) bell.style.display = 'flex';
+    const un = document.getElementById('userName'); if (un) un.innerHTML = Utils.nickHtml(this.me.username, this.me.isAdmin, this.me.isMod, this.me.isBot) + ' (' + this.me.rating + ')';
+    const ua = document.getElementById('userAvatar'); if (ua) ua.textContent = this.me.username.charAt(0).toUpperCase();
+    const uma = document.getElementById('umAvatar'); if (uma) uma.textContent = this.me.username.charAt(0).toUpperCase();
+    const umn = document.getElementById('umName'); if (umn) umn.textContent = this.me.username;
     if (this.socket) this.socket.emit('msgGetUnread', (r) => { if (r) Inbox.setUnread(r.count); });
   },
 
@@ -488,68 +366,33 @@ const App = {
     const password = document.getElementById('password').value;
     const email = document.getElementById('email').value.trim();
     const msgEl = document.getElementById('loginMsg');
-
     if (!username || !password) { msgEl.textContent = 'Введите логин и пароль'; return; }
     if (Auth.mode === 'register' && !email) { msgEl.textContent = 'Введите email'; return; }
-    if (Auth.mode === 'register') {
-      const honor = document.getElementById('honorCheckbox');
-      if (honor && !honor.checked) { msgEl.textContent = 'Подтвердите, что будете играть честно'; return; }
-    }
-
-    msgEl.textContent = 'Загрузка...';
-    msgEl.style.color = 'var(--text)';
-
+    if (Auth.mode === 'register') { const honor = document.getElementById('honorCheckbox'); if (honor && !honor.checked) { msgEl.textContent = 'Подтвердите, что будете играть честно'; return; } }
+    msgEl.textContent = 'Загрузка...'; msgEl.style.color = 'var(--text)';
     this.socket.emit('register', { username, password, email: Auth.mode === 'register' ? email : undefined }, (res) => {
       if (!res || !res.ok) {
-        msgEl.style.color = '#ff6b6b';
-        msgEl.textContent = (res && res.msg) || 'Ошибка';
-        if (res && res.pending) {
-          msgEl.style.color = '#7dbe30';
-          msgEl.innerHTML = `Мы отправили письмо с подтверждением на почту: <b>${Utils.escapeHtml(email)}</b>.<br>Если письмо не приходит, проверьте папку «Спам».`;
-        }
+        msgEl.style.color = '#ff6b6b'; msgEl.textContent = (res && res.msg) || 'Ошибка';
+        if (res && res.pending) { msgEl.style.color = '#7dbe30'; msgEl.innerHTML = `Мы отправили письмо с подтверждением на почту: <b>${Utils.escapeHtml(email)}</b>.<br>Если письмо не приходит, проверьте папку «Спам».`; }
         return;
       }
       this.me = res.user;
       try { localStorage.setItem('kingside_login', JSON.stringify({ username, password })); } catch (e) {}
-      this.showAuthenticatedUI();
-      this.updateTopbarUser();
-      Router.go('lobby');
-      this.tryResumeGame();
+      this.showAuthenticatedUI(); this.updateTopbarUser(); Router.go('lobby'); this.tryResumeGame();
     });
   },
 
-  logout() {
-    try { localStorage.removeItem('kingside_login'); localStorage.removeItem('kingside_active_lobby'); localStorage.removeItem('kingside_last_arena'); } catch (e) {}
-    this.me = null;
-    location.hash = '#/autorize';
-    location.reload();
-  },
+  logout() { try { localStorage.removeItem('kingside_login'); localStorage.removeItem('kingside_active_lobby'); localStorage.removeItem('kingside_last_arena'); } catch (e) {} this.me = null; location.hash = '#/autorize'; location.reload(); },
 
   tryResumeGame() {
     if (this.restoring) return;
-    let saved = null;
-    try { saved = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
+    let saved = null; try { saved = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
     if (!saved) return;
-
-    if (saved.startsWith('sp_')) {
-      try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
-      Game.updateBackToGameBtn();
-      return;
-    }
-
+    if (saved.startsWith('sp_')) { try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {} Game.updateBackToGameBtn(); return; }
     this.socket.emit('getGameState', { lobbyId: saved }, (res) => {
-      if (!res || !res.ok) {
-        try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
-        Game.updateBackToGameBtn();
-        return;
-      }
-      if (res.state && res.state.isSelfPlay) {
-        try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
-        Game.updateBackToGameBtn();
-        return;
-      }
-      this.lobbyId = saved;
-      Game.applyGameStateFromServer(res.state, saved);
+      if (!res || !res.ok) { try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {} Game.updateBackToGameBtn(); return; }
+      if (res.state && res.state.isSelfPlay) { try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {} Game.updateBackToGameBtn(); return; }
+      this.lobbyId = saved; Game.applyGameStateFromServer(res.state, saved);
     });
   },
 
@@ -566,12 +409,9 @@ const App = {
   scheduleArenaClock() {
     setInterval(() => {
       const localNow = Date.now();
-      const nowClock = document.getElementById('arenasNowClock');
-      if (nowClock) nowClock.textContent = Utils.fmtMskHM(localNow);
-      const arenasScreen = document.getElementById('arenasScreen');
-      if (!arenasScreen || !arenasScreen.classList.contains('active')) return;
-      const scroller = document.querySelector('#arenasGridWrap .arenasScroller');
-      if (!scroller) return;
+      const nowClock = document.getElementById('arenasNowClock'); if (nowClock) nowClock.textContent = Utils.fmtMskHM(localNow);
+      const arenasScreen = document.getElementById('arenasScreen'); if (!arenasScreen || !arenasScreen.classList.contains('active')) return;
+      const scroller = document.querySelector('#arenasGridWrap .arenasScroller'); if (!scroller) return;
       const nowLine = scroller.querySelector('.nowLine'); if (!nowLine) return;
       const timeRow = scroller.querySelector('.timeRow'); if (!timeRow) return;
       const firstCell = timeRow.querySelector('.timeCell'); if (!firstCell) return;
@@ -580,18 +420,14 @@ const App = {
       const startMs = (typeof window.__arenaStartMs === 'number') ? window.__arenaStartMs : Math.floor(localNow / SLOT_MS) * SLOT_MS;
       const nowLeft = ((localNow - startMs) / SLOT_MS) * SLOT_PX;
       nowLine.style.left = nowLeft.toFixed(2) + 'px';
-      const cells = timeRow.querySelectorAll('.timeCell');
-      const idx = Math.floor((localNow - startMs) / SLOT_MS);
+      const cells = timeRow.querySelectorAll('.timeCell'); const idx = Math.floor((localNow - startMs) / SLOT_MS);
       cells.forEach((c, i) => c.classList.toggle('now', i === idx && idx >= 0 && idx < cells.length));
     }, 1000);
   },
 
   bindSocket() {
     const s = this.socket;
-    s.on('connect', () => {
-      s.emit('stats', () => {});
-      Ping.onReconnect();
-    });
+    s.on('connect', () => { s.emit('stats', () => {}); Ping.onReconnect(); });
     s.on('stats', (st) => Stats.onStats(st));
     s.on('communityOnline', (players) => Community.render(players));
     s.on('lobbiesUpdate', () => Lobby.refreshIfActive());
@@ -616,10 +452,7 @@ const App = {
     s.on('arenaUpdate', ({ arenaId }) => Arena.onUpdate(arenaId));
     s.on('arenaStarted', ({ arenaId }) => Arena.onUpdate(arenaId));
     s.on('arenaFinished', ({ arenaId, top3 }) => Arena.onFinished(arenaId, top3));
-    s.on('liveGamesUpdate', (list) => {
-      const ws = document.getElementById('watchScreen');
-      if (ws && ws.classList.contains('active')) Watch.refreshFromList(list);
-    });
+    s.on('liveGamesUpdate', (list) => { const ws = document.getElementById('watchScreen'); if (ws && ws.classList.contains('active')) Watch.refreshFromList(list); });
     s.on('msgNew', (msg) => Inbox.onNew(msg));
     s.on('msgUnread', ({ count }) => Inbox.setUnread(count));
     s.on('msgDialogDeleted', ({ with: other }) => Inbox.onDialogDeleted(other));
@@ -637,22 +470,9 @@ const App = {
 // ============================================================
 const UserMenu = {
   isOpen: false,
-  init() {
-    document.addEventListener('click', (e) => {
-      const m = document.getElementById('userMenu');
-      const btn = document.getElementById('userBtn');
-      if (!m || m.style.display === 'none') return;
-      if (m.contains(e.target) || (btn && btn.contains(e.target))) return;
-      this.close();
-    });
-  },
+  init() { document.addEventListener('click', (e) => { const m = document.getElementById('userMenu'); const btn = document.getElementById('userBtn'); if (!m || m.style.display === 'none') return; if (m.contains(e.target) || (btn && btn.contains(e.target))) return; this.close(); }); },
   toggle(e) { if (e) e.stopPropagation(); this.isOpen ? this.close() : this.open(); },
-  open() {
-    const m = document.getElementById('userMenu'); if (!m) return;
-    m.style.display = 'block'; this.isOpen = true;
-    Ping.refresh();
-    if (App.socket) App.socket.emit('msgGetUnread', (r) => { if (r) Inbox.setUnread(r.count); });
-  },
+  open() { const m = document.getElementById('userMenu'); if (!m) return; m.style.display = 'block'; this.isOpen = true; Ping.refresh(); if (App.socket) App.socket.emit('msgGetUnread', (r) => { if (r) Inbox.setUnread(r.count); }); },
   close() { const m = document.getElementById('userMenu'); if (!m) return; m.style.display = 'none'; this.isOpen = false; },
   goProfile() { this.close(); Router.go('profile'); },
   goInbox() { this.close(); Router.go('inbox'); },
@@ -666,21 +486,15 @@ const Ping = {
   timer: null, lastPingMs: null,
   init() { this.timer = setInterval(() => { const m = document.getElementById('userMenu'); if (m && m.style.display !== 'none') this.refresh(); }, 3000); },
   onReconnect() { this.refresh(); },
-  refresh() {
-    if (!App.socket) return;
-    const t0 = performance.now();
-    App.socket.emit('getStats', () => { const ms = Math.round(performance.now() - t0); this.setPing(ms); });
-  },
+  refresh() { if (!App.socket) return; const t0 = performance.now(); App.socket.emit('getStats', () => { const ms = Math.round(performance.now() - t0); this.setPing(ms); }); },
   setPing(ms) {
     this.lastPingMs = ms;
-    const el = document.getElementById('umPingValue');
-    const bars = document.getElementById('umPingBars');
-    const dot = document.getElementById('umServerDot');
-    const srv = document.getElementById('umServerValue');
+    const el = document.getElementById('umPingValue'); const bars = document.getElementById('umPingBars');
+    const dot = document.getElementById('umServerDot'); const srv = document.getElementById('umServerValue');
     if (el) el.textContent = ms + ' ms';
     if (srv) srv.textContent = '—';
-    if (bars) { bars.classList.remove('good', 'mid', 'bad'); if (ms < 80) bars.classList.add('good'); else if (ms < 250) bars.classList.add('mid'); else bars.classList.add('bad'); }
-    if (dot) { dot.classList.remove('ok', 'bad'); if (App.socket && App.socket.connected) dot.classList.add('ok'); else dot.classList.add('bad'); }
+    if (bars) { bars.classList.remove('good','mid','bad'); if (ms < 80) bars.classList.add('good'); else if (ms < 250) bars.classList.add('mid'); else bars.classList.add('bad'); }
+    if (dot) { dot.classList.remove('ok','bad'); if (App.socket && App.socket.connected) dot.classList.add('ok'); else dot.classList.add('bad'); }
     const umPing = document.getElementById('umPing'); if (umPing) umPing.textContent = ms + ' ms';
   }
 };
@@ -690,14 +504,8 @@ const Ping = {
 // ============================================================
 const Router = {
   current: { name: 'lobby', param: null },
-  init() {
-    window.addEventListener('hashchange', () => this.handle());
-    this.handle();
-  },
-  go(name, param) {
-    const path = param ? `#/${name}/${encodeURIComponent(param)}` : `#/${name}`;
-    if (location.hash === path) this.handle(); else location.hash = path;
-  },
+  init() { window.addEventListener('hashchange', () => this.handle()); this.handle(); },
+  go(name, param) { const path = param ? `#/${name}/${encodeURIComponent(param)}` : `#/${name}`; if (location.hash === path) this.handle(); else location.hash = path; },
   handle() {
     const hash = location.hash.replace(/^#\/?/, '');
     const parts = hash.split('/').filter(Boolean);
@@ -707,62 +515,29 @@ const Router = {
   },
   apply() {
     const { name, param } = this.current;
-
     if (App.restoring) return;
-
-    if (App.me && App.gameActive && !App.gameEnded && (name === 'arenas' || name === 'arenaPage')) {
-      Router.go('lobby');
-      return;
-    }
-
-    if (name === 'reset') {
-      document.body.classList.add('login-active');
-      Router.show('resetScreen');
-      return;
-    }
-
-    if (name === 'verify') {
-      Router.go('autorize');
-      return;
-    }
-
-    if (name === 'login' || name === 'autorize' || !App.me) {
-      document.body.classList.add('login-active');
-      Router.show('autorizeScreen');
-      return;
-    }
-
+    if (App.me && App.gameActive && !App.gameEnded && (name === 'arenas' || name === 'arenaPage')) { Router.go('lobby'); return; }
+    if (name === 'reset') { document.body.classList.add('login-active'); Router.show('resetScreen'); return; }
+    if (name === 'verify') { Router.go('autorize'); return; }
+    if (name === 'login' || name === 'autorize' || !App.me) { document.body.classList.add('login-active'); Router.show('autorizeScreen'); return; }
     if (App.me && name !== 'reset' && name !== 'verify' && name !== 'login' && name !== 'autorize') {
       document.body.classList.remove('login-active');
-      const header = document.getElementById('mainHeader');
-      const main = document.getElementById('mainContent');
-      if (header) header.style.display = '';
-      if (main) main.style.display = '';
+      const header = document.getElementById('mainHeader'); const main = document.getElementById('mainContent');
+      if (header) header.style.display = ''; if (main) main.style.display = '';
     }
-
     if (App.me && App.gameActive && !App.gameEnded && App.lobbyId && name === 'lobby') {
-      const opponent = document.getElementById('activeGameOpponent');
-      if (opponent) opponent.textContent = App.opponentName || 'соперником';
+      const opponent = document.getElementById('activeGameOpponent'); if (opponent) opponent.textContent = App.opponentName || 'соперником';
       this.show('lobbyScreen');
       document.querySelectorAll('#mainNav a').forEach(a => a.classList.toggle('active', a.dataset.nav === 'lobby'));
-      Lobby.render();
-      return;
+      Lobby.render(); return;
     }
-    const activeNotice = document.getElementById('activeGameNoticeScreen');
-    if (activeNotice) activeNotice.classList.remove('active');
+    const activeNotice = document.getElementById('activeGameNoticeScreen'); if (activeNotice) activeNotice.classList.remove('active');
     if (name !== 'watch' && Watch.autoRefreshHandle) { clearInterval(Watch.autoRefreshHandle); Watch.autoRefreshHandle = null; }
     if (name !== 'arenaPage' && Arena.currentArenaId) Arena.leaveRoom();
-    
     const map = { login: 'autorizeScreen', lobby: 'lobbyScreen', watch: 'watchScreen', arenas: 'arenasScreen', arenaPage: 'arenaPageScreen', profile: 'profileScreen', community: 'communityScreen', game: 'gameScreen', inbox: 'inboxScreen' };
-    const screenId = map[name];
-    if (!screenId) { this.show('lobbyScreen'); return; }
+    const screenId = map[name]; if (!screenId) { this.show('lobbyScreen'); return; }
     this.show(screenId);
-    
-    document.querySelectorAll('#mainNav a').forEach(a => {
-      const nav = a.dataset.nav;
-      a.classList.toggle('active', nav === name || (name === 'arenaPage' && nav === 'arenas'));
-    });
-    
+    document.querySelectorAll('#mainNav a').forEach(a => { const nav = a.dataset.nav; a.classList.toggle('active', nav === name || (name === 'arenaPage' && nav === 'arenas')); });
     switch (name) {
       case 'lobby': Lobby.enter(); break;
       case 'watch': Watch.enter(param); break;
@@ -774,10 +549,7 @@ const Router = {
       case 'inbox': Inbox.enter(param); break;
     }
   },
-  show(screenId) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    const el = document.getElementById(screenId); if (el) el.classList.add('active');
-  }
+  show(screenId) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); const el = document.getElementById(screenId); if (el) el.classList.add('active'); }
 };
 
 // ============================================================
@@ -809,12 +581,8 @@ const Stats = {
   refresh() { App.socket.emit('getStats', (s) => this.onStats(s)); },
   onStats(s) {
     if (!s) return;
-    const e1 = document.getElementById('statOnline');
-    const e2 = document.getElementById('statGames');
-    const e3 = document.getElementById('statActive');
-    if (e1) e1.textContent = s.online;
-    if (e2) e2.textContent = s.games;
-    if (e3) e3.textContent = s.activeGames || 0;
+    const e1 = document.getElementById('statOnline'); const e2 = document.getElementById('statGames'); const e3 = document.getElementById('statActive');
+    if (e1) e1.textContent = s.online; if (e2) e2.textContent = s.games; if (e3) e3.textContent = s.activeGames || 0;
   }
 };
 
@@ -852,7 +620,6 @@ const Lobby = {
     App.socket.emit('getLobbies', (res) => {
       let list = Array.isArray(res) ? res : ((res && Array.isArray(res.list)) ? res.list : []);
       list = list.filter(l => !l.isSelfPlay);
-
       el.innerHTML = '';
       const current = new Map();
       if (list.length) for (const l of list) if (l.status === 'waiting') current.set(l.id, l);
@@ -883,10 +650,7 @@ const Lobby = {
       if (this.disappeared.size) setTimeout(() => { if (this.currentTab === 'waiting') this.render(); }, 5200);
     });
   },
-  onRowClick(l, isMine) {
-    if (isMine) { App.socket.emit('cancelLobby', { id: l.id }, () => this.render()); return; }
-    App.socket.emit('joinLobby', { id: l.id }, (r) => { if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; } App.lobbyId = r.id || l.id; });
-  },
+  onRowClick(l, isMine) { if (isMine) { App.socket.emit('cancelLobby', { id: l.id }, () => this.render()); return; } App.socket.emit('joinLobby', { id: l.id }, (r) => { if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; } App.lobbyId = r.id || l.id; }); },
   quickStart(time, inc) {
     App.socket.emit('createLobby', { time, inc }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
@@ -899,16 +663,11 @@ const Lobby = {
       App.isBotGame = false; App.currentGameIsArena = false; App.currentArenaName = null;
       Game.reset(); Game.resetUI(); Game.hideResultBar();
       Router.go('game'); Game.renderBoard(); Game.renderMoves();
-      const bar = document.getElementById('statusBar');
-      if (bar) { bar.className = 'statusGreen'; bar.textContent = 'Ожидание соперника...'; }
+      const bar = document.getElementById('statusBar'); if (bar) { bar.className = 'statusGreen'; bar.textContent = 'Ожидание соперника...'; }
     });
   },
   showCustom() { const p = document.getElementById('customGamePanel'); if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none'; },
-  createCustom() {
-    const m = +document.getElementById('customMin').value || 5;
-    const i = +document.getElementById('customInc').value || 0;
-    this.quickStart(m, i);
-  }
+  createCustom() { const m = +document.getElementById('customMin').value || 5; const i = +document.getElementById('customInc').value || 0; this.quickStart(m, i); }
 };
 
 // ============================================================
@@ -916,13 +675,7 @@ const Lobby = {
 // ============================================================
 const Bot = {
   init() { const dlg = document.getElementById('botDialog'); if (dlg) dlg.addEventListener('click', (e) => { if (e.target === dlg) this.closeDialog(); }); },
-  openDialog() {
-    const dlg = document.getElementById('botDialog'); if (!dlg) return;
-    App.socket.emit('getBots', (list) => {
-      if (Array.isArray(list)) App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.initialRating, games: b.games || 0, isMaster: b.level === 4 }));
-      this.render(); dlg.classList.add('show');
-    });
-  },
+  openDialog() { const dlg = document.getElementById('botDialog'); if (!dlg) return; App.socket.emit('getBots', (list) => { if (Array.isArray(list)) App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.initialRating, games: b.games || 0, isMaster: b.level === 4 })); this.render(); dlg.classList.add('show'); }); },
   closeDialog() { const dlg = document.getElementById('botDialog'); if (dlg) dlg.classList.remove('show'); },
   render() {
     const levelsEl = document.getElementById('botLevels'); const timesEl = document.getElementById('botTimes');
@@ -934,12 +687,7 @@ const Bot = {
     levelsEl.querySelectorAll('button').forEach(b => b.onclick = () => { App.botDialogState.level = +b.dataset.level; this.render(); });
     timesEl.querySelectorAll('button').forEach(b => b.onclick = () => { App.botDialogState.time = +b.dataset.t; App.botDialogState.inc = +b.dataset.i; this.render(); });
   },
-  startGame() {
-    const bot = App.botLevels.find(b => b.level === App.botDialogState.level); if (!bot) return;
-    App.socket.emit('playWithBot', { time: App.botDialogState.time, inc: App.botDialogState.inc, botName: bot.name }, (res) => {
-      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.closeDialog();
-    });
-  }
+  startGame() { const bot = App.botLevels.find(b => b.level === App.botDialogState.level); if (!bot) return; App.socket.emit('playWithBot', { time: App.botDialogState.time, inc: App.botDialogState.inc, botName: bot.name }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.closeDialog(); }); }
 };
 
 // ============================================================
@@ -1004,8 +752,7 @@ const Watch = {
     const flip = false;
     const lmHash = g.lastMove ? g.lastMove.from.join(',') + '>' + g.lastMove.to.join(',') : '';
     const hash = g.id + '|' + g.fen + '|' + g.turn + '|' + flip + '|' + (g.watchersCount || 0) + '|' + (g.finished ? 'F' : 'A') + '|' + lmHash;
-    if (hash === this.lastBoardHash) return;
-    this.lastBoardHash = hash;
+    if (hash === this.lastBoardHash) return; this.lastBoardHash = hash;
     const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
     let squares = '';
     const lm = g.lastMove;
@@ -1047,8 +794,7 @@ const Watch = {
   },
   onWatchersUpdate(lobbyId, count) {
     if (this.watchingGame && this.watchingGame.id === lobbyId) { this.watchingGame.watchersCount = count; this.lastBoardHash = ''; this.renderBoard(); }
-    const ws = document.getElementById('watchScreen');
-    if (ws && ws.classList.contains('active')) this.refresh(false);
+    const ws = document.getElementById('watchScreen'); if (ws && ws.classList.contains('active')) this.refresh(false);
   },
   onBoardUpdate({ lobbyId, fen, turn, san, from, to }) {
     if (!this.watchingGame || this.watchingGame.id !== lobbyId) return;
@@ -1087,8 +833,7 @@ const Arena = {
     this.currentArenaId = arenaId;
     this.openPlayerName = null;
     this.lastLiveGames = []; this.lastDoneGames = [];
-    const chatEl = document.getElementById('arenaChatMessages');
-    if (chatEl) chatEl.innerHTML = '';
+    const chatEl = document.getElementById('arenaChatMessages'); if (chatEl) chatEl.innerHTML = '';
     this.lastStateHash = ''; this.lastGamesHash = '';
     App.socket.emit('joinArenaRoom', { arenaId }, (res) => { if (res && res.ok && Array.isArray(res.chat)) { const box = document.getElementById('arenaChatMessages'); if (box) { box.innerHTML = ''; res.chat.forEach(m => this.renderChatMsg(m)); } } });
     this.loadPage();
@@ -1121,8 +866,7 @@ const Arena = {
     });
     if (this.refreshHandle) clearInterval(this.refreshHandle);
     this.refreshHandle = setInterval(() => {
-      const as2 = document.getElementById('arenasScreen');
-      if (!as2 || !as2.classList.contains('active')) return;
+      const as2 = document.getElementById('arenasScreen'); if (!as2 || !as2.classList.contains('active')) return;
       App.socket.emit('getArenas', (res) => {
         const list = (res && res.list) || []; const serverNow = (res && res.serverNow) || Date.now();
         this.serverOffsetMs = serverNow - Date.now(); this.cache = list;
@@ -1146,11 +890,7 @@ const Arena = {
     const toPx = (ts) => ((ts - startMs) / SLOT_MS) * SLOT_PX;
     const visible = this.cache.map(a => ({ ...a, clientStartsAt: toClient(a.startsAt), clientEndsAt: toClient(a.endsAt) })).filter(a => a.clientEndsAt > startMs && a.clientStartsAt < endMs).sort((a, b) => a.clientStartsAt - b.clientStartsAt);
     const rows = [];
-    for (const arena of visible) {
-      const lane = arena.lane || 0;
-      if (!rows[lane]) rows[lane] = [];
-      rows[lane].push(arena);
-    }
+    for (const arena of visible) { const lane = arena.lane || 0; if (!rows[lane]) rows[lane] = []; rows[lane].push(arena); }
     const finalRows = rows.filter(r => r && r.length);
     const rowWidth = COLS * SLOT_PX;
     let html = '<div class="arenasScroller"><div class="timeRow" style="width:' + rowWidth + 'px;">';
@@ -1183,10 +923,7 @@ const Arena = {
   loadPage() {
     if (!this.currentArenaId || this.loadBusy) return; this.loadBusy = true;
     const arena = this.cache.find(a => a.id === this.currentArenaId);
-    if (!arena) {
-      App.socket.emit('getArenas', (res) => { this.cache = (res && res.list) || []; if (res && res.serverNow) this.serverOffsetMs = res.serverNow - Date.now(); this.loadBusy = false; if (this.cache.find(x => x.id === this.currentArenaId)) this.loadPage(); });
-      return;
-    }
+    if (!arena) { App.socket.emit('getArenas', (res) => { this.cache = (res && res.list) || []; if (res && res.serverNow) this.serverOffsetMs = res.serverNow - Date.now(); this.loadBusy = false; if (this.cache.find(x => x.id === this.currentArenaId)) this.loadPage(); }); return; }
     App.socket.emit('getArenaState', { arenaId: this.currentArenaId }, (state) => {
       this.loadBusy = false; this.currentArenaState = state;
       if (state.serverNow) this.serverOffsetMs = state.serverNow - Date.now();
@@ -1263,23 +1000,31 @@ const Arena = {
     App.socket.emit('getArenaGames', { arenaId: this.currentArenaId }, (res) => {
       if (!res || typeof res !== 'object') return;
       const live = res.live || [], done = res.done || [];
-      const pcEl = document.getElementById('arenaParticipantsCount');
-      const vcEl = document.getElementById('arenaViewersCount');
-      if (pcEl) pcEl.textContent = res.participantsCount || 0;
-      if (vcEl) vcEl.textContent = res.chatViewersCount || 0;
-      this.lastLiveGames = live;
-      this.lastDoneGames = done;
+      const pcEl = document.getElementById('arenaParticipantsCount'); const vcEl = document.getElementById('arenaViewersCount');
+      if (pcEl) pcEl.textContent = res.participantsCount || 0; if (vcEl) vcEl.textContent = res.chatViewersCount || 0;
+      this.lastLiveGames = live; this.lastDoneGames = done;
 
-      // ---- Блок лидера: без заголовка ----
+      // Место игрока для карточки лидера (берём из текущей турнирной таблицы)
+      const placeMap = new Map();
+      if (this.currentArenaState && Array.isArray(this.currentArenaState.participants)) {
+        this.currentArenaState.participants.forEach((p, i) => placeMap.set(p.username, i + 1));
+      }
+
+      // --- Партия лидеров (без кнопки, весь блок кликабелен) ---
       if (topEl) {
         const myName = App.me ? App.me.username : null;
         const myLive = myName ? live.find(g => g.white === myName || g.black === myName) : null;
         const topGame = myLive || live[0] || null;
         if (topGame) {
-          topEl.innerHTML = this.renderTopGame(topGame);
-          const link = topEl.querySelector('.arenaTopGameLink');
-          if (link) link.onclick = () => Watch.watch(topGame.lobbyId);
+          topEl.classList.remove('arenaTopGameEmpty');
+          topEl.innerHTML = this.renderTopGame(topGame, placeMap);
+          topEl.style.cursor = 'pointer';
+          topEl.title = 'Смотреть партию';
+          topEl.onclick = () => Watch.watch(topGame.lobbyId);
         } else {
+          topEl.style.cursor = 'default';
+          topEl.title = '';
+          topEl.onclick = null;
           const phase = this.currentArenaState && this.currentArenaState.phase;
           if (phase === 'live' || phase === 'waiting') {
             topEl.innerHTML = this.renderTopGamePlaceholder(phase);
@@ -1289,36 +1034,37 @@ const Arena = {
         }
       }
 
-      // Если открыта карточка игрока — рисуем её вместо нижнего списка
       if (this.openPlayerName) { this.renderPlayerCard(); return; }
 
       const hash = JSON.stringify({
         live: live.map(g => [g.lobbyId, g.fen, g.timeW, g.timeB]),
         done: done.slice(0, 30).map(g => [g.white, g.black, g.result, g.finishedAt])
       });
-      if (hash === this.lastGamesHash) return;
-      this.lastGamesHash = hash;
-      if (!done.length && !live.length) {
-        listEl.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>';
-        return;
-      }
+      if (hash === this.lastGamesHash) return; this.lastGamesHash = hash;
+      if (!done.length && !live.length) { listEl.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>'; return; }
       let html = '';
       for (const g of live) {
         const wR = g.whiteRating || ''; const bR = g.blackRating || '';
+        const wPlace = placeMap.get(g.white); const bPlace = placeMap.get(g.black);
+        const wPlaceHtml = wPlace ? `<span class="agl-place">#${wPlace}</span>` : '';
+        const bPlaceHtml = bPlace ? `<span class="agl-place">#${bPlace}</span>` : '';
         html += `<div class="arenaGameLine live" onclick="Watch.watch('${g.lobbyId}')">
           <span class="agl-res live">▶</span>
-          <span class="agl-players">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${wR?`<span class="agl-r">(${wR})</span>`:''} <span class="agl-vs">vs</span> ${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${bR?`<span class="agl-r">(${bR})</span>`:''}</span>
+          <span class="agl-players">${wPlaceHtml}${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${wR?`<span class="agl-r">(${wR})</span>`:''} <span class="agl-vs">vs</span> ${bPlaceHtml}${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${bR?`<span class="agl-r">(${bR})</span>`:''}</span>
           <span class="agl-score">${Utils.formatTime(g.timeW)} / ${Utils.formatTime(g.timeB)}</span>
         </div>`;
       }
       for (const g of done.slice(0, 50)) {
         const resStr = g.result === 'w' ? '1-0' : (g.result === 'b' ? '0-1' : '½-½');
         const wR = g.whiteRating || ''; const bR = g.blackRating || '';
+        const wPlace = placeMap.get(g.white); const bPlace = placeMap.get(g.black);
+        const wPlaceHtml = wPlace ? `<span class="agl-place">#${wPlace}</span>` : '';
+        const bPlaceHtml = bPlace ? `<span class="agl-place">#${bPlace}</span>` : '';
         const wCls = g.result === 'w' ? 'winner' : (g.result === 'b' ? 'loser' : '');
         const bCls = g.result === 'b' ? 'winner' : (g.result === 'w' ? 'loser' : '');
         html += `<div class="arenaGameLine">
           <span class="agl-res ${g.result === 'w' ? 'w' : (g.result === 'b' ? 'b' : 'd')}">${resStr}</span>
-          <span class="agl-players"><span class="${wCls}">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${wR?`<span class="agl-r">(${wR})</span>`:''}</span> <span class="agl-vs">vs</span> <span class="${bCls}">${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${bR?`<span class="agl-r">(${bR})</span>`:''}</span></span>
+          <span class="agl-players"><span class="${wCls}">${wPlaceHtml}${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${wR?`<span class="agl-r">(${wR})</span>`:''}</span> <span class="agl-vs">vs</span> <span class="${bCls}">${bPlaceHtml}${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${bR?`<span class="agl-r">(${bR})</span>`:''}</span></span>
         </div>`;
       }
       listEl.innerHTML = html;
@@ -1331,8 +1077,7 @@ const Arena = {
     let squares = '';
     for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) {
       const cls = 'sq ' + ((dr + dc) % 2 ? 'dark' : 'light');
-      const p = state.board[dr][dc];
-      let inner = '';
+      const p = state.board[dr][dc]; let inner = '';
       if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW ? 'w' : 'b'}">${Chess.pieceSvg(p)}</span>`; }
       squares += `<div class="${cls}">${inner}</div>`;
     }
@@ -1340,40 +1085,40 @@ const Arena = {
     return `<div class="arenaTopGamePlayers"><span class="playerRow">⚫ <span class="name" style="opacity:.6;">—</span></span><span class="time">—</span></div>
       <div class="arenaTopGameBoard">${squares}</div>
       <div class="arenaTopGamePlayers"><span class="playerRow">⚪ <span class="name" style="opacity:.6;">—</span></span><span class="time">—</span></div>
-      <div class="arenaTopGameLink" style="cursor:default; opacity:.55;">${label}</div>`;
+      <div style="text-align:center; font-size:11px; color:var(--muted); padding:2px 0;">${label}</div>`;
   },
 
-  renderTopGame(g) {
-    const state = Chess.parseFen(g.fen); let squares = '';
+  renderTopGame(g, placeMap) {
+    const state = Chess.parseFen(g.fen);
+    const lm = g.lastMove;
+    let squares = '';
     for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) {
-      const cls = 'sq ' + ((dr + dc) % 2 ? 'dark' : 'light');
-      const p = state.board[dr][dc];
-      let inner = '';
+      let cls = 'sq ' + ((dr + dc) % 2 ? 'dark' : 'light');
+      if (lm && ((lm.from[0] === dr && lm.from[1] === dc) || (lm.to[0] === dr && lm.to[1] === dc))) cls += ' lastmove';
+      const p = state.board[dr][dc]; let inner = '';
       if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW ? 'w' : 'b'}">${Chess.pieceSvg(p)}</span>`; }
       squares += `<div class="${cls}">${inner}</div>`;
     }
     const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
     const wR = g.whiteRating ? `<span class="prat">${g.whiteRating}</span>` : '';
     const bR = g.blackRating ? `<span class="prat">${g.blackRating}</span>` : '';
-    return `<div class="arenaTopGamePlayers"><span class="playerRow">⚫ <span class="name">${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span><span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeB)}</span></div><div class="arenaTopGameBoard">${squares}</div><div class="arenaTopGamePlayers"><span class="playerRow">⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div><div class="arenaTopGameLink">▶ – Смотреть партию</div>`;
+    const wPlace = placeMap && placeMap.get(g.white);
+    const bPlace = placeMap && placeMap.get(g.black);
+    const wPlaceHtml = wPlace ? `<span class="agl-place">#${wPlace}</span>` : '';
+    const bPlaceHtml = bPlace ? `<span class="agl-place">#${bPlace}</span>` : '';
+    return `<div class="arenaTopGamePlayers"><span class="playerRow">${bPlaceHtml}⚫ <span class="name">${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span><span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeB)}</span></div>
+      <div class="arenaTopGameBoard">${squares}</div>
+      <div class="arenaTopGamePlayers"><span class="playerRow">${wPlaceHtml}⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div>`;
   },
 
-  openPlayer(username) {
-    this.openPlayerName = username;
-    this.renderPlayerCard();
-  },
-  closePlayerCard() {
-    this.openPlayerName = null;
-    this.lastGamesHash = '';
-    this.renderGamesList();
-  },
+  openPlayer(username) { this.openPlayerName = username; this.renderPlayerCard(); },
+  closePlayerCard() { this.openPlayerName = null; this.lastGamesHash = ''; this.renderGamesList(); },
   renderPlayerCard() {
     const box = document.getElementById('arenaGamesList'); if (!box) return;
     if (!this.openPlayerName) { this.renderGamesList(); return; }
     const state = this.currentArenaState;
     const p = (state && state.participants || []).find(x => x.username === this.openPlayerName);
-    const done = this.lastDoneGames || [];
-    const live = this.lastLiveGames || [];
+    const done = this.lastDoneGames || []; const live = this.lastLiveGames || [];
     const myGames = done.filter(g => g.white === this.openPlayerName || g.black === this.openPlayerName);
     const myLive = live.filter(g => g.white === this.openPlayerName || g.black === this.openPlayerName);
     const played = myGames.length + myLive.length;
@@ -1460,10 +1205,8 @@ const Arena = {
       const aps = document.getElementById('arenaPageScreen');
       if (aps && aps.classList.contains('active')) this.loadPage();
     }
-    const as = document.getElementById('arenasScreen');
-    if (as && as.classList.contains('active')) this.refresh();
-    const ls = document.getElementById('lobbyScreen');
-    if (ls && ls.classList.contains('active')) TopArenas.refresh();
+    const as = document.getElementById('arenasScreen'); if (as && as.classList.contains('active')) this.refresh();
+    const ls = document.getElementById('lobbyScreen'); if (ls && ls.classList.contains('active')) TopArenas.refresh();
   },
   onFinished(arenaId, top3) {
     if (this.currentArenaId === arenaId) {
@@ -1472,10 +1215,8 @@ const Arena = {
       if (aps && aps.classList.contains('active')) { this.loadPage(); this.renderGamesList(); }
       if (top3 && top3.length) this.showWinnerBanner(top3);
     }
-    const as = document.getElementById('arenasScreen');
-    if (as && as.classList.contains('active')) this.refresh();
-    const ls = document.getElementById('lobbyScreen');
-    if (ls && ls.classList.contains('active')) TopArenas.refresh();
+    const as = document.getElementById('arenasScreen'); if (as && as.classList.contains('active')) this.refresh();
+    const ls = document.getElementById('lobbyScreen'); if (ls && ls.classList.contains('active')) TopArenas.refresh();
   }
 };
 
@@ -1483,14 +1224,8 @@ const Arena = {
 // PROFILE
 // ============================================================
 const Profile = {
-  gamesVisible: false,
-  selectedCategory: 'all',
-  chartRange: 'all',
-  chartData: null,
-  chartUserId: null,
-
+  gamesVisible: false, selectedCategory: 'all', chartRange: 'all', chartData: null, chartUserId: null,
   init() {},
-
   enter(username) {
     const target = username || (App.me && App.me.username); if (!target) return;
     App.profileViewing = target; this.gamesVisible = false; this.selectedCategory = 'all'; this.chartRange = 'all';
@@ -1501,13 +1236,7 @@ const Profile = {
       this.render(res.user, res.games, res.history, res.categoryHistory);
     });
   },
-
-  writeMessage() {
-    const target = App.profileViewing; if (!target) return;
-    if (App.me && target === App.me.username) { alert('Это ваш профиль'); return; }
-    Inbox.openWith(target);
-  },
-
+  writeMessage() { const target = App.profileViewing; if (!target) return; if (App.me && target === App.me.username) { alert('Это ваш профиль'); return; } Inbox.openWith(target); },
   toggleGames() {
     this.gamesVisible = !this.gamesVisible;
     const wrap = document.getElementById('profileGamesWrap'); const btn = document.getElementById('showGamesBtn');
@@ -1515,10 +1244,8 @@ const Profile = {
     if (this.gamesVisible) { wrap.classList.remove('profileGamesHidden'); btn.textContent = '📜 Скрыть партии'; }
     else { wrap.classList.add('profileGamesHidden'); btn.textContent = '📜 Показать партии'; }
   },
-
   render(user, games, history, categoryHistory) {
-    const avatarEl = document.getElementById('pAvatarBig');
-    if (!avatarEl) return;
+    const avatarEl = document.getElementById('pAvatarBig'); if (!avatarEl) return;
     avatarEl.className = 'profileAvatar' + (user.isBot ? ' botAvatar' : '');
     avatarEl.innerHTML = (user.isAdmin ? '<span class="pCrown">👑</span>' : '') + (user.isBot ? '🤖' : user.username.charAt(0).toUpperCase());
     const onlinePrefix = Utils.onlineDotHtml(user.online);
@@ -1554,41 +1281,21 @@ const Profile = {
     }
     const writeBtn = document.getElementById('pWriteBtn');
     if (writeBtn) { if (App.me && user.username !== App.me.username && !user.isBot) writeBtn.style.display = ''; else writeBtn.style.display = 'none'; }
-    this.chartData = { games, history, user, categoryHistory };
-    this.chartUserId = user.username;
-    this.renderChartControls();
-    this.renderChart();
-    this.renderGamesList(games, user.username);
+    this.chartData = { games, history, user, categoryHistory }; this.chartUserId = user.username;
+    this.renderChartControls(); this.renderChart(); this.renderGamesList(games, user.username);
   },
-
   renderChartControls() {
-    const wrap = document.getElementById('chartControls');
-    if (!wrap) return;
-    const ranges = [
-      { key: '1m', label: '1М' },
-      { key: '3m', label: '3М' },
-      { key: '6m', label: '6М' },
-      { key: '1y', label: '1Г' },
-      { key: 'all', label: 'ALL' }
-    ];
+    const wrap = document.getElementById('chartControls'); if (!wrap) return;
+    const ranges = [{key:'1m',label:'1М'},{key:'3m',label:'3М'},{key:'6m',label:'6М'},{key:'1y',label:'1Г'},{key:'all',label:'ALL'}];
     wrap.innerHTML = ranges.map(r => `<button class="chartRangeBtn ${r.key === this.chartRange ? 'active' : ''}" onclick="Profile.setChartRange('${r.key}')">${r.label}</button>`).join('');
   },
-
-  setChartRange(range) {
-    this.chartRange = range;
-    this.renderChartControls();
-    this.renderChart();
-  },
-
+  setChartRange(range) { this.chartRange = range; this.renderChartControls(); this.renderChart(); },
   renderChart() {
-    const wrap = document.getElementById('ratingChartWrap');
-    if (!wrap || !this.chartData) return;
+    const wrap = document.getElementById('ratingChartWrap'); if (!wrap || !this.chartData) return;
     const { games, user, categoryHistory } = this.chartData;
     const categories = [
-      { key:'bullet', label:'Пуля', color:'#fb7185' },
-      { key:'blitz', label:'Блиц', color:'#4ade80' },
-      { key:'rapid', label:'Рапид', color:'#38bdf8' },
-      { key:'classical', label:'Классика', color:'#a78bfa' }
+      { key:'bullet', label:'Пуля', color:'#fb7185' },{ key:'blitz', label:'Блиц', color:'#4ade80' },
+      { key:'rapid', label:'Рапид', color:'#38bdf8' },{ key:'classical', label:'Классика', color:'#a78bfa' }
     ];
     const now = Date.now(), dayMs = 86400000;
     let startTs = Number(user.createdAt) || now;
@@ -1596,33 +1303,20 @@ const Profile = {
     else if (this.chartRange === '3m') startTs = Math.max(startTs, now - 90*dayMs);
     else if (this.chartRange === '6m') startTs = Math.max(startTs, now - 180*dayMs);
     else if (this.chartRange === '1y') startTs = Math.max(startTs, now - 365*dayMs);
-    const startDay = Math.floor(startTs / dayMs) * dayMs;
-    const endDay = Math.floor(now / dayMs) * dayMs;
+    const startDay = Math.floor(startTs / dayMs) * dayMs; const endDay = Math.floor(now / dayMs) * dayMs;
     const allGames = (Array.isArray(categoryHistory) ? categoryHistory : (games || []));
     const W=900, H=300, PL=58, PR=18, PT=18, PB=34, IW=W-PL-PR, IH=H-PT-PB;
     const xOf = day => PL + ((day-startDay)/(Math.max(dayMs,endDay-startDay))) * IW;
     const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
     const series = categories.map(cat => {
-      const relevant = allGames.filter(g => g.category === cat.key)
-        .sort((a,b) => Number(a.finishedAt)-Number(b.finishedAt));
+      const relevant = allGames.filter(g => g.category === cat.key).sort((a,b) => Number(a.finishedAt)-Number(b.finishedAt));
       const byDay = new Map();
-      for (const g of relevant) {
-        const ts = Number(g.finishedAt);
-        const rating = Number(g.white === this.chartUserId ? g.whiteAfter : g.blackAfter);
-        if (Number.isFinite(ts) && Number.isFinite(rating)) byDay.set(Math.floor(ts/dayMs)*dayMs, rating);
-      }
+      for (const g of relevant) { const ts = Number(g.finishedAt); const rating = Number(g.white === this.chartUserId ? g.whiteAfter : g.blackAfter); if (Number.isFinite(ts) && Number.isFinite(rating)) byDay.set(Math.floor(ts/dayMs)*dayMs, rating); }
       if (!byDay.size) return { ...cat, points:[], latest:null, delta:null };
-      let last = null;
-      for (const [day, rating] of byDay) if (day < startDay) last = rating;
+      let last = null; for (const [day, rating] of byDay) if (day < startDay) last = rating;
       const points=[];
-      for(let d=startDay; d<=endDay; d+=dayMs) {
-        if (byDay.has(d)) last=byDay.get(d);
-        if (last !== null) points.push({day:d,rating:last});
-      }
-      for (const [day, rating] of byDay) {
-        if (day >= startDay && day <= endDay && !points.some(p=>p.day===day)) points.push({day,rating});
-      }
+      for(let d=startDay; d<=endDay; d+=dayMs) { if (byDay.has(d)) last=byDay.get(d); if (last !== null) points.push({day:d,rating:last}); }
+      for (const [day, rating] of byDay) if (day >= startDay && day <= endDay && !points.some(p=>p.day===day)) points.push({day,rating});
       points.sort((a,b)=>a.day-b.day);
       const inRange = [...byDay.entries()].filter(([day])=>day>=startDay && day<=endDay).map(([,rating])=>rating);
       const latest = points.length ? points[points.length-1].rating : null;
@@ -1630,40 +1324,22 @@ const Profile = {
       return { ...cat, points, latest, delta: first===null || latest===null ? null : latest-first };
     });
     const visible = series.filter(s=>s.points.length);
-    if (!visible.length) {
-      wrap.innerHTML = '<div class="ratingChartEmpty">Пока нет истории рейтинга за выбранный период</div>';
-      return;
-    }
+    if (!visible.length) { wrap.innerHTML = '<div class="ratingChartEmpty">Пока нет истории рейтинга за выбранный период</div>'; return; }
     const allValues = visible.flatMap(s=>s.points.map(p=>p.rating));
     const minV=Math.min(...allValues), maxV=Math.max(...allValues);
     const pad=Math.max(30,Math.ceil((maxV-minV)*.12));
     const yMin=Math.floor((minV-pad)/50)*50, yMax=Math.ceil((maxV+pad)/50)*50;
     const yOf = rating => PT+IH-((rating-yMin)/Math.max(1,yMax-yMin))*IH;
     const grid=[];
-    for(let i=0;i<=5;i++) {
-      const val=yMin+(yMax-yMin)*i/5, y=yOf(val);
-      grid.push(`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="var(--border,#3a3833)" stroke-dasharray="3,4"/><text x="${PL-9}" y="${y+4}" fill="var(--muted,#7d7a72)" font-size="11" text-anchor="end">${Math.round(val)}</text>`);
-    }
+    for(let i=0;i<=5;i++) { const val=yMin+(yMax-yMin)*i/5, y=yOf(val); grid.push(`<line x1="${PL}" y1="${y}" x2="${W-PR}" y2="${y}" stroke="var(--border,#3a3833)" stroke-dasharray="3,4"/><text x="${PL-9}" y="${y+4}" fill="var(--muted,#7d7a72)" font-size="11" text-anchor="end">${Math.round(val)}</text>`); }
     const labels=[];
-    for(let i=0;i<5;i++) {
-      const day=startDay+(endDay-startDay)*i/4;
-      labels.push(`<text x="${xOf(day)}" y="${H-8}" fill="var(--muted,#7d7a72)" font-size="11" text-anchor="middle">${new Date(day).toLocaleDateString('ru-RU',{day:'2-digit',month:'short'})}</text>`);
-    }
-    const paths=visible.map(s=>{
-      const path=s.points.map((p,i)=>`${i?'L':'M'}${xOf(p.day).toFixed(1)},${yOf(p.rating).toFixed(1)}`).join(' ');
-      return `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>${s.points.length===1?`<circle cx="${xOf(s.points[0].day)}" cy="${yOf(s.points[0].rating)}" r="3.5" fill="${s.color}"/>`:''}`;
-    }).join('');
-    const legend=series.map(s=>{
-      const value=s.latest===null?'—':s.latest;
-      const delta=s.delta===null?'':` <em style="color:${s.delta>0?'#4ade80':s.delta<0?'#fb7185':'var(--muted)'}">${s.delta>0?'+':''}${s.delta}</em>`;
-      return `<span class="ratingOverlayLegendItem"><i style="background:${s.color}"></i>${esc(s.label)} <b>${value}</b>${delta}</span>`;
-    }).join('');
+    for(let i=0;i<5;i++) { const day=startDay+(endDay-startDay)*i/4; labels.push(`<text x="${xOf(day)}" y="${H-8}" fill="var(--muted,#7d7a72)" font-size="11" text-anchor="middle">${new Date(day).toLocaleDateString('ru-RU',{day:'2-digit',month:'short'})}</text>`); }
+    const paths=visible.map(s=>{ const path=s.points.map((p,i)=>`${i?'L':'M'}${xOf(p.day).toFixed(1)},${yOf(p.rating).toFixed(1)}`).join(' '); return `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>${s.points.length===1?`<circle cx="${xOf(s.points[0].day)}" cy="${yOf(s.points[0].rating)}" r="3.5" fill="${s.color}"/>`:''}`; }).join('');
+    const legend=series.map(s=>{ const value=s.latest===null?'—':s.latest; const delta=s.delta===null?'':` <em style="color:${s.delta>0?'#4ade80':s.delta<0?'#fb7185':'var(--muted)'}">${s.delta>0?'+':''}${s.delta}</em>`; return `<span class="ratingOverlayLegendItem"><i style="background:${s.color}"></i>${esc(s.label)} <b>${value}</b>${delta}</span>`; }).join('');
     wrap.innerHTML = `<div class="ratingOverlayLegend">${legend}</div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="История рейтинга по всем режимам на одном графике" style="width:100%;height:auto;display:block">${grid.join('')}${paths}${labels.join('')}</svg>`;
   },
-
   renderGamesList(games, username) {
-    const el = document.getElementById('gamesList');
-    if (!el) return;
+    const el = document.getElementById('gamesList'); if (!el) return;
     if (!games || !games.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px">Партий пока нет</div>'; return; }
     const filtered = this.selectedCategory === 'all' ? games : games.filter(g => g.category === this.selectedCategory);
     if (!filtered.length) { el.innerHTML = '<div style="color:var(--muted);font-size:13px;text-align:center;padding:16px">Нет партий в этой категории</div>'; return; }
@@ -1709,36 +1385,16 @@ const Community = {
 // INBOX
 // ============================================================
 const Inbox = {
-  dialogs: [],
-  activeWith: null,
-  history: [],
-  unread: 0,
-  loaded: false,
-
+  dialogs: [], activeWith: null, history: [], unread: 0, loaded: false,
   init() {},
-  enter(param) {
-    if (param) this.selectDialog(param, true);
-    else if (!this.loaded) this.loadDialogs();
-    else this.renderDialogs();
-  },
-
-  loadDialogs() {
-    App.socket.emit('msgGetDialogs', (res) => {
-      if (!res || !res.ok) return;
-      this.dialogs = res.dialogs || [];
-      this.loaded = true;
-      this.renderDialogs();
-    });
-  },
-
+  enter(param) { if (param) this.selectDialog(param, true); else if (!this.loaded) this.loadDialogs(); else this.renderDialogs(); },
+  loadDialogs() { App.socket.emit('msgGetDialogs', (res) => { if (!res || !res.ok) return; this.dialogs = res.dialogs || []; this.loaded = true; this.renderDialogs(); }); },
   renderDialogs() {
     const box = document.getElementById('msgDialogs'); if (!box) return;
     if (!this.dialogs.length) { box.innerHTML = '<div class="msgEmpty">Диалогов пока нет</div>'; return; }
     const frag = document.createDocumentFragment();
     for (const d of this.dialogs) {
-      const other = d.other;
-      const lastText = (d.last_text || '').slice(0, 50);
-      const unread = d.unread || 0;
+      const other = d.other; const lastText = (d.last_text || '').slice(0, 50); const unread = d.unread || 0;
       const row = document.createElement('div');
       row.className = 'msgDialogRow' + (this.activeWith === other ? ' active' : '') + (unread ? ' unread' : '');
       row.dataset.with = other;
@@ -1747,137 +1403,68 @@ const Inbox = {
       row.addEventListener('click', () => this.selectDialog(other));
       frag.appendChild(row);
     }
-    box.innerHTML = '';
-    box.appendChild(frag);
+    box.innerHTML = ''; box.appendChild(frag);
   },
-
-  newDialog() {
-    const row = document.getElementById('msgNewRow'); if (!row) return;
-    row.style.display = row.style.display === 'none' ? 'flex' : 'none';
-    const inp = document.getElementById('msgNewInput');
-    if (inp && row.style.display !== 'none') { inp.value = ''; inp.focus(); }
-  },
-
+  newDialog() { const row = document.getElementById('msgNewRow'); if (!row) return; row.style.display = row.style.display === 'none' ? 'flex' : 'none'; const inp = document.getElementById('msgNewInput'); if (inp && row.style.display !== 'none') { inp.value = ''; inp.focus(); } },
   startWithInput() {
     const inp = document.getElementById('msgNewInput'); if (!inp) return;
     const name = inp.value.trim(); if (!name) return;
     if (App.me && name === App.me.username) { alert('Нельзя написать самому себе'); return; }
-    App.socket.emit('getPlayerCard', { username: name }, (res) => {
-      if (!res || !res.ok) { alert('Игрок не найден'); return; }
-      inp.value = '';
-      const row = document.getElementById('msgNewRow'); if (row) row.style.display = 'none';
-      this.selectDialog(name);
-    });
+    App.socket.emit('getPlayerCard', { username: name }, (res) => { if (!res || !res.ok) { alert('Игрок не найден'); return; } inp.value = ''; const row = document.getElementById('msgNewRow'); if (row) row.style.display = 'none'; this.selectDialog(name); });
   },
-
   selectDialog(other, open) {
     this.activeWith = other;
-    const nameEl = document.getElementById('inboxChatName');
-    const openBtn = document.getElementById('inboxOpenProfile');
-    const delBtn = document.getElementById('inboxDelete');
-    if (nameEl) nameEl.textContent = other;
-    if (openBtn) openBtn.style.display = '';
-    if (delBtn) delBtn.style.display = '';
+    const nameEl = document.getElementById('inboxChatName'); const openBtn = document.getElementById('inboxOpenProfile'); const delBtn = document.getElementById('inboxDelete');
+    if (nameEl) nameEl.textContent = other; if (openBtn) openBtn.style.display = ''; if (delBtn) delBtn.style.display = '';
     this.loadHistory(other);
     document.querySelectorAll('.msgDialogRow').forEach(r => r.classList.toggle('active', r.dataset.with === other));
     const wrap = document.querySelector('.inboxWrap'); if (wrap) wrap.classList.add('chatOpen');
   },
-
-  openWith(username) {
-    Router.go('inbox');
-    setTimeout(() => this.selectDialog(username), 50);
-  },
-
-  loadHistory(other) {
-    App.socket.emit('msgGetHistory', { with: other, markRead: true }, (res) => {
-      if (!res || !res.ok) return;
-      this.history = res.history || [];
-      this.renderHistory();
-    });
-  },
-
+  openWith(username) { Router.go('inbox'); setTimeout(() => this.selectDialog(username), 50); },
+  loadHistory(other) { App.socket.emit('msgGetHistory', { with: other, markRead: true }, (res) => { if (!res || !res.ok) return; this.history = res.history || []; this.renderHistory(); }); },
   renderHistory() {
     const box = document.getElementById('inboxChatBody'); if (!box) return;
     if (!this.activeWith) { box.innerHTML = '<div class="msgEmpty">Выберите диалог</div>'; return; }
     if (!this.history.length) { box.innerHTML = '<div class="msgEmpty">Нет сообщений. Начните первым!</div>'; return; }
-    const frag = document.createDocumentFragment();
-    let lastDate = '';
+    const frag = document.createDocumentFragment(); let lastDate = '';
     for (const m of this.history) {
       const ts = Number(m.created_at || m.createdAt || m.ts);
       const dateStr = Utils.fmtDate(ts);
-      if (dateStr !== lastDate) {
-        const div = document.createElement('div'); div.className = 'msgDateDivider'; div.textContent = dateStr;
-        frag.appendChild(div); lastDate = dateStr;
-      }
+      if (dateStr !== lastDate) { const div = document.createElement('div'); div.className = 'msgDateDivider'; div.textContent = dateStr; frag.appendChild(div); lastDate = dateStr; }
       const mine = (m.from_user === App.me.username);
-      const div = document.createElement('div');
-      div.className = 'msgBubble ' + (mine ? 'me' : 'them');
-      div.textContent = m.text;
-      const time = document.createElement('span'); time.className = 'msgTime'; time.textContent = Utils.fmtTimeHM(ts);
-      div.appendChild(time);
+      const div = document.createElement('div'); div.className = 'msgBubble ' + (mine ? 'me' : 'them'); div.textContent = m.text;
+      const time = document.createElement('span'); time.className = 'msgTime'; time.textContent = Utils.fmtTimeHM(ts); div.appendChild(time);
       frag.appendChild(div);
     }
-    box.innerHTML = '';
-    box.appendChild(frag);
-    box.scrollTop = box.scrollHeight;
+    box.innerHTML = ''; box.appendChild(frag); box.scrollTop = box.scrollHeight;
   },
-
   send(e) {
     e.preventDefault();
-    const inp = document.getElementById('inboxChatInput');
-    if (!inp || !this.activeWith) return;
+    const inp = document.getElementById('inboxChatInput'); if (!inp || !this.activeWith) return;
     const text = inp.value.trim(); if (!text) return;
-    App.socket.emit('msgSend', { to: this.activeWith, text }, (res) => {
-      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      inp.value = '';
-    });
+    App.socket.emit('msgSend', { to: this.activeWith, text }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } inp.value = ''; });
   },
-
   onNew(msg) {
     const other = (msg.from === App.me.username) ? msg.to : msg.from;
     if (Router.current.name === 'inbox' && this.activeWith === other) {
       this.history.push({ id: msg.id, from_user: msg.from, to_user: msg.to, text: msg.text, created_at: msg.ts, read_at: msg.readAt });
       this.renderHistory();
-      if (msg.from !== App.me.username) {
-        App.socket.emit('msgGetHistory', { with: other, markRead: true }, (res) => {
-          if (res && res.ok) { this.history = res.history; this.renderHistory(); }
-        });
-      }
-    } else if (msg.from !== App.me.username) {
-      Sounds.msg();
-    }
+      if (msg.from !== App.me.username) { App.socket.emit('msgGetHistory', { with: other, markRead: true }, (res) => { if (res && res.ok) { this.history = res.history; this.renderHistory(); } }); }
+    } else if (msg.from !== App.me.username) Sounds.msg();
     this.loadDialogs();
   },
-
   onDialogDeleted(other) {
-    this.dialogs = this.dialogs.filter(d => d.other !== other);
-    this.renderDialogs();
-    if (this.activeWith === other) {
-      this.activeWith = null; this.history = [];
-      this.renderHistory();
-      const n = document.getElementById('inboxChatName'); if (n) n.textContent = 'Выберите диалог';
-      const wrap = document.querySelector('.inboxWrap'); if (wrap) wrap.classList.remove('chatOpen');
-    }
+    this.dialogs = this.dialogs.filter(d => d.other !== other); this.renderDialogs();
+    if (this.activeWith === other) { this.activeWith = null; this.history = []; this.renderHistory(); const n = document.getElementById('inboxChatName'); if (n) n.textContent = 'Выберите диалог'; const wrap = document.querySelector('.inboxWrap'); if (wrap) wrap.classList.remove('chatOpen'); }
   },
-
   deleteCurrent() {
     if (!this.activeWith) return;
     if (!confirm('Удалить чат с ' + this.activeWith + '?')) return;
     const other = this.activeWith;
-    App.socket.emit('msgDeleteDialog', { with: other }, (res) => {
-      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      this.onDialogDeleted(other);
-    });
+    App.socket.emit('msgDeleteDialog', { with: other }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.onDialogDeleted(other); });
   },
-
   openProfile() { if (!this.activeWith) return; const other = this.activeWith; Router.go('profile', other); },
-
-  setUnread(count) {
-    this.unread = count || 0;
-    const badge = document.getElementById('msgBadge'); const um = document.getElementById('umInboxCount');
-    if (badge) { badge.textContent = this.unread > 99 ? '99+' : this.unread; badge.style.display = this.unread > 0 ? 'flex' : 'none'; }
-    if (um) um.textContent = this.unread > 0 ? this.unread : '';
-  }
+  setUnread(count) { this.unread = count || 0; const badge = document.getElementById('msgBadge'); const um = document.getElementById('umInboxCount'); if (badge) { badge.textContent = this.unread > 99 ? '99+' : this.unread; badge.style.display = this.unread > 0 ? 'flex' : 'none'; } if (um) um.textContent = this.unread > 0 ? this.unread : ''; }
 };
 
 // ============================================================
@@ -1886,11 +1473,9 @@ const Inbox = {
 const Mod = {
   el: null,
   openMenu(ev, msgId, username, scope, scopeId) {
-    this.close();
-    if (!App.me || !App.me.isMod) return;
+    this.close(); if (!App.me || !App.me.isMod) return;
     const rect = ev.target.getBoundingClientRect();
-    const menu = document.createElement('div');
-    menu.className = 'modMenu';
+    const menu = document.createElement('div'); menu.className = 'modMenu';
     menu.style.left = Math.min(window.innerWidth - 210, Math.max(8, rect.left - 60)) + 'px';
     menu.style.top = Math.min(window.innerHeight - 320, rect.bottom + 4) + 'px';
     menu.innerHTML = `<div class="lbl">Сообщение</div><button data-act="del">🗑 – Удалить сообщение</button><div class="sep"></div><div class="lbl">Игрок: ${Utils.escapeHtml(username)}</div>
@@ -1902,15 +1487,9 @@ const Mod = {
     document.body.appendChild(menu); this.el = menu;
     menu.addEventListener('click', (e) => {
       const act = e.target.dataset.act;
-      if (act === 'del') {
-        const evName = scope === 'arena' ? 'modDeleteArenaMessage' : 'modDeleteMessage';
-        const payload = scope === 'arena' ? { arenaId: scopeId, msgId } : { lobbyId: scopeId, msgId };
-        App.socket.emit(evName, payload, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); this.close(); });
-      } else if (act === 'mute') {
-        App.socket.emit('modMuteUser', { username, minutes: +e.target.dataset.min }, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); this.close(); });
-      } else if (act === 'unmute') {
-        App.socket.emit('modUnmuteUser', { username }, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); this.close(); });
-      }
+      if (act === 'del') { const evName = scope === 'arena' ? 'modDeleteArenaMessage' : 'modDeleteMessage'; const payload = scope === 'arena' ? { arenaId: scopeId, msgId } : { lobbyId: scopeId, msgId }; App.socket.emit(evName, payload, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); this.close(); }); }
+      else if (act === 'mute') { App.socket.emit('modMuteUser', { username, minutes: +e.target.dataset.min }, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); this.close(); }); }
+      else if (act === 'unmute') { App.socket.emit('modUnmuteUser', { username }, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); this.close(); }); }
     });
   },
   close() { if (this.el) { this.el.remove(); this.el = null; } }
@@ -1923,10 +1502,8 @@ document.addEventListener('click', (e) => { if (Mod.el && !Mod.el.contains(e.tar
 const Banners = {
   rematchFrom: null, drawFrom: null,
   init() {
-    const rAccept = document.getElementById('rematchBannerAccept');
-    const rDecline = document.getElementById('rematchBannerDecline');
-    const dAccept = document.getElementById('drawOfferBannerAccept');
-    const dDecline = document.getElementById('drawOfferBannerDecline');
+    const rAccept = document.getElementById('rematchBannerAccept'); const rDecline = document.getElementById('rematchBannerDecline');
+    const dAccept = document.getElementById('drawOfferBannerAccept'); const dDecline = document.getElementById('drawOfferBannerDecline');
     if (rAccept) rAccept.onclick = () => { if (!App.lobbyId) return; App.socket.emit('rematchRequest', { lobbyId: App.lobbyId }, () => {}); this.hideRematch(); };
     if (rDecline) rDecline.onclick = () => { if (App.lobbyId) App.socket.emit('rematchDecline', { lobbyId: App.lobbyId }); this.hideRematch(); };
     if (dAccept) dAccept.onclick = () => { if (App.lobbyId) App.socket.emit('drawAccept', { lobbyId: App.lobbyId }); this.hideDraw(); };
@@ -1940,11 +1517,7 @@ const Banners = {
     const btn = document.getElementById('grRematchBtn'); if (btn) { btn.classList.add('accept'); btn.textContent = 'ПРИНЯТЬ РЕВАНШ'; }
   },
   hideRematch() { this.rematchFrom = null; const b = document.getElementById('rematchBanner'); if (b) b.style.display = 'none'; },
-  showDrawOffer(from) {
-    this.drawFrom = from;
-    const b = document.getElementById('drawOfferBanner'); const t = document.getElementById('drawOfferBannerText');
-    if (!b || !t) return; t.textContent = `½ ${from} предлагает ничью`; b.style.display = 'flex';
-  },
+  showDrawOffer(from) { this.drawFrom = from; const b = document.getElementById('drawOfferBanner'); const t = document.getElementById('drawOfferBannerText'); if (!b || !t) return; t.textContent = `½ ${from} предлагает ничью`; b.style.display = 'flex'; },
   hideDraw() { this.drawFrom = null; const b = document.getElementById('drawOfferBanner'); if (b) b.style.display = 'none'; }
 };
 
@@ -1969,10 +1542,7 @@ const Game = {
     board.addEventListener('mousedown', (ev) => this.onMouseDown(ev));
     document.addEventListener('mousemove', (ev) => this.onMouseMove(ev));
     document.addEventListener('mouseup', (ev) => this.onMouseUp(ev));
-    board.addEventListener('contextmenu', (ev) => {
-      ev.preventDefault();
-      this.cancelPremove();
-    });
+    board.addEventListener('contextmenu', (ev) => { ev.preventDefault(); this.cancelPremove(); });
     const pw = document.getElementById('password'); if (pw) pw.addEventListener('keydown', (e) => { if (e.key === 'Enter') App.doLogin(); });
   },
 
@@ -1987,10 +1557,7 @@ const Game = {
 
   enter(lobbyId) {
     if (lobbyId && lobbyId.startsWith('sp_')) { Router.go('lobby'); return; }
-    if (lobbyId && App.lobbyId === lobbyId && (App.gameActive || App.gameEnded)) {
-      this.renderBoard(); this.renderMoves(); this.updateTimers();
-      return;
-    }
+    if (lobbyId && App.lobbyId === lobbyId && (App.gameActive || App.gameEnded)) { this.renderBoard(); this.renderMoves(); this.updateTimers(); return; }
     if (lobbyId && (!App.lobbyId || App.lobbyId !== lobbyId)) {
       App.lobbyId = lobbyId;
       App.socket.emit('getGameState', { lobbyId }, (res) => {
@@ -2024,8 +1591,7 @@ const Game = {
     const gr = document.getElementById('gameResultCompact'); if (gr) gr.classList.remove('show');
     const bar = document.getElementById('bigActionsRow'); if (bar) bar.style.display = '';
     const mp = document.getElementById('movesPanel'); if (mp) mp.classList.remove('compact');
-    const btn = document.getElementById('grRematchBtn');
-    if (btn) { btn.classList.remove('accept'); btn.disabled = false; btn.textContent = 'РЕВАНШ'; }
+    const btn = document.getElementById('grRematchBtn'); if (btn) { btn.classList.remove('accept'); btn.disabled = false; btn.textContent = 'РЕВАНШ'; }
     this.stopRematchSpinner();
   },
   showResultBar(winner, reason) {
@@ -2036,34 +1602,17 @@ const Game = {
     if (!winner) { text = '½ – Ничья'; cls = ''; }
     else if (winner === App.myColor) { text = (App.myColor === 'w' ? '1-0' : '0-1') + ' – Победа'; cls = 'win'; }
     else { text = (App.myColor === 'w' ? '0-1' : '1-0') + ' – Поражение'; cls = 'lose'; }
-    title.textContent = text; title.className = 'grTitle ' + cls;
-    sub.textContent = reason || '';
+    title.textContent = text; title.className = 'grTitle ' + cls; sub.textContent = reason || '';
     const rematchBtn = document.getElementById('grRematchBtn'); const pauseBtn = document.getElementById('grPauseBtn'); const findBtn = document.getElementById('grFindBtn');
     if (App.currentGameIsArena) {
       if (rematchBtn) rematchBtn.style.display = 'none';
       if (pauseBtn) { pauseBtn.style.display = 'block'; pauseBtn.textContent = (Arena.currentArenaState && Arena.currentArenaState.paused) ? '▶ ПРОДОЛЖИТЬ' : '⏸ ПАУЗА'; }
-      if (findBtn) {
-        findBtn.textContent = 'ПЕРЕЙТИ В ТУРНИР';
-        findBtn.onclick = () => {
-          const arenaId = App.currentArenaId;
-          if (!arenaId) { this.hideResultBar(); Router.go('arenas'); return; }
-          App.socket.emit('continueArenaPairing', { arenaId }, (res) => {
-            if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось вернуться в турнир'); return; }
-            this.hideResultBar(); Router.go('arenaPage', arenaId);
-          });
-        };
-      }
+      if (findBtn) { findBtn.textContent = 'ПЕРЕЙТИ В ТУРНИР'; findBtn.onclick = () => { const arenaId = App.currentArenaId; if (!arenaId) { this.hideResultBar(); Router.go('arenas'); return; } App.socket.emit('continueArenaPairing', { arenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось вернуться в турнир'); return; } this.hideResultBar(); Router.go('arenaPage', arenaId); }); }; }
     } else {
       if (rematchBtn) { rematchBtn.style.display = 'block'; rematchBtn.disabled = false; }
       if (pauseBtn) pauseBtn.style.display = 'none';
-      if (rematchBtn) {
-        if (Banners.rematchFrom) { rematchBtn.classList.add('accept'); rematchBtn.textContent = 'ПРИНЯТЬ РЕВАНШ'; }
-        else { rematchBtn.classList.remove('accept'); rematchBtn.textContent = 'РЕВАНШ'; }
-      }
-      if (findBtn) {
-        findBtn.textContent = 'НАЙТИ ДРУГОГО СОПЕРНИКА';
-        findBtn.onclick = () => { this.hideResultBar(); this.cleanupAndLeave(); };
-      }
+      if (rematchBtn) { if (Banners.rematchFrom) { rematchBtn.classList.add('accept'); rematchBtn.textContent = 'ПРИНЯТЬ РЕВАНШ'; } else { rematchBtn.classList.remove('accept'); rematchBtn.textContent = 'РЕВАНШ'; } }
+      if (findBtn) { findBtn.textContent = 'НАЙТИ ДРУГОГО СОПЕРНИКА'; findBtn.onclick = () => { this.hideResultBar(); this.cleanupAndLeave(); }; }
     }
     bar.classList.add('show');
     const mp = document.getElementById('movesPanel'); if (mp) mp.classList.add('compact');
@@ -2113,12 +1662,8 @@ const Game = {
     this.updateTimers();
     const cm = document.getElementById('chatMessages'); if (cm) cm.innerHTML = '';
     if (Array.isArray(s.chat)) s.chat.forEach(m => this.onChatMessage(m));
-
     const cur = Router.current;
-    if (!(cur && cur.name === 'game' && cur.param === lobbyId)) {
-      Router.go('game', lobbyId);
-    }
-
+    if (!(cur && cur.name === 'game' && cur.param === lobbyId)) Router.go('game', lobbyId);
     this.renderBoard(); this.renderMoves(); this.updateTurnIndicator();
     if (s.finished) this.hideResultBar();
     this.updateBackToGameBtn();
@@ -2185,8 +1730,7 @@ const Game = {
   },
   updateTurnIndicator(state) {
     if (!state) state = Chess.parseFen(App.currentFen);
-    const isMy = state.turn === App.myColor;
-    this.clockTurn = state.turn;
+    const isMy = state.turn === App.myColor; this.clockTurn = state.turn;
     if (App.gameActive && !App.gameEnded) { this.clockSyncedAt = performance.now(); this.clockMyAtSync = App.myTime; this.clockOppAtSync = App.oppTime; if (!this.clockLoopRunning) this.startClockLoop(); }
     const ts = document.getElementById('topStrip'); if (ts) ts.classList.toggle('active', App.gameActive && !App.gameEnded && state.turn !== App.myColor);
     const bs = document.getElementById('bottomStrip'); if (bs) bs.classList.toggle('active', App.gameActive && !App.gameEnded && state.turn === App.myColor);
@@ -2237,30 +1781,13 @@ const Game = {
     if (this.selected) {
       const from = this.selected;
       if (from[0] === r && from[1] === c) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); return; }
-      if (isMyPiece) {
-        this.selected = [r, c];
-        this.legalMoves = myTurn ? Chess.legalMovesFor(state, r, c) : Chess.pseudoMoves(state, r, c);
-        this.lastBoardHash = ''; this.renderBoard();
-        return;
-      }
-      if (myTurn) {
-        this.selected = null; this.legalMoves = [];
-        this.applyUserMove(from, [r, c], false);
-        this.lastBoardHash = ''; this.renderBoard();
-      } else {
-        this.premove = { from, to: [r, c], san: '' };
-        this.selected = null; this.legalMoves = [];
-        this.lastBoardHash = ''; this.renderBoard();
-      }
+      if (isMyPiece) { this.selected = [r, c]; this.legalMoves = myTurn ? Chess.legalMovesFor(state, r, c) : Chess.pseudoMoves(state, r, c); this.lastBoardHash = ''; this.renderBoard(); return; }
+      if (myTurn) { this.selected = null; this.legalMoves = []; this.applyUserMove(from, [r, c], false); this.lastBoardHash = ''; this.renderBoard(); }
+      else { this.premove = { from, to: [r, c], san: '' }; this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); }
       return;
     }
-    if (isMyPiece) {
-      this.selected = [r, c];
-      this.legalMoves = myTurn ? Chess.legalMovesFor(state, r, c) : Chess.pseudoMoves(state, r, c);
-      this.lastBoardHash = ''; this.renderBoard();
-    } else {
-      this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard();
-    }
+    if (isMyPiece) { this.selected = [r, c]; this.legalMoves = myTurn ? Chess.legalMovesFor(state, r, c) : Chess.pseudoMoves(state, r, c); this.lastBoardHash = ''; this.renderBoard(); }
+    else { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); }
   },
   applyUserMove(from, to, isPremove) {
     const state = Chess.parseFen(App.currentFen);
@@ -2308,13 +1835,11 @@ const Game = {
     const sameColor = Chess.isWhite(p) === (App.myColor === 'w');
     if (!sameColor) return;
     const leg = myTurn ? Chess.legalMovesFor(state, r, c) : Chess.pseudoMoves(state, r, c);
-    this.selected = [r, c];
-    this.legalMoves = leg;
+    this.selected = [r, c]; this.legalMoves = leg;
     this.dragging = { from: [r, c], active: false, premoveDrag: !myTurn };
     this.dragStartPos = { x: ev.clientX, y: ev.clientY };
     this.lastBoardHash = ''; this.renderBoard();
-    this.startDragGhost(p, ev.clientX, ev.clientY);
-    ev.preventDefault();
+    this.startDragGhost(p, ev.clientX, ev.clientY); ev.preventDefault();
   },
   startDragGhost(piece, x, y) {
     if (this.ghostEl) { this.ghostEl.remove(); this.ghostEl = null; }
@@ -2339,30 +1864,15 @@ const Game = {
     const from = this.dragging.from;
     this.dragging = null; this.clearGhost(); this.dragStartPos = null;
     if (!target) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); return; }
-    if (target[0] === from[0] && target[1] === from[1]) {
-      const state = Chess.parseFen(App.currentFen);
-      const myTurn = state.turn === App.myColor;
-      this.selected = from;
-      this.legalMoves = myTurn ? Chess.legalMovesFor(state, from[0], from[1]) : Chess.pseudoMoves(state, from[0], from[1]);
-      this.lastBoardHash = ''; this.renderBoard();
-      return;
-    }
+    if (target[0] === from[0] && target[1] === from[1]) { const state = Chess.parseFen(App.currentFen); const myTurn = state.turn === App.myColor; this.selected = from; this.legalMoves = myTurn ? Chess.legalMovesFor(state, from[0], from[1]) : Chess.pseudoMoves(state, from[0], from[1]); this.lastBoardHash = ''; this.renderBoard(); return; }
     const latestState = Chess.parseFen(App.currentFen);
     const nowMyTurn = latestState.turn === App.myColor;
     const latestPiece = latestState.board[from[0]][from[1]];
     const latestIsMine = latestPiece && Chess.isWhite(latestPiece) === (App.myColor === 'w');
-    if (!latestIsMine) {
-      this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard();
-      return;
-    }
-    if (nowMyTurn) {
-      const ok = this.applyUserMove(from, target, false);
-      if (!ok) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); }
-      return;
-    }
+    if (!latestIsMine) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); return; }
+    if (nowMyTurn) { const ok = this.applyUserMove(from, target, false); if (!ok) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); } return; }
     this.premove = { from, to: target, san: '' };
-    this.selected = null; this.legalMoves = [];
-    this.lastBoardHash = ''; this.renderBoard();
+    this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard();
   },
   flipBoard() { this.boardFlipped = !this.boardFlipped; this.lastBoardHash = ''; this.renderBoard(); },
   resign() { if (!App.gameActive || App.gameEnded) return; if (!confirm('Точно сдаться?')) return; App.socket.emit('resign', { lobbyId: App.lobbyId }); this.endGame(App.myColor === 'w' ? 'b' : 'w', 'Сдача', true, App.currentGameIsArena); },
@@ -2410,19 +1920,16 @@ const Game = {
   sendChat(e) {
     e.preventDefault();
     const input = document.getElementById('chatInput'); if (!input) return;
-    const text = input.value.trim();
-    if (!text || !App.lobbyId) return;
+    const text = input.value.trim(); if (!text || !App.lobbyId) return;
     App.socket.emit('chatMessage', { lobbyId: App.lobbyId, text });
     input.value = '';
   },
   onChatMessage(msg) {
     const box = document.getElementById('chatMessages'); if (!box) return;
     if (msg.id && this.chatMsgIds.has(msg.id)) return; if (msg.id) this.chatMsgIds.add(msg.id);
-    const div = document.createElement('div');
-    div.className = 'msg'; div.dataset.msgId = msg.id || '';
+    const div = document.createElement('div'); div.className = 'msg'; div.dataset.msgId = msg.id || '';
     const time = Utils.fmtMskHM(msg.ts);
-    let modHtml = '';
-    if (App.me && App.me.isMod) modHtml = `<span class="modBtn" title="Модерация">⚙</span>`;
+    let modHtml = ''; if (App.me && App.me.isMod) modHtml = `<span class="modBtn" title="Модерация">⚙</span>`;
     div.innerHTML = `<span class="u">${Utils.nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${Utils.escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
     if (App.me && App.me.isMod) { const btn = div.querySelector('.modBtn'); if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); Mod.openMenu(ev, msg.id, msg.user, 'game', App.lobbyId); }); }
     box.appendChild(div);
@@ -2450,15 +1957,13 @@ const Game = {
     if (payload.lobbyId && payload.lobbyId.startsWith('sp_')) { console.warn('[Game] Получен gameStart для self-play, игнорируем'); return; }
     if (payload.isSelfPlay) { console.warn('[Game] Получен gameStart с isSelfPlay, игнорируем'); return; }
     if (App.gameActive && !App.gameEnded && App.lobbyId && payload.lobbyId && payload.lobbyId !== App.lobbyId) { console.warn('[Game] Игнорирую gameStart для чужого lobbyId', payload.lobbyId, 'текущий', App.lobbyId); return; }
-
     const { color, opponent, opponentRating, time, inc, lobbyId, fen, chat, arenaId, arenaName, opponentIsAdmin, opponentIsMod, opponentOnline, opponentIsBot, isBot: isBotFlag } = payload;
     if (lobbyId) App.lobbyId = lobbyId;
     App.myColor = color || 'w'; App.inc = inc || 0;
     App.opponentName = opponent || 'Соперник'; App.opponentRating = opponentRating || null;
     App.opponentIsAdmin = (typeof opponentIsAdmin === 'boolean') ? opponentIsAdmin : (App.opponentName === 'PeshkaSasha');
     App.opponentOnline = (typeof opponentOnline === 'boolean') ? opponentOnline : true;
-    App.opponentIsBot = !!(opponentIsBot || isBotFlag);
-    App.isBotGame = !!isBotFlag || App.opponentIsBot;
+    App.opponentIsBot = !!(opponentIsBot || isBotFlag); App.isBotGame = !!isBotFlag || App.opponentIsBot;
     App.myTime = time * 60; App.oppTime = time * 60;
     App.currentFen = fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
     App.gameActive = true; App.gameEnded = false;
