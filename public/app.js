@@ -172,52 +172,38 @@ const Chess = {
   applyMove(state, from, to) {
     const copy = { board: state.board.map(row => row.slice()), turn: state.turn, castling: state.castling, ep: state.ep, half: state.half, full: state.full };
     const [fr, fc] = from, [tr, tc] = to;
-    const p = copy.board[fr][fc]; 
+    const p = copy.board[fr][fc];
     if (!p) return copy;
     const white = this.isWhite(p); const type = p.toLowerCase();
-    
-    if (type === 'p' && copy.ep) { 
-      const target = String.fromCharCode(97 + tc) + (8 - tr); 
-      if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null; 
+    if (type === 'p' && copy.ep) {
+      const target = String.fromCharCode(97 + tc) + (8 - tr);
+      if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null;
     }
-    
-    copy.board[tr][tc] = p; 
+    copy.board[tr][tc] = p;
     copy.board[fr][fc] = null;
-    
     if (type === 'p' && (tr === 0 || tr === 7)) copy.board[tr][tc] = white ? 'Q' : 'q';
-    
-    if (type === 'k' && Math.abs(tc - fc) === 2) { 
-      const row = fr; 
-      if (tc > fc) { 
-        copy.board[row][5] = copy.board[row][7]; 
-        copy.board[row][7] = null; 
-      } else { 
-        copy.board[row][3] = copy.board[row][0]; 
-        copy.board[row][0] = null; 
-      } 
+    if (type === 'k' && Math.abs(tc - fc) === 2) {
+      const row = fr;
+      if (tc > fc) { copy.board[row][5] = copy.board[row][7]; copy.board[row][7] = null; }
+      else { copy.board[row][3] = copy.board[row][0]; copy.board[row][0] = null; }
     }
-    
     let cast = copy.castling;
     if (type === 'k') cast = cast.replace(white ? /[KQ]/g : /[kq]/g, '');
-    if (type === 'r') { 
-      if (fr === 7 && fc === 0) cast = cast.replace('Q', ''); 
-      if (fr === 7 && fc === 7) cast = cast.replace('K', ''); 
-      if (fr === 0 && fc === 0) cast = cast.replace('q', ''); 
-      if (fr === 0 && fc === 7) cast = cast.replace('k', ''); 
+    if (type === 'r') {
+      if (fr === 7 && fc === 0) cast = cast.replace('Q', '');
+      if (fr === 7 && fc === 7) cast = cast.replace('K', '');
+      if (fr === 0 && fc === 0) cast = cast.replace('q', '');
+      if (fr === 0 && fc === 7) cast = cast.replace('k', '');
     }
     if (!cast || cast === '') cast = '-';
-    
-    let ep = '-'; 
+    let ep = '-';
     if (type === 'p' && Math.abs(tr - fr) === 2) ep = String.fromCharCode(97 + fc) + (8 - (fr + (tr - fr) / 2));
-    
-    copy.castling = cast; 
-    copy.ep = ep; 
-    copy.turn = white ? 'b' : 'w'; 
+    copy.castling = cast;
+    copy.ep = ep;
+    copy.turn = white ? 'b' : 'w';
     copy.full += 1;
-    
     const wasCapture = !!state.board[tr][tc] || (type === 'p' && fc !== tc);
     copy.half = (type === 'p' || wasCapture) ? 0 : (state.half + 1);
-    
     return copy;
   },
   legalMovesFor(state, r, c) {
@@ -398,7 +384,6 @@ const App = {
 
   _restoreSession(saved, done) {
     const finish = () => { if (typeof done === 'function') done(); };
-
     this.socket.emit('register', { username: saved.username, password: saved.password }, (res) => {
       if (!res || !res.ok) {
         this._autoLoginAttempts++;
@@ -410,14 +395,11 @@ const App = {
         finish();
         return;
       }
-
       this.me = res.user;
       this._autoLoginAttempts = 0;
       this.updateTopbarUser();
-
       let activeLobby = null;
       try { activeLobby = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
-
       if (activeLobby && !activeLobby.startsWith('sp_')) {
         this.socket.emit('getGameState', { lobbyId: activeLobby }, (r) => {
           if (r && r.ok && r.state && !r.state.isSelfPlay) {
@@ -432,7 +414,6 @@ const App = {
         });
         return;
       }
-
       this._afterRestoreFallback();
       finish();
     });
@@ -442,7 +423,6 @@ const App = {
     const hash = location.hash.replace(/^#\/?/, '');
     const parts = hash.split('/').filter(Boolean);
     const name = parts[0];
-
     if (name === 'game') {
       try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
       Router.go('lobby');
@@ -530,13 +510,11 @@ const App = {
     let saved = null;
     try { saved = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
     if (!saved) return;
-
     if (saved.startsWith('sp_')) {
       try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
       Game.updateBackToGameBtn();
       return;
     }
-
     this.socket.emit('getGameState', { lobbyId: saved }, (res) => {
       if (!res || !res.ok) {
         try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
@@ -752,17 +730,17 @@ const Router = {
     if (activeNotice) activeNotice.classList.remove('active');
     if (name !== 'watch' && Watch.autoRefreshHandle) { clearInterval(Watch.autoRefreshHandle); Watch.autoRefreshHandle = null; }
     if (name !== 'arenaPage' && Arena.currentArenaId) Arena.leaveRoom();
-    
+
     const map = { login: 'autorizeScreen', lobby: 'lobbyScreen', watch: 'watchScreen', arenas: 'arenasScreen', arenaPage: 'arenaPageScreen', profile: 'profileScreen', community: 'communityScreen', game: 'gameScreen', inbox: 'inboxScreen' };
     const screenId = map[name];
     if (!screenId) { this.show('lobbyScreen'); return; }
     this.show(screenId);
-    
+
     document.querySelectorAll('#mainNav a').forEach(a => {
       const nav = a.dataset.nav;
       a.classList.toggle('active', nav === name || (name === 'arenaPage' && nav === 'arenas'));
     });
-    
+
     switch (name) {
       case 'lobby': Lobby.enter(); break;
       case 'watch': Watch.enter(param); break;
@@ -1075,6 +1053,8 @@ const Arena = {
   cache: [], statesCache: {}, serverOffsetMs: 0, currentArenaId: null, currentArenaState: null,
   lastListHash: '', lastStateHash: '', lastGamesHash: '', loadBusy: false,
   pageRefreshHandle: null, statusTickHandle: null, gamesRefreshHandle: null, refreshHandle: null,
+  openPlayerName: null,
+  lastLiveGames: [], lastDoneGames: [],
   init() {},
   enterList() { this.refresh(true); },
   enterPage(arenaId) {
@@ -1083,6 +1063,8 @@ const Arena = {
     if (Watch.watchingGameId) Watch.stop();
     if (this.currentArenaId && this.currentArenaId !== arenaId) App.socket.emit('leaveArenaRoom', { arenaId: this.currentArenaId });
     this.currentArenaId = arenaId;
+    this.openPlayerName = null;
+    this.lastLiveGames = []; this.lastDoneGames = [];
     const chatEl = document.getElementById('arenaChatMessages');
     if (chatEl) chatEl.innerHTML = '';
     this.lastStateHash = ''; this.lastGamesHash = '';
@@ -1101,6 +1083,7 @@ const Arena = {
     if (this.pageRefreshHandle) { clearInterval(this.pageRefreshHandle); this.pageRefreshHandle = null; }
     if (this.statusTickHandle) { clearInterval(this.statusTickHandle); this.statusTickHandle = null; }
     if (this.gamesRefreshHandle) { clearInterval(this.gamesRefreshHandle); this.gamesRefreshHandle = null; }
+    this.openPlayerName = null;
   },
   refresh(force) {
     const as = document.getElementById('arenasScreen');
@@ -1246,13 +1229,12 @@ const Arena = {
       if (p.winStreak >= 3) streakTag = `<span class="streak">🔥${p.winStreak}</span>`;
       else if (p.drawStreak >= 2) streakTag = `<span class="streak">½${p.drawStreak}</span>`;
       const botCls = p.isBot ? 'botRow' : '';
-      return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''} ${botCls}"><span class="place ${placeCls}">${place}</span><span class="pname">${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
+      return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''} ${botCls}" data-username="${Utils.escapeHtml(p.username)}" onclick="Arena.openPlayer('${Utils.escapeHtml(p.username)}')"><span class="place ${placeCls}">${place}</span><span class="pname">${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
     }).join('');
   },
   filterParticipants() { if (this.currentArenaState && this.currentArenaId) { const arena = this.cache.find(a => a.id === this.currentArenaId); if (arena) this.renderParticipants(arena, this.currentArenaState); } },
   renderGamesList() {
-    const topEl = document.getElementById('arenaTopGame'); const listEl = document.getElementById('arenaGamesList');
-    if (!topEl || !listEl) return;
+    const box = document.getElementById('arenaGamesList'); if (!box) return;
     App.socket.emit('getArenaGames', { arenaId: this.currentArenaId }, (res) => {
       if (!res || typeof res !== 'object') return;
       const live = res.live || [], done = res.done || [];
@@ -1260,27 +1242,97 @@ const Arena = {
       if (pcEl) pcEl.textContent = res.participantsCount || 0; if (vcEl) vcEl.textContent = res.chatViewersCount || 0;
       const hash = JSON.stringify({ live: live.map(g => [g.lobbyId, g.fen, g.timeW, g.timeB]), done: done.slice(0, 30).map(g => [g.white, g.black, g.result, g.finishedAt]) });
       if (hash === this.lastGamesHash) return; this.lastGamesHash = hash;
-      const myName = App.me ? App.me.username : null;
-      const myLive = myName ? live.find(g => g.white === myName || g.black === myName) : null;
-      const topGame = myLive || live[0] || null;
-      if (topGame) { topEl.innerHTML = this.renderTopGame(topGame); const link = topEl.querySelector('.arenaTopGameLink'); if (link) link.onclick = () => Watch.watch(topGame.lobbyId); }
-      else topEl.innerHTML = '<div class="arenaTopGameEmpty">Сейчас никто не играет</div>';
-      if (!done.length) { listEl.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>'; return; }
-      listEl.innerHTML = done.slice(0, 50).map(g => {
-        const resChar = g.result === 'w' ? '1-0' : (g.result === 'b' ? '0-1' : '½-½');
-        const resCls = g.result === 'draw' ? 'd' : 'w';
-        const dateStr = Utils.fmtMskHM(g.finishedAt);
-        const wR = g.whiteRating ? `<span class="rating"> ${g.whiteRating}</span>` : ''; const bR = g.blackRating ? `<span class="rating"> ${g.blackRating}</span>` : '';
-        return `<div class="arenaGameCard"><div class="row1"><span class="name">⚪ ${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${wR}</span><span class="res ${resCls}">${resChar}</span></div><div class="row1"><span class="name">⚫ ${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${bR}</span></div><div class="row2"><span>завершена</span><span>${dateStr}</span></div></div>`;
-      }).join('');
+      this.lastLiveGames = live;
+      this.lastDoneGames = done;
+      if (this.openPlayerName) { this.renderPlayerCard(); return; }
+      if (!done.length && !live.length) { box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>'; return; }
+      let html = '';
+      for (const g of live) {
+        const wR = g.whiteRating || ''; const bR = g.blackRating || '';
+        html += `<div class="arenaGameLine live" onclick="Watch.watch('${g.lobbyId}')">
+          <span class="agl-res live">▶</span>
+          <span class="agl-players">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${wR?`<span class="agl-r">(${wR})</span>`:''} <span class="agl-vs">vs</span> ${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${bR?`<span class="agl-r">(${bR})</span>`:''}</span>
+          <span class="agl-score">${Utils.formatTime(g.timeW)} / ${Utils.formatTime(g.timeB)}</span>
+        </div>`;
+      }
+      for (const g of done.slice(0, 50)) {
+        const resStr = g.result === 'w' ? '1-0' : (g.result === 'b' ? '0-1' : '½-½');
+        const wR = g.whiteRating || ''; const bR = g.blackRating || '';
+        const wCls = g.result === 'w' ? 'winner' : (g.result === 'b' ? 'loser' : '');
+        const bCls = g.result === 'b' ? 'winner' : (g.result === 'w' ? 'loser' : '');
+        html += `<div class="arenaGameLine">
+          <span class="agl-res ${g.result === 'w' ? 'w' : (g.result === 'b' ? 'b' : 'd')}">${resStr}</span>
+          <span class="agl-players"><span class="${wCls}">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${wR?`<span class="agl-r">(${wR})</span>`:''}</span> <span class="agl-vs">vs</span> <span class="${bCls}">${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${bR?`<span class="agl-r">(${bR})</span>`:''}</span></span>
+        </div>`;
+      }
+      box.innerHTML = html;
     });
   },
-  renderTopGame(g) {
-    const state = Chess.parseFen(g.fen); let squares = '';
-    for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) { const cls = 'sq ' + ((dr + dc) % 2 ? 'dark' : 'light'); const p = state.board[dr][dc]; let inner = ''; if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW ? 'w' : 'b'}">${Chess.pieceSvg(p)}</span>`; } squares += `<div class="${cls}">${inner}</div>`; }
-    const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
-    const wR = g.whiteRating ? `<span class="prat">${g.whiteRating}</span>` : ''; const bR = g.blackRating ? `<span class="prat">${g.blackRating}</span>` : '';
-    return `<div class="arenaTopGamePlayers"><span class="playerRow">⚫ <span class="name">${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span><span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeB)}</span></div><div class="arenaTopGameBoard">${squares}</div><div class="arenaTopGamePlayers"><span class="playerRow">⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div><div class="arenaTopGameLink">▶ – Смотреть партию</div>`;
+  openPlayer(username) {
+    this.openPlayerName = username;
+    this.renderPlayerCard();
+  },
+  closePlayerCard() {
+    this.openPlayerName = null;
+    this.renderGamesList();
+  },
+  renderPlayerCard() {
+    const box = document.getElementById('arenaGamesList'); if (!box) return;
+    if (!this.openPlayerName) { this.renderGamesList(); return; }
+    const state = this.currentArenaState;
+    const p = (state.participants || []).find(x => x.username === this.openPlayerName);
+    const done = this.lastDoneGames || [];
+    const live = this.lastLiveGames || [];
+    const myGames = done.filter(g => g.white === this.openPlayerName || g.black === this.openPlayerName);
+    const myLive = live.filter(g => g.white === this.openPlayerName || g.black === this.openPlayerName);
+    const played = myGames.length + myLive.length;
+    let wins = 0, draws = 0, losses = 0, oppRatingSum = 0, oppRatingCount = 0, perfSum = 0, perfCount = 0;
+    for (const g of myGames) {
+      const iAmWhite = g.white === this.openPlayerName;
+      const myR = iAmWhite ? g.whiteRating : g.blackRating;
+      const oppR = iAmWhite ? g.blackRating : g.whiteRating;
+      if (oppR) { oppRatingSum += oppR; oppRatingCount++; }
+      let score = 0.5;
+      if (g.result === 'w') score = iAmWhite ? 1 : 0;
+      else if (g.result === 'b') score = iAmWhite ? 0 : 1;
+      if (score === 1) wins++; else if (score === 0) losses++; else draws++;
+      if (oppR) { perfSum += oppR + 400 * (score - 0.5) * 2; perfCount++; }
+    }
+    const perf = perfCount ? Math.round(perfSum / perfCount) : '—';
+    const avgOpp = oppRatingCount ? Math.round(oppRatingSum / oppRatingCount) : '—';
+    const winPct = played ? Math.round((wins / played) * 100) : 0;
+
+    let html = `<div class="arenaPlayerCard">
+      <div class="apc-head">
+        <div class="apc-name">${Utils.nickHtml(p ? p.username : this.openPlayerName, p && p.isAdmin, p && p.isMod, p && p.isBot)}</div>
+        <button class="apc-close" onclick="Arena.closePlayerCard()" title="Закрыть">✕</button>
+      </div>
+      <div class="apc-stats">
+        <div class="apc-row"><span>Сыграно партий</span><b>${played}</b></div>
+        <div class="apc-row"><span>Перформанс</span><b>${perf}</b></div>
+        <div class="apc-row"><span>Победы</span><b>${winPct}%</b></div>
+        <div class="apc-row"><span>Берсерк</span><b>0</b></div>
+        <div class="apc-row"><span>Средний рейтинг соперников</span><b>${avgOpp}</b></div>
+      </div>
+      <div class="apc-games-title">Партии</div>
+      <div class="apc-games">`;
+    const allMy = [...myLive.map(g => ({...g, live: true})), ...myGames];
+    if (!allMy.length) html += `<div class="apc-empty">Партий пока нет</div>`;
+    else {
+      for (const g of allMy) {
+        const iAmWhite = g.white === this.openPlayerName;
+        const opp = iAmWhite ? g.black : g.white;
+        const oppR = iAmWhite ? g.blackRating : g.whiteRating;
+        const resStr = g.live ? '▶' : (g.result === 'w' ? (iAmWhite ? '1-0' : '0-1') : (g.result === 'b' ? (iAmWhite ? '0-1' : '1-0') : '½-½'));
+        const resCls = g.live ? 'live' : (g.result === 'w' ? (iAmWhite ? 'w' : 'b') : (g.result === 'b' ? (iAmWhite ? 'b' : 'w') : 'd'));
+        html += `<div class="apc-game ${g.live ? 'live':''}">
+          <span class="apc-g-res ${resCls}">${resStr}</span>
+          <span class="apc-g-opp">${iAmWhite ? '⚪' : '⚫'} ${Utils.nickHtml(opp, false, false, false)}${oppR ? `<span class="apc-g-r">(${oppR})</span>` : ''}</span>
+        </div>`;
+      }
+    }
+    html += `</div></div>`;
+    box.innerHTML = html;
   },
   showWinnerBanner(top3) {
     const banner = document.getElementById('arenaWinnerBanner'); const podium = document.getElementById('awbPodium');
@@ -1826,7 +1878,6 @@ const Game = {
     board.addEventListener('mousedown', (ev) => this.onMouseDown(ev));
     document.addEventListener('mousemove', (ev) => this.onMouseMove(ev));
     document.addEventListener('mouseup', (ev) => this.onMouseUp(ev));
-    // ПКМ на доске — отмена премьюва / выделения
     board.addEventListener('contextmenu', (ev) => {
       ev.preventDefault();
       this.cancelPremove();
@@ -1834,7 +1885,6 @@ const Game = {
     const pw = document.getElementById('password'); if (pw) pw.addEventListener('keydown', (e) => { if (e.key === 'Enter') App.doLogin(); });
   },
 
-  // Отмена премьюва / сброс выделения по ПКМ
   cancelPremove() {
     let changed = false;
     if (this.premove) { this.premove = null; changed = true; }
@@ -1846,12 +1896,10 @@ const Game = {
 
   enter(lobbyId) {
     if (lobbyId && lobbyId.startsWith('sp_')) { Router.go('lobby'); return; }
-
     if (lobbyId && App.lobbyId === lobbyId && (App.gameActive || App.gameEnded)) {
       this.renderBoard(); this.renderMoves(); this.updateTimers();
       return;
     }
-
     if (lobbyId && (!App.lobbyId || App.lobbyId !== lobbyId)) {
       App.lobbyId = lobbyId;
       App.socket.emit('getGameState', { lobbyId }, (res) => {
@@ -2089,59 +2137,40 @@ const Game = {
     const tc = document.getElementById('topClock'); if (tc) tc.classList.toggle('low', App.oppTime <= 20);
     const bc = document.getElementById('bottomClock'); if (bc) bc.classList.toggle('low', App.myTime <= 20);
   },
-
-  // ---------- ВАЖНО: новая логика премьювов ----------
   onSquareClick(r, c) {
     if (!App.gameActive || App.gameEnded || this.viewIndex !== -1) return;
     const state = Chess.parseFen(App.currentFen);
     const myTurn = state.turn === App.myColor;
     const p = state.board[r][c];
     const isMyPiece = p && Chess.isWhite(p) === (App.myColor === 'w');
-
-    // Если выбрана фигура — либо пробуем походить/сделать премьюв на эту клетку.
     if (this.selected) {
       const from = this.selected;
-      // Клик по той же клетке — снять выделение
       if (from[0] === r && from[1] === c) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); return; }
-      // Клик по своей фигуре — перевыбрать
       if (isMyPiece) {
         this.selected = [r, c];
-        // Подсветка легальных ходов: при чужом ходе показываем «псевдовозможные», чтобы игрок
-        // видел, куда теоретически может пойти, но фактическая проверка — в момент исполнения.
-        this.legalMoves = myTurn
-          ? Chess.legalMovesFor(state, r, c)
-          : Chess.pseudoMoves(state, r, c);
+        this.legalMoves = myTurn ? Chess.legalMovesFor(state, r, c) : Chess.pseudoMoves(state, r, c);
         this.lastBoardHash = ''; this.renderBoard();
         return;
       }
-      // Клик по пустой/чужой клетке — ход/премьюв
       if (myTurn) {
-        // Сейчас наш ход — сразу пробуем выполнить реальный ход
         this.selected = null; this.legalMoves = [];
         this.applyUserMove(from, [r, c], false);
         this.lastBoardHash = ''; this.renderBoard();
       } else {
-        // Чужой ход — ставим премьюв (валидность проверим позже в tryApplyPremove)
         this.premove = { from, to: [r, c], san: '' };
         this.selected = null; this.legalMoves = [];
         this.lastBoardHash = ''; this.renderBoard();
       }
       return;
     }
-
-    // Если ничего не выбрано — начинаем выбор при клике на свою фигуру.
-    // Даже если сейчас чужой ход — разрешаем (это заготовка премьюва).
     if (isMyPiece) {
       this.selected = [r, c];
-      this.legalMoves = myTurn
-        ? Chess.legalMovesFor(state, r, c)
-        : Chess.pseudoMoves(state, r, c);
+      this.legalMoves = myTurn ? Chess.legalMovesFor(state, r, c) : Chess.pseudoMoves(state, r, c);
       this.lastBoardHash = ''; this.renderBoard();
     } else {
       this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard();
     }
   },
-
   applyUserMove(from, to, isPremove) {
     const state = Chess.parseFen(App.currentFen);
     const legal = Chess.legalMovesFor(state, from[0], from[1]);
@@ -2178,7 +2207,6 @@ const Game = {
     const mv = this.premove; this.premove = null;
     setTimeout(() => { this.applyUserMove(mv.from, mv.to, false); }, 30);
   },
-
   onMouseDown(ev) {
     if (ev.button !== 0) return;
     const sq = ev.target.closest('.sq'); if (!sq || sq.dataset.r == null) return;
@@ -2187,8 +2215,7 @@ const Game = {
     const p = state.board[r][c]; if (!p) return;
     const myTurn = state.turn === App.myColor;
     const sameColor = Chess.isWhite(p) === (App.myColor === 'w');
-    if (!sameColor) return; // чужую фигуру не тянем
-    // Разрешаем тянуть свою фигуру в любой момент (в т.ч. в чужой ход — это заготовка премьюва).
+    if (!sameColor) return;
     const leg = myTurn ? Chess.legalMovesFor(state, r, c) : Chess.pseudoMoves(state, r, c);
     this.selected = [r, c];
     this.legalMoves = leg;
@@ -2222,7 +2249,6 @@ const Game = {
     this.dragging = null; this.clearGhost(); this.dragStartPos = null;
     if (!target) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); return; }
     if (target[0] === from[0] && target[1] === from[1]) {
-      // Вернули на ту же клетку — просто оставляем выбор.
       const state = Chess.parseFen(App.currentFen);
       const myTurn = state.turn === App.myColor;
       this.selected = from;
@@ -2230,28 +2256,23 @@ const Game = {
       this.lastBoardHash = ''; this.renderBoard();
       return;
     }
-    // Решение принимаем по СВЕЖЕМУ состоянию доски на момент ОТПУСКАНИЯ.
     const latestState = Chess.parseFen(App.currentFen);
     const nowMyTurn = latestState.turn === App.myColor;
     const latestPiece = latestState.board[from[0]][from[1]];
     const latestIsMine = latestPiece && Chess.isWhite(latestPiece) === (App.myColor === 'w');
     if (!latestIsMine) {
-      // Фигуры уже нет (например, соперник её срубил) — просто сбрасываем.
       this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard();
       return;
     }
     if (nowMyTurn) {
-      // Уже наш ход — сразу пробуем реальный ход.
       const ok = this.applyUserMove(from, target, false);
       if (!ok) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); }
       return;
     }
-    // Ещё чужой ход — ставим премьюв без проверки легальности.
     this.premove = { from, to: target, san: '' };
     this.selected = null; this.legalMoves = [];
     this.lastBoardHash = ''; this.renderBoard();
   },
-
   flipBoard() { this.boardFlipped = !this.boardFlipped; this.lastBoardHash = ''; this.renderBoard(); },
   resign() { if (!App.gameActive || App.gameEnded) return; if (!confirm('Точно сдаться?')) return; App.socket.emit('resign', { lobbyId: App.lobbyId }); this.endGame(App.myColor === 'w' ? 'b' : 'w', 'Сдача', true, App.currentGameIsArena); },
   offerDraw() {
