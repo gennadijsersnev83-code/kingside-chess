@@ -176,7 +176,6 @@ const Chess = {
     if (!p) return copy;
     const white = this.isWhite(p); const type = p.toLowerCase();
     
-    // Взятие на проходе
     if (type === 'p' && copy.ep) { 
       const target = String.fromCharCode(97 + tc) + (8 - tr); 
       if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null; 
@@ -185,10 +184,8 @@ const Chess = {
     copy.board[tr][tc] = p; 
     copy.board[fr][fc] = null;
     
-    // Превращение пешки
     if (type === 'p' && (tr === 0 || tr === 7)) copy.board[tr][tc] = white ? 'Q' : 'q';
     
-    // Рокировка
     if (type === 'k' && Math.abs(tc - fc) === 2) { 
       const row = fr; 
       if (tc > fc) { 
@@ -200,7 +197,6 @@ const Chess = {
       } 
     }
     
-    // Обновление прав на рокировку
     let cast = copy.castling;
     if (type === 'k') cast = cast.replace(white ? /[KQ]/g : /[kq]/g, '');
     if (type === 'r') { 
@@ -211,7 +207,6 @@ const Chess = {
     }
     if (!cast || cast === '') cast = '-';
     
-    // Взятие на проходе (обновление)
     let ep = '-'; 
     if (type === 'p' && Math.abs(tr - fr) === 2) ep = String.fromCharCode(97 + fc) + (8 - (fr + (tr - fr) / 2));
     
@@ -220,7 +215,6 @@ const Chess = {
     copy.turn = white ? 'b' : 'w'; 
     copy.full += 1;
     
-    // 50 ходов (для ничьей)
     const wasCapture = !!state.board[tr][tc] || (type === 'p' && fc !== tc);
     copy.half = (type === 'p' || wasCapture) ? 0 : (state.half + 1);
     
@@ -382,9 +376,6 @@ const App = {
       this.updateTopbarUser();
     }
 
-    // ВАЖНО: сначала восстанавливаем сессию и активную игру, и только затем
-    // разрешаем роутеру обрабатывать hash — иначе после F5 пользователя
-    // «выбрасывает» из партии (роутер успевает применить hash до applyGameStateFromServer).
     if (saved) {
       this.restoring = true;
       this._restoreSession(saved, () => {
@@ -424,7 +415,6 @@ const App = {
       this._autoLoginAttempts = 0;
       this.updateTopbarUser();
 
-      // Приоритет: активная партия из localStorage
       let activeLobby = null;
       try { activeLobby = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
 
@@ -433,7 +423,6 @@ const App = {
           if (r && r.ok && r.state && !r.state.isSelfPlay) {
             App.lobbyId = activeLobby;
             Game.applyGameStateFromServer(r.state, activeLobby);
-            // даём отработать hashchange, который выставит Router.current = game/<id>
             setTimeout(() => { this.restoring = false; finish(); }, 0);
           } else {
             try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
@@ -454,8 +443,6 @@ const App = {
     const parts = hash.split('/').filter(Boolean);
     const name = parts[0];
 
-    // Активной партии нет — если hash указывает на игру, уводим на lobby,
-    // иначе оставляем роутеру разобрать hash самому.
     if (name === 'game') {
       try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
       Router.go('lobby');
@@ -539,7 +526,7 @@ const App = {
   },
 
   tryResumeGame() {
-    if (this.restoring) return; // не дублируем getGameState во время восстановления
+    if (this.restoring) return;
     let saved = null;
     try { saved = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
     if (!saved) return;
@@ -721,8 +708,6 @@ const Router = {
   apply() {
     const { name, param } = this.current;
 
-    // Пока идёт восстановление сессии/активной партии — не переключаем экраны,
-    // иначе после refresh пользователя «выбрасывает» с игры.
     if (App.restoring) return;
 
     if (App.me && App.gameActive && !App.gameEnded && (name === 'arenas' || name === 'arenaPage')) {
@@ -1841,13 +1826,27 @@ const Game = {
     board.addEventListener('mousedown', (ev) => this.onMouseDown(ev));
     document.addEventListener('mousemove', (ev) => this.onMouseMove(ev));
     document.addEventListener('mouseup', (ev) => this.onMouseUp(ev));
+    // ПКМ на доске — отмена премьюва / выделения
+    board.addEventListener('contextmenu', (ev) => {
+      ev.preventDefault();
+      this.cancelPremove();
+    });
     const pw = document.getElementById('password'); if (pw) pw.addEventListener('keydown', (e) => { if (e.key === 'Enter') App.doLogin(); });
+  },
+
+  // Отмена премьюва / сброс выделения по ПКМ
+  cancelPremove() {
+    let changed = false;
+    if (this.premove) { this.premove = null; changed = true; }
+    if (this.selected) { this.selected = null; this.legalMoves = []; changed = true; }
+    if (this.dragging) { this.dragging = null; this.clearGhost(); changed = true; }
+    this.dragStartPos = null;
+    if (changed) { this.lastBoardHash = ''; this.renderBoard(); }
   },
 
   enter(lobbyId) {
     if (lobbyId && lobbyId.startsWith('sp_')) { Router.go('lobby'); return; }
 
-    // Если партия уже активна и совпадает — просто перерисовать, не перезапрашивать.
     if (lobbyId && App.lobbyId === lobbyId && (App.gameActive || App.gameEnded)) {
       this.renderBoard(); this.renderMoves(); this.updateTimers();
       return;
@@ -1976,8 +1975,6 @@ const Game = {
     const cm = document.getElementById('chatMessages'); if (cm) cm.innerHTML = '';
     if (Array.isArray(s.chat)) s.chat.forEach(m => this.onChatMessage(m));
 
-    // Не дёргаем Router.go повторно, если уже на нужном экране/параметре —
-    // иначе возможен повторный getGameState и «Партия не найдена».
     const cur = Router.current;
     if (!(cur && cur.name === 'game' && cur.param === lobbyId)) {
       Router.go('game', lobbyId);
@@ -2092,24 +2089,59 @@ const Game = {
     const tc = document.getElementById('topClock'); if (tc) tc.classList.toggle('low', App.oppTime <= 20);
     const bc = document.getElementById('bottomClock'); if (bc) bc.classList.toggle('low', App.myTime <= 20);
   },
+
+  // ---------- ВАЖНО: новая логика премьювов ----------
   onSquareClick(r, c) {
     if (!App.gameActive || App.gameEnded || this.viewIndex !== -1) return;
     const state = Chess.parseFen(App.currentFen);
     const myTurn = state.turn === App.myColor;
-    if (!myTurn) {
-      const p = state.board[r][c]; const isMyPiece = p && Chess.isWhite(p) === (App.myColor === 'w');
-      if (this.selected) { const from = this.selected; if (from[0] === r && from[1] === c) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); return; } const piece = state.board[from[0]][from[1]]; if (piece && Chess.isWhite(piece) === (App.myColor === 'w')) { this.premove = { from, to: [r, c], san: '' }; this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); return; } else { this.selected = null; this.legalMoves = []; } }
-      if (isMyPiece) { this.selected = [r, c]; this.legalMoves = Chess.legalMovesFor(state, r, c); this.lastBoardHash = ''; this.renderBoard(); }
-      else { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); }
+    const p = state.board[r][c];
+    const isMyPiece = p && Chess.isWhite(p) === (App.myColor === 'w');
+
+    // Если выбрана фигура — либо пробуем походить/сделать премьюв на эту клетку.
+    if (this.selected) {
+      const from = this.selected;
+      // Клик по той же клетке — снять выделение
+      if (from[0] === r && from[1] === c) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); return; }
+      // Клик по своей фигуре — перевыбрать
+      if (isMyPiece) {
+        this.selected = [r, c];
+        // Подсветка легальных ходов: при чужом ходе показываем «псевдовозможные», чтобы игрок
+        // видел, куда теоретически может пойти, но фактическая проверка — в момент исполнения.
+        this.legalMoves = myTurn
+          ? Chess.legalMovesFor(state, r, c)
+          : Chess.pseudoMoves(state, r, c);
+        this.lastBoardHash = ''; this.renderBoard();
+        return;
+      }
+      // Клик по пустой/чужой клетке — ход/премьюв
+      if (myTurn) {
+        // Сейчас наш ход — сразу пробуем выполнить реальный ход
+        this.selected = null; this.legalMoves = [];
+        this.applyUserMove(from, [r, c], false);
+        this.lastBoardHash = ''; this.renderBoard();
+      } else {
+        // Чужой ход — ставим премьюв (валидность проверим позже в tryApplyPremove)
+        this.premove = { from, to: [r, c], san: '' };
+        this.selected = null; this.legalMoves = [];
+        this.lastBoardHash = ''; this.renderBoard();
+      }
       return;
     }
-    if (this.premove) { if (this.premove.to[0] === r && this.premove.to[1] === c) { this.premove = null; this.lastBoardHash = ''; this.renderBoard(); return; } }
-    if (this.selected) { const isLegal = this.legalMoves.some(([mr, mc]) => mr === r && mc === c); if (isLegal) { const from = this.selected; this.selected = null; this.legalMoves = []; this.applyUserMove(from, [r, c], false); return; } }
-    const p = state.board[r][c];
-    if (p && Chess.isWhite(p) === (App.myColor === 'w')) { this.selected = [r, c]; this.legalMoves = Chess.legalMovesFor(state, r, c); }
-    else { this.selected = null; this.legalMoves = []; }
-    this.lastBoardHash = ''; this.renderBoard();
+
+    // Если ничего не выбрано — начинаем выбор при клике на свою фигуру.
+    // Даже если сейчас чужой ход — разрешаем (это заготовка премьюва).
+    if (isMyPiece) {
+      this.selected = [r, c];
+      this.legalMoves = myTurn
+        ? Chess.legalMovesFor(state, r, c)
+        : Chess.pseudoMoves(state, r, c);
+      this.lastBoardHash = ''; this.renderBoard();
+    } else {
+      this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard();
+    }
   },
+
   applyUserMove(from, to, isPremove) {
     const state = Chess.parseFen(App.currentFen);
     const legal = Chess.legalMovesFor(state, from[0], from[1]);
@@ -2144,17 +2176,27 @@ const Game = {
     const ok = leg.some(([r, c]) => r === this.premove.to[0] && c === this.premove.to[1]);
     if (!ok) { this.premove = null; this.lastBoardHash = ''; this.renderBoard(); return; }
     const mv = this.premove; this.premove = null;
-    setTimeout(() => { this.applyUserMove(mv.from, mv.to, false); }, 50);
+    setTimeout(() => { this.applyUserMove(mv.from, mv.to, false); }, 30);
   },
+
   onMouseDown(ev) {
     if (ev.button !== 0) return;
     const sq = ev.target.closest('.sq'); if (!sq || sq.dataset.r == null) return;
     const r = +sq.dataset.r, c = +sq.dataset.c;
     const state = Chess.parseFen(App.currentFen);
     const p = state.board[r][c]; if (!p) return;
-    const myTurn = state.turn === App.myColor, sameColor = Chess.isWhite(p) === (App.myColor === 'w');
-    if (myTurn && sameColor) { const leg = Chess.legalMovesFor(state, r, c); if (!leg.length) return; this.selected = [r, c]; this.legalMoves = leg; this.dragging = { from: [r, c], active: false }; this.dragStartPos = { x: ev.clientX, y: ev.clientY }; this.lastBoardHash = ''; this.renderBoard(); this.startDragGhost(p, ev.clientX, ev.clientY); ev.preventDefault(); return; }
-    if (!myTurn && sameColor) { const leg = Chess.legalMovesFor(state, r, c); if (!leg.length) return; this.selected = [r, c]; this.legalMoves = leg; this.dragging = { from: [r, c], active: false, premoveDrag: true }; this.dragStartPos = { x: ev.clientX, y: ev.clientY }; this.lastBoardHash = ''; this.renderBoard(); this.startDragGhost(p, ev.clientX, ev.clientY); ev.preventDefault(); }
+    const myTurn = state.turn === App.myColor;
+    const sameColor = Chess.isWhite(p) === (App.myColor === 'w');
+    if (!sameColor) return; // чужую фигуру не тянем
+    // Разрешаем тянуть свою фигуру в любой момент (в т.ч. в чужой ход — это заготовка премьюва).
+    const leg = myTurn ? Chess.legalMovesFor(state, r, c) : Chess.pseudoMoves(state, r, c);
+    this.selected = [r, c];
+    this.legalMoves = leg;
+    this.dragging = { from: [r, c], active: false, premoveDrag: !myTurn };
+    this.dragStartPos = { x: ev.clientX, y: ev.clientY };
+    this.lastBoardHash = ''; this.renderBoard();
+    this.startDragGhost(p, ev.clientX, ev.clientY);
+    ev.preventDefault();
   },
   startDragGhost(piece, x, y) {
     if (this.ghostEl) { this.ghostEl.remove(); this.ghostEl = null; }
@@ -2176,24 +2218,40 @@ const Game = {
     if (!this.dragging) { this.dragStartPos = null; return; }
     if (!this.dragging.active) { this.dragging = null; this.clearGhost(); return; }
     const target = this.boardSquareFromEvent(ev);
-    const wasPremove = !!this.dragging.premoveDrag;
     const from = this.dragging.from;
     this.dragging = null; this.clearGhost(); this.dragStartPos = null;
     if (!target) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); return; }
-    if (target[0] === from[0] && target[1] === from[1]) { this.selected = from; this.legalMoves = Chess.legalMovesFor(Chess.parseFen(App.currentFen), from[0], from[1]); this.lastBoardHash = ''; this.renderBoard(); return; }
-    if (wasPremove) { this.premove = { from, to: target, san: '' }; this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); return; }
+    if (target[0] === from[0] && target[1] === from[1]) {
+      // Вернули на ту же клетку — просто оставляем выбор.
+      const state = Chess.parseFen(App.currentFen);
+      const myTurn = state.turn === App.myColor;
+      this.selected = from;
+      this.legalMoves = myTurn ? Chess.legalMovesFor(state, from[0], from[1]) : Chess.pseudoMoves(state, from[0], from[1]);
+      this.lastBoardHash = ''; this.renderBoard();
+      return;
+    }
+    // Решение принимаем по СВЕЖЕМУ состоянию доски на момент ОТПУСКАНИЯ.
     const latestState = Chess.parseFen(App.currentFen);
+    const nowMyTurn = latestState.turn === App.myColor;
     const latestPiece = latestState.board[from[0]][from[1]];
     const latestIsMine = latestPiece && Chess.isWhite(latestPiece) === (App.myColor === 'w');
-    if (latestState.turn !== App.myColor) {
-      if (latestIsMine) this.premove = { from, to: target, san: '' };
-      else this.premove = null;
+    if (!latestIsMine) {
+      // Фигуры уже нет (например, соперник её срубил) — просто сбрасываем.
       this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard();
       return;
     }
-    const ok = this.applyUserMove(from, target, false);
-    if (!ok) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); }
+    if (nowMyTurn) {
+      // Уже наш ход — сразу пробуем реальный ход.
+      const ok = this.applyUserMove(from, target, false);
+      if (!ok) { this.selected = null; this.legalMoves = []; this.lastBoardHash = ''; this.renderBoard(); }
+      return;
+    }
+    // Ещё чужой ход — ставим премьюв без проверки легальности.
+    this.premove = { from, to: target, san: '' };
+    this.selected = null; this.legalMoves = [];
+    this.lastBoardHash = ''; this.renderBoard();
   },
+
   flipBoard() { this.boardFlipped = !this.boardFlipped; this.lastBoardHash = ''; this.renderBoard(); },
   resign() { if (!App.gameActive || App.gameEnded) return; if (!confirm('Точно сдаться?')) return; App.socket.emit('resign', { lobbyId: App.lobbyId }); this.endGame(App.myColor === 'w' ? 'b' : 'w', 'Сдача', true, App.currentGameIsArena); },
   offerDraw() {
