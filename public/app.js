@@ -823,7 +823,15 @@ const Arena = {
   pageRefreshHandle: null, statusTickHandle: null, gamesRefreshHandle: null, refreshHandle: null,
   openPlayerName: null,
   lastLiveGames: [], lastDoneGames: [],
-  init() {},
+
+  init() {
+    // Гарантируем, что у панели партий есть position:relative и overlay-контейнер
+    document.addEventListener('DOMContentLoaded', () => this._ensureOverlay());
+    // На случай динамического ре-рендера
+    const origEnterPage = this.enterPage.bind(this);
+    this.enterPage = (arenaId) => { origEnterPage(arenaId); this._ensureOverlay(); };
+  },
+
   enterList() { this.refresh(true); },
   enterPage(arenaId) {
     if (!arenaId) { Router.go('arenas'); return; }
@@ -843,6 +851,7 @@ const Arena = {
     this.statusTickHandle = setInterval(() => this.tickStatus(), 1000);
     if (this.gamesRefreshHandle) clearInterval(this.gamesRefreshHandle);
     this.gamesRefreshHandle = setInterval(() => { const aps = document.getElementById('arenaPageScreen'); if (aps && aps.classList.contains('active')) this.renderGamesList(); }, 3000);
+    this._ensureOverlay();
   },
   leaveRoom() {
     if (Watch.watchingGameId) Watch.stop();
@@ -993,6 +1002,31 @@ const Arena = {
   },
   filterParticipants() { if (this.currentArenaState && this.currentArenaId) { const arena = this.cache.find(a => a.id === this.currentArenaId); if (arena) this.renderParticipants(arena, this.currentArenaState); } },
 
+  // --- overlay-карточка поверх панели партий ---
+  _ensureOverlay() {
+    const listEl = document.getElementById('arenaGamesList');
+    if (!listEl) return null;
+    const parent = listEl.parentElement;
+    if (!parent) return null;
+    parent.style.position = 'relative';
+    // ограничиваем высоту панели, чтобы не выпирало вниз
+    if (!parent.style.maxHeight) parent.style.maxHeight = 'none';
+    let ov = document.getElementById('arenaPlayerOverlay');
+    if (!ov) {
+      ov = document.createElement('div');
+      ov.id = 'arenaPlayerOverlay';
+      ov.style.cssText = 'position:absolute; inset:0; background:var(--panel, #1e1d1a); z-index:20; display:none; overflow-y:auto; padding:10px 12px 16px; border-radius:6px;';
+      parent.appendChild(ov);
+    }
+    return ov;
+  },
+  _hideLeaderPanel(hide) {
+    const topEl = document.getElementById('arenaTopGame');
+    const listEl = document.getElementById('arenaGamesList');
+    if (topEl) topEl.style.display = hide ? 'none' : '';
+    if (listEl) listEl.style.display = hide ? 'none' : '';
+  },
+
   renderGamesList() {
     const topEl = document.getElementById('arenaTopGame');
     const listEl = document.getElementById('arenaGamesList');
@@ -1004,13 +1038,12 @@ const Arena = {
       if (pcEl) pcEl.textContent = res.participantsCount || 0; if (vcEl) vcEl.textContent = res.chatViewersCount || 0;
       this.lastLiveGames = live; this.lastDoneGames = done;
 
-      // Место игрока для карточки лидера (берём из текущей турнирной таблицы)
       const placeMap = new Map();
       if (this.currentArenaState && Array.isArray(this.currentArenaState.participants)) {
         this.currentArenaState.participants.forEach((p, i) => placeMap.set(p.username, i + 1));
       }
 
-      // --- Партия лидеров (без кнопки, весь блок кликабелен) ---
+      // Партия лидеров
       if (topEl) {
         const myName = App.me ? App.me.username : null;
         const myLive = myName ? live.find(g => g.white === myName || g.black === myName) : null;
@@ -1034,6 +1067,7 @@ const Arena = {
         }
       }
 
+      // Если открыта карточка игрока — рисуем только её в overlay, а панель скрываем
       if (this.openPlayerName) { this.renderPlayerCard(); return; }
 
       const hash = JSON.stringify({
@@ -1111,11 +1145,27 @@ const Arena = {
       <div class="arenaTopGamePlayers"><span class="playerRow">${wPlaceHtml}⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div>`;
   },
 
-  openPlayer(username) { this.openPlayerName = username; this.renderPlayerCard(); },
-  closePlayerCard() { this.openPlayerName = null; this.lastGamesHash = ''; this.renderGamesList(); },
+  // Открывает overlay-карточку поверх панели партий
+  openPlayer(username) {
+    this.openPlayerName = username;
+    this._hideLeaderPanel(true);
+    const ov = this._ensureOverlay();
+    if (ov) ov.style.display = 'block';
+    this.renderPlayerCard();
+  },
+
+  closePlayerCard() {
+    this.openPlayerName = null;
+    const ov = document.getElementById('arenaPlayerOverlay');
+    if (ov) { ov.style.display = 'none'; ov.innerHTML = ''; }
+    this._hideLeaderPanel(false);
+    this.lastGamesHash = '';
+    this.renderGamesList();
+  },
+
   renderPlayerCard() {
-    const box = document.getElementById('arenaGamesList'); if (!box) return;
-    if (!this.openPlayerName) { this.renderGamesList(); return; }
+    const ov = this._ensureOverlay(); if (!ov) return;
+    if (!this.openPlayerName) { ov.style.display = 'none'; ov.innerHTML = ''; return; }
     const state = this.currentArenaState;
     const p = (state && state.participants || []).find(x => x.username === this.openPlayerName);
     const done = this.lastDoneGames || []; const live = this.lastLiveGames || [];
@@ -1167,7 +1217,7 @@ const Arena = {
       }
     }
     html += `</div></div>`;
-    box.innerHTML = html;
+    ov.innerHTML = html;
   },
 
   showWinnerBanner(top3) {
