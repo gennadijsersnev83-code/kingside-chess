@@ -1002,44 +1002,44 @@ const Arena = {
   },
   filterParticipants() { if (this.currentArenaState && this.currentArenaId) { const arena = this.cache.find(a => a.id === this.currentArenaId); if (arena) this.renderParticipants(arena, this.currentArenaState); } },
 
-  _ensureOverlay() {
-    const panel = document.querySelector('.arenaGamesPanel') || document.querySelector('.arenaRightCol');
-    if (!panel) return null;
-  
-    panel.style.position = 'relative';
-    panel.style.display = 'flex';
-    panel.style.flexDirection = 'column';
-    panel.style.overflow = 'hidden';
-    if (!panel.style.height) panel.style.height = '600px';
-    if (!panel.style.maxHeight) panel.style.maxHeight = '600px';
-  
-    // Ищем существующий body в панели, не пересоздаём
-    let body = panel.querySelector('.arenaGamesBody');
-    if (!body) {
-      body = document.createElement('div');
-      body.className = 'arenaGamesBody';
-      body.style.cssText = 'position:relative; flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden;';
-      panel.appendChild(body);
-    }
-  
-    // Переносим партию лидеров и список внутрь body, если они ещё не там
-    const topEl = document.getElementById('arenaTopGame');
-    const listEl = document.getElementById('arenaGamesList');
-    if (topEl && topEl.parentElement !== body) body.appendChild(topEl);
-    if (listEl && listEl.parentElement !== body) body.appendChild(listEl);
-  
-    // Overlay тоже внутри body
-    let ov = document.getElementById('arenaPlayerOverlay');
-    if (!ov) {
-      ov = document.createElement('div');
-      ov.id = 'arenaPlayerOverlay';
-      ov.style.cssText = 'position:absolute; inset:0; background:var(--panel, #1e1d1a); z-index:20; display:none; overflow-y:auto; overflow-x:hidden; padding:10px 12px 16px; border-radius:6px;';
-      body.appendChild(ov);
-    } else if (ov.parentElement !== body) {
-      body.appendChild(ov);
-    }
-    return ov;
+_ensureOverlay() {
+  const panel = document.querySelector('.arenaGamesPanel') || document.querySelector('.arenaRightCol');
+  if (!panel) return null;
+
+  panel.style.position = 'relative';
+  panel.style.display = 'flex';
+  panel.style.flexDirection = 'column';
+  panel.style.overflow = 'hidden';
+  if (!panel.style.height) panel.style.height = '600px';
+  if (!panel.style.maxHeight) panel.style.maxHeight = '600px';
+
+  // Ищем существующий body в панели, не пересоздаём
+  let body = panel.querySelector('.arenaGamesBody');
+  if (!body) {
+    body = document.createElement('div');
+    body.className = 'arenaGamesBody';
+    body.style.cssText = 'position:relative; flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden;';
+    panel.appendChild(body);
   }
+
+  // Переносим партию лидеров и список внутрь body, если они ещё не там
+  const topEl = document.getElementById('arenaTopGame');
+  const listEl = document.getElementById('arenaGamesList');
+  if (topEl && topEl.parentElement !== body) body.appendChild(topEl);
+  if (listEl && listEl.parentElement !== body) body.appendChild(listEl);
+
+  // Overlay тоже внутри body
+  let ov = document.getElementById('arenaPlayerOverlay');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'arenaPlayerOverlay';
+    ov.style.cssText = 'position:absolute; inset:0; background:var(--panel, #1e1d1a); z-index:20; display:none; overflow-y:auto; overflow-x:hidden; padding:10px 12px 16px; border-radius:6px;';
+    body.appendChild(ov);
+  } else if (ov.parentElement !== body) {
+    body.appendChild(ov);
+  }
+  return ov;
+}
   _hideLeaderPanel(hide) {
     const topEl = document.getElementById('arenaTopGame');
     const listEl = document.getElementById('arenaGamesList');
