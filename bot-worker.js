@@ -38,7 +38,6 @@ function ttKey(state) {
 function ttGet(k) { return TT_CACHE.get(k); }
 function ttSet(k, d, s, flag) {
   if (TT_CACHE.size > TT_MAX) {
-    // простая эвикция: очищаем половину через итератор
     let i = 0;
     for (const key of TT_CACHE.keys()) {
       TT_CACHE.delete(key);
@@ -236,17 +235,14 @@ function botEval(state) {
     score += white ? v : -v;
   }
 
-  // Bishop pair
   if (whiteBishops >= 2) score += 30;
   if (blackBishops >= 2) score -= 30;
 
-  // Doubled pawns
   for (let f = 0; f < 8; f++) {
     if (whitePawnsByFile[f] > 1) score -= 15 * (whitePawnsByFile[f] - 1);
     if (blackPawnsByFile[f] > 1) score += 15 * (blackPawnsByFile[f] - 1);
   }
 
-  // Isolated pawns
   for (let f = 0; f < 8; f++) {
     if (whitePawnsByFile[f] > 0) {
       const left = f > 0 ? whitePawnsByFile[f-1] : 0;
@@ -260,7 +256,6 @@ function botEval(state) {
     }
   }
 
-  // Passed pawns
   for (const [r, c] of whitePawnRanks) {
     let passed = true;
     for (const [br, bc] of blackPawnRanks) {
@@ -284,7 +279,6 @@ function botEval(state) {
     }
   }
 
-  // Rooks on open/semi-open files
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     if (p.toLowerCase() !== 'r') continue;
@@ -295,7 +289,6 @@ function botEval(state) {
     else if (ownPawns[c] === 0) score += white ? 12 : -12;
   }
 
-  // Bishops: blocked by own pawns penalty
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     if (p.toLowerCase() !== 'b') continue;
@@ -313,7 +306,6 @@ function botEval(state) {
     if (blocked >= 2) score += white ? -10 : 10;
   }
 
-  // Queen centralization (mild)
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
     if (p.toLowerCase() === 'q') {
@@ -322,7 +314,6 @@ function botEval(state) {
     }
   }
 
-  // King safety (only middlegame)
   if (!endgame) {
     if (wK) {
       const shieldW = [[wK[0]-1, wK[1]-1],[wK[0]-1, wK[1]],[wK[0]-1, wK[1]+1]]
@@ -336,7 +327,6 @@ function botEval(state) {
     }
   }
 
-  // Mobility (simplified, cheap: count pseudo moves)
   let wm = 0, bm = 0;
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
@@ -345,11 +335,9 @@ function botEval(state) {
   }
   score += (wm - bm) * 2;
 
-  // Check bonuses (light)
   if (botInCheck(state, true)) score -= 200;
   if (botInCheck(state, false)) score += 200;
 
-  // Draw by 50-move rule
   if (state.half >= 100) score = 0;
 
   return score;
@@ -620,7 +608,7 @@ function botQuiescence(state, alpha, beta, depthLeft, qdepth) {
     const target = state.board[t[0]][t[1]];
     const piece = state.board[f[0]][f[1]];
     if (target) return true;
-    if (piece && piece.toLowerCase() === 'p' && f[1] !== t[1]) return true; // ep
+    if (piece && piece.toLowerCase() === 'p' && f[1] !== t[1]) return true;
     return false;
   });
   captures.sort((a, b) => moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]));
@@ -753,12 +741,36 @@ function findMateInOne(state, white) {
   return null;
 }
 
+function findMateInTwo(state, white) {
+  const moves = botAllLegalMoves(state, white);
+  for (const [from, to] of moves) {
+    const next = botApplyMove(state, from, to);
+    const oppWhite = next.turn === 'w';
+    if (botInCheck(next, oppWhite) && botAllLegalMoves(next, oppWhite).length === 0) continue;
+    const oppMoves = botAllLegalMoves(next, oppWhite);
+    if (oppMoves.length === 0) continue;
+    let allLeadToMate = true;
+    for (const [of, ot] of oppMoves) {
+      const after = botApplyMove(next, of, ot);
+      const myMoves = botAllLegalMoves(after, white);
+      let foundMate = false;
+      for (const [mf, mt] of myMoves) {
+        const mateState = botApplyMove(after, mf, mt);
+        const opp2 = mateState.turn === 'w';
+        if (botInCheck(mateState, opp2) && botAllLegalMoves(mateState, opp2).length === 0) { foundMate = true; break; }
+      }
+      if (!foundMate) { allLeadToMate = false; break; }
+    }
+    if (allLeadToMate) return [from, to];
+  }
+  return null;
+}
+
 // ============================================================
 // BOT PARAMS (RATING-BASED)
 // ============================================================
 function getBotParams(rating, baseTimeMin, timeLeftSec = baseTimeMin * 60, incrementSec = 0) {
   let depth, noise;
-  // Базовые уровни: лёгкий ~1000, средний ~1300, сложный ~1700+, мастер ~2000+
   if (rating < 1100)      { depth = 1; noise = 80; }
   else if (rating < 1250) { depth = 2; noise = 35; }
   else if (rating < 1400) { depth = 2; noise = 18; }
@@ -769,7 +781,6 @@ function getBotParams(rating, baseTimeMin, timeLeftSec = baseTimeMin * 60, incre
   else if (rating < 2300) { depth = 6; noise = 0; }
   else                    { depth = 7; noise = 0; }
 
-  // Ограничения по контролю времени
   if (baseTimeMin <= 1) depth = Math.min(depth, 2);
   else if (baseTimeMin <= 2) depth = Math.min(depth, 3);
   else if (baseTimeMin <= 3) depth = Math.min(depth, 4);
@@ -780,7 +791,6 @@ function getBotParams(rating, baseTimeMin, timeLeftSec = baseTimeMin * 60, incre
   const left = Math.max(0, Number(timeLeftSec) || 0);
   const inc = Math.max(0, Number(incrementSec) || 0);
 
-  // Адаптивный time budget
   let timeBudgetMs;
   if (left <= 2) timeBudgetMs = Math.max(20, left * 1000 * 0.08);
   else if (left <= 5) timeBudgetMs = Math.max(50, left * 1000 * 0.10);
@@ -791,12 +801,14 @@ function getBotParams(rating, baseTimeMin, timeLeftSec = baseTimeMin * 60, incre
   if (inc > 0) timeBudgetMs += Math.min(inc * 1000 * 0.5, 800);
   timeBudgetMs = Math.min(timeBudgetMs, 4000);
 
-  // Жёсткие ограничения по времени
   if (left <= 3) depth = Math.min(depth, 2);
   else if (left <= 8) depth = Math.min(depth, 3);
   else if (left <= 18) depth = Math.min(depth, 4);
   else if (left <= 35 && inc < 2) depth = Math.min(depth, 5);
   else if (left <= 60 && inc === 0) depth = Math.min(depth, 5);
+
+  // Мастер всегда получает больше времени, чтобы не тупить
+  if (rating >= 1900) timeBudgetMs = Math.max(timeBudgetMs, 800);
 
   if (left <= 8 && rating >= 1400) noise = Math.max(noise, 3);
   return { depth, noise, timeBudgetMs };
@@ -814,7 +826,6 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
 
   const moveCount = state.full;
 
-  // 1) Дебютная книга
   if (moveCount <= 15 && historyLine) {
     const bm = bookMove(fen, historyLine);
     if (bm) {
@@ -825,13 +836,15 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
 
   const params = getBotParams(rating, baseTimeMin, timeLeftSec, incrementSec);
 
-  // 2) Быстрый мат в 1 для мастеров
   if (rating >= 1800) {
     const mate = findMateInOne(state, white);
     if (mate) return mate;
   }
+  if (rating >= 1900) {
+    const mate2 = findMateInTwo(state, white);
+    if (mate2) return mate2;
+  }
 
-  // 3) Дебютные эвристики — сдвигаем оценку ходов
   const openingPhase = moveCount <= 12;
   const openingBonus = openingPhase
     ? new Map(moves.map(([from, to]) => [uciFromTo(from, to), openingHeuristic(state, from, to, moveCount)]))
@@ -872,7 +885,6 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
     if (Date.now() > SEARCH_DEADLINE) break;
   }
 
-  // 4) Дополнительная рандомизация для слабых уровней
   if (rating < 1100 && Math.random() < 0.45) {
     const all = orderMoves(state, moves, 1, 0, null);
     return all[Math.floor(Math.random() * Math.min(4, all.length))];
@@ -899,7 +911,6 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
 parentPort.on('message', (msg) => {
   const { id, fen, rating, timeMin, timeLeftSec, incrementSec, historyLine } = msg;
   try {
-    // Санитизация входных данных
     const safeRating = Math.max(400, Math.min(2800, Number(rating) || 1000));
     const safeTimeMin = Math.max(0, Number(timeMin) || 5);
     const safeLeft = Math.max(0, Number(timeLeftSec) || safeTimeMin * 60);
