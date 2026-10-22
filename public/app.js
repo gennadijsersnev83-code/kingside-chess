@@ -386,6 +386,7 @@ const App = {
     if (saved) {
       this._restoreSession(saved);
     }
+    this.scheduleArenaClock();
   },
 
   _readSavedLogin() {
