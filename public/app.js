@@ -1012,17 +1012,37 @@ const Arena = {
   _ensureOverlay() {
     const listEl = document.getElementById('arenaGamesList');
     if (!listEl) return null;
-    const parent = listEl.parentElement;
-    if (!parent) return null;
-    parent.style.position = 'relative';
-    // ограничиваем высоту панели, чтобы не выпирало вниз
-    if (!parent.style.maxHeight) parent.style.maxHeight = 'none';
+    const panel = listEl.closest('.arenaGamesPanel') || listEl.parentElement;
+    if (!panel) return null;
+
+    // Панель — колонка фиксированной/максимальной высоты со скрытым overflow
+    panel.style.position = 'relative';
+    panel.style.display = 'flex';
+    panel.style.flexDirection = 'column';
+    panel.style.overflow = 'hidden';
+    if (!panel.style.maxHeight) panel.style.maxHeight = '600px';
+    if (!panel.style.height) panel.style.height = '600px';
+
+    // Внутри панели: шапка (счётчики) фиксирована, тело скроллится
+    let body = panel.querySelector(':scope > .arenaGamesBody');
+    if (!body) {
+      body = document.createElement('div');
+      body.className = 'arenaGamesBody';
+      body.style.cssText = 'position:relative; flex:1 1 auto; min-height:0; overflow-y:auto; overflow-x:hidden;';
+      // переносим партию лидеров и список внутрь body, если они ещё не там
+      const topEl = document.getElementById('arenaTopGame');
+      const listEl2 = document.getElementById('arenaGamesList');
+      if (topEl && topEl.parentElement === panel) body.appendChild(topEl);
+      if (listEl2 && listEl2.parentElement === panel) body.appendChild(listEl2);
+      panel.appendChild(body);
+    }
+
     let ov = document.getElementById('arenaPlayerOverlay');
     if (!ov) {
       ov = document.createElement('div');
       ov.id = 'arenaPlayerOverlay';
-      ov.style.cssText = 'position:absolute; inset:0; background:var(--panel, #1e1d1a); z-index:20; display:none; overflow-y:auto; padding:10px 12px 16px; border-radius:6px;';
-      parent.appendChild(ov);
+      ov.style.cssText = 'position:absolute; inset:0; background:var(--panel, #1e1d1a); z-index:20; display:none; overflow-y:auto; overflow-x:hidden; padding:10px 12px 16px; border-radius:6px;';
+      body.appendChild(ov);
     }
     return ov;
   },
