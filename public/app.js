@@ -1171,12 +1171,11 @@ const Arena = {
       <div class="arenaTopGamePlayers"><span class="playerRow">${wPlaceHtml}⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div>`;
   },
 
-  // Открывает overlay-карточку поверх панели партий
   openPlayer(username) {
     this.openPlayerName = username;
-    this._hideLeaderPanel(true);
     const ov = this._ensureOverlay();
-    if (ov) ov.style.display = 'block';
+    if (ov) { ov.style.display = 'block'; ov.scrollTop = 0; }
+    this._hideLeaderPanel(true);
     this.renderPlayerCard();
   },
 
@@ -1188,7 +1187,7 @@ const Arena = {
     this.lastGamesHash = '';
     this.renderGamesList();
   },
-
+  
   renderPlayerCard() {
     const ov = this._ensureOverlay(); if (!ov) return;
     if (!this.openPlayerName) { ov.style.display = 'none'; ov.innerHTML = ''; return; }
