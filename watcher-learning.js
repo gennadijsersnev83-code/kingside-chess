@@ -200,7 +200,6 @@ function startAutoSave() {
 // CHESS PRIMITIVES
 // ============================================================
 const PIECE_VALUES = { p: 100, n: 320, b: 330, r: 500, q: 900, k: 20000 };
-// MATE_SCORE должен доминировать над любым eval (max eval ~ 30000)
 const MATE_SCORE = 1000000;
 const isWhite = p => !!p && p === p.toUpperCase();
 const inBoard = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
@@ -572,9 +571,13 @@ function tacticalSafetyPenalty(state, from, to, moverWhite) {
   if (!moved) return 0;
   const value = PIECE_VALUES[moved.toLowerCase()] || 0;
   if (value < 300) return 0;
+  
   const attacked = isAttacked(next, to[0], to[1], !moverWhite);
   if (!attacked) return 0;
+  
   const defended = isAttacked(next, to[0], to[1], moverWhite);
+  
+  // Находим самого дешёвого атакующего
   let cheapestAttacker = Infinity;
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = next.board[r][c];
@@ -583,11 +586,19 @@ function tacticalSafetyPenalty(state, from, to, moverWhite) {
       cheapestAttacker = Math.min(cheapestAttacker, PIECE_VALUES[p.toLowerCase()] || 0);
     }
   }
-  if (!defended) return Math.round(value * 0.88);
-  if (Number.isFinite(cheapestAttacker) && cheapestAttacker < value) {
-    return Math.round((value - cheapestAttacker) * 0.45);
+  
+  // Если фигура защищена и атакующий дороже — штрафа нет
+  if (defended && cheapestAttacker >= value) return 0;
+  
+  // Иначе штраф = разница в стоимости (не 88%!)
+  if (!defended) {
+    // Фигура висит. Штраф = её стоимость, но только если атакующий дешевле
+    if (cheapestAttacker < value) return value - cheapestAttacker;
+    return Math.round(value * 0.3); // Если атакующий дороже, штраф маленький
   }
-  return 0;
+  
+  // Фигура защищена, но атакующий дешевле — небольшой штраф
+  return Math.round((value - cheapestAttacker) * 0.5);
 }
 
 function learnedMistakePenalty(state, from, to) {
@@ -598,7 +609,8 @@ function learnedMistakePenalty(state, from, to) {
   const ageDays = ageMs / (1000 * 60 * 60 * 24);
   const decay = Math.exp(-ageDays / 30);
   const seenBoost = Math.min(1.5, 1 + Math.log2(Math.max(1, item.seen)) * 0.08);
-  return Math.min(1800, item.penalty * seenBoost * decay);
+  // Уменьшаем штраф в 3 раза, чтобы он не перевешивал оценку
+  return Math.min(600, item.penalty * seenBoost * decay * 0.3);
 }
 
 // ============================================================
@@ -783,7 +795,7 @@ function negamax(state, depth, alpha, beta, color, ply) {
 }
 
 // ============================================================
-// MATE SEARCH (явный, до основного negamax)
+// MATE SEARCH
 // ============================================================
 function isMateAfterMove(state, from, to, moverWhite) {
   const next = applyMove(state, from, to);
@@ -804,14 +816,12 @@ function findMateInTwo(state, white) {
   for (const [from, to] of moves) {
     const next = applyMove(state, from, to);
     const oppWhite = !white;
-    // если это мат в 1 — уже обработано
     if (inCheck(next, oppWhite) && allLegalMoves(next, oppWhite).length === 0) continue;
     const oppMoves = allLegalMoves(next, oppWhite);
     if (oppMoves.length === 0) continue;
     let allLeadToMate = true;
     for (const [of, ot] of oppMoves) {
       const after = applyMove(next, of, ot);
-      // после ответа противника — есть ли у нас мат в 1?
       const myMoves = allLegalMoves(after, white);
       let foundMate = false;
       for (const [mf, mt] of myMoves) {
@@ -825,7 +835,7 @@ function findMateInTwo(state, white) {
 }
 
 // ============================================================
-// OPENING BOOK (compact)
+// OPENING BOOK
 // ============================================================
 const OPENING_BOOK = [
   { line: 'e2e4', weight: 40 },
@@ -935,20 +945,23 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
   const legalSet = new Set(legal.map(([f, t]) => uciFromTo(f, t)));
   const color = isWhiteTurn ? 1 : -1;
   const myTime = Math.max(0.5, timeMs / 1000);
+  const moveCount = state.full;
 
-  // Opening book
-  if (historyLine && state.full <= 15) {
+  // *** ДЕБЮТ: используем книгу, игнорируем штрафы ***
+  if (historyLine && moveCount <= 15) {
     const bm = bookMove(toFen(state), historyLine, legalSet);
     if (bm) return bm;
   }
 
-  // *** Явный поиск мата — ДО основного negamax ***
+  // Если книга не сработала, в дебюте (первые 10 ходов) применяем только оценку позиции
+  const openingPhase = moveCount <= 10;
+
+  // *** Явный поиск мата ***
   const mateIn1 = findMateInOne(state, isWhiteTurn);
   if (mateIn1) return mateIn1;
   const mateIn2 = findMateInTwo(state, isWhiteTurn);
   if (mateIn2) return mateIn2;
 
-  // Adaptive depth from time
   let maxDepth = 6;
   if (myTime < 3) maxDepth = 3;
   else if (myTime < 8) maxDepth = 4;
@@ -982,21 +995,43 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
       let score = -negamax(next, depth - 1, -beta, -alpha, -color, 1);
       if (SEARCH_ABORTED) break;
 
-      // *** Определяем, ведёт ли ход к мату — если да, не штрафуем ***
       const nextIsMate = inCheck(next, !isWhiteTurn) && allLegalMoves(next, !isWhiteTurn).length === 0;
 
-      if (!nextIsMate) {
+      // *** ШТРАФЫ ТОЛЬКО НЕ В ДЕБЮТЕ И ТОЛЬКО ЕСЛИ НЕ МАТ ***
+      if (!nextIsMate && !openingPhase) {
         const safetyPenalty = tacticalSafetyPenalty(state, from, to, isWhiteTurn);
         const memoryPenalty = learnedMistakePenalty(state, from, to);
-        const immediateGain = evaluate(next, isWhiteTurn) - evaluate(state, isWhiteTurn);
-        if (safetyPenalty > 0 && immediateGain < safetyPenalty * 0.8) score -= safetyPenalty;
+        
+        // Применяем safetyPenalty только если ход реально ухудшает позицию
+        if (safetyPenalty > 0) {
+          // Проверяем, есть ли у нас альтернативный ход без штрафа
+          // Если это единственный ход — не штрафуем
+          if (legal.length > 1) {
+            score -= safetyPenalty;
+          }
+        }
         score -= memoryPenalty;
 
-        if (positionCounts) {
+        if (positionCounts && moveCount > 10) {
           const nextKey = positionKey(toFen(next));
           const c = positionCounts.get(nextKey) || 0;
-          if (c >= 1) score -= 30;
-          if (c >= 2) score -= 120;
+          if (c >= 2) score -= 50;
+        }
+      }
+
+      // В дебюте добавляем бонус за развитие
+      if (openingPhase) {
+        const piece = state.board[from[0]][from[1]];
+        if (piece && (piece.toLowerCase() === 'n' || piece.toLowerCase() === 'b')) {
+          const homeRow = isWhiteTurn ? 7 : 0;
+          if (from[0] === homeRow) score += 30; // Бонус за вывод фигуры
+        }
+        if (piece && piece.toLowerCase() === 'p') {
+          const centerCols = [3, 4];
+          if (centerCols.includes(to[1])) score += 15; // Бонус за пешку в центр
+        }
+        if (piece && piece.toLowerCase() === 'k' && Math.abs(to[1] - from[1]) === 2) {
+          score += 50; // Бонус за рокировку
         }
       }
 
@@ -1152,7 +1187,6 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line, positionC
     const move = pickMoveSearch(state, color === 'w', thinkMs, historyLine, posCounts);
 
     if (!move || !Array.isArray(move) || move.length !== 2) {
-      // fallback: первый легальный ход — бот НИКОГДА не должен "замирать"
       const legal = allLegalMoves(state, color === 'w');
       if (legal.length > 0) {
         return { from: legal[0][0], to: legal[0][1] };
@@ -1170,7 +1204,6 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line, positionC
       return null;
     }
 
-    // Validate against availableMoves (только если формат совместим — строки UCI или {from,to})
     if (Array.isArray(availableMoves) && availableMoves.length > 0) {
       const uci = uciFromTo(move[0], move[1]);
       const ok = availableMoves.some(m => {
@@ -1185,14 +1218,12 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line, positionC
         return false;
       });
       if (!ok) {
-        // Ход не найден в availableMoves — играем первый доступный (строку UCI)
         for (const m of availableMoves) {
           if (typeof m === 'string' && m.length >= 4) {
             const fallback = uciToMove(m);
             if (fallback) return { from: fallback[0], to: fallback[1] };
           }
         }
-        // если availableMoves — не строки, просто играем свой
       }
     }
 
@@ -1232,7 +1263,6 @@ function learnFromObservedMove(prevFen, move, newFen, moverColor, timeControl, e
     if (!from || !to) return;
     if (!before.board[from[0]] || !before.board[from[0]][from[1]]) return;
 
-    // *** Не запоминать ошибки, если позиция матовая — это шум ***
     const afterIsMate = inCheck(after, !moverWhite) && allLegalMoves(after, !moverWhite).length === 0;
     if (afterIsMate) return;
 
