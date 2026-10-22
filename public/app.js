@@ -843,13 +843,7 @@ const Arena = {
     this.lastLiveGames = []; this.lastDoneGames = [];
     const chatEl = document.getElementById('arenaChatMessages'); if (chatEl) chatEl.innerHTML = '';
     this.lastStateHash = ''; this.lastGamesHash = '';
-    App.socket.emit('joinArenaRoom', { arenaId }, (res) => {
-      if (res && res.ok && Array.isArray(res.chat)) {
-        const box = document.getElementById('arenaChatMessages');
-        if (box) { box.innerHTML = ''; res.chat.forEach(m => this.renderChatMsg(m)); }
-      }
-      App.socket.emit('continueArenaPairing', { arenaId }, () => {});
-    });
+    App.socket.emit('joinArenaRoom', { arenaId }, (res) => { if (res && res.ok && Array.isArray(res.chat)) { const box = document.getElementById('arenaChatMessages'); if (box) { box.innerHTML = ''; res.chat.forEach(m => this.renderChatMsg(m)); } } });
     this.loadPage();
     if (this.pageRefreshHandle) clearInterval(this.pageRefreshHandle);
     this.pageRefreshHandle = setInterval(() => { const aps = document.getElementById('arenaPageScreen'); if (aps && aps.classList.contains('active')) this.loadPage(); }, 5000);
