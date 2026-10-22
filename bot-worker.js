@@ -712,43 +712,61 @@ function findMateInOne(state, white) {
 }
 
 function getBotParams(rating, baseTimeMin, timeLeftSec = baseTimeMin * 60, incrementSec = 0) {
-  let depth, noise;
-  if (rating < 1100)      { depth = 1; noise = 60; }
-  else if (rating < 1350) { depth = 2; noise = 25; }
-  else if (rating < 1500) { depth = 2; noise = 12; }
-  else if (rating < 1700) { depth = 3; noise = 5; }
-  else if (rating < 1850) { depth = 4; noise = 1; }
-  else if (rating < 2000) { depth = 4; noise = 0; }
-  else if (rating < 2200) { depth = 6; noise = 0; }
-  else                    { depth = 7; noise = 0; }
+  let depth, noise, timeMultiplier;
+    
+  if (rating < 1000) {  // Easy level
+    depth = 2;
+    noise = 50;
+    timeMultiplier = 0.05;
+  } else if (rating < 1300) {  // Medium level
+    depth = 3;
+    noise = 25;
+    timeMultiplier = 0.07;
+  } else if (rating < 1600) {  // Hard level
+      depth = 4;
+      noise = 10;
+    timeMultiplier = 0.10;
+  } else if (rating < 1800) {  // Very Hard level
+    depth = 5;
+    noise = 5;
+    timeMultiplier = 0.14;
+  } else {  // Master level
+    depth = 8;  // Увеличенная глубина поиска
+    noise = 0;
+    timeMultiplier = 0.20;
+  }
 
+  // Адаптивная регулировка глубины
+  const material = materialOf(state);
+  const materialDiff = Math.abs(material.w - material.b);
+  if (materialDiff > 2000) {
+    depth += 1;  // Увеличиваем глубину при материальном преимуществе
+  }
+
+  // Ограничения по времени
   if (baseTimeMin <= 1) depth = Math.min(depth, 2);
   else if (baseTimeMin <= 2) depth = Math.min(depth, 3);
   else if (baseTimeMin <= 3) depth = Math.min(depth, 4);
-  else if (baseTimeMin <= 5) depth = Math.min(depth, 4);
-  else if (baseTimeMin <= 10) depth = Math.min(depth, 5);
-  else if (baseTimeMin <= 15) depth = Math.min(depth, 6);
+  else if (baseTimeMin <= 5) depth = Math.min(depth, 5);
+  else if (baseTimeMin <= 10) depth = Math.min(depth, 6);
+  else if (baseTimeMin <= 15) depth = Math.min(depth, 7);
+  else if (baseTimeMin > 15) depth = Math.min(depth, 9);  // Увеличение максимальной глубины
+  else if (baseTimeMin > 60) depth = Math.min(depth, 10);
 
   const left = Math.max(0, Number(timeLeftSec) || 0);
   const inc = Math.max(0, Number(incrementSec) || 0);
 
   let timeBudgetMs;
-  if (left <= 2) timeBudgetMs = Math.max(20, left * 1000 * 0.08);
-  else if (left <= 5) timeBudgetMs = Math.max(40, left * 1000 * 0.10);
-  else if (left <= 15) timeBudgetMs = Math.max(80, left * 1000 * 0.12);
-  else if (left <= 60) timeBudgetMs = Math.max(120, left * 1000 * 0.14);
-  else if (left <= 180) timeBudgetMs = Math.max(200, left * 1000 * 0.15);
-  else timeBudgetMs = Math.max(250, Math.min(2500, left * 1000 * 0.10 + inc * 800));
+  if (left <= 2) timeBudgetMs = Math.max(20, left * 1000 * timeMultiplier);
+  else if (left <= 5) timeBudgetMs = Math.max(40, left * 1000 * timeMultiplier);
+  else if (left <= 15) timeBudgetMs = Math.max(80, left * 1000 * timeMultiplier);
+  else if (left <= 60) timeBudgetMs = Math.max(120, left * 1000 * timeMultiplier);
+  else if (left <= 180) timeBudgetMs = Math.max(200, left * 1000 * timeMultiplier);
+  else timeBudgetMs = Math.max(250, Math.min(2500, left * 1000 * timeMultiplier + inc * 800));
+    
   if (inc > 0) timeBudgetMs += Math.min(inc * 1000 * 0.5, 800);
-  timeBudgetMs = Math.min(timeBudgetMs, 3000);
+    timeBudgetMs = Math.min(timeBudgetMs, 3000);
 
-  if (left <= 3) depth = Math.min(depth, 2);
-  else if (left <= 8) depth = Math.min(depth, 3);
-  else if (left <= 18) depth = Math.min(depth, 4);
-  else if (left <= 35 && inc < 2) depth = Math.min(depth, 5);
-  else if (left <= 60 && inc === 0) depth = Math.min(depth, 5);
-
-  if (left <= 8 && rating >= 1500) noise = Math.max(noise, 3);
   return { depth, noise, timeBudgetMs };
 }
 
