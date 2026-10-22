@@ -172,17 +172,58 @@ const Chess = {
   applyMove(state, from, to) {
     const copy = { board: state.board.map(row => row.slice()), turn: state.turn, castling: state.castling, ep: state.ep, half: state.half, full: state.full };
     const [fr, fc] = from, [tr, tc] = to;
-    const p = copy.board[fr][fc]; const white = this.isWhite(p); const type = p.toLowerCase();
-    if (type === 'p' && copy.ep) { const target = String.fromCharCode(97 + tc) + (8 - tr); if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null; }
-    copy.board[tr][tc] = p; copy.board[fr][fc] = null;
+    const p = copy.board[fr][fc]; 
+    if (!p) return copy;
+    const white = this.isWhite(p); const type = p.toLowerCase();
+    
+    // Взятие на проходе
+    if (type === 'p' && copy.ep) { 
+      const target = String.fromCharCode(97 + tc) + (8 - tr); 
+      if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null; 
+    }
+    
+    copy.board[tr][tc] = p; 
+    copy.board[fr][fc] = null;
+    
+    // Превращение пешки
     if (type === 'p' && (tr === 0 || tr === 7)) copy.board[tr][tc] = white ? 'Q' : 'q';
-    if (type === 'k' && Math.abs(tc - fc) === 2) { const row = fr; if (tc > fc) { copy.board[row][5] = copy.board[row][7]; copy.board[row][7] = null; } else { copy.board[row][3] = copy.board[row][0]; copy.board[row][0] = null; } }
+    
+    // Рокировка
+    if (type === 'k' && Math.abs(tc - fc) === 2) { 
+      const row = fr; 
+      if (tc > fc) { 
+        copy.board[row][5] = copy.board[row][7]; 
+        copy.board[row][7] = null; 
+      } else { 
+        copy.board[row][3] = copy.board[row][0]; 
+        copy.board[row][0] = null; 
+      } 
+    }
+    
+    // Обновление прав на рокировку
     let cast = copy.castling;
     if (type === 'k') cast = cast.replace(white ? /[KQ]/g : /[kq]/g, '');
-    if (type === 'r') { if (fr === 7 && fc === 0) cast = cast.replace('Q', ''); if (fr === 7 && fc === 7) cast = cast.replace('K', ''); if (fr === 0 && fc === 0) cast = cast.replace('q', ''); if (fr === 0 && fc === 7) cast = cast.replace('k', ''); }
-    if (!cast) cast = '-';
-    let ep = '-'; if (type === 'p' && Math.abs(tr - fr) === 2) ep = String.fromCharCode(97 + fc) + (8 - (fr + (tr - fr) / 2));
-    copy.castling = cast; copy.ep = ep; copy.turn = white ? 'b' : 'w'; copy.full += 1;
+    if (type === 'r') { 
+      if (fr === 7 && fc === 0) cast = cast.replace('Q', ''); 
+      if (fr === 7 && fc === 7) cast = cast.replace('K', ''); 
+      if (fr === 0 && fc === 0) cast = cast.replace('q', ''); 
+      if (fr === 0 && fc === 7) cast = cast.replace('k', ''); 
+    }
+    if (!cast || cast === '') cast = '-';
+    
+    // Взятие на проходе (обновление)
+    let ep = '-'; 
+    if (type === 'p' && Math.abs(tr - fr) === 2) ep = String.fromCharCode(97 + fc) + (8 - (fr + (tr - fr) / 2));
+    
+    copy.castling = cast; 
+    copy.ep = ep; 
+    copy.turn = white ? 'b' : 'w'; 
+    copy.full += 1;
+    
+    // 50 ходов (для ничьей)
+    const wasCapture = !!state.board[tr][tc] || (type === 'p' && fc !== tc);
+    copy.half = (type === 'p' || wasCapture) ? 0 : (state.half + 1);
+    
     return copy;
   },
   legalMovesFor(state, r, c) {
@@ -329,12 +370,10 @@ const App = {
     Sounds.initOnFirstClick();
     this.bindSocket();
 
-    // 1. Инициализация всех модулей (они готовы принимать данные)
     TopArenas.init(); Stats.init(); Lobby.init(); Bot.init();
     Watch.init(); Arena.init(); Profile.init(); Community.init();
     Game.init(); Banners.init(); UserMenu.init(); Inbox.init(); Ping.init(); Auth.init();
 
-    // 2. Если есть сохраненный логин — оптимистично показываем UI
     const saved = this._readSavedLogin();
     if (saved) {
       this.me = { username: saved.username, rating: 1200, isAdmin: false, isMod: false, isBot: false, _restored: true };
@@ -342,10 +381,8 @@ const App = {
       this.updateTopbarUser();
     }
 
-    // 3. Инициализируем роутер. Если App.me уже есть, он сам откроет нужный экран (lobby, game или arena)
     Router.init();
     
-    // 4. Если есть сохраненный логин, отправляем запрос на сервер для синхронизации
     if (saved) {
       this._restoreSession(saved);
     }
@@ -360,7 +397,6 @@ const App = {
   },
 
   _restoreSession(saved) {
-    // Определяем, куда должен попасть пользователь
     const hash = location.hash.replace(/^#\/?/, '');
     const parts = hash.split('/').filter(Boolean);
     if (!parts.length) {
@@ -377,7 +413,6 @@ const App = {
         this._autoLoginAttempts = 0;
         this.updateTopbarUser();
         
-        // Если мы на странице лобби, и есть активная игра — возвращаем в неё
         let activeLobby = localStorage.getItem('kingside_active_lobby');
         if (activeLobby && !activeLobby.startsWith('sp_') && Router.current.name === 'lobby') {
           this.lobbyId = activeLobby;
