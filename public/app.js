@@ -1338,7 +1338,12 @@ const Arena = {
   renderChatMsg(msg) {
     const box = document.getElementById('arenaChatMessages'); if (!box) return;
     const div = document.createElement('div');
-    if (msg.system) { div.className = 'msg sys'; div.textContent = msg.text; }
+    
+    if (msg.system) { 
+      div.className = 'msg sys'; 
+      if (msg.isMuteNotice) div.classList.add('mute-notice'); // Красный стиль
+      div.textContent = msg.text; 
+    }
     else {
       div.className = 'msg'; div.dataset.msgId = msg.id || '';
       const time = Utils.fmtMskHM(msg.ts);
@@ -1635,13 +1640,39 @@ const Mod = {
       <button data-act="mute" data-min="30">🔇 – Мут 30 минут</button>
       <button data-act="mute" data-min="60">🔇 – Мут 1 час</button>
       <button data-act="mute" data-min="1440">🔇 – Мут 1 сутки</button>
+      <button data-act="mute" data-min="0">🔇 – Мут с причиной...</button>
       <button data-act="unmute">🔊 – Снять мут</button>`;
     document.body.appendChild(menu); this.el = menu;
     menu.addEventListener('click', (e) => {
       const act = e.target.dataset.act;
-      if (act === 'del') { const evName = scope === 'arena' ? 'modDeleteArenaMessage' : 'modDeleteMessage'; const payload = scope === 'arena' ? { arenaId: scopeId, msgId } : { lobbyId: scopeId, msgId }; App.socket.emit(evName, payload, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); this.close(); }); }
-      else if (act === 'mute') { App.socket.emit('modMuteUser', { username, minutes: +e.target.dataset.min }, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); this.close(); }); }
-      else if (act === 'unmute') { App.socket.emit('modUnmuteUser', { username }, (r) => { if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); this.close(); }); }
+      if (act === 'del') { 
+        const evName = scope === 'arena' ? 'modDeleteArenaMessage' : 'modDeleteMessage'; 
+        const payload = scope === 'arena' ? { arenaId: scopeId, msgId } : { lobbyId: scopeId, msgId }; 
+        App.socket.emit(evName, payload, (r) => { 
+          if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); 
+          this.close(); 
+        }); 
+      }
+      else if (act === 'mute') { 
+        let minutes = +e.target.dataset.min;
+        let reason = '';
+        if (minutes === 0) {
+          reason = prompt('Введите причину мута (кратко):');
+          if (reason === null) { this.close(); return; } // Отмена
+          reason = reason.trim().slice(0, 100) || 'нарушение правил';
+          minutes = 10; // По умолчанию 10 минут, если выбрали "с причиной"
+        }
+        App.socket.emit('modMuteUser', { username, minutes, reason, scope, scopeId }, (r) => { 
+          if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); 
+          this.close(); 
+        }); 
+      }
+      else if (act === 'unmute') { 
+        App.socket.emit('modUnmuteUser', { username }, (r) => { 
+          if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); 
+          this.close(); 
+        }); 
+      }
     });
   },
   close() { if (this.el) { this.el.remove(); this.el = null; } }
@@ -2079,11 +2110,28 @@ const Game = {
   onChatMessage(msg) {
     const box = document.getElementById('chatMessages'); if (!box) return;
     if (msg.id && this.chatMsgIds.has(msg.id)) return; if (msg.id) this.chatMsgIds.add(msg.id);
-    const div = document.createElement('div'); div.className = 'msg'; div.dataset.msgId = msg.id || '';
-    const time = Utils.fmtMskHM(msg.ts);
-    let modHtml = ''; if (App.me && App.me.isMod) modHtml = `<span class="modBtn" title="Модерация">⚙</span>`;
-    div.innerHTML = `<span class="u">${Utils.nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${Utils.escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
-    if (App.me && App.me.isMod) { const btn = div.querySelector('.modBtn'); if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); Mod.openMenu(ev, msg.id, msg.user, 'game', App.lobbyId); }); }
+    
+    const div = document.createElement('div'); 
+    div.className = 'msg'; 
+    div.dataset.msgId = msg.id || '';
+    
+    if (msg.system) {
+      // Системное сообщение (например, о муте)
+      div.className = 'msg sys';
+      if (msg.isMuteNotice) div.classList.add('mute-notice'); // Красный стиль
+      div.textContent = msg.text;
+      const time = Utils.fmtMskHM(msg.ts);
+      const timeSpan = document.createElement('span');
+      timeSpan.className = 't';
+      timeSpan.textContent = time;
+      div.appendChild(timeSpan);
+    } else {
+      const time = Utils.fmtMskHM(msg.ts);
+      let modHtml = ''; if (App.me && App.me.isMod) modHtml = `<span class="modBtn" title="Модерация">⚙</span>`;
+      div.innerHTML = `<span class="u">${Utils.nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${Utils.escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
+      if (App.me && App.me.isMod) { const btn = div.querySelector('.modBtn'); if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); Mod.openMenu(ev, msg.id, msg.user, 'game', App.lobbyId); }); }
+    }
+    
     box.appendChild(div);
     while (box.children.length > 50) box.removeChild(box.firstChild);
     box.scrollTop = box.scrollHeight;
