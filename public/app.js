@@ -605,10 +605,10 @@ const Lobby = {
     }
     if (this.currentTab === 'create') {
       el.innerHTML = `<div class="quickGrid">${[
-            {t:1,i:0,name:'Пуля'},{t:2,i:1,name:'Пуля'},
-            {t:3,i:0,name:'Блиц'},{t:3,i:2,name:'Блиц'},{t:5,i:0,name:'Блиц'},{t:5,i:3,name:'Блиц'},
-            {t:10,i:0,name:'Рапид'},{t:10,i:5,name:'Рапид'},{t:15,i:10,name:'Рапид'},
-            {t:30,i:0,name:'Классика'},{t:30,i:20,name:'Классика'}
+            {t:1,i:0,name:'Bullet'},{t:2,i:1,name:'Bullet'},
+            {t:3,i:0,name:'Blitz'},{t:3,i:2,name:'Blitz'},{t:5,i:0,name:'Blitz'},{t:5,i:3,name:'Blitz'},
+            {t:10,i:0,name:'Rapid'},{t:10,i:5,name:'Rapid'},{t:15,i:10,name:'Rapid'},
+            {t:30,i:0,name:'Classical'},{t:30,i:20,name:'Classical'}
           ].map(({t,i,name}) => `<button class="quickBtn" onclick="Lobby.quickStart(${t},${i})"><div class="qb-time">${t}+${i}</div><div class="qb-name">${name}</div></button>`).join('')}<button class="quickBtn custom" onclick="Lobby.showCustom()"><div class="qb-time">Своя</div><div class="qb-name">игра</div></button></div>
         <div id="customGamePanel" style="display:none; margin:0 16px 16px; padding:14px; background:var(--panel-2); border-radius:6px;"><div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;"><label style="color:var(--muted);font-size:13px;">Минуты:</label><input id="customMin" type="number" value="5" min="1" max="60" style="width:70px;"><label style="color:var(--muted);font-size:13px;">Инкремент:</label><input id="customInc" type="number" value="0" min="0" max="60" style="width:70px;"><button class="primary" onclick="Lobby.createCustom()" style="padding:8px 18px;">Создать</button></div></div>`;
       return;
