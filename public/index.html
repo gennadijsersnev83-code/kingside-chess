@@ -182,7 +182,10 @@ body.login-active #mainContent { display: none !important; }
               <h2 class="arenaPageName" id="arenaPageName">—</h2>
               <div class="arenaPageSub" id="arenaPageSub">—</div>
             </div>
-            <div class="arenaStatusTime" id="arenaStatusTime">--:--</div>
+            <div class="arenaStatusIndicator">
+              <span class="arenaStatusLabel" id="arenaStatusLabel">До конца:</span>
+              <span class="arenaStatusTime" id="arenaStatusTime">--:--</span>
+            </div>
           </div>
         </div>
         
@@ -194,7 +197,7 @@ body.login-active #mainContent { display: none !important; }
         </div>
         
         <div class="arenaParticipantsTable">
-          <div class="arenaTableHeader"><span>#</span><span>Игрок</span><span>Очки</span><span>В / Н / П</span><span>Партий</span></div>
+          <div class="arenaTableHeader"><span>#</span><span>Игрок</span><span>Очки</span><span>Серии</span><span>Партий</span></div>
           <div class="arenaTableBody" id="arenaTableBody"><div class="arenasEmpty">Загрузка участников...</div></div>
         </div>
         
@@ -373,4 +376,3 @@ body.login-active #mainContent { display: none !important; }
 <script src="/app.js"></script>
 </body>
 </html>
-
