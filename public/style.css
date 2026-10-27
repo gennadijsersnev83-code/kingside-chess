@@ -234,13 +234,13 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   align-items: stretch;
   gap: 20px;
   width: 100%;
-  max-width: 1400px;
+  max-width: 1600px; /* Расширил для большой таблицы */
   margin: 0 auto;
   padding: 0 16px;
 }
 
 .arenaLeft {
-  width: 320px;
+  width: 300px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -323,9 +323,28 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   letter-spacing: -0.3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .arenaPageSub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+
+.arenaStatusIndicator {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.arenaStatusLabel {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
 .arenaStatusTime {
   font-family: 'Roboto Mono', monospace;
-  font-size: 22px; font-weight: 400; color: var(--muted); flex-shrink: 0; margin-left: auto;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-bright);
 }
 
 .arenaPairingBox {
@@ -369,7 +388,8 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 }
 .arenaTableHeader {
   display: grid;
-  grid-template-columns: 32px minmax(0,1fr) 64px 96px 64px;
+  /* Увеличил ширину колонки "Серии" */
+  grid-template-columns: 32px minmax(0,1fr) 48px 110px 48px;
   gap: 12px; padding: 0 12px;
   background: transparent; border-bottom: 1px solid var(--border);
   font-size: 11px; color: var(--muted); text-transform: uppercase;
@@ -379,7 +399,8 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaTableBody { flex: 1; overflow-y: auto; overflow-x: hidden; max-height: 520px; }
 .arenaTableRow {
   display: grid;
-  grid-template-columns: 32px minmax(0,1fr) 64px 96px 64px;
+  /* Синхронизировал ширину с заголовком */
+  grid-template-columns: 32px minmax(0,1fr) 48px 110px 48px;
   gap: 12px; padding: 0 12px; align-items: center;
   font-size: 14px; border-bottom: 1px solid rgba(58,56,51,.35);
   height: 44px; box-sizing: border-box; cursor: pointer; transition: background .1s;
@@ -403,6 +424,29 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaTableRow .pname .ppause { color: var(--accent); font-size: 12px; }
 .arenaTableRow .score { color: var(--accent-2); font-weight: 700; text-align: center; font-size: 16px; }
 .arenaTableRow .score .streak { color: #ff9c3a; font-size: 12px; margin-left: 2px; }
+
+/* Стиль для точек серий */
+.arenaTableRow .streak-dots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  justify-content: center;
+}
+.streak-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+.streak-dot.w { background: #4ade80; color: #000; }
+.streak-dot.d { background: #bf811d; color: #fff; }
+.streak-dot.l { background: #a53030; color: #fff; }
+
 .arenaTableRow .wdl { color: var(--muted); text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; }
 .arenaTableRow .games { color: var(--text); text-align: center; font-size: 13px; font-weight: 600; }
 
@@ -874,7 +918,7 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
   .arenaPage { display:flex; flex-direction:column; max-width:none; }
   .arenaLeft, .arenaCenter, .arenaRight { width:100%; min-width:0; max-width:none; }
   .arenaJoinBtn { width:130px; min-width:130px; max-width:130px; font-size:12px; }
-  .arenaTableHeader, .arenaTableRow { grid-template-columns:26px minmax(0,1fr) 42px 66px 42px; gap:6px; font-size:12px; }
+  .arenaTableHeader, .arenaTableRow { grid-template-columns:26px minmax(0,1fr) 42px 80px 42px; gap:6px; font-size:12px; }
   .arenaTableRow .score { font-size:13px; }
   .arenasHeader h1 { font-size:24px; }
   .arenasHeader .ahNow { font-size:13px; }
