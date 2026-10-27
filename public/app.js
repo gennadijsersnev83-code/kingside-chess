@@ -1646,7 +1646,6 @@ const Mod = {
       <button data-act="mute" data-min="30">🔇 – Мут 30 минут</button>
       <button data-act="mute" data-min="60">🔇 – Мут 1 час</button>
       <button data-act="mute" data-min="1440">🔇 – Мут 1 сутки</button>
-      <button data-act="mute" data-min="0">🔇 – Мут с причиной...</button>
       <button data-act="unmute">🔊 – Снять мут</button>`;
     document.body.appendChild(menu); this.el = menu;
     this.scope = scope;
@@ -1666,12 +1665,7 @@ const Mod = {
         this.close();
       }
       else if (act === 'mute') { 
-        let minutes = +e.target.dataset.min;
-        if (minutes === 0) {
-          this.openMuteModal(username, scope, scopeId);
-          this.close();
-          return;
-        }
+        const minutes = +e.target.dataset.min;
         App.socket.emit('modMuteUser', { username, minutes, reason: '', scope, scopeId }, (r) => { 
           if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); 
           this.close(); 
@@ -1684,38 +1678,6 @@ const Mod = {
         }); 
       }
     });
-  },
-
-  openMuteModal(username, scope, scopeId) {
-    const overlay = document.createElement('div');
-    overlay.className = 'mute-modal-overlay show';
-    overlay.innerHTML = `
-      <div class="mute-modal-box">
-        <h3>🔇 Мут игрока: ${Utils.escapeHtml(username)}</h3>
-        <label class="mm-label">Причина мута (обязательно)</label>
-        <input type="text" id="muteReasonInput" placeholder="Например: оскорбления в чате" maxlength="100">
-        <label class="mm-label">Длительность (минут)</label>
-        <input type="text" id="muteDurationInput" placeholder="10" value="10" maxlength="5" style="margin-bottom:16px;">
-        <div class="mm-actions">
-          <button class="mm-cancel">Отмена</button>
-          <button class="mm-confirm">Замутить</button>
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-    const inp = overlay.querySelector('#muteReasonInput');
-    const dur = overlay.querySelector('#muteDurationInput');
-    setTimeout(() => inp.focus(), 50);
-    overlay.querySelector('.mm-cancel').onclick = () => overlay.remove();
-    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
-    overlay.querySelector('.mm-confirm').onclick = () => {
-      const reason = inp.value.trim();
-      const minutes = Math.max(1, Math.min(7*24*60, parseInt(dur.value, 10) || 10));
-      if (!reason) { inp.style.borderColor = '#e5484d'; inp.focus(); return; }
-      App.socket.emit('modMuteUser', { username, minutes, reason, scope, scopeId }, (r) => {
-        if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; }
-        overlay.remove();
-      });
-    };
   },
 
   startSelectionMode(scope, scopeId) {
