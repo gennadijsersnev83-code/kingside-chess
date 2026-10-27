@@ -427,31 +427,25 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 /* Новые стили для полосы результатов (Lichess style) */
 .arenaTableRow .history {
   display: flex;
-  gap: 2px;
+  gap: 4px;
   justify-content: flex-start;
   align-items: center;
   overflow: hidden;
 }
 .arena-results {
   display: flex;
-  gap: 2px;
+  gap: 4px;
   flex-wrap: nowrap;
+  align-items: center;
 }
-.res-sq {
-  width: 10px;
-  height: 10px;
-  border-radius: 2px;
-  display: inline-block;
-  flex-shrink: 0;
+.res-num {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
 }
-.res-sq.win { background-color: #4ade80; }   /* Победа - зеленый */
-.res-sq.draw { background-color: #bf811d; }  /* Ничья - желтый/оранжевый */
-.res-sq.loss { background-color: #a53030; }  /* Поражение - красный */
-
-/* Убираем старые стили для .streak-dots, так как они больше не используются */
-/* .arenaTableRow .streak-dots { ... } */
-/* .arenaTableRow .wdl { ... } */
-/* .arenaTableRow .games { ... } */
+.res-num.num-win { color: #4ade80; }   /* Победа - зеленый */
+.res-num.num-draw { color: #bf811d; }  /* Ничья - желтый/оранжевый */
+.res-num.num-loss { color: #a53030; }  /* Поражение - красный */
 
 
 /* --- Правая колонка --- */
