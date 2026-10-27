@@ -1065,3 +1065,67 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
 
   .arenaCenter { order: initial; }
 }
+
+
+/* Arena layout fix: independent column sizing; selected-player panel cannot
+   shrink the standings column or stretch it vertically. */
+.arenaPage {
+  display: grid !important;
+  grid-template-columns: minmax(250px, 300px) minmax(340px, 1fr) minmax(280px, 360px);
+  align-items: start !important;
+  justify-content: stretch;
+  gap: 20px;
+}
+
+.arenaLeft,
+.arenaCenter,
+.arenaRight {
+  min-width: 0;
+  width: auto;
+  max-width: 100%;
+  align-self: start !important;
+}
+
+.arenaCenter {
+  flex: initial;
+  grid-column: auto;
+  order: initial;
+}
+
+/* At intermediate widths keep the standings comfortably wide and move the
+   right-side board/details below it instead of squeezing the center column. */
+@media (max-width: 1150px) and (min-width: 801px) {
+  .arenaPage {
+    grid-template-columns: minmax(220px, 0.85fr) minmax(340px, 1.15fr);
+    gap: 16px;
+  }
+
+  .arenaLeft { grid-column: 1; }
+  .arenaCenter {
+    grid-column: 2;
+    min-width: 340px;
+  }
+
+  .arenaRight {
+    grid-column: 2;
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 800px) {
+  .arenaPage {
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 14px;
+  }
+
+  .arenaLeft,
+  .arenaCenter,
+  .arenaRight {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+}
