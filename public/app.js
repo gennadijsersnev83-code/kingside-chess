@@ -1299,10 +1299,36 @@ const Arena = {
   showWinnerBanner(top3) {
     const banner = document.getElementById('arenaWinnerBanner'); const podium = document.getElementById('awbPodium');
     if (!banner || !podium) return;
-    const medals = ['gold','silver','bronze'], places = ['🥇','🥈','🥉'];
+    const wasHidden = getComputedStyle(banner).display === 'none';
+    const places = ['🏆','🏆','🏆'], classes = ['gold','silver','bronze'];
     const order = top3.length >= 3 ? [1,0,2] : top3.map((_,i)=>i);
-    podium.innerHTML = order.map(i => { const p = top3[i]; if (!p) return ''; return `<div class="awbItem ${medals[i]}"><div class="place">${places[i]}</div><div class="n">${Utils.nickHtml(p.username, p.username === 'PeshkaSasha')}</div><div class="s">${p.score}</div></div>`; }).join('');
+    const arena = this.cache.find(a => a.id === this.currentArenaId);
+    const title = banner.querySelector('.awbTitle');
+    if (title) title.textContent = `${arena?.name || document.getElementById('arenaPageName')?.textContent || 'Арена'} — результаты`;
+    podium.innerHTML = order.map(i => {
+      const p = top3[i]; if (!p) return '';
+      const played = p.played ?? p.gamesPlayed ?? p.games ?? '—';
+      const perf = p.performance ?? p.perf ?? '—';
+      const winPct = p.winPct ?? p.winPercent ?? p.winPercentage ?? '—';
+      return `<div class="awbItem ${classes[i]}"><div class="place" aria-label="${i+1} место">${places[i]}</div><div class="n">${Utils.nickHtml(p.username, p.username === 'PeshkaSasha')}</div><div class="s">${p.score ?? 0} очков</div><div class="awbStats"><span>Перформанс <b>${Utils.escapeHtml(String(perf))}</b></span><span>Сыграно партий <b>${Utils.escapeHtml(String(played))}</b></span><span>Победы <b>${Utils.escapeHtml(String(winPct === '—' ? winPct : (String(winPct).includes('%') ? winPct : winPct + '%')))}</b></span></div></div>`;
+    }).join('');
     banner.style.display = 'block';
+    if (wasHidden) this.launchArenaConfetti();
+  },
+  launchArenaConfetti() {
+    const old = document.getElementById('arenaConfettiLayer'); if (old) old.remove();
+    const layer = document.createElement('div'); layer.id = 'arenaConfettiLayer'; layer.className = 'arenaConfettiLayer';
+    const colors = ['#ffd54f','#ff7043','#66bb6a','#42a5f5','#ab7cff','#f06292','#ffffff'];
+    for (let i = 0; i < 130; i++) {
+      const piece = document.createElement('i'); piece.className = 'arenaConfettiPiece';
+      piece.style.left = `${Math.random() * 100}%`; piece.style.background = colors[i % colors.length];
+      piece.style.animationDelay = `${Math.random() * 1.2}s`; piece.style.animationDuration = `${4 + Math.random() * 1.5}s`;
+      piece.style.setProperty('--drift', `${Math.round(Math.random() * 240 - 120)}px`);
+      if (i % 3 === 0) piece.style.borderRadius = '50%';
+      layer.appendChild(piece);
+    }
+    document.body.appendChild(layer);
+    setTimeout(() => layer.remove(), 6000);
   },
   joinCurrent() { if (!this.currentArenaId) return; App.socket.emit('joinArena', { arenaId: this.currentArenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.lastStateHash = ''; this.lastGamesHash = ''; this.loadPage(); this.refresh(true); this.renderGamesList(); }); },
   pauseCurrent() { if (!this.currentArenaId) return; App.socket.emit('pauseArena', { arenaId: this.currentArenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.lastStateHash = ''; this.loadPage(); this.refresh(true); }); },
