@@ -432,11 +432,11 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 
 .arenaTableRow {
   display: grid;
-  /* 3 колонки: место, игрок, счет+история */
-  grid-template-columns: 32px minmax(0,1fr) auto;
-  gap: 12px; padding: 0 12px; align-items: center;
+  /* Место | игрок | история партий | сумма очков справа */
+  grid-template-columns: 26px minmax(0,1fr) minmax(64px,auto) minmax(34px,auto);
+  gap: 5px; padding: 0 8px; align-items: center;
   font-size: 14px; border-bottom: 1px solid rgba(58,56,51,.35);
-  height: 44px; box-sizing: border-box; cursor: pointer; transition: background .1s;
+  height: 36px; box-sizing: border-box; cursor: pointer; transition: background .1s;
 }
 .arenaTableRow:hover { background: rgba(255,255,255,.04); }
 .arenaTableRow.me { background: rgba(191,129,29,.1); border-left: 3px solid var(--accent); padding-left: 9px; }
@@ -449,25 +449,19 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaTableRow .pname {
   color: var(--text-bright); font-weight: 500; overflow: hidden;
   text-overflow: ellipsis; white-space: nowrap; min-width: 0;
-  display: flex; align-items: center; gap: 6px;
+  display: flex; align-items: center; gap: 3px;
 }
-.arenaTableRow .pname .prat { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 4px; }
+.arenaTableRow .pname .prat { color: var(--muted); font-weight: 400; font-size: 11px; margin-left: 1px; }
 .arenaTableRow .pname .playerNick { font-weight: 600; }
 .arenaTableRow .pname .pgreen { color: var(--green-2); font-size: 11px; }
 .arenaTableRow .pname .ppause { color: var(--accent); font-size: 12px; }
 
-/* Обертка для счета и истории (справа) */
-.score-history-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  min-width: 0;
-}
+/* Суммарные очки всегда в крайней правой колонке. */
 .scoreBlock {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: flex-end;
+  min-width: 36px;
 }
 .scoreVal {
   color: var(--accent-2); 
@@ -475,17 +469,22 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   font-size: 16px;
 }
 .streak-fire {
-  font-size: 13px;
+  font-size: 14px;
   color: #ff9c3a;
-  font-weight: bold;
+  line-height: 1;
   white-space: nowrap;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 0 3px rgba(255,156,58,.25));
 }
 .historyBlock {
   display: flex;
-  gap: 4px;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 5px;
+  justify-content: center;
   overflow: hidden;
+  min-width: 0;
 }
+.historyBlock .arena-results { min-width: 0; overflow: hidden; }
 .arena-results {
   display: flex;
   gap: 4px;
@@ -598,19 +597,26 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .apc-g-r { color: var(--muted); font-size: 11px; margin-left: 3px; }
 .apc-empty { padding: 16px; text-align: center; color: var(--muted); font-size: 12px; }
 
-.arenaWinnerBanner { background: linear-gradient(160deg,#2a2520,#1a1815); border: 1px solid var(--accent); border-radius: 8px; padding: 14px; text-align: center; box-sizing: border-box; }
-.awbTitle { font-size: 18px; color: var(--accent-2); font-weight: 700; margin-bottom: 10px; }
-.awbPodium { display: flex; justify-content: center; align-items: flex-end; gap: 8px; }
-.awbItem { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px; min-width: 90px; }
-.awbItem.gold { border-color: var(--accent); background: linear-gradient(180deg,#3d331c,#2a2517); transform: translateY(-6px); }
-.awbItem.silver { border-color: #888; }
-.awbItem.bronze { border-color: #a06a3a; }
-.awbItem .place { font-size: 20px; font-weight: 700; }
+.arenaWinnerBanner { position: relative; overflow: hidden; background: radial-gradient(ellipse at top,rgba(255,190,55,.13),transparent 65%),linear-gradient(160deg,#29251f,#191816); border: 1px solid rgba(255,190,55,.65); border-radius: 12px; padding: 18px 14px; text-align: center; box-sizing: border-box; box-shadow: 0 8px 30px rgba(0,0,0,.22); }
+.awbTitle { font-size: 21px; color: var(--accent-2); font-weight: 700; margin-bottom: 14px; }
+.awbPodium { display: flex; justify-content: center; align-items: stretch; gap: 10px; }
+.awbItem { background: rgba(255,255,255,.035); border: 1px solid var(--border); border-radius: 9px; padding: 12px 10px; min-width: 0; width: min(31%, 190px); box-sizing: border-box; }
+.awbItem.gold { border-color: #e9b83f; background: linear-gradient(180deg,rgba(255,193,55,.18),rgba(42,37,23,.85)); }
+.awbItem.silver { border-color: #aeb8c0; }
+.awbItem.bronze { border-color: #bd8052; }
+.awbItem .place { font-size: 30px; line-height: 1.1; margin-bottom: 7px; }
 .awbItem.gold .place { color: #ffd54f; }
-.awbItem.silver .place { color: #d0d0d0; }
+.awbItem.silver .place { color: #d0d9df; }
 .awbItem.bronze .place { color: #d4904a; }
-.awbItem .n { color: var(--text-bright); font-weight: 600; margin: 2px 0; font-size: 13px; }
-.awbItem .s { color: var(--accent); font-weight: 700; font-size: 16px; }
+.awbItem .n { color: var(--text-bright); font-weight: 700; margin: 3px 0 8px; font-size: 13px; overflow-wrap: anywhere; }
+.awbItem .s { color: var(--accent); font-weight: 800; font-size: 19px; margin-bottom: 9px; }
+.awbStats { display: grid; grid-template-columns: 1fr; gap: 4px; text-align: left; font-size: 11px; color: var(--muted); }
+.awbStats span { display:flex; justify-content:space-between; gap:5px; }
+.awbStats b { color: var(--text-bright); white-space:nowrap; }
+.arenaConfettiLayer { position: fixed; inset: 0; z-index: 9999; pointer-events: none; overflow: hidden; }
+.arenaConfettiPiece { position:absolute; top:-18px; width:8px; height:12px; opacity:.95; animation: arenaConfettiFall 5s linear forwards; }
+@keyframes arenaConfettiFall { to { transform: translate3d(var(--drift),110vh,0) rotate(900deg); opacity:.15; } }
+@media (max-width: 600px) { .awbPodium { gap: 5px; } .awbItem { padding: 9px 5px; width: 33.333%; } .awbItem .place { font-size: 25px; } .awbItem .n { font-size: 11px; } .awbStats { font-size: 10px; } }
 
 /* Overlay-карточка поверх панели партий */
 #arenaPlayerOverlay {
@@ -1002,3 +1008,5 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
 .arenaGamesPanel > .arenaGamesBody { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; }
 #arenaGamesList { overflow-y: auto; overflow-x: hidden; }
 #arenaTopGame { flex: 0 0 auto; }
+
+@media (max-width: 600px) { .arenaTableRow { grid-template-columns: 22px minmax(0,1fr) minmax(48px,auto) minmax(28px,auto); gap: 4px; padding-left: 6px; padding-right: 6px; height: 34px; } .arenaTableRow .pname { gap: 4px; } .historyBlock { gap: 3px; } .arena-results { gap: 3px; } .res-num { font-size: 12px; } .scoreVal { font-size: 14px; } }
