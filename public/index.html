@@ -115,16 +115,14 @@ body.login-active #mainContent { display: none !important; }
         <div class="lobbyContent" id="lobbyTabContent"></div>
       </div>
       <aside class="homeRight">
-        <div class="sideTitle">Действия</div>
-        <div class="lobbyActions">
-          <button class="lobbyActionBtn challengeBtn" onclick="Lobby.switchTab('create')"><span class="laIcon">⚔</span><span class="laTitle">Создать запрос на игру</span></button>
-          <button class="lobbyActionBtn botBtn" onclick="Bot.openDialog()"><span class="laIcon">🤖</span><span class="laTitle">Сыграть с компьютером</span></button>
+        <div class="quickActionsRow">
+          <button class="quickActionBtn challengeBtn" onclick="Lobby.switchTab('create')">Создать запрос на игру</button>
+          <button class="quickActionBtn botBtn" onclick="Bot.openDialog()">Сыграть с компьютером</button>
         </div>
-        <div class="sideTitle" style="margin-top:16px">📊 Статистика</div>
-        <div class="statsBox">
-          <div class="statRow"><span class="lbl">Игроков на сайте</span><span class="val" id="statOnline">0</span></div>
-          <div class="statRow"><span class="lbl">Партий на сайте</span><span class="val" id="statGames">0</span></div>
-          <div class="statRow live"><span class="lbl">Партий сейчас</span><span class="val" id="statActive">0</span></div>
+        <div class="lobbyStatsRow">
+          <span class="lobbyStatItem"><b id="statOnline">0</b> игроков</span>
+          <span class="lobbyStatItem"><b id="statGames">0</b> партий</span>
+          <span class="lobbyStatItem"><b id="statActive">0</b> сейчас</span>
         </div>
       </aside>
     </div>
