@@ -432,8 +432,8 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 
 .arenaTableRow {
   display: grid;
-  /* 4 колонки: место, игрок, счет, история */
-  grid-template-columns: 32px minmax(0,1fr) 60px 110px;
+  /* 3 колонки: место, игрок, счет+история */
+  grid-template-columns: 32px minmax(0,1fr) auto;
   gap: 12px; padding: 0 12px; align-items: center;
   font-size: 14px; border-bottom: 1px solid rgba(58,56,51,.35);
   height: 44px; box-sizing: border-box; cursor: pointer; transition: background .1s;
@@ -455,19 +455,24 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaTableRow .pname .playerNick { font-weight: 600; }
 .arenaTableRow .pname .pgreen { color: var(--green-2); font-size: 11px; }
 .arenaTableRow .pname .ppause { color: var(--accent); font-size: 12px; }
-.arenaTableRow .score { 
-  text-align: center; 
-  font-size: 16px;
-}
-.scoreWrapper {
+
+/* Обертка для счета и истории (справа) */
+.score-history-wrapper {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-width: 0;
+}
+.scoreBlock {
+  display: flex;
+  align-items: center;
   gap: 4px;
 }
 .scoreVal {
   color: var(--accent-2); 
   font-weight: 700;
+  font-size: 16px;
 }
 .streak-fire {
   font-size: 13px;
@@ -475,13 +480,10 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   font-weight: bold;
   white-space: nowrap;
 }
-
-/* Полоса результатов (Lichess style) */
-.arenaTableRow .history {
+.historyBlock {
   display: flex;
   gap: 4px;
-  justify-content: flex-start;
-  align-items: center;
+  justify-content: flex-end;
   overflow: hidden;
 }
 .arena-results {
@@ -498,9 +500,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .res-num.num-win { color: #4ade80; }
 .res-num.num-draw { color: #bf811d; }
 .res-num.num-loss { color: #a53030; }
-
-/* Убираем старые стили для заголовков таблицы, так как их больше нет */
-/* .arenaTableHeader { ... } */
 
 
 /* --- Правая колонка --- */
@@ -971,7 +970,7 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
   .arenaPage { display:flex; flex-direction:column; max-width:none; }
   .arenaLeft, .arenaCenter, .arenaRight { width:100%; min-width:0; max-width:none; }
   .arenaJoinBtn { width:130px; min-width:130px; max-width:130px; font-size:12px; }
-  .arenaTableRow { grid-template-columns:26px minmax(0,1fr) 42px 80px; gap:6px; font-size:12px; }
+  .arenaTableRow { grid-template-columns:26px minmax(0,1fr) auto; gap:6px; font-size:12px; }
   .arenaTableRow .score { font-size:13px; }
   .arenasHeader h1 { font-size:24px; }
   .arenasHeader .ahNow { font-size:13px; }
