@@ -1013,119 +1013,61 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
 @media (max-width: 600px) { .arenaTableRow { grid-template-columns: 22px minmax(0,1fr) minmax(48px,auto) minmax(28px,auto); gap: 4px; padding-left: 6px; padding-right: 6px; height: 34px; } .arenaTableRow .pname { gap: 4px; } .historyBlock { gap: 3px; } .arena-results { gap: 3px; } .res-num { font-size: 12px; } .scoreVal { font-size: 14px; } }
 
 
-/* FIX: сохраняем три колонки арены на средних экранах.
-   Раньше breakpoint 1150px переносил центральную панель на новую строку,
-   из-за чего после клика игрока контент оказывался слева, а справа оставалась пустота. */
-@media (max-width: 1150px) and (min-width: 801px) {
-  .arenaPage {
-    display: flex;
-    flex-wrap: nowrap;
-    align-items: flex-start;
-    justify-content: center;
-    gap: 12px;
-    padding-left: 12px;
-    padding-right: 12px;
-  }
-
-  .arenaLeft {
-    width: clamp(210px, 25vw, 270px);
-    flex: 0 1 clamp(210px, 25vw, 270px);
-    min-width: 0;
-  }
-
-  .arenaCenter {
-    order: initial;
-    flex: 1 1 300px;
-    width: auto;
-    min-width: 260px;
-  }
-
-  .arenaRight {
-    width: clamp(240px, 29vw, 320px);
-    flex: 0 1 clamp(240px, 29vw, 320px);
-    min-width: 0;
-  }
-}
-
-@media (max-width: 800px) {
-  .arenaPage {
-    flex-direction: column;
-    flex-wrap: nowrap;
-    align-items: stretch;
-  }
-
-  .arenaLeft,
-  .arenaCenter,
-  .arenaRight {
-    width: 100%;
-    max-width: none;
-    min-width: 0;
-    flex: 0 0 auto;
-  }
-
-  .arenaCenter { order: initial; }
-}
-
-
-/* Arena layout fix: independent column sizing; selected-player panel cannot
-   shrink the standings column or stretch it vertically. */
+/* Восстановление нормальной раскладки арены: три независимые колонки.
+   Высота правой панели не влияет на среднюю; при выборе игрока центральная
+   колонка сохраняет рабочую ширину и не переносится под остальные панели. */
 .arenaPage {
   display: grid !important;
-  grid-template-columns: minmax(250px, 300px) minmax(340px, 1fr) minmax(280px, 360px);
+  grid-template-columns: minmax(220px, 300px) minmax(360px, 1fr) minmax(260px, 360px) !important;
   align-items: start !important;
-  justify-content: stretch;
-  gap: 20px;
+  justify-content: stretch !important;
+  gap: 20px !important;
+  width: 100% !important;
+  max-width: 1600px !important;
+  margin: 0 auto !important;
+  padding: 0 16px !important;
+  box-sizing: border-box !important;
 }
 
 .arenaLeft,
 .arenaCenter,
 .arenaRight {
+  width: auto !important;
   min-width: 0;
-  width: auto;
   max-width: 100%;
   align-self: start !important;
+  order: initial !important;
 }
 
 .arenaCenter {
-  flex: initial;
-  grid-column: auto;
-  order: initial;
+  min-width: 0 !important;
 }
 
-/* At intermediate widths keep the standings comfortably wide and move the
-   right-side board/details below it instead of squeezing the center column. */
-@media (max-width: 1150px) and (min-width: 801px) {
+.arenaRight {
+  justify-self: stretch;
+}
+
+/* Сохраняем все три колонки на обычных десктопных разрешениях. */
+@media (max-width: 1150px) and (min-width: 901px) {
   .arenaPage {
-    grid-template-columns: minmax(220px, 0.85fr) minmax(340px, 1.15fr);
-    gap: 16px;
-  }
-
-  .arenaLeft { grid-column: 1; }
-  .arenaCenter {
-    grid-column: 2;
-    min-width: 340px;
-  }
-
-  .arenaRight {
-    grid-column: 2;
-    width: 100%;
-    min-width: 0;
+    grid-template-columns: minmax(190px, 0.8fr) minmax(320px, 1.4fr) minmax(230px, 0.9fr) !important;
+    gap: 12px !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
   }
 }
 
-@media (max-width: 800px) {
+/* На действительно узких экранах складываем панели, вместо сжатия до нечитаемого размера. */
+@media (max-width: 900px) {
   .arenaPage {
-    display: flex !important;
-    flex-direction: column;
-    align-items: stretch !important;
-    gap: 14px;
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 16px !important;
   }
 
   .arenaLeft,
   .arenaCenter,
   .arenaRight {
-    width: 100%;
-    min-width: 0;
-    max-width: none;
+    width: 100% !important;
+    min-width: 0 !important;
   }
 }
