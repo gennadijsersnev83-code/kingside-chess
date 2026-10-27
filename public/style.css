@@ -780,6 +780,23 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   color: rgba(255, 107, 107, 0.7);
 }
 
+/* Стиль для системных сообщений о снятии мута (зелёные) */
+#chatMessages .msg.sys.unmute-notice,
+.arenaChatMessages .msg.sys.unmute-notice {
+  color: #7dbe30;
+  background: rgba(98, 153, 36, 0.1);
+  border-left: 3px solid #629924;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-style: normal;
+  font-weight: 500;
+  margin: 4px 0;
+}
+#chatMessages .msg.sys.unmute-notice .t,
+.arenaChatMessages .msg.sys.unmute-notice .t {
+  color: rgba(125, 190, 48, 0.7);
+}
+
 #chatForm { display:flex; border-top:1px solid var(--border); }
 #chatForm input { flex:1; border:none; border-radius:0; background:transparent; padding:10px 12px; font-size:13px; }
 #chatForm button { border-radius:0; padding:0 16px; font-size:14px; border:none; background:transparent; color:var(--muted); cursor:pointer; min-width:48px; min-height:40px; }
@@ -1043,3 +1060,53 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
 #arenaTopGame { flex: 0 0 auto; }
 
 @media (max-width: 600px) { .arenaTableRow { grid-template-columns: 22px minmax(0,1fr) minmax(48px,auto) minmax(28px,auto); gap: 4px; padding-left: 6px; padding-right: 6px; height: 34px; } .arenaTableRow .pname { gap: 4px; } .historyBlock { gap: 3px; } .arena-results { gap: 3px; } .res-num { font-size: 12px; } .scoreVal { font-size: 14px; } }
+
+/* === MODAL ДЛЯ МУТА === */
+.mute-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7);
+  display: none; align-items: center; justify-content: center; z-index: 10000;
+  padding: 20px; box-sizing: border-box;
+}
+.mute-modal-overlay.show { display: flex; }
+.mute-modal-box {
+  background: #262522; border: 1px solid #3a3833; border-radius: 10px;
+  padding: 22px; max-width: 400px; width: 100%; color: #e8e6e3;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+}
+.mute-modal-box h3 { margin: 0 0 14px; font-weight: 600; font-size: 16px; color: var(--text-bright); }
+.mute-modal-box .mm-label { font-size: 12px; color: #7d7a72; text-transform: uppercase; letter-spacing: .5px; font-weight: 700; margin-bottom: 8px; display: block; }
+.mute-modal-box input[type="text"] {
+  width: 100%; padding: 10px 12px; font-size: 14px; background: #1a1917;
+  border: 1px solid #3a3833; border-radius: 6px; color: #e8e6e3; outline: none;
+  box-sizing: border-box; margin-bottom: 16px;
+}
+.mute-modal-box input[type="text"]:focus { border-color: var(--accent); }
+.mute-modal-box .mm-actions { display: flex; gap: 10px; }
+.mute-modal-box .mm-actions button { flex: 1; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 13px; border: none; }
+.mute-modal-box .mm-actions .mm-cancel { background: #2d2c29; border: 1px solid #3a3833; color: #bfbdb6; }
+.mute-modal-box .mm-actions .mm-cancel:hover { background: #34322e; }
+.mute-modal-box .mm-actions .mm-confirm { background: #a53030; color: #fff; }
+.mute-modal-box .mm-actions .mm-confirm:hover { background: #c0392b; }
+
+/* === ЧЕКБОКСЫ ДЛЯ УДАЛЕНИЯ СООБЩЕНИЙ === */
+.msg .msg-checkbox {
+  display: none; width: 14px; height: 14px; margin-right: 6px; cursor: pointer;
+  accent-color: #e5484d; vertical-align: middle;
+}
+.chat-selection-mode .msg .msg-checkbox { display: inline-block; }
+.chat-selection-mode .msg { background: rgba(229,72,77,0.06); cursor: pointer; }
+.chat-selection-mode .msg.selected { background: rgba(229,72,77,0.2); }
+.chat-selection-bar {
+  display: none; padding: 8px 12px; background: #2d1a1a; border-top: 1px solid #e5484d;
+  align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; color: #ff8080;
+}
+.chat-selection-bar.show { display: flex; }
+.chat-selection-bar button {
+  background: #e5484d; color: #fff; border: none; padding: 6px 12px;
+  border-radius: 4px; font-weight: 700; cursor: pointer; font-size: 12px;
+  min-height: 28px;
+}
+.chat-selection-bar button:hover { background: #ff5c5c; }
+.chat-selection-bar button.cancel {
+  background: transparent; border: 1px solid #3a3833; color: #bfbdb6;
+}
