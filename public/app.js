@@ -676,12 +676,12 @@ const Lobby = {
 // ============================================================
 const Bot = {
   init() { const dlg = document.getElementById('botDialog'); if (dlg) dlg.addEventListener('click', (e) => { if (e.target === dlg) this.closeDialog(); }); },
-  openDialog() { const dlg = document.getElementById('botDialog'); if (!dlg) return; App.socket.emit('getBots', (list) => { if (Array.isArray(list)) App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.initialRating, games: b.games || 0, isMaster: b.level === 4 })); this.render(); dlg.classList.add('show'); }); },
+  openDialog() { const dlg = document.getElementById('botDialog'); if (!dlg) return; App.socket.emit('getBots', (list) => { if (Array.isArray(list)) App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.rating, games: b.games || 0, isMaster: b.level === 4 })); this.render(); dlg.classList.add('show'); }); },
   closeDialog() { const dlg = document.getElementById('botDialog'); if (dlg) dlg.classList.remove('show'); },
   render() {
     const levelsEl = document.getElementById('botLevels'); const timesEl = document.getElementById('botTimes');
     if (!levelsEl || !timesEl) return;
-    if (!App.botLevels.length) { App.socket.emit('getBots', (list) => { if (Array.isArray(list)) { App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.initialRating, games: b.games || 0, isMaster: b.level === 4 })); this.render(); } }); return; }
+    if (!App.botLevels.length) { App.socket.emit('getBots', (list) => { if (Array.isArray(list)) { App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.rating, games: b.games || 0, isMaster: b.level === 4 })); this.render(); } }); return; }
     const st = App.botDialogState;
     levelsEl.innerHTML = App.botLevels.map(l => { const active = st.level === l.level; const cls = active ? 'active' : ''; const extra = l.isMaster ? 'masterBtn' : ''; return `<button data-level="${l.level}" class="${cls} ${extra}"><div class="btitle">${l.title}</div><div class="brating">${l.rating}</div></button>`; }).join('');
     timesEl.innerHTML = App.botTimes.map(t => { const active = st.time === t.t && st.inc === t.i; return `<button data-t="${t.t}" data-i="${t.i}" class="${active ? 'active' : ''}">${t.label}</button>`; }).join('');
@@ -824,6 +824,7 @@ const Arena = {
   pageRefreshHandle: null, statusTickHandle: null, gamesRefreshHandle: null, refreshHandle: null,
   openPlayerName: null,
   lastLiveGames: [], lastDoneGames: [],
+  currentPage: 0, // <--- Добавлено для пагинации
 
   init() {
     document.addEventListener('DOMContentLoaded', () => this._ensureOverlay());
@@ -840,6 +841,7 @@ const Arena = {
     this.currentArenaId = arenaId;
     this.openPlayerName = null;
     this.lastLiveGames = []; this.lastDoneGames = [];
+    this.currentPage = 0; // Сброс страницы
     const chatEl = document.getElementById('arenaChatMessages'); if (chatEl) chatEl.innerHTML = '';
     this.lastStateHash = ''; this.lastGamesHash = '';
     App.socket.emit('joinArenaRoom', { arenaId }, (res) => { if (res && res.ok && Array.isArray(res.chat)) { const box = document.getElementById('arenaChatMessages'); if (box) { box.innerHTML = ''; res.chat.forEach(m => this.renderChatMsg(m)); } } });
@@ -947,9 +949,25 @@ const Arena = {
     if (!row || !lbl || !time) return; const state = this.currentArenaState; if (!state) return;
     const serverNow = Date.now() + this.serverOffsetMs;
     row.classList.remove('live', 'finished');
-    if (state.phase === 'finished') { row.classList.add('finished'); lbl.textContent = 'Завершена:'; time.textContent = '00:00'; return; }
-    if (state.phase === 'waiting') { lbl.textContent = 'До начала:'; time.textContent = Utils.formatMMSS(Math.max(0, state.startsAt - serverNow)); return; }
-    if (state.phase === 'live') { row.classList.add('live'); lbl.textContent = 'До конца:'; time.textContent = Utils.formatMMSS(Math.max(0, state.endsAt - serverNow)); return; }
+    
+    // Исправлено: теперь показывает время до начала/до конца
+    if (state.phase === 'finished') { 
+      row.classList.add('finished'); 
+      lbl.textContent = 'Завершена:'; 
+      time.textContent = '00:00'; 
+      return; 
+    }
+    if (state.phase === 'waiting') { 
+      lbl.textContent = 'До начала:'; 
+      time.textContent = Utils.formatMMSS(Math.max(0, state.startsAt - serverNow)); 
+      return; 
+    }
+    if (state.phase === 'live') { 
+      row.classList.add('live'); 
+      lbl.textContent = 'До конца:'; 
+      time.textContent = Utils.formatMMSS(Math.max(0, state.endsAt - serverNow)); 
+      return; 
+    }
   },
   renderPage(arena, state) {
     const n = document.getElementById('arenaPageName'); if (n) n.textContent = arena.name;
@@ -979,29 +997,62 @@ const Arena = {
   },
   renderParticipants(arena, state) {
     const body = document.getElementById('arenaTableBody'); if (!body) return;
+    const pag = document.getElementById('arenaPagination'); if (!pag) return;
+    
     const list = state.participants || [];
-    if (!list.length) { body.innerHTML = '<div class="arenasEmpty" style="padding:20px;">Пока никто не зарегистрировался</div>'; return; }
+    if (!list.length) { 
+      body.innerHTML = '<div class="arenasEmpty" style="padding:20px;">Пока никто не зарегистрировался</div>'; 
+      pag.innerHTML = '';
+      return; 
+    }
+
     const myName = App.me ? App.me.username : null;
     const searchEl = document.getElementById('arenaSearchInput');
     const search = ((searchEl && searchEl.value) || '').trim().toLowerCase();
     const filtered = search ? list.filter(p => p.username.toLowerCase().includes(search)) : list;
+
+    // Пагинация: 10 игроков на страницу
+    const pageSize = 10;
+    const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+    if (this.currentPage >= totalPages) this.currentPage = totalPages - 1;
+    if (this.currentPage < 0) this.currentPage = 0;
     
-    body.innerHTML = filtered.map((p) => {
-      const place = list.indexOf(p) + 1;
+    const startIdx = this.currentPage * pageSize;
+    const endIdx = Math.min(startIdx + pageSize, filtered.length);
+    const pageItems = filtered.slice(startIdx, endIdx);
+
+    // Рендер панели пагинации
+    pag.innerHTML = `
+      <button class="pageBtn" ${this.currentPage === 0 ? 'disabled' : ''} onclick="Arena.changePage(0)">|◀</button>
+      <button class="pageBtn" ${this.currentPage === 0 ? 'disabled' : ''} onclick="Arena.changePage(Arena.currentPage - 1)">◀</button>
+      <span class="pageInfo">${filtered.length ? startIdx + 1 : 0}-${endIdx} / ${filtered.length}</span>
+      <button class="pageBtn" ${this.currentPage >= totalPages - 1 ? 'disabled' : ''} onclick="Arena.changePage(Arena.currentPage + 1)">▶</button>
+      <button class="pageBtn" ${this.currentPage >= totalPages - 1 ? 'disabled' : ''} onclick="Arena.changePage(${totalPages - 1})">▶|</button>
+    `;
+
+    body.innerHTML = pageItems.map((p) => {
+      const globalIdx = list.indexOf(p);
+      const place = globalIdx + 1;
       const placeCls = place === 1 ? 'top1' : place === 2 ? 'top2' : place === 3 ? 'top3' : '';
       const isMe = myName && p.username === myName;
       const greenDot = p.isBot ? '<span class="pgreen" style="color:#a56ce8">🤖</span>' : (p.online ? '<span class="pgreen">●</span>' : '');
       const pauseTag = p.paused ? '<span class="ppause">⏸</span>' : '';
 
+      // ОЧКИ: Добавлен огонек, если серия >= 3
+      let streakHtml = '';
+      if (p.winStreak >= 3) {
+        streakHtml = `<span class="streak-fire" title="${p.winStreak} побед подряд">🔥${p.winStreak}</span>`;
+      }
+      
+      const scoreHtml = `<div class="scoreWrapper"><span class="scoreVal">${p.score}</span>${streakHtml}</div>`;
+
       // ИСТОРИЯ: Цифры (0 = loss, 1 = draw, 2 = win, 4 = berserk win)
       let resultsHtml = '<div class="arena-results">';
       if (p.history && p.history.length > 0) {
         for (const res of p.history) {
-          // res: 0 = loss, 1 = draw, 2 = win, 4 = berserk win
           let cls = 'num-loss';
           if (res === 2 || res === 4) cls = 'num-win';
           else if (res === 1) cls = 'num-draw';
-          
           resultsHtml += `<span class="res-num ${cls}">${res}</span>`;
         }
       } else {
@@ -1013,12 +1064,26 @@ const Arena = {
       return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''} ${botCls}" data-username="${Utils.escapeHtml(p.username)}" onclick="Arena.openPlayer('${Utils.escapeHtml(p.username)}')">
         <span class="place ${placeCls}">${place}</span>
         <span class="pname">${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span>
-        <span class="score">${p.score}</span>
+        <span class="score">${scoreHtml}</span>
         <span class="history">${resultsHtml}</span>
       </div>`;
     }).join('');
   },
-  filterParticipants() { if (this.currentArenaState && this.currentArenaId) { const arena = this.cache.find(a => a.id === this.currentArenaId); if (arena) this.renderParticipants(arena, this.currentArenaState); } },
+  changePage(page) { // <--- Новая функция для пагинации
+    this.currentPage = page;
+    this.lastStateHash = ''; // Принудительный ререндер
+    if (this.currentArenaState && this.currentArenaId) {
+      const arena = this.cache.find(a => a.id === this.currentArenaId);
+      if (arena) this.renderParticipants(arena, this.currentArenaState);
+    }
+  },
+  filterParticipants() { 
+    this.currentPage = 0; // Сброс страницы при поиске
+    if (this.currentArenaState && this.currentArenaId) { 
+      const arena = this.cache.find(a => a.id === this.currentArenaId); 
+      if (arena) this.renderParticipants(arena, this.currentArenaState); 
+    } 
+  },
 
   _ensureOverlay() {
     const listEl = document.getElementById('arenaGamesList');
@@ -1065,22 +1130,11 @@ const Arena = {
         const topGame = myLive || live[0] || null;
         if (topGame) {
           topEl.classList.remove('arenaTopGameEmpty');
-          let headerEl = document.getElementById('arenaTopGameHeader');
-          if (!headerEl) {
-            headerEl = document.createElement('div');
-            headerEl.id = 'arenaTopGameHeader';
-            headerEl.className = 'arenaTopGameHeader';
-            topEl.parentElement.insertBefore(headerEl, topEl);
-          }
-          headerEl.style.display = 'flex';
-          headerEl.innerHTML = `<span>#1 ${Utils.nickHtml(topGame.white, topGame.whiteIsAdmin, topGame.whiteIsMod)} ${topGame.whiteRating || ''}</span><span style="color:var(--green-2)">${Utils.formatTime(topGame.timeW)}</span>`;
           topEl.innerHTML = this.renderTopGame(topGame, placeMap);
           topEl.style.cursor = 'pointer';
           topEl.title = 'Смотреть партию';
           topEl.onclick = () => Watch.watch(topGame.lobbyId);
         } else {
-          const headerEl = document.getElementById('arenaTopGameHeader');
-          if (headerEl) headerEl.style.display = 'none';
           topEl.style.cursor = 'default';
           topEl.title = '';
           topEl.onclick = null;
