@@ -823,7 +823,6 @@ const Arena = {
   lastListHash: '', lastStateHash: '', lastGamesHash: '', loadBusy: false,
   pageRefreshHandle: null, statusTickHandle: null, gamesRefreshHandle: null, refreshHandle: null,
   openPlayerName: null,
-  leaderClockHandle: null, leaderClockData: {}, leaderClockSyncedAt: 0,
   lastLiveGames: [], lastDoneGames: [],
   currentPage: 0,
 
@@ -853,8 +852,6 @@ const Arena = {
     this.statusTickHandle = setInterval(() => this.tickStatus(), 1000);
     if (this.gamesRefreshHandle) clearInterval(this.gamesRefreshHandle);
     this.gamesRefreshHandle = setInterval(() => { const aps = document.getElementById('arenaPageScreen'); if (aps && aps.classList.contains('active')) this.renderGamesList(); }, 3000);
-    if (this.leaderClockHandle) clearInterval(this.leaderClockHandle);
-    this.leaderClockHandle = setInterval(() => this.tickLeaderClocks(), 250);
     this._ensureOverlay();
   },
   leaveRoom() {
@@ -863,8 +860,6 @@ const Arena = {
     if (this.pageRefreshHandle) { clearInterval(this.pageRefreshHandle); this.pageRefreshHandle = null; }
     if (this.statusTickHandle) { clearInterval(this.statusTickHandle); this.statusTickHandle = null; }
     if (this.gamesRefreshHandle) { clearInterval(this.gamesRefreshHandle); this.gamesRefreshHandle = null; }
-    if (this.leaderClockHandle) { clearInterval(this.leaderClockHandle); this.leaderClockHandle = null; }
-    this.leaderClockData = {};
     this.openPlayerName = null;
   },
   refresh(force) {
@@ -1121,32 +1116,6 @@ const Arena = {
       const pcEl = document.getElementById('arenaParticipantsCount'); const vcEl = document.getElementById('arenaViewersCount');
       if (pcEl) pcEl.textContent = res.participantsCount || 0; if (vcEl) vcEl.textContent = res.chatViewersCount || 0;
       this.lastLiveGames = live; this.lastDoneGames = done;
-      // Keep a per-game local clock between server polls. The server list is
-      // refreshed every few seconds; resetting the clock on every response made
-      // the displayed time jump/pause instead of ticking once per second.
-      const nowPerf = performance.now();
-      const previousClocks = this.leaderClockData || {};
-      const nextClocks = {};
-      for (const g of live) {
-        const id = String(g.lobbyId);
-        const turn = g.turn === 'b' ? 'b' : 'w';
-        const fen = g.fen || '';
-        const serverW = Math.max(0, Number(g.timeW) || 0);
-        const serverB = Math.max(0, Number(g.timeB) || 0);
-        const prev = previousClocks[id];
-        if (prev && prev.turn === turn && prev.fen === fen) {
-          const elapsed = Math.max(0, (nowPerf - prev.syncedAt) / 1000);
-          nextClocks[id] = {
-            w: Math.max(0, prev.w - (turn === 'w' ? elapsed : 0)),
-            b: Math.max(0, prev.b - (turn === 'b' ? elapsed : 0)),
-            turn, fen, syncedAt: nowPerf
-          };
-        } else {
-          nextClocks[id] = { w: serverW, b: serverB, turn, fen, syncedAt: nowPerf };
-        }
-      }
-      this.leaderClockData = nextClocks;
-      this.leaderClockSyncedAt = nowPerf;
 
       const placeMap = new Map();
       if (this.currentArenaState && Array.isArray(this.currentArenaState.participants)) {
@@ -1193,7 +1162,7 @@ const Arena = {
         html += `<div class="arenaGameLine live" onclick="Watch.watch('${g.lobbyId}')">
           <span class="agl-res live">▶</span>
           <span class="agl-players">${wPlaceHtml}${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}${wR?`<span class="agl-r">(${wR})</span>`:''} <span class="agl-vs">vs</span> ${bPlaceHtml}${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}${bR?`<span class="agl-r">(${bR})</span>`:''}</span>
-          <span class="agl-score"><span data-arena-clock="${String(g.lobbyId).replace(/[^a-zA-Z0-9_-]/g, '')}-w">${Utils.formatTime(g.timeW)}</span> / <span data-arena-clock="${String(g.lobbyId).replace(/[^a-zA-Z0-9_-]/g, '')}-b">${Utils.formatTime(g.timeB)}</span></span>
+          <span class="agl-score">${Utils.formatTime(g.timeW)} / ${Utils.formatTime(g.timeB)}</span>
         </div>`;
       }
       for (const g of done.slice(0, 50)) {
@@ -1211,35 +1180,6 @@ const Arena = {
       }
       listEl.innerHTML = html;
     });
-  },
-
-  tickLeaderClocks() {
-    if (!this.currentArenaId || !this.leaderClockData) return;
-    const nowPerf = performance.now();
-    const fmt = (seconds) => Utils.formatTime(Math.max(0, Math.ceil(seconds)));
-    for (const [id, clock] of Object.entries(this.leaderClockData)) {
-      const elapsed = Math.max(0, (nowPerf - (clock.syncedAt || this.leaderClockSyncedAt)) / 1000);
-      const w = Math.max(0, clock.w - (clock.turn === 'w' ? elapsed : 0));
-      const b = Math.max(0, clock.b - (clock.turn === 'b' ? elapsed : 0));
-      const safeId = id.replace(/[^a-zA-Z0-9_-]/g, '');
-      const wEl = document.querySelector(`[data-arena-clock="${safeId}-w"]`);
-      const bEl = document.querySelector(`[data-arena-clock="${safeId}-b"]`);
-      if (wEl) wEl.textContent = fmt(w);
-      if (bEl) bEl.textContent = fmt(b);
-    }
-    const top = this.lastLiveGames || [];
-    const myName = App.me ? App.me.username : null;
-    const game = (myName && top.find(g => g.white === myName || g.black === myName)) || top[0];
-    if (game) {
-      const clock = this.leaderClockData[String(game.lobbyId)];
-      if (clock) {
-        const clockElapsed = Math.max(0, (nowPerf - (clock.syncedAt || this.leaderClockSyncedAt)) / 1000);
-        const wEl = document.querySelector('#arenaTopGame [data-arena-top-clock="w"]');
-        const bEl = document.querySelector('#arenaTopGame [data-arena-top-clock="b"]');
-        if (wEl) wEl.textContent = fmt(Math.max(0, clock.w - (clock.turn === 'w' ? clockElapsed : 0)));
-        if (bEl) bEl.textContent = fmt(Math.max(0, clock.b - (clock.turn === 'b' ? clockElapsed : 0)));
-      }
-    }
   },
 
   renderTopGamePlaceholder(phase) {
@@ -1277,9 +1217,9 @@ const Arena = {
     const bPlace = placeMap && placeMap.get(g.black);
     const wPlaceHtml = wPlace ? `<span class="agl-place">#${wPlace}</span>` : '';
     const bPlaceHtml = bPlace ? `<span class="agl-place">#${bPlace}</span>` : '';
-    return `<div class="arenaTopGamePlayers"><span class="playerRow">${bPlaceHtml}⚫ <span class="name">${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span><span class="time" data-arena-top-clock="b" style="${blackActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeB)}</span></div>
+    return `<div class="arenaTopGamePlayers"><span class="playerRow">${bPlaceHtml}⚫ <span class="name">${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span><span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeB)}</span></div>
       <div class="arenaTopGameBoard">${squares}</div>
-      <div class="arenaTopGamePlayers"><span class="playerRow">${wPlaceHtml}⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" data-arena-top-clock="w" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div>`;
+      <div class="arenaTopGamePlayers"><span class="playerRow">${wPlaceHtml}⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div>`;
   },
 
   openPlayer(username) {
