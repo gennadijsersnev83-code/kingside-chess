@@ -151,39 +151,74 @@ body.login-active #mainContent { display: none !important; }
   <section id="arenaPageScreen" class="screen">
     <div class="arenaPage">
       <aside class="arenaLeft">
-        <div class="arenaInfoCard">
-          <div class="aInfoIcon">🏆</div>
-          <div class="aInfoTitle" id="aInfoTitle">—</div>
-          <div class="aInfoTime" id="aInfoTime">—</div>
-          <div class="aInfoDesc" id="aInfoDesc">—</div>
-          <div class="aInfoRules"><div class="aInfoRulesLabel">Очки:</div><div class="aInfoRulesText">победа 2 · победа в серии 3+ = 4 · ничья 1 · ничья в серии 2+ = 2 · поражение 0</div></div>
+        <!-- Новая карточка статуса -->
+        <div class="arenaStatusCard">
+          <div class="ascIcon">🏆</div>
+          <div class="ascTitle" id="aInfoTitle">—</div>
+          <div class="ascTime" id="aInfoTime">—</div>
+          <div class="ascDesc" id="aInfoDesc">—</div>
+          <div class="ascRules">
+            <div class="ascRulesLabel">Условия участия:</div>
+            <div class="ascRulesText">Рейтинговые игры в этой категории</div>
+          </div>
         </div>
+        
+        <!-- Чат без жесткой высоты -->
         <div class="arenaChatBox">
-          <div class="arenaChatHeader">💬 Чат арены</div>
+          <div class="arenaChatHeader">
+            <span>💬 Чат</span>
+            <div class="chatToggleSwitch active" onclick="this.classList.toggle('active')"><div class="slider"></div></div>
+          </div>
           <div class="arenaChatMessages" id="arenaChatMessages"></div>
-          <form class="arenaChatForm" onsubmit="Arena.sendChat(event)"><input id="arenaChatInput" placeholder="Написать в чат..." maxlength="300" autocomplete="off"><button type="submit">→</button></form>
+          <form class="arenaChatForm" onsubmit="Arena.sendChat(event)"><input id="arenaChatInput" placeholder="Будьте вежливы в чате!" maxlength="300" autocomplete="off"><button type="submit">→</button></form>
         </div>
       </aside>
+      
       <main class="arenaCenter">
-        <div class="arenaTopBar"><div class="arenaTopLeft"><div class="arenaTrophy">🏆</div><div style="min-width:0; flex:1;"><h2 class="arenaPageName" id="arenaPageName">—</h2><div class="arenaPageSub" id="arenaPageSub">—</div></div></div></div>
-        <div class="arenaStatusRow" id="arenaStatusRow"><span class="arenaStatusLabel" id="arenaStatusLabel">До начала:</span><span class="arenaStatusTime" id="arenaStatusTime">--:--</span></div>
+        <div class="arenaTopBar">
+          <div class="arenaTopLeft">
+            <div class="arenaTrophy">🏆</div>
+            <div style="min-width:0; flex:1;">
+              <h2 class="arenaPageName" id="arenaPageName">—</h2>
+              <div class="arenaPageSub" id="arenaPageSub">—</div>
+            </div>
+            <div class="arenaStatusTime" id="arenaStatusTime">--:--</div>
+          </div>
+        </div>
+        
         <div class="arenaPairingBox" id="arenaPairingBox" style="display:none;"></div>
+        
         <div class="arenaParticipantsHeader">
           <div class="arenaSearch"><input id="arenaSearchInput" placeholder="🔍 Поиск игрока" oninput="Arena.filterParticipants()"></div>
           <div id="arenaJoinBtnWrap"><button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button></div>
         </div>
+        
         <div class="arenaParticipantsTable">
           <div class="arenaTableHeader"><span>#</span><span>Игрок</span><span>Очки</span><span>В / Н / П</span><span>Партий</span></div>
           <div class="arenaTableBody" id="arenaTableBody"><div class="arenasEmpty">Загрузка участников...</div></div>
         </div>
+        
         <div class="arenaWinnerBanner" id="arenaWinnerBanner" style="display:none;"><div class="awbTitle">🏆 Арена завершена!</div><div class="awbPodium" id="awbPodium"></div></div>
       </main>
+      
       <aside class="arenaRight">
         <div class="arenaRightCol">
+          <!-- Заголовок игры сверху -->
+          <div class="arenaTopGameHeader" id="arenaTopGameHeader" style="display:none;">
+            <span id="arenaTopGamePlayers">— vs —</span>
+          </div>
+          
+          <!-- Сама доска -->
           <div class="arenaTopGame" id="arenaTopGame"><div class="arenaTopGameEmpty">Сейчас никто не играет</div></div>
-          <div class="arenaGamesHeader" style="border-top:1px solid var(--border);">🏆 ПРОШЛЫЕ ПАРТИИ ЛИДЕРОВ</div>
+          
+          <!-- Блок лучших игр -->
+          <div class="arenaGamesHeader" style="border-top:1px solid var(--border);">🏆 ЛУЧШИЕ ИГРЫ</div>
           <div class="arenaGamesList" id="arenaGamesList"><div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div></div>
-          <div class="arenaStatsBox" id="arenaStatsBox"><span>👥 Участников: <b id="arenaParticipantsCount">0</b></span><span>👁 Зрителей: <b id="arenaViewersCount">0</b></span></div>
+          
+          <div class="arenaStatsBox" id="arenaStatsBox">
+            <span>👥 Участников: <b id="arenaParticipantsCount">0</b></span>
+            <span>👁 Зрителей: <b id="arenaViewersCount">0</b></span>
+          </div>
         </div>
       </aside>
     </div>
