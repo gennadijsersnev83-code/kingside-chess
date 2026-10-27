@@ -117,7 +117,6 @@ const Chess = {
     } else if (type === 'n') { [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc]) => add(r+dr, c+dc)); }
     else if (type === 'k') {
       [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc]) => add(r+dr, c+dc));
-      // Рокировка невозможна, если король под шахом
       const underCheck = this.inCheck(state, white);
       if (white && r === 7 && c === 4 && !underCheck) {
         if (state.castling.includes('K') && !state.board[7][5] && !state.board[7][6] && state.board[7][7] === 'R' && !this.isAttacked(state, 7, 5, false) && !this.isAttacked(state, 7, 6, false)) moves.push([7, 6]);
@@ -986,6 +985,7 @@ const Arena = {
     const searchEl = document.getElementById('arenaSearchInput');
     const search = ((searchEl && searchEl.value) || '').trim().toLowerCase();
     const filtered = search ? list.filter(p => p.username.toLowerCase().includes(search)) : list;
+    
     body.innerHTML = filtered.map((p) => {
       const place = list.indexOf(p) + 1;
       const placeCls = place === 1 ? 'top1' : place === 2 ? 'top2' : place === 3 ? 'top3' : '';
@@ -993,23 +993,26 @@ const Arena = {
       const greenDot = p.isBot ? '<span class="pgreen" style="color:#a56ce8">🤖</span>' : (p.online ? '<span class="pgreen">●</span>' : '');
       const pauseTag = p.paused ? '<span class="ppause">⏸</span>' : '';
 
-      // Серии и WDL
-      const w = p.wins || 0;
-      const d = p.draws || 0;
-      const l = p.losses || 0;
-      const totalGames = w + d + l;
-
-      let streakHtml = '';
-      if (p.winStreak >= 3) {
-        streakHtml = `<span class="streak-dot w" title="${p.winStreak} побед подряд">🔥${p.winStreak}</span>`;
-      } else if (p.drawStreak >= 2) {
-        streakHtml = `<span class="streak-dot d" title="${p.drawStreak} ничьих подряд">½${p.drawStreak}</span>`;
+      // Полоса результатов (как на Lichess) 0=loss, 1=draw, 2=win
+      let resultsHtml = '<div class="arena-results">';
+      if (p.history && p.history.length > 0) {
+        for (const res of p.history) {
+          if (res === 2) resultsHtml += '<span class="res-sq win"></span>';
+          else if (res === 1) resultsHtml += '<span class="res-sq draw"></span>';
+          else resultsHtml += '<span class="res-sq loss"></span>';
+        }
       } else {
-        streakHtml = `<span style="opacity:0.6">${w > 0 || d > 0 || l > 0 ? `${w} / ${d} / ${l}` : '0 / 0 / 0'}</span>`;
+        resultsHtml += '<span style="opacity:0.2">—</span>';
       }
+      resultsHtml += '</div>';
 
       const botCls = p.isBot ? 'botRow' : '';
-      return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''} ${botCls}" data-username="${Utils.escapeHtml(p.username)}" onclick="Arena.openPlayer('${Utils.escapeHtml(p.username)}')"><span class="place ${placeCls}">${place}</span><span class="pname">${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}</span><span class="streak-dots">${streakHtml}</span><span class="games">${totalGames}</span></div>`;
+      return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''} ${botCls}" data-username="${Utils.escapeHtml(p.username)}" onclick="Arena.openPlayer('${Utils.escapeHtml(p.username)}')">
+        <span class="place ${placeCls}">${place}</span>
+        <span class="pname">${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span>
+        <span class="score">${p.score}</span>
+        <span class="history">${resultsHtml}</span>
+      </div>`;
     }).join('');
   },
   filterParticipants() { if (this.currentArenaState && this.currentArenaId) { const arena = this.cache.find(a => a.id === this.currentArenaId); if (arena) this.renderParticipants(arena, this.currentArenaState); } },
