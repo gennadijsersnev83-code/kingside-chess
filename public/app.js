@@ -117,11 +117,13 @@ const Chess = {
     } else if (type === 'n') { [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc]) => add(r+dr, c+dc)); }
     else if (type === 'k') {
       [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc]) => add(r+dr, c+dc));
-      if (white && r === 7 && c === 4 && !this.isAttacked(state, 7, 4, false)) {
+      // Рокировка невозможна, если король под шахом
+      const underCheck = this.inCheck(state, white);
+      if (white && r === 7 && c === 4 && !underCheck) {
         if (state.castling.includes('K') && !state.board[7][5] && !state.board[7][6] && state.board[7][7] === 'R' && !this.isAttacked(state, 7, 5, false) && !this.isAttacked(state, 7, 6, false)) moves.push([7, 6]);
         if (state.castling.includes('Q') && !state.board[7][3] && !state.board[7][2] && !state.board[7][1] && state.board[7][0] === 'R' && !this.isAttacked(state, 7, 3, false) && !this.isAttacked(state, 7, 2, false)) moves.push([7, 2]);
       }
-      if (!white && r === 0 && c === 4 && !this.isAttacked(state, 0, 4, true)) {
+      if (!white && r === 0 && c === 4 && !underCheck) {
         if (state.castling.includes('k') && !state.board[0][5] && !state.board[0][6] && state.board[0][7] === 'r' && !this.isAttacked(state, 0, 5, true) && !this.isAttacked(state, 0, 6, true)) moves.push([0, 6]);
         if (state.castling.includes('q') && !state.board[0][3] && !state.board[0][2] && !state.board[0][1] && state.board[0][0] === 'r' && !this.isAttacked(state, 0, 3, true) && !this.isAttacked(state, 0, 2, true)) moves.push([0, 2]);
       }
@@ -825,9 +827,7 @@ const Arena = {
   lastLiveGames: [], lastDoneGames: [],
 
   init() {
-    // Гарантируем, что у панели партий есть position:relative и overlay-контейнер
     document.addEventListener('DOMContentLoaded', () => this._ensureOverlay());
-    // На случай динамического ре-рендера
     const origEnterPage = this.enterPage.bind(this);
     this.enterPage = (arenaId) => { origEnterPage(arenaId); this._ensureOverlay(); };
   },
@@ -1002,14 +1002,12 @@ const Arena = {
   },
   filterParticipants() { if (this.currentArenaState && this.currentArenaId) { const arena = this.cache.find(a => a.id === this.currentArenaId); if (arena) this.renderParticipants(arena, this.currentArenaState); } },
 
-  // --- overlay-карточка поверх панели партий ---
   _ensureOverlay() {
     const listEl = document.getElementById('arenaGamesList');
     if (!listEl) return null;
     const parent = listEl.parentElement;
     if (!parent) return null;
     parent.style.position = 'relative';
-    // ограничиваем высоту панели, чтобы не выпирало вниз
     if (!parent.style.maxHeight) parent.style.maxHeight = 'none';
     let ov = document.getElementById('arenaPlayerOverlay');
     if (!ov) {
@@ -1043,18 +1041,28 @@ const Arena = {
         this.currentArenaState.participants.forEach((p, i) => placeMap.set(p.username, i + 1));
       }
 
-      // Партия лидеров
       if (topEl) {
         const myName = App.me ? App.me.username : null;
         const myLive = myName ? live.find(g => g.white === myName || g.black === myName) : null;
         const topGame = myLive || live[0] || null;
         if (topGame) {
           topEl.classList.remove('arenaTopGameEmpty');
+          let headerEl = document.getElementById('arenaTopGameHeader');
+          if (!headerEl) {
+            headerEl = document.createElement('div');
+            headerEl.id = 'arenaTopGameHeader';
+            headerEl.className = 'arenaTopGameHeader';
+            topEl.parentElement.insertBefore(headerEl, topEl);
+          }
+          headerEl.style.display = 'flex';
+          headerEl.innerHTML = `<span>#1 ${Utils.nickHtml(topGame.white, topGame.whiteIsAdmin, topGame.whiteIsMod)} ${topGame.whiteRating || ''}</span><span style="color:var(--green-2)">${Utils.formatTime(topGame.timeW)}</span>`;
           topEl.innerHTML = this.renderTopGame(topGame, placeMap);
           topEl.style.cursor = 'pointer';
           topEl.title = 'Смотреть партию';
           topEl.onclick = () => Watch.watch(topGame.lobbyId);
         } else {
+          const headerEl = document.getElementById('arenaTopGameHeader');
+          if (headerEl) headerEl.style.display = 'none';
           topEl.style.cursor = 'default';
           topEl.title = '';
           topEl.onclick = null;
@@ -1067,7 +1075,6 @@ const Arena = {
         }
       }
 
-      // Если открыта карточка игрока — рисуем только её в overlay, а панель скрываем
       if (this.openPlayerName) { this.renderPlayerCard(); return; }
 
       const hash = JSON.stringify({
@@ -1145,7 +1152,6 @@ const Arena = {
       <div class="arenaTopGamePlayers"><span class="playerRow">${wPlaceHtml}⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div>`;
   },
 
-  // Открывает overlay-карточку поверх панели партий
   openPlayer(username) {
     this.openPlayerName = username;
     this._hideLeaderPanel(true);
