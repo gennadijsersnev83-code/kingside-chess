@@ -824,7 +824,7 @@ const Arena = {
   pageRefreshHandle: null, statusTickHandle: null, gamesRefreshHandle: null, refreshHandle: null,
   openPlayerName: null,
   lastLiveGames: [], lastDoneGames: [],
-  currentPage: 0, // <--- Добавлено для пагинации
+  currentPage: 0,
 
   init() {
     document.addEventListener('DOMContentLoaded', () => this._ensureOverlay());
@@ -841,7 +841,7 @@ const Arena = {
     this.currentArenaId = arenaId;
     this.openPlayerName = null;
     this.lastLiveGames = []; this.lastDoneGames = [];
-    this.currentPage = 0; // Сброс страницы
+    this.currentPage = 0;
     const chatEl = document.getElementById('arenaChatMessages'); if (chatEl) chatEl.innerHTML = '';
     this.lastStateHash = ''; this.lastGamesHash = '';
     App.socket.emit('joinArenaRoom', { arenaId }, (res) => { if (res && res.ok && Array.isArray(res.chat)) { const box = document.getElementById('arenaChatMessages'); if (box) { box.innerHTML = ''; res.chat.forEach(m => this.renderChatMsg(m)); } } });
@@ -950,7 +950,6 @@ const Arena = {
     const serverNow = Date.now() + this.serverOffsetMs;
     row.classList.remove('live', 'finished');
     
-    // Исправлено: теперь показывает время до начала/до конца
     if (state.phase === 'finished') { 
       row.classList.add('finished'); 
       lbl.textContent = 'Завершена:'; 
@@ -1044,7 +1043,7 @@ const Arena = {
         streakHtml = `<span class="streak-fire" title="${p.winStreak} побед подряд">🔥${p.winStreak}</span>`;
       }
       
-      const scoreHtml = `<div class="scoreWrapper"><span class="scoreVal">${p.score}</span>${streakHtml}</div>`;
+      const scoreHtml = `<span class="scoreVal">${p.score}</span>${streakHtml}`;
 
       // ИСТОРИЯ: Цифры (0 = loss, 1 = draw, 2 = win, 4 = berserk win)
       let resultsHtml = '<div class="arena-results">';
@@ -1064,21 +1063,23 @@ const Arena = {
       return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''} ${botCls}" data-username="${Utils.escapeHtml(p.username)}" onclick="Arena.openPlayer('${Utils.escapeHtml(p.username)}')">
         <span class="place ${placeCls}">${place}</span>
         <span class="pname">${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span>
-        <span class="score">${scoreHtml}</span>
-        <span class="history">${resultsHtml}</span>
+        <span class="score-history-wrapper">
+          <span class="scoreBlock">${scoreHtml}</span>
+          <span class="historyBlock">${resultsHtml}</span>
+        </span>
       </div>`;
     }).join('');
   },
-  changePage(page) { // <--- Новая функция для пагинации
+  changePage(page) {
     this.currentPage = page;
-    this.lastStateHash = ''; // Принудительный ререндер
+    this.lastStateHash = '';
     if (this.currentArenaState && this.currentArenaId) {
       const arena = this.cache.find(a => a.id === this.currentArenaId);
       if (arena) this.renderParticipants(arena, this.currentArenaState);
     }
   },
   filterParticipants() { 
-    this.currentPage = 0; // Сброс страницы при поиске
+    this.currentPage = 0;
     if (this.currentArenaState && this.currentArenaId) { 
       const arena = this.cache.find(a => a.id === this.currentArenaId); 
       if (arena) this.renderParticipants(arena, this.currentArenaState); 
