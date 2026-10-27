@@ -237,6 +237,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   max-width: 1600px;
   margin: 0 auto;
   padding: 0 16px;
+  min-height: calc(100vh - 120px); /* ← чтобы страница не схлопывалась */
 }
 
 .arenaLeft {
@@ -260,22 +261,36 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  height: calc(100vh - 120px); /* ← вот это ключевое */
+  min-height: 0;
+  position: sticky;
+  top: 60px;
 }
 
+/* Планшеты: держим 3 колонки, просто немного ужимаем */
 @media (max-width: 1150px) {
-  .arenaPage { flex-wrap: nowrap; }
+  .arenaPage { 
+    flex-wrap: nowrap; /* Запрещаем перенос, чтобы центр не растягивался */
+  }
   .arenaLeft { width: 260px; }
   .arenaRight { width: 300px; }
 }
+
+/* Мобильные: разрешаем перенос */
 @media (max-width: 1000px) {
-  .arenaPage { flex-wrap: wrap; align-items: stretch; }
+  .arenaPage { 
+    flex-wrap: wrap; 
+    align-items: stretch;
+  }
   .arenaLeft { width: calc(50% - 10px); }
-  .arenaRight { width: calc(50% - 10px); }
+  .arenaRight { width: calc(50% - 10px); height: auto; position: static; }
   .arenaCenter { width: 100%; order: 3; }
 }
+
+/* Узкие экраны: всё в одну колонку */
 @media (max-width: 800px) {
   .arenaPage { flex-direction: column; padding: 0 8px; }
-  .arenaLeft, .arenaCenter, .arenaRight { width: 100%; order: unset; }
+  .arenaLeft, .arenaCenter, .arenaRight { width: 100%; order: unset; height: auto; position: static; }
 }
 
 /* --- Левая колонка --- */
