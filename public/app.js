@@ -945,27 +945,29 @@ const Arena = {
   },
   tickStatus() {
     if (!this.currentArenaId) return;
-    const row = document.getElementById('arenaStatusRow'); const lbl = document.getElementById('arenaStatusLabel'); const time = document.getElementById('arenaStatusTime');
-    if (!row || !lbl || !time) return; const state = this.currentArenaState; if (!state) return;
+    const row = document.querySelector('.arenaStatusIndicator'); const lbl = document.getElementById('arenaStatusLabel'); const time = document.getElementById('arenaStatusTime');
+    if (!lbl || !time) return; const state = this.currentArenaState; if (!state) return;
     const serverNow = Date.now() + this.serverOffsetMs;
-    row.classList.remove('live', 'finished');
-    
-    if (state.phase === 'finished') { 
-      row.classList.add('finished'); 
-      lbl.textContent = 'Завершена:'; 
-      time.textContent = '00:00'; 
-      return; 
+    if (row) row.classList.remove('live', 'finished');
+
+    // Use timestamps as the source of truth so the countdown keeps moving even
+    // if the phase update arrives a little late from the server.
+    if (state.phase === 'finished' || (state.endsAt > 0 && serverNow >= state.endsAt)) {
+      if (row) row.classList.add('finished');
+      lbl.textContent = 'Завершена:';
+      time.textContent = '00:00';
+      return;
     }
-    if (state.phase === 'waiting') { 
-      lbl.textContent = 'До начала:'; 
-      time.textContent = Utils.formatMMSS(Math.max(0, state.startsAt - serverNow)); 
-      return; 
+    if (state.startsAt > 0 && serverNow < state.startsAt) {
+      lbl.textContent = 'До начала:';
+      time.textContent = Utils.formatMMSS(state.startsAt - serverNow);
+      return;
     }
-    if (state.phase === 'live') { 
-      row.classList.add('live'); 
-      lbl.textContent = 'До конца:'; 
-      time.textContent = Utils.formatMMSS(Math.max(0, state.endsAt - serverNow)); 
-      return; 
+    if (state.endsAt > 0) {
+      if (row) row.classList.add('live');
+      lbl.textContent = 'До конца:';
+      time.textContent = Utils.formatMMSS(state.endsAt - serverNow);
+      return;
     }
   },
   renderPage(arena, state) {
@@ -1037,15 +1039,12 @@ const Arena = {
       const greenDot = p.isBot ? '<span class="pgreen" style="color:#a56ce8">🤖</span>' : (p.online ? '<span class="pgreen">●</span>' : '');
       const pauseTag = p.paused ? '<span class="ppause">⏸</span>' : '';
 
-      // ОЧКИ: Добавлен огонек, если серия >= 3
-      let streakHtml = '';
-      if (p.winStreak >= 3) {
-        streakHtml = `<span class="streak-fire" title="${p.winStreak} побед подряд">🔥${p.winStreak}</span>`;
-      }
-      
-      const scoreHtml = `<span class="scoreVal">${p.score}</span>${streakHtml}`;
+      // Огонёк показывает активную серию побед, без числового счётчика.
+      const streakHtml = p.winStreak >= 3
+        ? `<span class="streak-fire" title="Серия побед">🔥</span>`
+        : '';
 
-      // ИСТОРИЯ: Цифры (0 = loss, 1 = draw, 2 = win, 4 = berserk win)
+      // История очков за каждую партию: 0 = поражение, 1 = ничья, 2/4 = победа.
       let resultsHtml = '<div class="arena-results">';
       if (p.history && p.history.length > 0) {
         for (const res of p.history) {
@@ -1063,10 +1062,8 @@ const Arena = {
       return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''} ${botCls}" data-username="${Utils.escapeHtml(p.username)}" onclick="Arena.openPlayer('${Utils.escapeHtml(p.username)}')">
         <span class="place ${placeCls}">${place}</span>
         <span class="pname">${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span>
-        <span class="score-history-wrapper">
-          <span class="scoreBlock">${scoreHtml}</span>
-          <span class="historyBlock">${resultsHtml}</span>
-        </span>
+        <span class="historyBlock" title="Очки за партии">${resultsHtml}${streakHtml}</span>
+        <span class="scoreBlock"><span class="scoreVal">${p.score}</span></span>
       </div>`;
     }).join('');
   },
