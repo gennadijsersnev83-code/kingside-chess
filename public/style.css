@@ -231,7 +231,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaPage {
   display: flex;
   justify-content: center;
-  align-items: flex-start;   /* ИЗМЕНЕНО: было stretch — колонки больше не тянутся по высоте */
+  align-items: flex-start; /* Жёстко фиксируем верх, чтобы колонки не растягивались */
   gap: 20px;
   width: 100%;
   max-width: 1600px;
@@ -241,14 +241,14 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 
 .arenaLeft {
   width: 300px;
-  flex: 0 0 300px;           /* ИЗМЕНЕНО: фиксированная ширина, не сжимается/не растягивается */
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
 .arenaCenter {
-  flex: 0 1 640px;           /* ИЗМЕНЕНО: фиксированная базовая ширина вместо flex:1 */
+  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -257,20 +257,35 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 
 .arenaRight {
   width: 360px;
-  flex: 0 0 360px;           /* ИЗМЕНЕНО: фиксированная ширина */
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
 }
 
+/* Планшеты: держим 3 колонки, просто немного ужимаем */
 @media (max-width: 1150px) {
-  .arenaPage { flex-wrap: wrap; align-items: flex-start; }
-  .arenaLeft { width: calc(50% - 10px); flex: 1 1 calc(50% - 10px); }
-  .arenaRight { width: calc(50% - 10px); flex: 1 1 calc(50% - 10px); }
-  .arenaCenter { width: 100%; flex: 1 1 100%; order: 3; }
+  .arenaPage { 
+    flex-wrap: nowrap; /* Запрещаем перенос, чтобы центр не растягивался */
+  }
+  .arenaLeft { width: 260px; }
+  .arenaRight { width: 300px; }
 }
+
+/* Мобильные: разрешаем перенос */
+@media (max-width: 1000px) {
+  .arenaPage { 
+    flex-wrap: wrap; 
+    align-items: stretch;
+  }
+  .arenaLeft { width: calc(50% - 10px); }
+  .arenaRight { width: calc(50% - 10px); }
+  .arenaCenter { width: 100%; order: 3; }
+}
+
+/* Узкие экраны: всё в одну колонку */
 @media (max-width: 800px) {
   .arenaPage { flex-direction: column; padding: 0 8px; }
-  .arenaLeft, .arenaCenter, .arenaRight { width: 100%; flex: 1 1 100%; }
+  .arenaLeft, .arenaCenter, .arenaRight { width: 100%; order: unset; }
 }
 
 /* --- Левая колонка --- */
@@ -504,8 +519,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 /* --- Правая колонка --- */
 .arenaRightCol {
   background: transparent; border: none; border-radius: 0;
-  display: flex; flex-direction: column;
-  /* ИЗМЕНЕНО: убран height:100% — колонка больше не растягивается по высоте */
+  display: flex; flex-direction: column; height: 100%;
 }
 .arenaTopGameHeader {
   padding: 0 0 8px; display: flex; justify-content: space-between; align-items: center;
@@ -749,25 +763,21 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 #chatMessages .msg .modBtn:hover { color:#ff8080; }
 #chatMessages .msg .modBtn.always { opacity:.7; }
 
-/* ИЗМЕНЕНО: стили системных сообщений в чатах (в т.ч. красные мут-сообщения) */
-#chatMessages .msg.sys,
-.arenaChatMessages .msg.sys {
-  color: var(--muted);
-  font-size: 12px;
-  font-style: italic;
-  background: transparent;
-  padding: 1px 3px;
-}
-#chatMessages .msg.muteSys,
-.arenaChatMessages .msg.muteSys {
+/* Стиль для системных сообщений о муте (красные) */
+#chatMessages .msg.sys.mute-notice,
+.arenaChatMessages .msg.sys.mute-notice {
   color: #ff6b6b;
-  font-style: normal;
-  font-weight: 600;
-  background: rgba(165, 48, 48, .12);
-  border-left: 3px solid var(--red);
-  padding: 4px 8px;
+  background: rgba(229, 72, 77, 0.1);
+  border-left: 3px solid #e5484d;
+  padding: 6px 10px;
   border-radius: 4px;
-  margin: 2px 0;
+  font-style: normal;
+  font-weight: 500;
+  margin: 4px 0;
+}
+#chatMessages .msg.sys.mute-notice .t,
+.arenaChatMessages .msg.sys.mute-notice .t {
+  color: rgba(255, 107, 107, 0.7);
 }
 
 #chatForm { display:flex; border-top:1px solid var(--border); }
