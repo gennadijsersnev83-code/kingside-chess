@@ -234,7 +234,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   align-items: stretch;
   gap: 20px;
   width: 100%;
-  max-width: 1600px; /* Расширил для большой таблицы */
+  max-width: 1600px;
   margin: 0 auto;
   padding: 0 16px;
 }
@@ -388,8 +388,8 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 }
 .arenaTableHeader {
   display: grid;
-  /* Увеличил ширину колонки "Серии" */
-  grid-template-columns: 32px minmax(0,1fr) 48px 110px 48px;
+  /* Изменено: 4 колонки (место, игрок, счет, история) */
+  grid-template-columns: 32px minmax(0,1fr) 48px 110px;
   gap: 12px; padding: 0 12px;
   background: transparent; border-bottom: 1px solid var(--border);
   font-size: 11px; color: var(--muted); text-transform: uppercase;
@@ -399,8 +399,8 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaTableBody { flex: 1; overflow-y: auto; overflow-x: hidden; max-height: 520px; }
 .arenaTableRow {
   display: grid;
-  /* Синхронизировал ширину с заголовком */
-  grid-template-columns: 32px minmax(0,1fr) 48px 110px 48px;
+  /* Синхронизировано с заголовком: 4 колонки */
+  grid-template-columns: 32px minmax(0,1fr) 48px 110px;
   gap: 12px; padding: 0 12px; align-items: center;
   font-size: 14px; border-bottom: 1px solid rgba(58,56,51,.35);
   height: 44px; box-sizing: border-box; cursor: pointer; transition: background .1s;
@@ -423,32 +423,36 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaTableRow .pname .pgreen { color: var(--green-2); font-size: 11px; }
 .arenaTableRow .pname .ppause { color: var(--accent); font-size: 12px; }
 .arenaTableRow .score { color: var(--accent-2); font-weight: 700; text-align: center; font-size: 16px; }
-.arenaTableRow .score .streak { color: #ff9c3a; font-size: 12px; margin-left: 2px; }
 
-/* Стиль для точек серий */
-.arenaTableRow .streak-dots {
+/* Новые стили для полосы результатов (Lichess style) */
+.arenaTableRow .history {
   display: flex;
-  flex-wrap: wrap;
   gap: 2px;
-  justify-content: center;
-}
-.streak-dot {
-  width: 14px;
-  height: 14px;
-  border-radius: 2px;
-  font-size: 10px;
-  font-weight: bold;
-  display: inline-flex;
+  justify-content: flex-start;
   align-items: center;
-  justify-content: center;
-  color: #fff;
+  overflow: hidden;
 }
-.streak-dot.w { background: #4ade80; color: #000; }
-.streak-dot.d { background: #bf811d; color: #fff; }
-.streak-dot.l { background: #a53030; color: #fff; }
+.arena-results {
+  display: flex;
+  gap: 2px;
+  flex-wrap: nowrap;
+}
+.res-sq {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.res-sq.win { background-color: #4ade80; }   /* Победа - зеленый */
+.res-sq.draw { background-color: #bf811d; }  /* Ничья - желтый/оранжевый */
+.res-sq.loss { background-color: #a53030; }  /* Поражение - красный */
 
-.arenaTableRow .wdl { color: var(--muted); text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; }
-.arenaTableRow .games { color: var(--text); text-align: center; font-size: 13px; font-weight: 600; }
+/* Убираем старые стили для .streak-dots, так как они больше не используются */
+/* .arenaTableRow .streak-dots { ... } */
+/* .arenaTableRow .wdl { ... } */
+/* .arenaTableRow .games { ... } */
+
 
 /* --- Правая колонка --- */
 .arenaRightCol {
@@ -918,7 +922,7 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
   .arenaPage { display:flex; flex-direction:column; max-width:none; }
   .arenaLeft, .arenaCenter, .arenaRight { width:100%; min-width:0; max-width:none; }
   .arenaJoinBtn { width:130px; min-width:130px; max-width:130px; font-size:12px; }
-  .arenaTableHeader, .arenaTableRow { grid-template-columns:26px minmax(0,1fr) 42px 80px 42px; gap:6px; font-size:12px; }
+  .arenaTableHeader, .arenaTableRow { grid-template-columns:26px minmax(0,1fr) 42px 80px; gap:6px; font-size:12px; }
   .arenaTableRow .score { font-size:13px; }
   .arenasHeader h1 { font-size:24px; }
   .arenasHeader .ahNow { font-size:13px; }
