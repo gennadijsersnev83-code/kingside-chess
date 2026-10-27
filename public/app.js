@@ -993,13 +993,16 @@ const Arena = {
       const greenDot = p.isBot ? '<span class="pgreen" style="color:#a56ce8">🤖</span>' : (p.online ? '<span class="pgreen">●</span>' : '');
       const pauseTag = p.paused ? '<span class="ppause">⏸</span>' : '';
 
-      // Полоса результатов (как на Lichess) 0=loss, 1=draw, 2=win
+      // ИСТОРИЯ: Цифры (0 = loss, 1 = draw, 2 = win, 4 = berserk win)
       let resultsHtml = '<div class="arena-results">';
       if (p.history && p.history.length > 0) {
         for (const res of p.history) {
-          if (res === 2) resultsHtml += '<span class="res-sq win"></span>';
-          else if (res === 1) resultsHtml += '<span class="res-sq draw"></span>';
-          else resultsHtml += '<span class="res-sq loss"></span>';
+          // res: 0 = loss, 1 = draw, 2 = win, 4 = berserk win
+          let cls = 'num-loss';
+          if (res === 2 || res === 4) cls = 'num-win';
+          else if (res === 1) cls = 'num-draw';
+          
+          resultsHtml += `<span class="res-num ${cls}">${res}</span>`;
         }
       } else {
         resultsHtml += '<span style="opacity:0.2">—</span>';
