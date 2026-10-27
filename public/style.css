@@ -386,21 +386,54 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   background: transparent; border: none; border-radius: 0;
   overflow: hidden; display: flex; flex-direction: column; flex: 1;
 }
-.arenaTableHeader {
-  display: grid;
-  /* Изменено: 4 колонки (место, игрок, счет, история) */
-  grid-template-columns: 32px minmax(0,1fr) 48px 110px;
-  gap: 12px; padding: 0 12px;
-  background: transparent; border-bottom: 1px solid var(--border);
-  font-size: 11px; color: var(--muted); text-transform: uppercase;
-  letter-spacing: .5px; font-weight: 600;
-  min-height: 32px; align-items: center;
-}
 .arenaTableBody { flex: 1; overflow-y: auto; overflow-x: hidden; max-height: 520px; }
+
+/* Пагинация (страницы) */
+.arenaPagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  font-size: 13px;
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+}
+.pageBtn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-bright);
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  min-height: 32px;
+  padding: 0;
+  transition: .15s;
+}
+.pageBtn:hover:not(:disabled) {
+  background: var(--panel-hover);
+  border-color: var(--accent);
+}
+.pageBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+.pageInfo {
+  font-family: 'Roboto Mono', monospace;
+  font-weight: 600;
+  color: var(--text-bright);
+  min-width: 80px;
+  text-align: center;
+}
+
 .arenaTableRow {
   display: grid;
-  /* Синхронизировано с заголовком: 4 колонки */
-  grid-template-columns: 32px minmax(0,1fr) 48px 110px;
+  /* 4 колонки: место, игрок, счет, история */
+  grid-template-columns: 32px minmax(0,1fr) 60px 110px;
   gap: 12px; padding: 0 12px; align-items: center;
   font-size: 14px; border-bottom: 1px solid rgba(58,56,51,.35);
   height: 44px; box-sizing: border-box; cursor: pointer; transition: background .1s;
@@ -422,9 +455,28 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaTableRow .pname .playerNick { font-weight: 600; }
 .arenaTableRow .pname .pgreen { color: var(--green-2); font-size: 11px; }
 .arenaTableRow .pname .ppause { color: var(--accent); font-size: 12px; }
-.arenaTableRow .score { color: var(--accent-2); font-weight: 700; text-align: center; font-size: 16px; }
+.arenaTableRow .score { 
+  text-align: center; 
+  font-size: 16px;
+}
+.scoreWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.scoreVal {
+  color: var(--accent-2); 
+  font-weight: 700;
+}
+.streak-fire {
+  font-size: 13px;
+  color: #ff9c3a;
+  font-weight: bold;
+  white-space: nowrap;
+}
 
-/* Новые стили для полосы результатов (Lichess style) */
+/* Полоса результатов (Lichess style) */
 .arenaTableRow .history {
   display: flex;
   gap: 4px;
@@ -443,9 +495,12 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   font-weight: 600;
   line-height: 1;
 }
-.res-num.num-win { color: #4ade80; }   /* Победа - зеленый */
-.res-num.num-draw { color: #bf811d; }  /* Ничья - желтый/оранжевый */
-.res-num.num-loss { color: #a53030; }  /* Поражение - красный */
+.res-num.num-win { color: #4ade80; }
+.res-num.num-draw { color: #bf811d; }
+.res-num.num-loss { color: #a53030; }
+
+/* Убираем старые стили для заголовков таблицы, так как их больше нет */
+/* .arenaTableHeader { ... } */
 
 
 /* --- Правая колонка --- */
@@ -916,7 +971,7 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
   .arenaPage { display:flex; flex-direction:column; max-width:none; }
   .arenaLeft, .arenaCenter, .arenaRight { width:100%; min-width:0; max-width:none; }
   .arenaJoinBtn { width:130px; min-width:130px; max-width:130px; font-size:12px; }
-  .arenaTableHeader, .arenaTableRow { grid-template-columns:26px minmax(0,1fr) 42px 80px; gap:6px; font-size:12px; }
+  .arenaTableRow { grid-template-columns:26px minmax(0,1fr) 42px 80px; gap:6px; font-size:12px; }
   .arenaTableRow .score { font-size:13px; }
   .arenasHeader h1 { font-size:24px; }
   .arenasHeader .ahNow { font-size:13px; }
