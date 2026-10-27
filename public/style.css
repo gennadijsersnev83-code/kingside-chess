@@ -231,7 +231,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaPage {
   display: flex;
   justify-content: center;
-  align-items: flex-start; /* Жёстко фиксируем верх, чтобы колонки не растягивались */
+  align-items: flex-start;
   gap: 20px;
   width: 100%;
   max-width: 1600px;
@@ -262,27 +262,17 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   flex-direction: column;
 }
 
-/* Планшеты: держим 3 колонки, просто немного ужимаем */
 @media (max-width: 1150px) {
-  .arenaPage { 
-    flex-wrap: nowrap; /* Запрещаем перенос, чтобы центр не растягивался */
-  }
+  .arenaPage { flex-wrap: nowrap; }
   .arenaLeft { width: 260px; }
   .arenaRight { width: 300px; }
 }
-
-/* Мобильные: разрешаем перенос */
 @media (max-width: 1000px) {
-  .arenaPage { 
-    flex-wrap: wrap; 
-    align-items: stretch;
-  }
+  .arenaPage { flex-wrap: wrap; align-items: stretch; }
   .arenaLeft { width: calc(50% - 10px); }
   .arenaRight { width: calc(50% - 10px); }
   .arenaCenter { width: 100%; order: 3; }
 }
-
-/* Узкие экраны: всё в одну колонку */
 @media (max-width: 800px) {
   .arenaPage { flex-direction: column; padding: 0 8px; }
   .arenaLeft, .arenaCenter, .arenaRight { width: 100%; order: unset; }
@@ -447,7 +437,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 
 .arenaTableRow {
   display: grid;
-  /* Место | игрок | история партий | сумма очков справа */
   grid-template-columns: 26px minmax(0,1fr) minmax(64px,auto) minmax(34px,auto);
   gap: 5px; padding: 0 8px; align-items: center;
   font-size: 14px; border-bottom: 1px solid rgba(58,56,51,.35);
@@ -471,7 +460,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaTableRow .pname .pgreen { color: var(--green-2); font-size: 11px; }
 .arenaTableRow .pname .ppause { color: var(--accent); font-size: 12px; }
 
-/* Суммарные очки всегда в крайней правой колонке. */
 .scoreBlock {
   display: flex;
   align-items: center;
@@ -479,7 +467,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   min-width: 36px;
 }
 .scoreVal {
-  color: var(--accent-2); 
+  color: var(--accent-2);
   font-weight: 700;
   font-size: 16px;
 }
@@ -515,21 +503,23 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .res-num.num-draw { color: #bf811d; }
 .res-num.num-loss { color: #a53030; }
 
-
 /* --- Правая колонка --- */
 .arenaRightCol {
   background: transparent; border: none; border-radius: 0;
-  display: flex; flex-direction: column; 
+  display: flex; flex-direction: column;
   height: 100%;
-  min-height: 0; /* Важно для правильного скролла */
+  min-height: 0;
+  overflow: hidden; /* Убираем скролл у самого контейнера */
 }
+
 .arenaTopGameHeader {
   padding: 0 0 8px; display: flex; justify-content: space-between; align-items: center;
   font-size: 13px; font-weight: 600; color: var(--text-bright);
 }
 .arenaTopGame {
   padding: 0; border: none; display: flex; flex-direction: column;
-  cursor: pointer; margin-bottom: 16px; flex: 0 0 auto;
+  cursor: pointer; margin-bottom: 16px;
+  flex: 0 0 auto; /* Не растягивается */
 }
 .arenaTopGameEmpty { padding: 40px 10px; text-align: center; color: var(--muted); font-size: 13px; }
 .arenaTopGamePlayers {
@@ -563,12 +553,16 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   flex: 0 0 auto;
 }
 .arenaGamesHeader::after { content: '👁'; font-size: 14px; opacity: .6; }
+
+/* Скролл только у списка игр */
 .arenaGamesList {
-  flex: 1; overflow-y: auto; overflow-x: hidden;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex; flex-direction: column; gap: 2px;
-  min-height: 0; /* Обязательно для работы overflow внутри flex-контейнера */
-  max-height: none;
+  min-height: 0; /* Обязательно для скролла внутри flex */
 }
+
 .arenaGameLine {
   display: flex; align-items: center; gap: 8px; padding: 6px 4px;
   font-size: 13px; border-bottom: 1px solid rgba(58,56,51,.35);
@@ -586,6 +580,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .agl-players .winner { font-weight: 600; }
 .agl-players .loser { color: var(--muted); }
 .agl-score { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+
 .arenaStatsBox {
   padding: 12px 0; border-top: 1px solid var(--border);
   font-size: 13px; color: var(--muted); display: flex; justify-content: space-between;
