@@ -2410,14 +2410,44 @@ io.on('connection', (socket) => {
     cb({ ok: true });
   });
 
-  socket.on('modMuteUser', ({ username, minutes }, cb) => {
+  socket.on('modMuteUser', ({ username, minutes, reason, scope, scopeId }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     if (!isMod(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
     if (!db.users[username]) return cb({ ok: false, msg: 'Игрок не найден' });
     if (isAdmin(username) && !isAdmin(socket.username)) return cb({ ok: false, msg: 'Нельзя замутить админа' });
+    
     minutes = Math.max(1, Math.min(7 * 24 * 60, +minutes || 10));
     setMute(username, minutes);
     const until = Date.now() + minutes * 60 * 1000;
+    const reasonText = reason ? String(reason).slice(0, 100) : 'нарушение правил';
+
+    // Системное сообщение в чат (только в тот, где замутили)
+    if (scope && scopeId) {
+      const sysMsg = {
+        id: 'sys' + Date.now(),
+        system: true,
+        isMuteNotice: true,
+        text: `${username} был заблокирован в чате на ${minutes} мин. Причина: ${reasonText}`,
+        ts: Date.now()
+      };
+      
+      if (scope === 'game') {
+        const l = lobbies.get(scopeId);
+        if (l) {
+          l.chat.push(sysMsg);
+          if (l.chat.length > 50) l.chat.shift();
+          emitToGameAndWatchers(scopeId, 'chatMessage', sysMsg);
+        }
+      } else if (scope === 'arena') {
+        const state = arenas.get(scopeId);
+        if (state) {
+          state.chat.push(sysMsg);
+          if (state.chat.length > 300) state.chat.shift();
+          io.to('arena:' + scopeId).emit('arenaChatMessage', sysMsg);
+        }
+      }
+    }
+
     io.emit('modAction', { action: 'mute', by: socket.username, target: username, minutes, until, ts: Date.now() });
     cb({ ok: true, until });
   });
