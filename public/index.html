@@ -151,7 +151,6 @@ body.login-active #mainContent { display: none !important; }
   <section id="arenaPageScreen" class="screen">
     <div class="arenaPage">
       <aside class="arenaLeft">
-        <!-- Новая карточка статуса -->
         <div class="arenaStatusCard">
           <div class="ascIcon">🏆</div>
           <div class="ascTitle" id="aInfoTitle">—</div>
@@ -163,7 +162,6 @@ body.login-active #mainContent { display: none !important; }
           </div>
         </div>
         
-        <!-- Чат без жесткой высоты -->
         <div class="arenaChatBox">
           <div class="arenaChatHeader">
             <span>💬 Чат</span>
@@ -196,10 +194,10 @@ body.login-active #mainContent { display: none !important; }
           <div id="arenaJoinBtnWrap"><button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button></div>
         </div>
         
+        <!-- Изменено: убран заголовок таблицы, добавлена пагинация -->
         <div class="arenaParticipantsTable">
-          <!-- Изменено: 4 колонки (место, игрок, счет, история) вместо 5 -->
-          <div class="arenaTableHeader"><span>#</span><span>Игрок</span><span>Очки</span><span>История</span></div>
           <div class="arenaTableBody" id="arenaTableBody"><div class="arenasEmpty">Загрузка участников...</div></div>
+          <div class="arenaPagination" id="arenaPagination"></div>
         </div>
         
         <div class="arenaWinnerBanner" id="arenaWinnerBanner" style="display:none;"><div class="awbTitle">🏆 Арена завершена!</div><div class="awbPodium" id="awbPodium"></div></div>
@@ -207,11 +205,6 @@ body.login-active #mainContent { display: none !important; }
       
       <aside class="arenaRight">
         <div class="arenaRightCol">
-          <!-- Заголовок игры сверху -->
-          <div class="arenaTopGameHeader" id="arenaTopGameHeader" style="display:none;">
-            <span id="arenaTopGamePlayers">— vs —</span>
-          </div>
-          
           <!-- Сама доска -->
           <div class="arenaTopGame" id="arenaTopGame"><div class="arenaTopGameEmpty">Сейчас никто не играет</div></div>
           
