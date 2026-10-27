@@ -919,7 +919,8 @@ function joinBotsToArena(state) {
       score: 0, wins: 0, draws: 0, losses: 0, winStreak: 0, drawStreak: 0,
       socketId: 'BOT:' + bot.name, lobbyId: null, isPlaying: false, paused: false,
       waitingSince: Date.now(), isBot: true, botLevel: bot.level,
-      inArenaRoom: true, cooldownUntil: 0, awaitingNextPair: false
+      inArenaRoom: true, cooldownUntil: 0, awaitingNextPair: false,
+      history: []
     });
     const beh = botInitBehavior(bot.name);
     beh.state = 'in_arena'; beh.activityId = state.id; beh.lastChange = Date.now();
@@ -1070,7 +1071,8 @@ function botJoinArena(botName, arenaId) {
     score: 0, wins: 0, draws: 0, losses: 0, winStreak: 0, drawStreak: 0,
     socketId: 'BOT:' + botName, lobbyId: null, isPlaying: false, paused: false,
     waitingSince: Date.now(), isBot: true,
-    inArenaRoom: true, cooldownUntil: 0, awaitingNextPair: false
+    inArenaRoom: true, cooldownUntil: 0, awaitingNextPair: false,
+    history: []
   });
   const sysMsg = { id: 'sys' + Date.now(), system: true, text: `${botName} присоединился к арене`, ts: Date.now(), arenaId };
   state.chat.push(sysMsg); if (state.chat.length > 300) state.chat.shift();
@@ -1185,7 +1187,8 @@ function watcherTick() {
         score: 0, wins: 0, draws: 0, losses: 0, winStreak: 0, drawStreak: 0,
         socketId: 'BOT:' + WATCHER_NAME, lobbyId: null, isPlaying: false, paused: false,
         waitingSince: Date.now(), isBot: true,
-        inArenaRoom: true, cooldownUntil: 0, awaitingNextPair: false
+        inArenaRoom: true, cooldownUntil: 0, awaitingNextPair: false,
+        history: []
       });
       beh.state = 'in_arena'; beh.activityId = chosen.id; beh.lastChange = now;
       const sysMsg = { id: 'sys' + Date.now(), system: true, text: `${WATCHER_NAME} присоединился к арене`, ts: Date.now(), arenaId: chosen.id };
@@ -1396,9 +1399,27 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
     broadcastLiveGames();
     return;
   }
-  if (result === 'w') { whiteP.score += calcArenaPoints(whiteP, 'win'); whiteP.wins++; blackP.losses++; calcArenaPoints(blackP, 'loss'); }
-  else if (result === 'b') { blackP.score += calcArenaPoints(blackP, 'win'); blackP.wins++; whiteP.losses++; calcArenaPoints(whiteP, 'loss'); }
-  else { whiteP.score += calcArenaPoints(whiteP, 'draw'); blackP.score += calcArenaPoints(blackP, 'draw'); whiteP.draws++; blackP.draws++; }
+  
+  if (!whiteP.history) whiteP.history = [];
+  if (!blackP.history) blackP.history = [];
+
+  if (result === 'w') {
+    const ptsW = calcArenaPoints(whiteP, 'win');
+    const ptsB = calcArenaPoints(blackP, 'loss');
+    whiteP.score += ptsW; whiteP.wins++; blackP.losses++;
+    whiteP.history.push(ptsW); blackP.history.push(ptsB);
+  } else if (result === 'b') {
+    const ptsB = calcArenaPoints(blackP, 'win');
+    const ptsW = calcArenaPoints(whiteP, 'loss');
+    blackP.score += ptsB; blackP.wins++; whiteP.losses++;
+    blackP.history.push(ptsB); whiteP.history.push(ptsW);
+  } else {
+    const ptsW = calcArenaPoints(whiteP, 'draw');
+    const ptsB = calcArenaPoints(blackP, 'draw');
+    whiteP.score += ptsW; blackP.score += ptsB; whiteP.draws++; blackP.draws++;
+    whiteP.history.push(ptsW); blackP.history.push(ptsB);
+  }
+
   const now = Date.now();
   whiteP.isPlaying = false; blackP.isPlaying = false;
   whiteP.lobbyId = null; blackP.lobbyId = null;
@@ -2612,7 +2633,8 @@ io.on('connection', (socket) => {
       isAdmin: isAdmin(p.username), isMod: isMod(p.username),
       online: p.isBot ? true : (p.socketId && io.sockets.sockets.has(p.socketId)),
       isBot: !!p.isBot && p.username !== WATCHER_NAME,
-      cooldownUntil: p.cooldownUntil || 0
+      cooldownUntil: p.cooldownUntil || 0,
+      history: p.history || []
     })).sort((a, b) => b.score - a.score || b.rating - a.rating);
     const meP = socket.username ? state.participants.get(socket.username) : null;
     cb({
@@ -2703,7 +2725,8 @@ io.on('connection', (socket) => {
       rating: db.users[socket.username] ? db.users[socket.username].rating : 1200,
       score: 0, wins: 0, draws: 0, losses: 0, winStreak: 0, drawStreak: 0,
       socketId: socket.id, lobbyId: null, isPlaying: false, paused: false, waitingSince: Date.now(), isBot: false,
-      inArenaRoom: true, cooldownUntil: 0, awaitingNextPair: false
+      inArenaRoom: true, cooldownUntil: 0, awaitingNextPair: false,
+      history: []
     });
     const sysMsg = { id: 'sys' + Date.now(), system: true, text: `${socket.username} присоединился к арене`, ts: Date.now(), arenaId: state.id };
     state.chat.push(sysMsg); if (state.chat.length > 300) state.chat.shift();
@@ -2983,6 +3006,24 @@ io.on('connection', (socket) => {
     await pool.query('DELETE FROM users WHERE username = $1', [username]);
     delete db.users[username];
     cb({ ok: true });
+  });
+
+  socket.on('disconnect', () => {
+    const name = socket.username;
+    if (name) {
+      online.delete(socket.id);
+      broadcastOnline();
+    }
+    for (const state of arenas.values()) {
+      if (state.chatViewers.has(socket.id)) {
+        state.chatViewers.delete(socket.id);
+        if (name) {
+          const p = state.participants.get(name);
+          if (p) { p.socketId = null; if (!p.isPlaying) p.inArenaRoom = false; }
+        }
+        io.to('arena:' + state.id).emit('arenaUpdate', { arenaId: state.id });
+      }
+    }
   });
 });
 
