@@ -151,7 +151,6 @@ body.login-active #mainContent { display: none !important; }
   <section id="arenaPageScreen" class="screen">
     <div class="arenaPage">
       <aside class="arenaLeft">
-        <!-- Новая карточка статуса -->
         <div class="arenaStatusCard">
           <div class="ascIcon">🏆</div>
           <div class="ascTitle" id="aInfoTitle">—</div>
@@ -162,8 +161,6 @@ body.login-active #mainContent { display: none !important; }
             <div class="ascRulesText">Рейтинговые игры в этой категории</div>
           </div>
         </div>
-        
-        <!-- Чат без жесткой высоты -->
         <div class="arenaChatBox">
           <div class="arenaChatHeader">
             <span>💬 Чат</span>
@@ -197,7 +194,7 @@ body.login-active #mainContent { display: none !important; }
         </div>
         
         <div class="arenaParticipantsTable">
-          <div class="arenaTableHeader"><span>#</span><span>Игрок</span><span>Очки</span><span>Серии</span><span>Партий</span></div>
+          <div class="arenaTableHeader"><span>#</span><span>Игрок</span><span>Очки</span><span>Серии</span></div>
           <div class="arenaTableBody" id="arenaTableBody"><div class="arenasEmpty">Загрузка участников...</div></div>
         </div>
         
@@ -206,18 +203,12 @@ body.login-active #mainContent { display: none !important; }
       
       <aside class="arenaRight">
         <div class="arenaRightCol">
-          <!-- Заголовок игры сверху -->
           <div class="arenaTopGameHeader" id="arenaTopGameHeader" style="display:none;">
             <span id="arenaTopGamePlayers">— vs —</span>
           </div>
-          
-          <!-- Сама доска -->
           <div class="arenaTopGame" id="arenaTopGame"><div class="arenaTopGameEmpty">Сейчас никто не играет</div></div>
-          
-          <!-- Блок лучших игр -->
           <div class="arenaGamesHeader" style="border-top:1px solid var(--border);">🏆 ЛУЧШИЕ ИГРЫ</div>
           <div class="arenaGamesList" id="arenaGamesList"><div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div></div>
-          
           <div class="arenaStatsBox" id="arenaStatsBox">
             <span>👥 Участников: <b id="arenaParticipantsCount">0</b></span>
             <span>👁 Зрителей: <b id="arenaViewersCount">0</b></span>
