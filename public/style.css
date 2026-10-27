@@ -432,9 +432,9 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 
 .arenaTableRow {
   display: grid;
-  /* 3 колонки: место, игрок, счет+история */
-  grid-template-columns: 32px minmax(0,1fr) auto;
-  gap: 12px; padding: 0 12px; align-items: center;
+  /* Место | игрок | история партий | сумма очков справа */
+  grid-template-columns: 32px minmax(0,1fr) minmax(72px,auto) minmax(36px,auto);
+  gap: 10px; padding: 0 12px; align-items: center;
   font-size: 14px; border-bottom: 1px solid rgba(58,56,51,.35);
   height: 44px; box-sizing: border-box; cursor: pointer; transition: background .1s;
 }
@@ -456,18 +456,12 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaTableRow .pname .pgreen { color: var(--green-2); font-size: 11px; }
 .arenaTableRow .pname .ppause { color: var(--accent); font-size: 12px; }
 
-/* Обертка для счета и истории (справа) */
-.score-history-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  min-width: 0;
-}
+/* Суммарные очки всегда в крайней правой колонке. */
 .scoreBlock {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: flex-end;
+  min-width: 36px;
 }
 .scoreVal {
   color: var(--accent-2); 
@@ -475,17 +469,22 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   font-size: 16px;
 }
 .streak-fire {
-  font-size: 13px;
+  font-size: 14px;
   color: #ff9c3a;
-  font-weight: bold;
+  line-height: 1;
   white-space: nowrap;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 0 3px rgba(255,156,58,.25));
 }
 .historyBlock {
   display: flex;
-  gap: 4px;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 5px;
+  justify-content: center;
   overflow: hidden;
+  min-width: 0;
 }
+.historyBlock .arena-results { min-width: 0; overflow: hidden; }
 .arena-results {
   display: flex;
   gap: 4px;
@@ -1002,3 +1001,5 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
 .arenaGamesPanel > .arenaGamesBody { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; }
 #arenaGamesList { overflow-y: auto; overflow-x: hidden; }
 #arenaTopGame { flex: 0 0 auto; }
+
+@media (max-width: 600px) { .arenaTableRow { grid-template-columns: 24px minmax(0,1fr) minmax(52px,auto) minmax(30px,auto); gap: 6px; padding-left: 8px; padding-right: 8px; } .arenaTableRow .pname { gap: 4px; } .historyBlock { gap: 3px; } .arena-results { gap: 3px; } .res-num { font-size: 12px; } .scoreVal { font-size: 14px; } }
