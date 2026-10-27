@@ -990,14 +990,26 @@ const Arena = {
       const place = list.indexOf(p) + 1;
       const placeCls = place === 1 ? 'top1' : place === 2 ? 'top2' : place === 3 ? 'top3' : '';
       const isMe = myName && p.username === myName;
-      const totalGames = (p.wins || 0) + (p.draws || 0) + (p.losses || 0);
       const greenDot = p.isBot ? '<span class="pgreen" style="color:#a56ce8">🤖</span>' : (p.online ? '<span class="pgreen">●</span>' : '');
       const pauseTag = p.paused ? '<span class="ppause">⏸</span>' : '';
-      let streakTag = '';
-      if (p.winStreak >= 3) streakTag = `<span class="streak">🔥${p.winStreak}</span>`;
-      else if (p.drawStreak >= 2) streakTag = `<span class="streak">½${p.drawStreak}</span>`;
+
+      // Серии и WDL
+      const w = p.wins || 0;
+      const d = p.draws || 0;
+      const l = p.losses || 0;
+      const totalGames = w + d + l;
+
+      let streakHtml = '';
+      if (p.winStreak >= 3) {
+        streakHtml = `<span class="streak-dot w" title="${p.winStreak} побед подряд">🔥${p.winStreak}</span>`;
+      } else if (p.drawStreak >= 2) {
+        streakHtml = `<span class="streak-dot d" title="${p.drawStreak} ничьих подряд">½${p.drawStreak}</span>`;
+      } else {
+        streakHtml = `<span style="opacity:0.6">${w > 0 || d > 0 || l > 0 ? `${w} / ${d} / ${l}` : '0 / 0 / 0'}</span>`;
+      }
+
       const botCls = p.isBot ? 'botRow' : '';
-      return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''} ${botCls}" data-username="${Utils.escapeHtml(p.username)}" onclick="Arena.openPlayer('${Utils.escapeHtml(p.username)}')"><span class="place ${placeCls}">${place}</span><span class="pname">${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}${streakTag}</span><span class="wdl">${p.wins} / ${p.draws} / ${p.losses}</span><span class="games">${totalGames}</span></div>`;
+      return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''} ${botCls}" data-username="${Utils.escapeHtml(p.username)}" onclick="Arena.openPlayer('${Utils.escapeHtml(p.username)}')"><span class="place ${placeCls}">${place}</span><span class="pname">${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}${greenDot}${pauseTag}<span class="prat">(${p.rating})</span></span><span class="score">${p.score}</span><span class="streak-dots">${streakHtml}</span><span class="games">${totalGames}</span></div>`;
     }).join('');
   },
   filterParticipants() { if (this.currentArenaState && this.currentArenaId) { const arena = this.cache.find(a => a.id === this.currentArenaId); if (arena) this.renderParticipants(arena, this.currentArenaState); } },
