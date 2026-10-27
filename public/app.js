@@ -1342,6 +1342,7 @@ const Arena = {
     if (msg.system) { 
       div.className = 'msg sys'; 
       if (msg.isMuteNotice) div.classList.add('mute-notice'); // Красный стиль
+      if (msg.isUnmuteNotice) div.classList.add('unmute-notice'); // Зелёный стиль
       div.textContent = msg.text; 
     }
     else {
@@ -1629,13 +1630,18 @@ const Inbox = {
 // ============================================================
 const Mod = {
   el: null,
+  selectionMode: false,
+  selectedMsgs: new Set(),
+  scope: null,
+  scopeId: null,
+
   openMenu(ev, msgId, username, scope, scopeId) {
     this.close(); if (!App.me || !App.me.isMod) return;
     const rect = ev.target.getBoundingClientRect();
     const menu = document.createElement('div'); menu.className = 'modMenu';
     menu.style.left = Math.min(window.innerWidth - 210, Math.max(8, rect.left - 60)) + 'px';
     menu.style.top = Math.min(window.innerHeight - 320, rect.bottom + 4) + 'px';
-    menu.innerHTML = `<div class="lbl">Сообщение</div><button data-act="del">🗑 – Удалить сообщение</button><div class="sep"></div><div class="lbl">Игрок: ${Utils.escapeHtml(username)}</div>
+    menu.innerHTML = `<div class="lbl">Сообщение</div><button data-act="del-one">🗑 – Удалить это сообщение</button><button data-act="del-many">☑ – Выбрать несколько</button><div class="sep"></div><div class="lbl">Игрок: ${Utils.escapeHtml(username)}</div>
       <button data-act="mute" data-min="5">🔇 – Мут 5 минут</button>
       <button data-act="mute" data-min="30">🔇 – Мут 30 минут</button>
       <button data-act="mute" data-min="60">🔇 – Мут 1 час</button>
@@ -1643,9 +1649,11 @@ const Mod = {
       <button data-act="mute" data-min="0">🔇 – Мут с причиной...</button>
       <button data-act="unmute">🔊 – Снять мут</button>`;
     document.body.appendChild(menu); this.el = menu;
+    this.scope = scope;
+    this.scopeId = scopeId;
     menu.addEventListener('click', (e) => {
       const act = e.target.dataset.act;
-      if (act === 'del') { 
+      if (act === 'del-one') { 
         const evName = scope === 'arena' ? 'modDeleteArenaMessage' : 'modDeleteMessage'; 
         const payload = scope === 'arena' ? { arenaId: scopeId, msgId } : { lobbyId: scopeId, msgId }; 
         App.socket.emit(evName, payload, (r) => { 
@@ -1653,16 +1661,18 @@ const Mod = {
           this.close(); 
         }); 
       }
+      else if (act === 'del-many') {
+        this.startSelectionMode(scope, scopeId);
+        this.close();
+      }
       else if (act === 'mute') { 
         let minutes = +e.target.dataset.min;
-        let reason = '';
         if (minutes === 0) {
-          reason = prompt('Введите причину мута (кратко):');
-          if (reason === null) { this.close(); return; } // Отмена
-          reason = reason.trim().slice(0, 100) || 'нарушение правил';
-          minutes = 10; // По умолчанию 10 минут, если выбрали "с причиной"
+          this.openMuteModal(username, scope, scopeId);
+          this.close();
+          return;
         }
-        App.socket.emit('modMuteUser', { username, minutes, reason, scope, scopeId }, (r) => { 
+        App.socket.emit('modMuteUser', { username, minutes, reason: '', scope, scopeId }, (r) => { 
           if (!r || !r.ok) alert((r && r.msg) || 'Ошибка'); 
           this.close(); 
         }); 
@@ -1675,6 +1685,125 @@ const Mod = {
       }
     });
   },
+
+  openMuteModal(username, scope, scopeId) {
+    const overlay = document.createElement('div');
+    overlay.className = 'mute-modal-overlay show';
+    overlay.innerHTML = `
+      <div class="mute-modal-box">
+        <h3>🔇 Мут игрока: ${Utils.escapeHtml(username)}</h3>
+        <label class="mm-label">Причина мута (обязательно)</label>
+        <input type="text" id="muteReasonInput" placeholder="Например: оскорбления в чате" maxlength="100">
+        <label class="mm-label">Длительность (минут)</label>
+        <input type="text" id="muteDurationInput" placeholder="10" value="10" maxlength="5" style="margin-bottom:16px;">
+        <div class="mm-actions">
+          <button class="mm-cancel">Отмена</button>
+          <button class="mm-confirm">Замутить</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const inp = overlay.querySelector('#muteReasonInput');
+    const dur = overlay.querySelector('#muteDurationInput');
+    setTimeout(() => inp.focus(), 50);
+    overlay.querySelector('.mm-cancel').onclick = () => overlay.remove();
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) overlay.remove(); });
+    overlay.querySelector('.mm-confirm').onclick = () => {
+      const reason = inp.value.trim();
+      const minutes = Math.max(1, Math.min(7*24*60, parseInt(dur.value, 10) || 10));
+      if (!reason) { inp.style.borderColor = '#e5484d'; inp.focus(); return; }
+      App.socket.emit('modMuteUser', { username, minutes, reason, scope, scopeId }, (r) => {
+        if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; }
+        overlay.remove();
+      });
+    };
+  },
+
+  startSelectionMode(scope, scopeId) {
+    this.selectionMode = true;
+    this.selectedMsgs.clear();
+    this.scope = scope;
+    this.scopeId = scopeId;
+    const containerId = scope === 'arena' ? 'arenaChatMessages' : 'chatMessages';
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.classList.add('chat-selection-mode');
+    // Добавляем чекбоксы к каждому сообщению
+    container.querySelectorAll('.msg').forEach(msgEl => {
+      const msgId = msgEl.dataset.msgId;
+      if (!msgId) return;
+      let cb = msgEl.querySelector('.msg-checkbox');
+      if (!cb) {
+        cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'msg-checkbox';
+        cb.dataset.msgId = msgId;
+        msgEl.prepend(cb);
+      }
+      cb.onchange = () => {
+        if (cb.checked) this.selectedMsgs.add(msgId);
+        else this.selectedMsgs.delete(msgId);
+        msgEl.classList.toggle('selected', cb.checked);
+      };
+      msgEl.onclick = (e) => {
+        if (e.target === cb) return;
+        cb.checked = !cb.checked;
+        cb.onchange();
+      };
+    });
+    // Панель действий
+    let bar = document.getElementById('chatSelectionBar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'chatSelectionBar';
+      bar.className = 'chat-selection-bar show';
+      bar.innerHTML = `
+        <span>Выбрано: <b id="selCount">0</b></span>
+        <div style="display:flex;gap:6px;">
+          <button id="selDeleteBtn">Удалить выбранные</button>
+          <button class="cancel" id="selCancelBtn">Отмена</button>
+        </div>`;
+      const parent = container.parentElement;
+      parent.insertBefore(bar, container.nextSibling);
+    }
+    bar.classList.add('show');
+    this.updateSelectionCount();
+    document.getElementById('selDeleteBtn').onclick = () => this.deleteSelected();
+    document.getElementById('selCancelBtn').onclick = () => this.cancelSelection();
+  },
+
+  updateSelectionCount() {
+    const el = document.getElementById('selCount');
+    if (el) el.textContent = this.selectedMsgs.size;
+  },
+
+  deleteSelected() {
+    if (this.selectedMsgs.size === 0) { alert('Ничего не выбрано'); return; }
+    const evName = this.scope === 'arena' ? 'modDeleteArenaMessage' : 'modDeleteMessage';
+    const arr = [...this.selectedMsgs];
+    let left = arr.length;
+    arr.forEach(msgId => {
+      const payload = this.scope === 'arena' ? { arenaId: this.scopeId, msgId } : { lobbyId: this.scopeId, msgId };
+      App.socket.emit(evName, payload, () => {
+        left--;
+        if (left === 0) this.cancelSelection();
+      });
+    });
+  },
+
+  cancelSelection() {
+    this.selectionMode = false;
+    this.selectedMsgs.clear();
+    const containerId = this.scope === 'arena' ? 'arenaChatMessages' : 'chatMessages';
+    const container = document.getElementById(containerId);
+    if (container) {
+      container.classList.remove('chat-selection-mode');
+      container.querySelectorAll('.msg-checkbox').forEach(cb => cb.remove());
+      container.querySelectorAll('.msg').forEach(m => { m.classList.remove('selected'); m.onclick = null; });
+    }
+    const bar = document.getElementById('chatSelectionBar');
+    if (bar) bar.remove();
+  },
+
   close() { if (this.el) { this.el.remove(); this.el = null; } }
 };
 document.addEventListener('click', (e) => { if (Mod.el && !Mod.el.contains(e.target)) Mod.close(); });
@@ -2119,6 +2248,7 @@ const Game = {
       // Системное сообщение (например, о муте)
       div.className = 'msg sys';
       if (msg.isMuteNotice) div.classList.add('mute-notice'); // Красный стиль
+      if (msg.isUnmuteNotice) div.classList.add('unmute-notice'); // Зелёный стиль
       div.textContent = msg.text;
       const time = Utils.fmtMskHM(msg.ts);
       const timeSpan = document.createElement('span');
