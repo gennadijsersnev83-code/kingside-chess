@@ -491,6 +491,10 @@ function emitToGameAndWatchers(lobbyId, event, payload) {
   io.to(lobbyId).emit(event, withId);
   io.to('watch:' + lobbyId).emit(event, withId);
 }
+function emitArenaTopUpdate(arenaId) {
+  if (!arenaId) return;
+  io.to('arena:' + arenaId).emit('arenaTopUpdate', { arenaId });
+}
 
 function cleanupStuckPlaying() {
   for (const state of arenas.values()) {
@@ -1523,11 +1527,9 @@ setInterval(() => {
     lobby.lastTick = now;
     if (side === 'w') lobby.timeW = Math.max(0, lobby.timeW - elapsed);
     else              lobby.timeB = Math.max(0, lobby.timeB - elapsed);
-    if (!lobby.isBot) {
-      if (!lobby._lastTimeEmit || now - lobby._lastTimeEmit > 2000) {
-        lobby._lastTimeEmit = now;
-        emitToGameAndWatchers(id, 'timeUpdate', { timeW: lobby.timeW, timeB: lobby.timeB, serverNow: now });
-      }
+    if (!lobby._lastTimeEmit || now - lobby._lastTimeEmit > 2000) {
+      lobby._lastTimeEmit = now;
+      emitToGameAndWatchers(id, 'timeUpdate', { timeW: lobby.timeW, timeB: lobby.timeB, serverNow: now });
     }
     if (lobby.timeW <= 0) finishGame(id, 'b', 'Время');
     else if (lobby.timeB <= 0) finishGame(id, 'w', 'Время');
@@ -1611,9 +1613,10 @@ function scheduleBotMove(lobbyId) {
       cur.lastTick = now;
       cur.fen = botToFen(nextState); cur.turn = nextState.turn; cur.drawOffer = null;
       registerPosition(cur);
-      emitToGameAndWatchers(lobbyId, 'boardUpdate', { fen: cur.fen, turn: cur.turn, san: null, from, to });
+      emitToGameAndWatchers(lobbyId, 'boardUpdate', { fen: cur.fen, turn: cur.turn, san: null, from, to, timeW: cur.timeW, timeB: cur.timeB });
       emitToGameAndWatchers(lobbyId, 'timeUpdate', { timeW: cur.timeW, timeB: cur.timeB, serverNow: now });
       broadcastLiveGames();
+      emitArenaTopUpdate(cur.arenaId);
       if (checkAutoDraw(lobbyId)) return;
       const sideToMoveWhite = cur.turn === 'w';
       const hasMoves = botAllLegalMoves(botParseFen(cur.fen), sideToMoveWhite).length > 0;
@@ -1764,7 +1767,7 @@ function scheduleBotMove(lobbyId) {
       }
     } else {
       const historyLine = buildUciHistoryLine(cur, 40);
-      const safeTimeLeft = Math.max(botTimeLeft, 3); // <--- ФИКС: гарантируем минимум 3 секунды
+      const safeTimeLeft = Math.max(botTimeLeft, 3);
       try { mv = await botPool.getMove(cur.fen, botRating, cur.time, safeTimeLeft, inc, historyLine); }
       catch (err) { return; }
     }
@@ -1802,9 +1805,10 @@ function scheduleBotMove(lobbyId) {
       cur2.fen = botToFen(nextStateFb); cur2.turn = nextStateFb.turn;
       cur2.drawOffer = null; cur2.botDrawOffered = false;
       registerPosition(cur2);
-      emitToGameAndWatchers(lobbyId, 'boardUpdate', { fen: cur2.fen, turn: cur2.turn, san: null, from: fromFb, to: toFb });
+      emitToGameAndWatchers(lobbyId, 'boardUpdate', { fen: cur2.fen, turn: cur2.turn, san: null, from: fromFb, to: toFb, timeW: cur2.timeW, timeB: cur2.timeB });
       emitToGameAndWatchers(lobbyId, 'timeUpdate', { timeW: cur2.timeW, timeB: cur2.timeB, serverNow: nowFb });
       broadcastLiveGames();
+      emitArenaTopUpdate(cur2.arenaId);
       if (checkAutoDraw(lobbyId)) return;
       const sideToMoveWhiteFb = cur2.turn === 'w';
       const hasMovesFb = botAllLegalMoves(botParseFen(cur2.fen), sideToMoveWhiteFb).length > 0;
@@ -1831,9 +1835,10 @@ function scheduleBotMove(lobbyId) {
     cur2.fen = botToFen(nextState); cur2.turn = nextState.turn;
     cur2.drawOffer = null; cur2.botDrawOffered = false;
     registerPosition(cur2);
-    emitToGameAndWatchers(lobbyId, 'boardUpdate', { fen: cur2.fen, turn: cur2.turn, san: null, from, to });
+    emitToGameAndWatchers(lobbyId, 'boardUpdate', { fen: cur2.fen, turn: cur2.turn, san: null, from, to, timeW: cur2.timeW, timeB: cur2.timeB });
     emitToGameAndWatchers(lobbyId, 'timeUpdate', { timeW: cur2.timeW, timeB: cur2.timeB, serverNow: now });
     broadcastLiveGames();
+    emitArenaTopUpdate(cur2.arenaId);
     if (checkAutoDraw(lobbyId)) return;
     const sideToMoveWhite = cur2.turn === 'w';
     const hasMoves = botAllLegalMoves(botParseFen(cur2.fen), sideToMoveWhite).length > 0;
@@ -2337,9 +2342,10 @@ io.on('connection', (socket) => {
     else                 l.timeB = Math.max(0, l.timeB - elapsed) + l.inc;
     l.lastTick = now; l.fen = fen; l.turn = newTurn; l.drawOffer = null;
     registerPosition(l);
-    emitToGameAndWatchers(lobbyId, 'boardUpdate', { fen, turn: newTurn, san: san || null, from: fromSq, to: toSq });
+    emitToGameAndWatchers(lobbyId, 'boardUpdate', { fen, turn: newTurn, san: san || null, from: fromSq, to: toSq, timeW: l.timeW, timeB: l.timeB });
     emitToGameAndWatchers(lobbyId, 'timeUpdate', { timeW: l.timeW, timeB: l.timeB, serverNow: now });
     broadcastLiveGames();
+    emitArenaTopUpdate(l.arenaId);
     if (checkAutoDraw(lobbyId)) return;
     {
       const oppWhite = l.turn === 'w';
@@ -2683,12 +2689,14 @@ io.on('connection', (socket) => {
         const wName = l.hostColor === 'w' ? l.host : l.guest;
         const bName = l.hostColor === 'b' ? l.host : l.guest;
         const wU = db.users[wName]; const bU = db.users[bName];
+        const lastHist = (l.history && l.history.length) ? l.history[l.history.length - 1] : null;
         live.push({
           lobbyId: id, white: wName, black: bName,
           whiteIsAdmin: isAdmin(wName), blackIsAdmin: isAdmin(bName),
           whiteIsMod: isMod(wName), blackIsMod: isMod(bName),
           whiteRating: wU ? wU.rating : null, blackRating: bU ? bU.rating : null,
           timeW: l.timeW, timeB: l.timeB, turn: l.turn, fen: l.fen,
+          lastMove: (lastHist && lastHist.from && lastHist.to) ? { from: lastHist.from, to: lastHist.to } : null,
           moveCount: l.fen ? (+l.fen.split(' ')[5] || 1) : 1, live: true,
           watchersCount: watchersCountOf(l)
         });
