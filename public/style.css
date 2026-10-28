@@ -231,7 +231,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaPage {
   display: flex;
   justify-content: center;
-  align-items: stretch; /* вернули как было */
+  align-items: stretch;
   gap: 20px;
   width: 100%;
   max-width: 1600px;
@@ -263,9 +263,8 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   flex-direction: column;
   position: relative;
   min-height: 0;
-  height: 600px;      /* стартовая высота = высота левой (статус + чат 380 + gap) */
-  max-height: 600px;
-  overflow: hidden;
+  align-self: stretch; /* растягивается минимум до высоты левой */
+  /* НЕТ фиксированной height / max-height — растёт по контенту */
 }
 
 @media (max-width: 1150px) {
@@ -276,7 +275,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 }
 @media (max-width: 800px) {
   .arenaPage { flex-direction: column; padding: 0 8px; }
-  .arenaLeft, .arenaCenter, .arenaRight { width: 100%; height: auto; max-height: none; }
+  .arenaLeft, .arenaCenter, .arenaRight { width: 100%; }
 }
 
 /* --- Левая колонка --- */
@@ -509,8 +508,8 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   display: flex; flex-direction: column;
   height: 100%;
   min-height: 0;
-  overflow: hidden;
   position: relative;
+  overflow: hidden;
 }
 .arenaTopGameHeader {
   padding: 0 0 8px; display: flex; justify-content: space-between; align-items: center;
@@ -554,6 +553,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaGamesList {
   flex: 1 1 auto;
   min-height: 0;
+  max-height: 420px;   /* список партий не выше 420px — иначе скролл внутри списка */
   overflow-y: auto;
   overflow-x: hidden;
   display: flex;
