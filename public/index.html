@@ -114,8 +114,8 @@ body.login-active #mainContent { display: none !important; }
 </div>
 
 
-<div id="adminPanelOverlay" class="adminOverlay" style="display:none;">
-  <section class="adminPanel" role="dialog" aria-modal="true" aria-labelledby="adminPanelTitle">
+<main id="adminPage" class="adminPage" style="display:none;">
+  <section class="adminPanel" aria-labelledby="adminPanelTitle">
     <header class="adminPanelHeader"><div><h2 id="adminPanelTitle">🛡️ Админ-панель Kingside</h2><p>Полный доступ только у PeshkaSasha</p></div><button class="adminClose" onclick="AdminPanel.close()" aria-label="Закрыть">×</button></header>
     <div class="adminPanelTabs"><button class="active" data-admin-tab="users" onclick="AdminPanel.setTab('users',this)">Список игроков</button><button data-admin-tab="chat" onclick="AdminPanel.setTab('chat',this)">Модерация чата</button><button data-admin-tab="private" onclick="AdminPanel.setTab('private',this)">Личные сообщения</button><button data-admin-tab="settings" onclick="AdminPanel.setTab('settings',this)">Настройки</button></div>
     <div id="adminUsersTab">
@@ -129,51 +129,51 @@ body.login-active #mainContent { display: none !important; }
       <textarea id="adminPrivateText" maxlength="2000" placeholder="Текст личного сообщения"></textarea>
       <div class="adminInline"><label>Цвет текста <input type="color" id="adminPrivateColor" value="#ff4d4f"></label><button onclick="AdminPanel.addPrivateMessage()">Отправить ЛС</button></div>
       </section>
-      <section id="adminSettingsSection"><h3>Настройки личных сообщений</h3><label class="adminDmSetting"><input type="checkbox" id="adminDmClosed" onchange="AdminPanel.setDmClosed(this.checked)"> Запретить игрокам отправлять мне ЛС</label><p class="adminMuted">Настройка сохраняется на сервере. Даже если входящие ЛС отключены, вы сможете писать игрокам сами.</p></section>
+      <section id="adminSettingsSection"><h3>Настройки</h3><label class="adminDmSetting"><input type="checkbox" id="adminDmClosed" onchange="AdminPanel.setDmClosed(this.checked)"> Запретить игрокам отправлять мне ЛС</label><div class="adminInline"><label for="adminChatInterval">Интервал сообщений в чате</label><input id="adminChatInterval" type="number" min="0" max="120" step="1" value="0" style="width:72px"><span class="adminMuted">сек. (0 — без ограничения)</span><button type="button" onclick="AdminPanel.saveChatInterval()">Сохранить</button></div><p class="adminMuted">Интервал применяется к обычным игрокам в игровом и аренном чате и проверяется сервером.</p><p class="adminMuted">Настройка ЛС сохраняется на сервере. Даже при отключённых входящих ЛС вы можете писать игрокам сами.</p></section>
       <section id="adminModerationSection"><hr id="adminChatModerationAnchor"><h3>Удаление сообщений в игровом чате</h3><p class="adminMuted">Наведите курсор на область перед ником сообщения и отметьте его. Кнопка удаления появится только после выбора хотя бы одного сообщения.</p>
       <div class="adminMuted">Всего выбрано в открытых чатах: <span id="adminSelectedCount">0</span></div></section>
     </div>
     <div id="adminPanelStatus" class="adminStatus" aria-live="polite"></div>
   </section>
-</div>
+</main>
 <style>
-/* Compact, isolated admin layout: avoid oversized panels and overlapping sticky bars. */
-#adminPanelOverlay.adminOverlay{position:fixed;inset:58px 0 0;z-index:9990;display:none;align-items:stretch;justify-content:center;padding:0;background:#0b0e13;color:#e9edf5;box-sizing:border-box;font:13px/1.4 system-ui,-apple-system,Segoe UI,sans-serif}
-#adminPanelOverlay .adminPanel{box-sizing:border-box;width:100%;max-width:1180px;height:100%;max-height:calc(100vh - 58px);overflow:auto;margin:0 auto;padding:14px 18px 18px;background:#141820;color:#e9edf5;border:0;border-left:1px solid #252c38;border-right:1px solid #252c38;border-radius:0;box-shadow:none;font:inherit}
-#adminPanelOverlay .adminPanelHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 0 10px;margin:0 0 10px;border-bottom:1px solid #2a303b;background:#141820}
-#adminPanelOverlay .adminPanelHeader h2{font-size:17px;line-height:1.25;margin:0 0 3px;font-weight:700}
-#adminPanelOverlay .adminPanelHeader p{font-size:11px;color:#9da8ba;margin:0}
-#adminPanelOverlay .adminClose{font-size:22px;line-height:1;padding:4px 8px;background:transparent;border:0;color:#cbd3e0;cursor:pointer}
-#adminPanelOverlay .adminPanelTabs{display:flex;flex-wrap:wrap;gap:5px;padding:0 0 9px;margin:0 0 12px;border-bottom:1px solid #2a303b;background:#141820}
-#adminPanelOverlay .adminPanel button{box-sizing:border-box;min-height:29px;padding:5px 9px;border:1px solid #394253;border-radius:6px;background:#222936;color:#e9edf5;font:inherit;font-size:12px;line-height:1.2;white-space:normal;cursor:pointer}
-#adminPanelOverlay .adminPanel button:hover{background:#2d3645}
-#adminPanelOverlay .adminPanel button:disabled{opacity:.45;cursor:not-allowed}
-#adminPanelOverlay .adminPanelTabs button.active{background:#57411f;border-color:#a77b31}
-#adminPanelOverlay .adminTools{display:flex;gap:7px;align-items:center;margin:0 0 8px}
-#adminPanelOverlay .adminTools input{flex:1;min-width:0}
-#adminPanelOverlay .adminTools input,#adminPanelOverlay textarea,#adminPanelOverlay select,#adminPanelOverlay input[type=number]{box-sizing:border-box;max-width:100%;min-height:30px;padding:6px 8px;border:1px solid #394253;border-radius:6px;background:#0e1117;color:#f2f4f8;font:inherit;font-size:12px}
-#adminPanelOverlay .adminPanel textarea{display:block;width:min(100%,760px);min-height:76px;resize:vertical}
-#adminPanelOverlay .adminMuted{font-size:11px;color:#9da8ba;margin:4px 0 8px}
-#adminPanelOverlay .adminUsersList{display:grid;grid-template-columns:1fr;gap:6px}
-#adminPanelOverlay .adminUserRow{display:grid;grid-template-columns:minmax(130px,1fr) minmax(112px,130px) minmax(190px,auto) auto;align-items:center;gap:7px;padding:8px;border:1px solid #2b3340;border-radius:7px;background:#191f29;min-width:0}
-#adminPanelOverlay .adminUserRow>div{min-width:0}
-#adminPanelOverlay .adminUserName{font-size:12px;font-weight:700;overflow-wrap:anywhere}
-#adminPanelOverlay .adminUserMeta{font-size:10px;color:#9da8ba;margin-top:2px;overflow-wrap:anywhere}
-#adminPanelOverlay .adminUserRow select{width:100%;min-width:0}
-#adminPanelOverlay .adminUserActions{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
-#adminPanelOverlay .adminUserActions label{display:flex;align-items:center;gap:4px}
-#adminPanelOverlay .adminUserActions input[type=number]{width:52px;min-width:0}
-#adminPanelOverlay .adminDanger{background:#762a32!important;border-color:#a9434d!important}
-#adminPanelOverlay .adminStatus{min-height:16px;margin:9px 0 0;padding-top:7px;border-top:1px solid #2a303b;font-size:11px;color:#8ddca4;overflow-wrap:anywhere}
-#adminPanelOverlay .adminInline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0}
-#adminPanelOverlay .adminInline label{display:flex;align-items:center;gap:6px;font-size:12px}
-#adminPanelOverlay .adminFieldLabel{display:grid;gap:4px;margin:8px 0;font-size:12px}
-#adminPanelOverlay .adminFieldLabel select{width:min(100%,500px)}
-#adminPanelOverlay .adminDmSetting{display:flex;align-items:center;gap:8px;margin:8px 0;font-weight:600;font-size:12px}
-#adminPanelOverlay .adminDmSetting input{accent-color:#d49a3c}
-#adminPanelOverlay #adminPrivateSection,#adminPanelOverlay #adminSettingsSection,#adminPanelOverlay #adminModerationSection{max-width:820px;margin:0 0 14px}
-#adminPanelOverlay h3{font-size:14px;margin:10px 0 5px}
-#adminPanelOverlay hr{border:0;border-top:1px solid #2a303b;margin:12px 0}
+/* Standalone admin route: normal document flow, compact and consistent with Kingside dark UI. */
+#adminPage.adminPage{box-sizing:border-box;width:100%;max-width:1120px;min-height:calc(100vh - 64px);margin:0 auto;padding:14px 16px 22px;background:transparent;color:var(--text-bright,#e9edf5);font:13px/1.4 system-ui,-apple-system,Segoe UI,sans-serif}
+#adminPage .adminPanel{box-sizing:border-box;width:100%;margin:0 auto;padding:12px 14px 16px;background:var(--panel,#141820);color:var(--text-bright,#e9edf5);border:1px solid var(--border,#2a303b);border-radius:10px;box-shadow:none;font:inherit}
+#adminPage .adminPanelHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 0 10px;margin:0 0 10px;border-bottom:1px solid #2a303b;background:#141820}
+#adminPage .adminPanelHeader h2{font-size:15px;line-height:1.25;margin:0 0 3px;font-weight:700}
+#adminPage .adminPanelHeader p{font-size:11px;color:#9da8ba;margin:0}
+#adminPage .adminClose{font-size:22px;line-height:1;padding:4px 8px;background:transparent;border:0;color:#cbd3e0;cursor:pointer}
+#adminPage .adminPanelTabs{display:flex;flex-wrap:wrap;gap:5px;padding:0 0 9px;margin:0 0 12px;border-bottom:1px solid #2a303b;background:#141820}
+#adminPage .adminPanel button{box-sizing:border-box;min-height:29px;padding:5px 9px;border:1px solid #394253;border-radius:6px;background:#222936;color:#e9edf5;font:inherit;font-size:12px;line-height:1.2;white-space:normal;cursor:pointer}
+#adminPage .adminPanel button:hover{background:#2d3645}
+#adminPage .adminPanel button:disabled{opacity:.45;cursor:not-allowed}
+#adminPage .adminPanelTabs button.active{background:#57411f;border-color:#a77b31}
+#adminPage .adminTools{display:flex;gap:7px;align-items:center;margin:0 0 8px}
+#adminPage .adminTools input{flex:1;min-width:0}
+#adminPage .adminTools input,#adminPage textarea,#adminPage select,#adminPage input[type=number]{box-sizing:border-box;max-width:100%;min-height:30px;padding:6px 8px;border:1px solid #394253;border-radius:6px;background:#0e1117;color:#f2f4f8;font:inherit;font-size:12px}
+#adminPage .adminPanel textarea{display:block;width:min(100%,760px);min-height:76px;resize:vertical}
+#adminPage .adminMuted{font-size:11px;color:#9da8ba;margin:4px 0 8px}
+#adminPage .adminUsersList{display:grid;grid-template-columns:1fr;gap:6px}
+#adminPage .adminUserRow{display:grid;grid-template-columns:minmax(130px,1fr) minmax(105px,120px) minmax(170px,auto) auto;align-items:center;gap:7px;padding:6px 7px;border:1px solid #2b3340;border-radius:7px;background:#191f29;min-width:0}
+#adminPage .adminUserRow>div{min-width:0}
+#adminPage .adminUserName{font-size:12px;font-weight:700;overflow-wrap:anywhere}
+#adminPage .adminUserMeta{font-size:10px;color:#9da8ba;margin-top:2px;overflow-wrap:anywhere}
+#adminPage .adminUserRow select{width:100%;min-width:0}
+#adminPage .adminUserActions{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+#adminPage .adminUserActions label{display:flex;align-items:center;gap:4px}
+#adminPage .adminUserActions input[type=number]{width:52px;min-width:0}
+#adminPage .adminDanger{background:#762a32!important;border-color:#a9434d!important}
+#adminPage .adminStatus{min-height:16px;margin:9px 0 0;padding-top:7px;border-top:1px solid #2a303b;font-size:11px;color:#8ddca4;overflow-wrap:anywhere}
+#adminPage .adminInline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0}
+#adminPage .adminInline label{display:flex;align-items:center;gap:6px;font-size:12px}
+#adminPage .adminFieldLabel{display:grid;gap:4px;margin:8px 0;font-size:12px}
+#adminPage .adminFieldLabel select{width:min(100%,500px)}
+#adminPage .adminDmSetting{display:flex;align-items:center;gap:8px;margin:8px 0;font-weight:600;font-size:12px}
+#adminPage .adminDmSetting input{accent-color:#d49a3c}
+#adminPage #adminPrivateSection,#adminPage #adminSettingsSection,#adminPage #adminModerationSection{max-width:760px;margin:0 0 12px}
+#adminPage h3{font-size:14px;margin:10px 0 5px}
+#adminPage hr{border:0;border-top:1px solid #2a303b;margin:12px 0}
 .adminChatInlineTools{display:none;align-items:center;justify-content:flex-end;gap:7px;position:sticky;top:0;z-index:2;box-sizing:border-box;padding:5px 7px;margin:0 0 5px;background:#171c25ed;border:1px solid #394253;border-radius:6px;font:11px system-ui,sans-serif}
 .adminChatInlineTools button{padding:5px 8px!important;font-size:11px!important;background:#762a32!important;border:1px solid #a9434d!important;border-radius:6px;color:#fff;cursor:pointer}
 .adminSelectMsg{accent-color:#d49a3c;margin:0;vertical-align:middle;opacity:0;pointer-events:none;transform:scale(.9);transition:opacity .12s ease}
@@ -185,8 +185,8 @@ body.login-active #mainContent { display: none !important; }
 .adminTopMenu{padding:5px;background:#171c25;border:1px solid #394253;border-radius:8px;box-shadow:0 8px 20px #0008}
 .adminTopMenu button{display:block;width:100%;text-align:left;white-space:nowrap;border:0;border-radius:5px;background:transparent;color:#e9edf5;padding:7px 9px;cursor:pointer}
 .adminTopMenu button:hover{background:#2d3645}
-@media(max-width:850px){#adminPanelOverlay .adminUserRow{grid-template-columns:minmax(0,1fr) minmax(100px,130px)}#adminPanelOverlay .adminUserRow>.adminUserActions{grid-column:auto}#adminPanelOverlay .adminUserRow>.adminUserActions:last-child{grid-column:1/-1}}
-@media(max-width:560px){#adminPanelOverlay.adminOverlay{inset:52px 0 0}#adminPanelOverlay .adminPanel{max-height:calc(100vh - 52px);padding:10px}#adminPanelOverlay .adminPanelHeader h2{font-size:15px}#adminPanelOverlay .adminPanelTabs{gap:4px}#adminPanelOverlay .adminPanelTabs button{font-size:11px;padding:5px 7px}#adminPanelOverlay .adminTools{align-items:stretch}#adminPanelOverlay .adminUserRow{grid-template-columns:1fr;gap:6px}#adminPanelOverlay .adminUserRow>.adminUserActions:last-child{grid-column:auto}#adminPanelOverlay .adminUserActions{gap:4px}}
+@media(max-width:850px){#adminPage .adminUserRow{grid-template-columns:minmax(0,1fr) minmax(100px,130px)}#adminPage .adminUserRow>.adminUserActions{grid-column:auto}#adminPage .adminUserRow>.adminUserActions:last-child{grid-column:1/-1}}
+@media(max-width:560px){#adminPage.adminPage{min-height:calc(100vh - 52px);padding:8px}#adminPage .adminPanel{padding:9px}#adminPage .adminPanelHeader h2{font-size:15px}#adminPage .adminPanelTabs{gap:4px}#adminPage .adminPanelTabs button{font-size:11px;padding:5px 7px}#adminPage .adminTools{align-items:stretch}#adminPage .adminUserRow{grid-template-columns:1fr;gap:6px}#adminPage .adminUserRow>.adminUserActions:last-child{grid-column:auto}#adminPage .adminUserActions{gap:4px}}
 </style>
 
 <main id="mainContent" style="display: none;">
