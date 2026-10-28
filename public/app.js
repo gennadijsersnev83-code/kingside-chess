@@ -1091,6 +1091,7 @@ const Arena = {
     parent.style.position = 'relative';
     parent.style.overflow = 'hidden';
     parent.style.minHeight = '0';
+    parent.style.maxHeight = '100%';
     // НЕ трогаем maxHeight — пусть ограничивается flex-родителем
     let ov = document.getElementById('arenaPlayerOverlay');
     if (!ov) {
