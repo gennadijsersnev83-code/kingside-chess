@@ -263,6 +263,8 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   position: relative;
   min-height: 0;
   overflow: hidden;
+  align-self: stretch;
+  max-height: 100%;
 }
 
 @media (max-width: 1150px) {
