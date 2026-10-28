@@ -34,12 +34,14 @@ const ADMINS = new Set(['PeshkaSasha']);
 const MODERATORS = new Set(['Debian']);
 const DEVS = new Set(['PeshkaSasha']);
 function roleOf(username) {
-  if (ADMINS.has(username) || DEVS.has(username)) return 'admin';
+  if (username === 'PeshkaSasha') return 'admin';
+  const u = db.users[username];
+  if (u && (u.role === 'moderator' || u.role === 'user')) return u.role;
   if (MODERATORS.has(username)) return 'moderator';
   return 'user';
 }
-function isAdmin(username) { return ADMINS.has(username) || DEVS.has(username); }
-function isMod(username) { return isAdmin(username) || MODERATORS.has(username); }
+function isAdmin(username) { return username === 'PeshkaSasha'; }
+function isMod(username) { return isAdmin(username) || roleOf(username) === 'moderator'; }
 function isDev(username) { return DEVS.has(username); }
 
 const BOTS = [
@@ -147,9 +149,10 @@ async function initDB() {
     ['muted_until','BIGINT DEFAULT 0'],['is_bot','BOOLEAN DEFAULT FALSE'],
     ['email','TEXT'], ['email_verified','BOOLEAN DEFAULT FALSE'], ['verify_token','TEXT'], ['verify_token_expires','BIGINT DEFAULT 0'],
     ['bio','TEXT DEFAULT \'\''], ['delete_token','TEXT'], ['delete_requested_at','BIGINT DEFAULT 0'], ['show_subseconds','BOOLEAN DEFAULT FALSE'],
-    ['is_banned','BOOLEAN DEFAULT FALSE'], ['banned_until','BIGINT DEFAULT 0']
+    ['is_banned','BOOLEAN DEFAULT FALSE'], ['banned_until','BIGINT DEFAULT 0'], ['role',"TEXT DEFAULT 'user'"]
   ];
   for (const [name, type] of cols) await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${name} ${type};`);
+  await pool.query(`UPDATE users SET role = 'moderator' WHERE username = 'Debian' AND (role IS NULL OR role = 'user')`);
 
   await pool.query(`CREATE TABLE IF NOT EXISTS password_resets (
     id SERIAL PRIMARY KEY,
@@ -208,7 +211,7 @@ async function loadDB() {
       deleteRequestedAt: Number(row.delete_requested_at || 0),
       showSubseconds: !!row.show_subseconds,
       isBanned: !!row.is_banned,
-      bannedUntil: Number(row.banned_until || 0),
+      bannedUntil: Number(row.banned_until || 0), role: row.role || 'user',
       categories: {
         classical: { rating: row.rating_classical != null ? row.rating_classical : row.rating, rd: row.rd_classical != null ? row.rd_classical : GLICKO2.DEFAULT_RD, vol: row.vol_classical != null ? row.vol_classical : GLICKO2.DEFAULT_VOL, wins: row.wins_classical || 0, losses: row.losses_classical || 0, games: row.games_classical || 0 },
         rapid:     { rating: row.rating_rapid     != null ? row.rating_rapid     : row.rating, rd: row.rd_rapid     != null ? row.rd_rapid     : GLICKO2.DEFAULT_RD, vol: row.vol_rapid     != null ? row.vol_rapid     : GLICKO2.DEFAULT_VOL, wins: row.wins_rapid     || 0, losses: row.losses_rapid     || 0, games: row.games_rapid     || 0 },
@@ -226,7 +229,7 @@ async function loadDB() {
       db.users[bot.name] = {
         passwordHash: '', salt: '', rating: startRating, rd: GLICKO2.DEFAULT_RD, vol: GLICKO2.DEFAULT_VOL,
         wins: 0, losses: 0, draws: 0, games: 0, createdAt: Date.now(), mutedUntil: 0, isBot: true,
-        email: null, emailVerified: true, verifyToken: null, verifyExpires: 0, bio: '', deleteToken: null, deleteRequestedAt: 0, showSubseconds: false, isBanned: false, bannedUntil: 0,
+        email: null, emailVerified: true, verifyToken: null, verifyExpires: 0, bio: '', deleteToken: null, deleteRequestedAt: 0, showSubseconds: false, isBanned: false, bannedUntil: 0, role: 'user',
         categories: { classical: emptyRatingBlock(startRating), rapid: emptyRatingBlock(startRating), blitz: emptyRatingBlock(startRating), bullet: emptyRatingBlock(startRating) }
       };
       try {
@@ -281,7 +284,7 @@ async function saveUser(username) {
        email = EXCLUDED.email, email_verified = EXCLUDED.email_verified,
        verify_token = EXCLUDED.verify_token, verify_token_expires = EXCLUDED.verify_token_expires,
        bio = EXCLUDED.bio, delete_token = EXCLUDED.delete_token, delete_requested_at = EXCLUDED.delete_requested_at,
-       show_subseconds = EXCLUDED.show_subseconds, is_banned = EXCLUDED.is_banned, banned_until = EXCLUDED.banned_until`,
+       show_subseconds = EXCLUDED.show_subseconds, is_banned = EXCLUDED.is_banned, banned_until = EXCLUDED.banned_until, role = EXCLUDED.role`,
     [username, u.passwordHash, u.salt, u.rating, u.rd || GLICKO2.DEFAULT_RD, u.vol || GLICKO2.DEFAULT_VOL,
      u.wins, u.losses, u.draws, u.games, u.createdAt,
      c.classical ? c.classical.rating : u.rating, c.rapid ? c.rapid.rating : u.rating,
@@ -295,7 +298,7 @@ async function saveUser(username) {
      get('classical','games'), get('rapid','games'), get('blitz','games'), get('bullet','games'),
      u.mutedUntil || 0, !!u.isBot,
      u.email || null, !!u.emailVerified, u.verifyToken || null, u.verifyExpires || 0,
-     u.bio || '', u.deleteToken || null, u.deleteRequestedAt || 0, !!u.showSubseconds, !!u.isBanned, u.bannedUntil || 0]
+     u.bio || '', u.deleteToken || null, u.deleteRequestedAt || 0, !!u.showSubseconds, !!u.isBanned, u.bannedUntil || 0, u.role || 'user']
   );
 }
 
@@ -1263,7 +1266,7 @@ function tryPair(state) {
     for (let i = 0; i < available.length && pairsCreated < MAX_PAIRS_PER_TICK; i++) {
       const a = available[i];
       if (used.has(a.username) || a.isPlaying || a.lobbyId) continue;
-      let best = null, bestDiff = Infinity;
+      let best = null, bestDiff = Infinity, bestCandidates = [];
       for (let j = 0; j < available.length; j++) {
         if (i === j) continue;
         const b = available[j];
@@ -1289,8 +1292,12 @@ function tryPair(state) {
           if (humanGamesInArena(state.id) >= MAX_HUMAN_GAMES_PER_ARENA) continue;
         }
         const diff = Math.abs((a.score || 0) - (b.score || 0));
-        if (diff < bestDiff) { bestDiff = diff; best = b; }
+        if (diff < bestDiff) { bestDiff = diff; bestCandidates = [b]; }
+        else if (diff === bestDiff) bestCandidates.push(b);
       }
+      // При одинаковой разнице очков выбираем случайно, чтобы не закреплять
+      // один и тот же порядок обхода Map и не создавать повторяющиеся пары.
+      if (bestCandidates.length) best = bestCandidates[Math.floor(Math.random() * bestCandidates.length)];
       if (!best) continue;
 
       if (a.isPlaying || a.lobbyId || best.isPlaying || best.lobbyId) continue;
@@ -2023,7 +2030,7 @@ io.on('connection', (socket) => {
         wins: 0, losses: 0, draws: 0, games: 0,
         createdAt: Date.now(), mutedUntil: 0, isBot: false,
         email: email, emailVerified: false, verifyToken: verifyToken, verifyExpires: verifyExpires,
-        bio: '', deleteToken: null, deleteRequestedAt: 0, showSubseconds: false, isBanned: false, bannedUntil: 0,
+        bio: '', deleteToken: null, deleteRequestedAt: 0, showSubseconds: false, isBanned: false, bannedUntil: 0, role: 'user',
         categories: { classical: emptyRatingBlock(base), rapid: emptyRatingBlock(base), blitz: emptyRatingBlock(base), bullet: emptyRatingBlock(base) }
       };
 
@@ -2037,6 +2044,14 @@ io.on('connection', (socket) => {
       }
     }
 
+    if (user && user.isBanned) {
+      if (Number(user.bannedUntil || 0) > Date.now()) {
+        const hoursLeft = Math.max(1, Math.ceil((Number(user.bannedUntil) - Date.now()) / 3600000));
+        return cb({ ok: false, msg: `Аккаунт заблокирован. Осталось примерно ${hoursLeft} ч.` });
+      }
+      user.isBanned = false; user.bannedUntil = 0;
+      await saveUser(username);
+    }
     online.set(socket.id, username);
     socket.username = username;
     cb({ ok: true, user: publicUser(username) });
@@ -2994,38 +3009,96 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('adminBan', async ({ username }, cb) => {
+  socket.on('adminListUsers', (cb) => {
+    if (typeof cb !== 'function') return;
     if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
-    const u = db.users[username];
-    if (!u) return cb({ ok: false, msg: 'Не найден' });
-    u.isBanned = true;
-    u.bannedUntil = Date.now() + 365 * 24 * 3600 * 1000;
+    const users = Object.keys(db.users).map(username => {
+      const u = db.users[username];
+      return { username, role: roleOf(username), rating: u.rating || 1200, games: u.games || 0,
+        createdAt: u.createdAt || 0, online: isUserOnline(username), isBanned: !!u.isBanned,
+        bannedUntil: Number(u.bannedUntil || 0), isBot: !!u.isBot };
+    }).sort((a,b) => Number(b.online)-Number(a.online) || a.username.localeCompare(b.username, 'ru'));
+    cb({ ok: true, users });
+  });
+
+  socket.on('adminSetRole', async ({ username, role }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    if (!db.users[username]) return cb({ ok: false, msg: 'Игрок не найден' });
+    if (username === 'PeshkaSasha') return cb({ ok: false, msg: 'Роль главного администратора закреплена' });
+    if (!['user', 'moderator'].includes(role)) return cb({ ok: false, msg: 'Можно назначить роль пользователя или модератора' });
+    db.users[username].role = role;
     await saveUser(username);
-    for (const [sid, name] of online.entries()) {
-      if (name === username) {
-        const s = io.sockets.sockets.get(sid);
-        if (s) s.disconnect(true);
-      }
+    for (const sid of socketsOfUser(username)) {
+      const targetSocket = io.sockets.sockets.get(sid);
+      if (targetSocket) targetSocket.emit('accountRoleUpdated', publicUser(username));
     }
     cb({ ok: true });
   });
 
+  socket.on('adminBan', async ({ username, hours }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    if (username === 'PeshkaSasha') return cb({ ok: false, msg: 'Нельзя заблокировать главного администратора' });
+    const u = db.users[username];
+    if (!u) return cb({ ok: false, msg: 'Не найден' });
+    const durationHours = Math.max(1, Math.min(24 * 365, Number(hours) || 5));
+    u.isBanned = true;
+    u.bannedUntil = Date.now() + durationHours * 3600 * 1000;
+    await saveUser(username);
+    for (const [sid, name] of online.entries()) {
+      if (name === username) {
+        const targetSocket = io.sockets.sockets.get(sid);
+        if (targetSocket) targetSocket.disconnect(true);
+      }
+    }
+    cb({ ok: true, bannedUntil: u.bannedUntil });
+  });
+
   socket.on('adminUnban', async ({ username }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
     if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
     const u = db.users[username];
     if (!u) return cb({ ok: false, msg: 'Не найден' });
-    u.isBanned = false;
-    u.bannedUntil = 0;
+    u.isBanned = false; u.bannedUntil = 0;
     await saveUser(username);
     cb({ ok: true });
   });
 
   socket.on('adminDeleteAccount', async ({ username }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
     if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
-    if (username === 'PeshkaSasha') return cb({ ok: false, msg: 'Нельзя удалить главного админа' });
+    if (username === 'PeshkaSasha') return cb({ ok: false, msg: 'Нельзя удалить главного администратора' });
+    if (!db.users[username]) return cb({ ok: false, msg: 'Пользователь не найден' });
+    for (const sid of socketsOfUser(username)) {
+      const targetSocket = io.sockets.sockets.get(sid);
+      if (targetSocket) targetSocket.disconnect(true);
+    }
     await pool.query('DELETE FROM users WHERE username = $1', [username]);
     delete db.users[username];
     cb({ ok: true });
+  });
+
+  socket.on('adminBulkDeleteChat', ({ scope, lobbyId, arenaId, msgIds }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    if (!Array.isArray(msgIds) || !msgIds.length || msgIds.length > 100) return cb({ ok: false, msg: 'Выберите от 1 до 100 сообщений' });
+    let chat, emitEvent, payload;
+    if (scope === 'arena') {
+      const state = arenas.get(arenaId);
+      if (!state) return cb({ ok: false, msg: 'Арена не найдена' });
+      chat = state.chat; emitEvent = 'chatMessageDeleted'; payload = { scope: 'arena', arenaId };
+    } else {
+      const lobby = lobbies.get(lobbyId);
+      if (!lobby) return cb({ ok: false, msg: 'Партия не найдена' });
+      chat = lobby.chat; emitEvent = 'chatMessageDeleted'; payload = { scope: 'game', lobbyId };
+    }
+    const wanted = new Set(msgIds.map(String));
+    const found = chat.filter(m => wanted.has(String(m.id)) && !m.system);
+    if (!found.length) return cb({ ok: false, msg: 'Сообщения не найдены' });
+    for (let i = chat.length - 1; i >= 0; i--) if (wanted.has(String(chat[i].id)) && !chat[i].system) chat.splice(i, 1);
+    for (const msg of found) io.emit(emitEvent, { ...payload, msgId: msg.id });
+    cb({ ok: true, deleted: found.length });
   });
 
   socket.on('disconnect', () => {
