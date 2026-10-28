@@ -38,11 +38,33 @@ body.login-active #mainContent { display: none !important; }
       </div>
       <a href="#/reset" class="forgot-link" style="display:inline-block;margin-top:8px;font-size:12px;color:#4a9ce8;text-align:right;width:100%;">Забыли пароль?</a>
     </div>
-    <label class="checkbox-row" style="margin-bottom:16px;">
-      <input type="checkbox" id="honorCheckbox">
-      <span class="checkmark"></span>
-      <span>Подтверждаю, что буду играть честно</span>
-    </label>
+    <div id="registrationAgreements" style="display:none;margin:10px 0 14px;">
+      <details class="auth-terms" style="font-size:12px;line-height:1.5;color:var(--muted);margin:0 0 10px;">
+        <summary style="cursor:pointer;color:var(--text);font-weight:600;padding:5px 0;">Пользовательское соглашение и правила Kingside</summary>
+        <div style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;max-height:190px;overflow:auto;background:var(--panel, transparent);">
+          <p><strong>1. Назначение платформы.</strong> Kingside предназначена для игры в шахматы, общения и участия в турнирах. Создавая аккаунт, пользователь обязуется соблюдать эти правила и применимое законодательство.</p>
+          <p><strong>2. Честная игра.</strong> Запрещено использовать шахматные движки, подсказки, стороннюю помощь, автоматизацию ходов, несколько аккаунтов для получения нечестного преимущества, намеренно сливать партии, договариваться о результатах или манипулировать рейтингом. Анализ партии после её завершения разрешён, если правила конкретного режима не устанавливают иное.</p>
+          <p><strong>3. Уважительное общение.</strong> Запрещены оскорбления, угрозы, травля, спам, выдача себя за другого пользователя, публикация чужих личных данных и попытки нарушить работу платформы.</p>
+          <p><strong>4. Модерация.</strong> При нарушении правил администрация может удалить сообщения, ограничить чат, временно заблокировать или отключить аккаунт. Срок и мера зависят от тяжести и повторности нарушения. Запрещённые действия не становятся допустимыми из-за отсутствия немедленной санкции.</p>
+          <p><strong>5. Аккаунт и безопасность.</strong> Пользователь отвечает за сохранность пароля и действия, совершённые через аккаунт. Нельзя пытаться получить доступ к чужим аккаунтам или обходить ограничения.</p>
+          <p><strong>6. Данные и письма.</strong> Email используется для подтверждения аккаунта и восстановления доступа. Пользователь должен указывать доступный ему адрес и хранить ссылку восстановления в тайне. Ссылка восстановления одноразовая и ограничена по времени.</p>
+          <p><strong>7. Доступность сервиса.</strong> Платформа предоставляется по принципу «как есть». Возможны технические перерывы, обновления и исправления ошибок. Не следует использовать Kingside для хранения критически важных данных.</p>
+          <p><strong>8. Изменения правил.</strong> Правила могут обновляться. При существенных изменениях платформа может запросить повторное подтверждение. Версия, принятая при регистрации, сохраняется в записи аккаунта.</p>
+          <p><strong>9. Обращения.</strong> Если вы считаете, что ограничение применено ошибочно, обратитесь к администрации через доступные на платформе каналы.</p>
+          <p>Продолжая регистрацию, вы подтверждаете, что прочитали соглашение, понимаете правила и обязуетесь их соблюдать.</p>
+        </div>
+      </details>
+      <label class="checkbox-row" style="margin-bottom:8px;align-items:flex-start;">
+        <input type="checkbox" id="honorCheckbox" required>
+        <span class="checkmark"></span>
+        <span>Подтверждаю, что буду играть честно и не использовать стороннюю помощь во время партий.</span>
+      </label>
+      <label class="checkbox-row" style="margin-bottom:0;align-items:flex-start;">
+        <input type="checkbox" id="rulesCheckbox" required>
+        <span class="checkmark"></span>
+        <span>Подтверждаю, что прочитал(а) пользовательское соглашение и буду следовать правилам платформы.</span>
+      </label>
+    </div>
     <button id="submitBtn" class="primary auth-submit" onclick="App.doLogin()"><span id="btnText">Войти</span></button>
     <div id="loginMsg" class="auth-msg"></div>
   </div>
@@ -52,13 +74,13 @@ body.login-active #mainContent { display: none !important; }
   <div class="auth-card">
     <h2 style="margin-top:0;color:var(--text-bright);text-align:center;">Сброс пароля</h2>
     <div id="resetStep1">
-      <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">Введите вашу электронную почту, мы отправим вам письмо с ссылкой на сброс пароля.</p>
+      <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">Укажите email, привязанный к аккаунту. Ссылка для смены пароля будет действовать 1 час и может быть использована один раз.</p>
       <div class="auth-field"><label>Email</label><input id="resetEmailInput" type="email" placeholder="you@example.com"></div>
       <button class="primary auth-submit" onclick="Auth.requestReset()">Сбросить пароль</button>
       <div id="resetMsg1" class="auth-msg"></div>
     </div>
     <div id="resetStep2" style="display: none;">
-      <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">Введите новый пароль дважды.</p>
+      <p style="font-size:13px;color:var(--muted);text-align:center;margin-bottom:16px;">Придумайте новый пароль длиной не менее 8 символов и введите его дважды.</p>
       <div class="auth-field"><label>Новый пароль</label><input id="newPassword" type="password" placeholder="••••••••••••" autocomplete="new-password"></div>
       <div class="auth-field"><label>Повторите пароль</label><input id="confirmPassword" type="password" placeholder="••••••••••••" autocomplete="new-password"></div>
       <button class="primary auth-submit" onclick="Auth.doReset()">Обновить пароль</button>
