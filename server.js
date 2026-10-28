@@ -31,6 +31,7 @@ function fmtMskHM(ts) { const p = mskParts(ts); return String(p.h).padStart(2, '
 function roundToMinute(ts) { return Math.round(ts / 60000) * 60000; }
 
 const ADMINS = new Set(['PeshkaSasha']);
+let adminDmClosed = false;
 const MODERATORS = new Set(['Debian']);
 const DEVS = new Set(['PeshkaSasha']);
 function roleOf(username) {
@@ -176,7 +177,11 @@ async function initDB() {
   await pool.query(`ALTER TABLE games ADD COLUMN IF NOT EXISTS is_bot BOOLEAN DEFAULT FALSE;`);
   await pool.query(`CREATE TABLE IF NOT EXISTS messages (
     id SERIAL PRIMARY KEY, from_user TEXT NOT NULL, to_user TEXT NOT NULL, text TEXT NOT NULL,
-    created_at BIGINT NOT NULL, read_at BIGINT DEFAULT 0, hidden_for TEXT DEFAULT '');`);
+    created_at BIGINT NOT NULL, read_at BIGINT DEFAULT 0, hidden_for TEXT DEFAULT '', color TEXT DEFAULT '');`);
+  await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS color TEXT DEFAULT '';`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '');`);
+  const adminDmSetting = await pool.query(`SELECT value FROM app_settings WHERE key = 'admin_dm_closed'`);
+  adminDmClosed = adminDmSetting.rows[0]?.value === 'true';
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_pair ON messages (from_user, to_user, created_at);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_to ON messages (to_user, read_at);`);
   
@@ -1889,7 +1894,7 @@ async function getDialogs(username) {
 }
 async function getHistory(username, other, markRead) {
   const res = await pool.query(`
-    SELECT id, from_user, to_user, text, created_at, read_at FROM messages
+    SELECT id, from_user, to_user, text, created_at, read_at, color FROM messages
     WHERE ((from_user = $1 AND to_user = $2) OR (from_user = $2 AND to_user = $1))
       AND NOT (hidden_for LIKE '%' || $1 || '%')
     ORDER BY created_at ASC LIMIT 500;
@@ -2868,17 +2873,18 @@ io.on('connection', (socket) => {
     if (!text) return cb({ ok: false, msg: 'Пустое сообщение' });
     if (!db.users[to]) return cb({ ok: false, msg: 'Игрок не найден' });
     if (to === socket.username) return cb({ ok: false, msg: 'Нельзя писать самому себе' });
+    if (to === 'PeshkaSasha' && adminDmClosed && !isAdmin(socket.username)) return cb({ ok: false, msg: 'Администратор временно отключил входящие личные сообщения' });
     const muteUntil = checkMute(socket.username);
     if (muteUntil > 0) { const mins = Math.ceil((muteUntil - Date.now()) / 60000); return cb({ ok: false, msg: `Вы заглушены ещё ${mins} мин.` }); }
     try {
       const now = Date.now();
       const r = await pool.query(
-        `INSERT INTO messages (from_user, to_user, text, created_at, read_at) VALUES ($1, $2, $3, $4, 0)
-         RETURNING id, from_user, to_user, text, created_at, read_at`,
+        `INSERT INTO messages (from_user, to_user, text, created_at, read_at, color) VALUES ($1, $2, $3, $4, 0, '')
+         RETURNING id, from_user, to_user, text, created_at, read_at, color`,
         [socket.username, to, text, now]
       );
       const row = r.rows[0];
-      const msgObj = { id: row.id, from: row.from_user, to: row.to_user, text: row.text, ts: Number(row.created_at), readAt: Number(row.read_at) };
+      const msgObj = { id: row.id, from: row.from_user, to: row.to_user, text: row.text, ts: Number(row.created_at), readAt: Number(row.read_at), color: row.color || '' };
       for (const sid of socketsOfUser(to)) io.to(sid).emit('msgNew', msgObj);
       for (const sid of socketsOfUser(socket.username)) io.to(sid).emit('msgNew', msgObj);
       const un = await unreadCount(to);
@@ -3007,6 +3013,45 @@ io.on('connection', (socket) => {
     } catch (e) {
       cb({ ok: false, msg: 'Ошибка отправки письма.' });
     }
+  });
+
+  socket.on('adminGetDmSetting', async (cb) => {
+    if (typeof cb !== 'function') return;
+    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    try {
+      const r = await pool.query(`SELECT value FROM app_settings WHERE key = 'admin_dm_closed'`);
+      adminDmClosed = r.rows[0]?.value === 'true';
+      cb({ ok: true, closed: adminDmClosed });
+    } catch (e) { cb({ ok: false, msg: 'Не удалось прочитать настройку' }); }
+  });
+
+  socket.on('adminSetDmSetting', async ({ closed }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    try {
+      adminDmClosed = !!closed;
+      await pool.query(`INSERT INTO app_settings (key, value) VALUES ('admin_dm_closed', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [adminDmClosed ? 'true' : 'false']);
+      cb({ ok: true, closed: adminDmClosed });
+    } catch (e) { cb({ ok: false, msg: 'Не удалось сохранить настройку' }); }
+  });
+
+  socket.on('adminSendPrivateMessage', async ({ to, text, color }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    if (typeof to !== 'string' || !to || to === 'PeshkaSasha' || !db.users[to]) return cb({ ok: false, msg: 'Выберите существующего игрока' });
+    if (typeof text !== 'string' || !(text = text.trim().slice(0, 2000))) return cb({ ok: false, msg: 'Введите текст сообщения' });
+    color = typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color) ? color : '#ff4d4f';
+    try {
+      const now = Date.now();
+      const r = await pool.query(`INSERT INTO messages (from_user, to_user, text, created_at, read_at, color) VALUES ($1, $2, $3, $4, 0, $5) RETURNING id, from_user, to_user, text, created_at, read_at, color`, ['PeshkaSasha', to, text, now, color]);
+      const row = r.rows[0];
+      const msgObj = { id: row.id, from: row.from_user, to: row.to_user, text: row.text, ts: Number(row.created_at), readAt: Number(row.read_at), color: row.color };
+      for (const sid of socketsOfUser(to)) io.to(sid).emit('msgNew', msgObj);
+      for (const sid of socketsOfUser('PeshkaSasha')) io.to(sid).emit('msgNew', msgObj);
+      const un = await unreadCount(to);
+      for (const sid of socketsOfUser(to)) io.to(sid).emit('msgUnread', { count: un });
+      cb({ ok: true, msg: msgObj });
+    } catch (e) { cb({ ok: false, msg: 'Ошибка БД при отправке сообщения' }); }
   });
 
   socket.on('adminListUsers', (cb) => {
