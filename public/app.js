@@ -1089,12 +1089,14 @@ const Arena = {
     const parent = listEl.parentElement;
     if (!parent) return null;
     parent.style.position = 'relative';
-    if (!parent.style.maxHeight) parent.style.maxHeight = 'none';
+    parent.style.overflow = 'hidden';
+    parent.style.minHeight = '0';
+    // НЕ трогаем maxHeight — пусть ограничивается flex-родителем
     let ov = document.getElementById('arenaPlayerOverlay');
     if (!ov) {
       ov = document.createElement('div');
       ov.id = 'arenaPlayerOverlay';
-      ov.style.cssText = 'position:absolute; inset:0; background:var(--panel, #1e1d1a); z-index:20; display:none; overflow-y:auto; padding:10px 12px 16px; border-radius:6px;';
+      ov.style.cssText = 'position:absolute; inset:0; background:var(--panel, #1e1d1a); z-index:20; display:none; overflow-y:auto; padding:10px 12px 16px; border-radius:6px; box-sizing:border-box;';
       parent.appendChild(ov);
     }
     return ov;
