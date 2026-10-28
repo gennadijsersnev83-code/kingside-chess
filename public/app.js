@@ -1086,13 +1086,12 @@ const Arena = {
   _ensureOverlay() {
     const listEl = document.getElementById('arenaGamesList');
     if (!listEl) return null;
-    const parent = listEl.parentElement;
+    const parent = listEl.parentElement; // .arenaRightCol
     if (!parent) return null;
     parent.style.position = 'relative';
     parent.style.overflow = 'hidden';
     parent.style.minHeight = '0';
-    parent.style.maxHeight = '100%';
-    // НЕ трогаем maxHeight — пусть ограничивается flex-родителем
+    // НЕ трогаем maxHeight
     let ov = document.getElementById('arenaPlayerOverlay');
     if (!ov) {
       ov = document.createElement('div');
