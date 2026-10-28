@@ -3084,30 +3084,47 @@ io.on('connection', (socket) => {
   socket.on('adminBan', async ({ username, hours }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
-    if (username === 'PeshkaSasha') return cb({ ok: false, msg: 'Нельзя заблокировать главного администратора' });
+    if (typeof username !== 'string' || username === 'PeshkaSasha') return cb({ ok: false, msg: 'Нельзя заблокировать главного администратора' });
     const u = db.users[username];
-    if (!u) return cb({ ok: false, msg: 'Не найден' });
-    const durationHours = Math.max(1, Math.min(24 * 365, Number(hours) || 5));
-    u.isBanned = true;
-    u.bannedUntil = Date.now() + durationHours * 3600 * 1000;
-    await saveUser(username);
-    for (const [sid, name] of online.entries()) {
-      if (name === username) {
-        const targetSocket = io.sockets.sockets.get(sid);
-        if (targetSocket) targetSocket.disconnect(true);
-      }
+    if (!u) return cb({ ok: false, msg: 'Игрок не найден' });
+    const requestedHours = Number(hours);
+    if (!Number.isFinite(requestedHours) || requestedHours < 1 || requestedHours > 24 * 365) {
+      return cb({ ok: false, msg: 'Срок бана должен быть от 1 до 8760 часов' });
     }
-    cb({ ok: true, bannedUntil: u.bannedUntil });
+    const bannedUntil = Date.now() + Math.floor(requestedHours) * 3600 * 1000;
+    try {
+      // Persist the ban directly, then update memory. This avoids relying on a full user upsert.
+      const saved = await pool.query('UPDATE users SET is_banned = TRUE, banned_until = $1 WHERE username = $2', [bannedUntil, username]);
+      if (!saved.rowCount) return cb({ ok: false, msg: 'Аккаунт не найден в базе данных' });
+      u.isBanned = true;
+      u.bannedUntil = bannedUntil;
+      // Disconnect every session for this account, not only sessions present in the online index.
+      for (const [sid, targetSocket] of io.sockets.sockets.entries()) {
+        if (targetSocket.username === username || online.get(sid) === username) targetSocket.disconnect(true);
+      }
+      return cb({ ok: true, bannedUntil });
+    } catch (err) {
+      console.error('[Admin ban] Не удалось сохранить бан:', err.message);
+      return cb({ ok: false, msg: 'Не удалось сохранить бан в базе данных' });
+    }
   });
 
   socket.on('adminUnban', async ({ username }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    if (typeof username !== 'string') return cb({ ok: false, msg: 'Некорректный игрок' });
     const u = db.users[username];
-    if (!u) return cb({ ok: false, msg: 'Не найден' });
-    u.isBanned = false; u.bannedUntil = 0;
-    await saveUser(username);
-    cb({ ok: true });
+    if (!u) return cb({ ok: false, msg: 'Игрок не найден' });
+    try {
+      const saved = await pool.query('UPDATE users SET is_banned = FALSE, banned_until = 0 WHERE username = $1', [username]);
+      if (!saved.rowCount) return cb({ ok: false, msg: 'Аккаунт не найден в базе данных' });
+      u.isBanned = false;
+      u.bannedUntil = 0;
+      return cb({ ok: true });
+    } catch (err) {
+      console.error('[Admin unban] Не удалось снять бан:', err.message);
+      return cb({ ok: false, msg: 'Не удалось снять бан в базе данных' });
+    }
   });
 
   socket.on('adminDeleteAccount', async ({ username }, cb) => {
