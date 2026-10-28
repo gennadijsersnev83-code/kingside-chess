@@ -1623,6 +1623,7 @@ const Inbox = {
       if (dateStr !== lastDate) { const div = document.createElement('div'); div.className = 'msgDateDivider'; div.textContent = dateStr; frag.appendChild(div); lastDate = dateStr; }
       const mine = (m.from_user === App.me.username);
       const div = document.createElement('div'); div.className = 'msgBubble ' + (mine ? 'me' : 'them'); div.textContent = m.text;
+      if (m.from_user === 'PeshkaSasha' && /^#[0-9a-fA-F]{6}$/.test(m.color || '')) { div.style.borderColor = m.color; div.style.color = m.color; }
       const time = document.createElement('span'); time.className = 'msgTime'; time.textContent = Utils.fmtTimeHM(ts); div.appendChild(time);
       frag.appendChild(div);
     }
@@ -1637,7 +1638,7 @@ const Inbox = {
   onNew(msg) {
     const other = (msg.from === App.me.username) ? msg.to : msg.from;
     if (Router.current.name === 'inbox' && this.activeWith === other) {
-      this.history.push({ id: msg.id, from_user: msg.from, to_user: msg.to, text: msg.text, created_at: msg.ts, read_at: msg.readAt });
+      this.history.push({ id: msg.id, from_user: msg.from, to_user: msg.to, text: msg.text, created_at: msg.ts, read_at: msg.readAt, color: msg.color || '' });
       this.renderHistory();
       if (msg.from !== App.me.username) { App.socket.emit('msgGetHistory', { with: other, markRead: true }, (res) => { if (res && res.ok) { this.history = res.history; this.renderHistory(); } }); }
     } else if (msg.from !== App.me.username) Sounds.msg();
@@ -2232,7 +2233,7 @@ const AdminPanel = {
     this.status('Загружаю список аккаунтов…');
     App.socket.emit('adminListUsers',res=>{
       if(!res||!res.ok){this.status((res&&res.msg)||'Не удалось загрузить игроков',true);return;}
-      this.users=res.users||[];this.renderUsers();this.status('Список обновлён');
+      this.users=res.users||[];this.renderUsers();this.populateRecipient();this.loadDmSetting();this.status('Список обновлён');
     });
   },
   renderUsers() {
@@ -2263,50 +2264,70 @@ const AdminPanel = {
   },
   unban(encoded) {const username=decodeURIComponent(encoded);App.socket.emit('adminUnban',{username},res=>{if(!res||!res.ok){this.status((res&&res.msg)||'Ошибка разбана',true);return;}this.status('Блокировка снята: '+username);this.refresh();});},
   deleteAccount(encoded) {const username=decodeURIComponent(encoded);if(!confirm(`Безвозвратно удалить аккаунт ${username}?`))return;App.socket.emit('adminDeleteAccount',{username},res=>{if(!res||!res.ok){this.status((res&&res.msg)||'Ошибка удаления',true);return;}this.status('Аккаунт удалён: '+username);this.refresh();});},
+  populateRecipient() {
+    const sel=document.getElementById('adminPrivateRecipient'); if(!sel)return;
+    const old=sel.value;
+    sel.innerHTML='<option value="">Выберите игрока…</option>'+this.users.filter(u=>u.username!=='PeshkaSasha').map(u=>`<option value="${Utils.escapeHtml(u.username)}">${Utils.escapeHtml(u.username)}</option>`).join('');
+    if(this.users.some(u=>u.username===old))sel.value=old;
+  },
+  loadDmSetting() {
+    if(!this.isRoot()||!App.socket)return;
+    App.socket.emit('adminGetDmSetting',res=>{const c=document.getElementById('adminDmClosed');if(res&&res.ok&&c)c.checked=!!res.closed;});
+  },
+  setDmClosed(closed) {
+    App.socket.emit('adminSetDmSetting',{closed:!!closed},res=>{if(!res||!res.ok){this.status((res&&res.msg)||'Не удалось изменить настройку ЛС',true);this.loadDmSetting();return;}this.status(closed?'Входящие ЛС для вас отключены':'Входящие ЛС для вас включены');});
+  },
   addPrivateMessage() {
+    if(!this.isRoot())return;
     const text=(document.getElementById('adminPrivateText')?.value||'').trim();
     const color=document.getElementById('adminPrivateColor')?.value||'#ff4d4f';
-    if(!text){this.status('Введите текст личного объявления',true);return;}
-    const targets=[];
-    if(App.currentArenaId) targets.push(document.getElementById('arenaChatMessages'));
-    else if(App.lobbyId) targets.push(document.getElementById('chatMessages'));
-    else targets.push(document.getElementById('arenaChatMessages'),document.getElementById('chatMessages'));
-    const box=targets.find(x=>x && x.offsetParent!==null) || targets.find(Boolean);
-    if(!box){this.status('Откройте чат, чтобы добавить личное объявление',true);return;}
-    const div=document.createElement('div');div.className='adminLocalNotice';div.style.setProperty('--admin-msg-color',color);
-    const tag=document.createElement('span');tag.className='adminLocalTag';tag.textContent='ТОЛЬКО ВАМ';
-    const body=document.createElement('span');body.style.color=color;body.textContent=text;
-    div.append(tag,body);box.appendChild(div);box.scrollTop=box.scrollHeight;
-    try { const saved=JSON.parse(localStorage.getItem('kingside_admin_notes')||'[]');saved.push({text,color,ts:Date.now()});localStorage.setItem('kingside_admin_notes',JSON.stringify(saved.slice(-100))); }catch(e){}
-    document.getElementById('adminPrivateText').value='';this.status('Добавлено локально — другие игроки этого не увидят');
+    const to=document.getElementById('adminPrivateRecipient')?.value||'';
+    if(!to){this.status('Выберите игрока, которому отправить сообщение',true);return;}
+    if(!text){this.status('Введите текст личного сообщения',true);return;}
+    App.socket.emit('adminSendPrivateMessage',{to,text,color},res=>{
+      if(!res||!res.ok){this.status((res&&res.msg)||'Не удалось отправить личное сообщение',true);return;}
+      const inp=document.getElementById('adminPrivateText');if(inp)inp.value='';
+      this.status(`Личное сообщение отправлено игроку ${to}`);
+    });
+  },
+  ensureChatTools(box,scope) {
+    if(!box||!this.isRoot()||box.querySelector(':scope > .adminChatInlineTools'))return;
+    const tools=document.createElement('div');tools.className='adminChatInlineTools';tools.dataset.scope=scope;
+    const label=document.createElement('span');label.textContent='Выбрано: ';
+    const count=document.createElement('b');count.className='adminInlineSelectedCount';count.textContent='0';label.appendChild(count);
+    const btn=document.createElement('button');btn.type='button';btn.className='adminInlineDeleteSelected';btn.textContent='🗑 Удалить выбранные';btn.addEventListener('click',()=>this.deleteSelected(scope));
+    tools.append(label,btn);box.prepend(tools);
   },
   decorateChatMessage(div,msg,scope) {
     if(!this.isRoot()||!msg||msg.system||!msg.id)return;
+    const box=document.getElementById(scope==='arena'?'arenaChatMessages':'chatMessages');this.ensureChatTools(box,scope);
     div.classList.add('adminSelectable');
     const cb=document.createElement('input');cb.type='checkbox';cb.className='adminSelectMsg';cb.title='Выбрать сообщение для удаления';cb.dataset.msgId=String(msg.id);cb.dataset.scope=scope;
     cb.addEventListener('change',()=>this.updateSelectedCount());
     const first=div.firstChild;if(first)div.insertBefore(cb,first);else div.appendChild(cb);
   },
-  updateSelectedCount() {const el=document.getElementById('adminSelectedCount');if(el)el.textContent=String(document.querySelectorAll('.adminSelectMsg:checked').length);},
-  deleteSelected() {
+  updateSelectedCount() {
     const selected=[...document.querySelectorAll('.adminSelectMsg:checked')];
+    document.querySelectorAll('.adminInlineSelectedCount').forEach(el=>{const tools=el.closest('.adminChatInlineTools');const scope=tools?.dataset.scope;el.textContent=String(selected.filter(c=>c.dataset.scope===scope).length);});
+    const el=document.getElementById('adminSelectedCount');if(el)el.textContent=String(selected.length);
+  },
+  deleteSelected(scope) {
+    const selected=[...document.querySelectorAll('.adminSelectMsg:checked')].filter(c=>!scope||c.dataset.scope===scope);
     if(!selected.length){this.status('Сначала отметьте сообщения галочками в чате',true);return;}
     if(!confirm(`Удалить выбранные сообщения (${selected.length}) у всех участников?`))return;
     const groups=new Map();
-    for(const c of selected){
-      const scope=c.dataset.scope, key=scope==='arena'?'arena':'game';
-      if(!groups.has(key))groups.set(key,[]);
-      groups.get(key).push(c.dataset.msgId);
-    }
+    for(const c of selected){const key=c.dataset.scope==='arena'?'arena':'game';if(!groups.has(key))groups.set(key,[]);groups.get(key).push(c.dataset.msgId);}
     let pending=groups.size, failed=false;
-    for(const [scope,msgIds] of groups){
-      const payload=scope==='arena'?{scope,arenaId:Arena.currentArenaId,msgIds}:{scope,lobbyId:App.lobbyId,msgIds};
+    for(const [kind,msgIds] of groups){
+      const payload=kind==='arena'?{scope:'arena',arenaId:Arena.currentArenaId,msgIds}:{scope:'game',lobbyId:App.lobbyId,msgIds};
       App.socket.emit('adminBulkDeleteChat',payload,res=>{
         if(!res||!res.ok){failed=true;this.status((res&&res.msg)||'Ошибка удаления',true);}
+        else selected.filter(c=>c.dataset.scope===(kind==='arena'?'arena':'game')&&msgIds.includes(c.dataset.msgId)).forEach(c=>c.closest('.msg')?.remove());
         pending--;if(!pending){if(!failed)this.status('Удалено сообщений: '+selected.length);this.updateSelectedCount();}
       });
     }
   }
+
 };
 
 // ============================================================
