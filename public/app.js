@@ -428,6 +428,7 @@ const App = {
     const s = this.socket;
     s.on('connect', () => { s.emit('stats', () => {}); Ping.onReconnect(); });
     s.on('stats', (st) => Stats.onStats(st));
+    s.on('accountRoleUpdated', (user) => { if(App.me && user && user.username===App.me.username){App.me=user;App.updateTopbarUser();} });
     s.on('communityOnline', (players) => Community.render(players));
     s.on('lobbiesUpdate', () => Lobby.refreshIfActive());
     s.on('connect_error', () => console.warn('Не удалось подключиться'));
@@ -477,7 +478,7 @@ const UserMenu = {
   isOpen: false,
   init() { document.addEventListener('click', (e) => { const m = document.getElementById('userMenu'); const btn = document.getElementById('userBtn'); if (!m || m.style.display === 'none') return; if (m.contains(e.target) || (btn && btn.contains(e.target))) return; this.close(); }); },
   toggle(e) { if (e) e.stopPropagation(); this.isOpen ? this.close() : this.open(); },
-  open() { const m = document.getElementById('userMenu'); if (!m) return; m.style.display = 'block'; this.isOpen = true; Ping.refresh(); if (App.socket) App.socket.emit('msgGetUnread', (r) => { if (r) Inbox.setUnread(r.count); }); },
+  open() { const m = document.getElementById('userMenu'); if (!m) return; m.style.display = 'block'; this.isOpen = true; const adminLink = document.getElementById('adminPanelMenuItem'); if (adminLink) adminLink.style.display = App.me && App.me.username === 'PeshkaSasha' ? 'flex' : 'none'; Ping.refresh(); if (App.socket) App.socket.emit('msgGetUnread', (r) => { if (r) Inbox.setUnread(r.count); }); },
   close() { const m = document.getElementById('userMenu'); if (!m) return; m.style.display = 'none'; this.isOpen = false; },
   goProfile() { this.close(); Router.go('profile'); },
   goInbox() { this.close(); Router.go('inbox'); },
@@ -1383,6 +1384,7 @@ const Arena = {
       div.innerHTML = `<span class="u">${Utils.nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${Utils.escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
       if (App.me && App.me.isMod) { const btn = div.querySelector('.modBtn'); if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); Mod.openMenu(ev, msg.id, msg.user, 'arena', this.currentArenaId); }); }
     }
+    if (window.AdminPanel) AdminPanel.decorateChatMessage(div, msg, 'arena');
     box.appendChild(div);
     while (box.children.length > 200) box.removeChild(box.firstChild);
     box.scrollTop = box.scrollHeight;
@@ -2120,6 +2122,7 @@ const Game = {
     let modHtml = ''; if (App.me && App.me.isMod) modHtml = `<span class="modBtn" title="Модерация">⚙</span>`;
     div.innerHTML = `<span class="u">${Utils.nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${Utils.escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
     if (App.me && App.me.isMod) { const btn = div.querySelector('.modBtn'); if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); Mod.openMenu(ev, msg.id, msg.user, 'game', App.lobbyId); }); }
+    if (window.AdminPanel) AdminPanel.decorateChatMessage(div, msg, 'game');
     box.appendChild(div);
     while (box.children.length > 50) box.removeChild(box.firstChild);
     box.scrollTop = box.scrollHeight;
@@ -2205,6 +2208,107 @@ const Game = {
   }
 };
 
+
+const AdminPanel = {
+  users: [], tab: 'users',
+  isRoot() { return !!(App.me && App.me.username === 'PeshkaSasha' && App.me.isAdmin); },
+  open() {
+    if (!this.isRoot()) { alert('Нет прав'); return; }
+    const overlay=document.getElementById('adminPanelOverlay'); if(overlay) overlay.style.display='flex';
+    UserMenu.close(); this.refresh();
+    const color=document.getElementById('adminPrivateColor'); if(color && !color.value) color.value='#ff4d4f';
+  },
+  close() { const overlay=document.getElementById('adminPanelOverlay'); if(overlay) overlay.style.display='none'; },
+  status(message, bad=false) { const el=document.getElementById('adminPanelStatus'); if(el){el.textContent=message||'';el.style.color=bad?'#ff8c91':'#8ddca4';} },
+  setTab(tab,btn) {
+    this.tab=tab;
+    document.getElementById('adminUsersTab').style.display=tab==='users'?'':'none';
+    document.getElementById('adminChatTab').style.display=tab==='chat'?'':'none';
+    document.querySelectorAll('.adminPanelTabs button').forEach(b=>b.classList.toggle('active',b===btn));
+    this.updateSelectedCount();
+  },
+  refresh() {
+    if(!this.isRoot() || !App.socket) return;
+    this.status('Загружаю список аккаунтов…');
+    App.socket.emit('adminListUsers',res=>{
+      if(!res||!res.ok){this.status((res&&res.msg)||'Не удалось загрузить игроков',true);return;}
+      this.users=res.users||[];this.renderUsers();this.status('Список обновлён');
+    });
+  },
+  renderUsers() {
+    const box=document.getElementById('adminUsersList');if(!box)return;
+    const q=(document.getElementById('adminUserSearch')?.value||'').trim().toLocaleLowerCase('ru');
+    const list=this.users.filter(u=>u.username.toLocaleLowerCase('ru').includes(q));
+    const count=document.getElementById('adminUserCount');if(count)count.textContent=`Профилей: ${this.users.length} · найдено: ${list.length}`;
+    if(!list.length){box.innerHTML='<div class="adminMuted">Ничего не найдено</div>';return;}
+    box.innerHTML=list.map(u=>{
+      const safe=Utils.escapeHtml(u.username);
+      const state=u.isBanned?`Заблокирован до ${new Date(u.bannedUntil).toLocaleString('ru-RU')}`:'Активен';
+      return `<div class="adminUserRow"><div><div class="adminUserName">${u.online?'🟢':'⚪'} ${safe}</div><div class="adminUserMeta">${u.rating} рейтинга · ${u.games} партий · ${state}</div></div>
+      <select aria-label="Роль ${safe}" id="adminRole-${encodeURIComponent(u.username)}" ${u.username==='PeshkaSasha'?'disabled':''}><option value="user" ${u.role==='user'?'selected':''}>Пользователь</option><option value="moderator" ${u.role==='moderator'?'selected':''}>Модератор</option></select>
+      <div class="adminUserActions"><button onclick="AdminPanel.setRole(decodeURIComponent('${encodeURIComponent(u.username)}'))" ${u.username==='PeshkaSasha'?'disabled':''}>Сохранить роль</button>
+      ${u.isBanned?`<button onclick="AdminPanel.unban('${encodeURIComponent(u.username)}')">Разбан</button>`:`<label style="display:flex;align-items:center;gap:4px"><input id="adminHours-${encodeURIComponent(u.username)}" type="number" min="1" max="8760" value="5" style="width:62px" aria-label="Часы бана"><button class="adminDanger" onclick="AdminPanel.ban('${encodeURIComponent(u.username)}')">Бан</button></label>`}</div>
+      <div class="adminUserActions"><button class="adminDanger" onclick="AdminPanel.deleteAccount('${encodeURIComponent(u.username)}')" ${u.username==='PeshkaSasha'?'disabled':''}>Удалить аккаунт</button></div></div>`;
+    }).join('');
+  },
+  setRole(encoded) {
+    const username=decodeURIComponent(encoded), role=document.getElementById('adminRole-'+encodeURIComponent(username))?.value;
+    App.socket.emit('adminSetRole',{username,role},res=>{if(!res||!res.ok){this.status((res&&res.msg)||'Ошибка назначения роли',true);return;}this.status('Роль обновлена: '+username);this.refresh();});
+  },
+  ban(encoded) {
+    const username=decodeURIComponent(encoded), hours=Number(document.getElementById('adminHours-'+encodeURIComponent(username))?.value||5);
+    if(!Number.isFinite(hours)||hours<1||hours>8760){this.status('Укажите срок бана от 1 до 8760 часов',true);return;}
+    if(!confirm(`Заблокировать ${username} на ${hours} ч.?`))return;
+    App.socket.emit('adminBan',{username,hours},res=>{if(!res||!res.ok){this.status((res&&res.msg)||'Ошибка бана',true);return;}this.status(`${username} заблокирован на ${hours} ч.`);this.refresh();});
+  },
+  unban(encoded) {const username=decodeURIComponent(encoded);App.socket.emit('adminUnban',{username},res=>{if(!res||!res.ok){this.status((res&&res.msg)||'Ошибка разбана',true);return;}this.status('Блокировка снята: '+username);this.refresh();});},
+  deleteAccount(encoded) {const username=decodeURIComponent(encoded);if(!confirm(`Безвозвратно удалить аккаунт ${username}?`))return;App.socket.emit('adminDeleteAccount',{username},res=>{if(!res||!res.ok){this.status((res&&res.msg)||'Ошибка удаления',true);return;}this.status('Аккаунт удалён: '+username);this.refresh();});},
+  addPrivateMessage() {
+    const text=(document.getElementById('adminPrivateText')?.value||'').trim();
+    const color=document.getElementById('adminPrivateColor')?.value||'#ff4d4f';
+    if(!text){this.status('Введите текст личного объявления',true);return;}
+    const targets=[];
+    if(App.currentArenaId) targets.push(document.getElementById('arenaChatMessages'));
+    else if(App.lobbyId) targets.push(document.getElementById('chatMessages'));
+    else targets.push(document.getElementById('arenaChatMessages'),document.getElementById('chatMessages'));
+    const box=targets.find(x=>x && x.offsetParent!==null) || targets.find(Boolean);
+    if(!box){this.status('Откройте чат, чтобы добавить личное объявление',true);return;}
+    const div=document.createElement('div');div.className='adminLocalNotice';div.style.setProperty('--admin-msg-color',color);
+    const tag=document.createElement('span');tag.className='adminLocalTag';tag.textContent='ТОЛЬКО ВАМ';
+    const body=document.createElement('span');body.style.color=color;body.textContent=text;
+    div.append(tag,body);box.appendChild(div);box.scrollTop=box.scrollHeight;
+    try { const saved=JSON.parse(localStorage.getItem('kingside_admin_notes')||'[]');saved.push({text,color,ts:Date.now()});localStorage.setItem('kingside_admin_notes',JSON.stringify(saved.slice(-100))); }catch(e){}
+    document.getElementById('adminPrivateText').value='';this.status('Добавлено локально — другие игроки этого не увидят');
+  },
+  decorateChatMessage(div,msg,scope) {
+    if(!this.isRoot()||!msg||msg.system||!msg.id)return;
+    div.classList.add('adminSelectable');
+    const cb=document.createElement('input');cb.type='checkbox';cb.className='adminSelectMsg';cb.title='Выбрать сообщение для удаления';cb.dataset.msgId=String(msg.id);cb.dataset.scope=scope;
+    cb.addEventListener('change',()=>this.updateSelectedCount());
+    const first=div.firstChild;if(first)div.insertBefore(cb,first);else div.appendChild(cb);
+  },
+  updateSelectedCount() {const el=document.getElementById('adminSelectedCount');if(el)el.textContent=String(document.querySelectorAll('.adminSelectMsg:checked').length);},
+  deleteSelected() {
+    const selected=[...document.querySelectorAll('.adminSelectMsg:checked')];
+    if(!selected.length){this.status('Сначала отметьте сообщения галочками в чате',true);return;}
+    if(!confirm(`Удалить выбранные сообщения (${selected.length}) у всех участников?`))return;
+    const groups=new Map();
+    for(const c of selected){
+      const scope=c.dataset.scope, key=scope==='arena'?'arena':'game';
+      if(!groups.has(key))groups.set(key,[]);
+      groups.get(key).push(c.dataset.msgId);
+    }
+    let pending=groups.size, failed=false;
+    for(const [scope,msgIds] of groups){
+      const payload=scope==='arena'?{scope,arenaId:Arena.currentArenaId,msgIds}:{scope,lobbyId:App.lobbyId,msgIds};
+      App.socket.emit('adminBulkDeleteChat',payload,res=>{
+        if(!res||!res.ok){failed=true;this.status((res&&res.msg)||'Ошибка удаления',true);}
+        pending--;if(!pending){if(!failed)this.status('Удалено сообщений: '+selected.length);this.updateSelectedCount();}
+      });
+    }
+  }
+};
+
 // ============================================================
 // BOOT
 // ============================================================
@@ -2212,7 +2316,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.App = App; window.Router = Router; window.Lobby = Lobby; window.Bot = Bot;
   window.Watch = Watch; window.Arena = Arena; window.Profile = Profile; window.Community = Community;
   window.Game = Game; window.Banners = Banners; window.Mod = Mod; window.Utils = Utils;
-  window.UserMenu = UserMenu; window.Inbox = Inbox; window.Ping = Ping; window.Auth = Auth;
+  window.UserMenu = UserMenu; window.Inbox = Inbox; window.Ping = Ping; window.Auth = Auth; window.AdminPanel = AdminPanel;
   App.init();
 });
 
