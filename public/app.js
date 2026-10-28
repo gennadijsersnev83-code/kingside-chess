@@ -1013,6 +1013,7 @@ const Arena = {
     const pag = document.getElementById('arenaPagination'); if (!pag) return;
 
     const list = state.participants || [];
+    // Если арена завершена и список пуст, не очищаем таблицу, а показываем заглушку
     if (!list.length) {
       body.innerHTML = '<div class="arenasEmpty" style="padding:20px;">Пока никто не зарегистрировался</div>';
       pag.innerHTML = '';
