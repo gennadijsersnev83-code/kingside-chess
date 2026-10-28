@@ -231,7 +231,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaPage {
   display: flex;
   justify-content: center;
-  align-items: flex-start; /* было stretch — теперь колонки не растягиваются по самой высокой */
+  align-items: stretch; /* вернули как было */
   gap: 20px;
   width: 100%;
   max-width: 1600px;
@@ -253,6 +253,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   display: flex;
   flex-direction: column;
   gap: 12px;
+  align-self: flex-start; /* средняя не растягивается по высоте соседей */
 }
 
 .arenaRight {
@@ -262,8 +263,9 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   flex-direction: column;
   position: relative;
   min-height: 0;
+  height: 600px;      /* стартовая высота = высота левой (статус + чат 380 + gap) */
+  max-height: 600px;
   overflow: hidden;
-  max-height: calc(100vh - 80px); /* жёсткий предел по высоте экрана */
 }
 
 @media (max-width: 1150px) {
@@ -274,7 +276,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 }
 @media (max-width: 800px) {
   .arenaPage { flex-direction: column; padding: 0 8px; }
-  .arenaLeft, .arenaCenter, .arenaRight { width: 100%; }
+  .arenaLeft, .arenaCenter, .arenaRight { width: 100%; height: auto; max-height: none; }
 }
 
 /* --- Левая колонка --- */
@@ -290,7 +292,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaChatBox {
   background: transparent; border: none; border-radius: 0;
   display: flex; flex-direction: column;
-  height: 380px; min-height: 380px; overflow: hidden; width: 100%;
+  height: 380px; min-height: 380px; max-height: 380px; overflow: hidden; width: 100%;
 }
 .arenaChatHeader {
   padding: 10px 0; border-bottom: 1px solid var(--border);
