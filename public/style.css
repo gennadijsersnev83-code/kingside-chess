@@ -1010,7 +1010,16 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
   *, *::before, *::after { scroll-behavior:auto !important; animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; }
 }
 :focus-visible { outline:2px solid var(--accent-2); outline-offset:2px; }
-.arenaGamesPanel { position: relative; display: flex; flex-direction: column; height: 600px; max-height: 600px; overflow: hidden; }
+.arenaGamesPanel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 600px;
+  max-height: 600px;
+  overflow: hidden;
+  min-height: 0;
+  flex: 1 1 auto;
+}
 .arenaGamesPanel > .arenaGamesBody { position: relative; flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; }
 #arenaGamesList { overflow-y: auto; overflow-x: hidden; }
 #arenaTopGame { flex: 0 0 auto; }
