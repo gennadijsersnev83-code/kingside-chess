@@ -226,8 +226,16 @@ const Auth = {
     this.mode = mode;
     const tabLogin = document.getElementById('tabLoginBtn'); const tabReg = document.getElementById('tabRegisterBtn');
     const emailField = document.getElementById('emailField'); const btnText = document.getElementById('btnText');
-    if (mode === 'login') { tabLogin.classList.add('active'); tabReg.classList.remove('active'); emailField.style.display = 'none'; btnText.textContent = 'Войти'; }
-    else { tabReg.classList.add('active'); tabLogin.classList.remove('active'); emailField.style.display = 'block'; btnText.textContent = 'Зарегистрироваться'; }
+    const agreements = document.getElementById('registrationAgreements');
+    if (mode === 'login') {
+      tabLogin.classList.add('active'); tabReg.classList.remove('active'); emailField.style.display = 'none'; btnText.textContent = 'Войти';
+      if (agreements) agreements.style.display = 'none';
+      const pw = document.getElementById('password'); if (pw) pw.autocomplete = 'current-password';
+    } else {
+      tabReg.classList.add('active'); tabLogin.classList.remove('active'); emailField.style.display = 'block'; btnText.textContent = 'Зарегистрироваться';
+      if (agreements) agreements.style.display = 'block';
+      const pw = document.getElementById('password'); if (pw) pw.autocomplete = 'new-password';
+    }
     document.getElementById('loginMsg').textContent = '';
     const usernameStatus = document.getElementById('usernameStatus');
     if (usernameStatus && mode === 'login') { usernameStatus.textContent = ''; usernameStatus.className = ''; }
@@ -271,6 +279,44 @@ const Auth = {
         }, 500);
       });
     }
+  },
+  resetToken: null,
+  showResetToken(token) {
+    this.resetToken = token || null;
+    const step1 = document.getElementById('resetStep1');
+    const step2 = document.getElementById('resetStep2');
+    if (step1) step1.style.display = token ? 'none' : '';
+    if (step2) step2.style.display = token ? '' : 'none';
+    const m1 = document.getElementById('resetMsg1'); const m2 = document.getElementById('resetMsg2');
+    if (m1) m1.textContent = ''; if (m2) m2.textContent = '';
+  },
+  requestReset() {
+    const emailEl = document.getElementById('resetEmailInput');
+    const msg = document.getElementById('resetMsg1');
+    const email = emailEl ? emailEl.value.trim().toLowerCase() : '';
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { msg.textContent = 'Введите корректный email'; msg.style.color = '#ff6b6b'; return; }
+    msg.textContent = 'Отправляем письмо…'; msg.style.color = 'var(--muted)';
+    App.socket.emit('requestPasswordReset', { email }, (res) => {
+      if (!res) { msg.textContent = 'Нет ответа от сервера. Проверьте соединение и попробуйте снова.'; msg.style.color = '#ff6b6b'; return; }
+      msg.textContent = res.msg || (res.ok ? 'Если адрес зарегистрирован, письмо отправлено.' : 'Не удалось запросить сброс пароля.');
+      msg.style.color = res.ok ? 'var(--text)' : '#ff6b6b';
+    });
+  },
+  doReset() {
+    const msg = document.getElementById('resetMsg2');
+    const password = document.getElementById('newPassword').value;
+    const confirm = document.getElementById('confirmPassword').value;
+    if (!this.resetToken) { msg.textContent = 'В ссылке отсутствует токен восстановления. Запросите новое письмо.'; msg.style.color = '#ff6b6b'; return; }
+    if (password.length < 8 || password.length > 128) { msg.textContent = 'Пароль должен содержать от 8 до 128 символов.'; msg.style.color = '#ff6b6b'; return; }
+    if (password !== confirm) { msg.textContent = 'Пароли не совпадают.'; msg.style.color = '#ff6b6b'; return; }
+    msg.textContent = 'Сохраняем новый пароль…'; msg.style.color = 'var(--muted)';
+    App.socket.emit('resetPassword', { token: this.resetToken, newPassword: password }, (res) => {
+      if (!res || !res.ok) { msg.textContent = (res && res.msg) || 'Не удалось изменить пароль. Запросите новую ссылку.'; msg.style.color = '#ff6b6b'; return; }
+      msg.textContent = 'Пароль изменён. Теперь можно войти с новым паролем.'; msg.style.color = '#7dbe30';
+      this.resetToken = null;
+      document.getElementById('newPassword').value = ''; document.getElementById('confirmPassword').value = '';
+      setTimeout(() => { location.hash = '#/autorize'; this.switchTab('login'); }, 1200);
+    });
   }
 };
 
@@ -368,9 +414,19 @@ const App = {
     const msgEl = document.getElementById('loginMsg');
     if (!username || !password) { msgEl.textContent = 'Введите логин и пароль'; return; }
     if (Auth.mode === 'register' && !email) { msgEl.textContent = 'Введите email'; return; }
-    if (Auth.mode === 'register') { const honor = document.getElementById('honorCheckbox'); if (honor && !honor.checked) { msgEl.textContent = 'Подтвердите, что будете играть честно'; return; } }
+    const honor = document.getElementById('honorCheckbox');
+    const rules = document.getElementById('rulesCheckbox');
+    if (Auth.mode === 'register') {
+      if (password.length < 8) { msgEl.textContent = 'Для нового аккаунта пароль должен содержать минимум 8 символов'; return; }
+      if (!honor || !honor.checked) { msgEl.textContent = 'Подтвердите, что будете играть честно'; return; }
+      if (!rules || !rules.checked) { msgEl.textContent = 'Подтвердите согласие с правилами платформы'; return; }
+    }
     msgEl.textContent = 'Загрузка...'; msgEl.style.color = 'var(--text)';
-    this.socket.emit('register', { username, password, email: Auth.mode === 'register' ? email : undefined }, (res) => {
+    this.socket.emit('register', {
+      username, password, email: Auth.mode === 'register' ? email : undefined,
+      acceptsHonestPlay: Auth.mode === 'register' ? !!(honor && honor.checked) : undefined,
+      acceptsPlatformRules: Auth.mode === 'register' ? !!(rules && rules.checked) : undefined
+    }, (res) => {
       if (!res || !res.ok) {
         msgEl.style.color = '#ff6b6b'; msgEl.textContent = (res && res.msg) || 'Ошибка';
         if (res && res.pending) { msgEl.style.color = '#7dbe30'; msgEl.innerHTML = `Мы отправили письмо с подтверждением на почту: <b>${Utils.escapeHtml(email)}</b>.<br>Если письмо не приходит, проверьте папку «Спам».`; }
@@ -515,16 +571,24 @@ const Router = {
   go(name, param) { const path = param ? `#/${name}/${encodeURIComponent(param)}` : `#/${name}`; if (location.hash === path) this.handle(); else location.hash = path; },
   handle() {
     const hash = location.hash.replace(/^#\/?/, '');
-    const parts = hash.split('/').filter(Boolean);
-    const name = parts[0] || (App.me ? 'lobby' : 'autorize');
-    const param = parts[1] ? decodeURIComponent(parts[1]) : null;
+    const routeAndQuery = hash.split('?');
+    const parts = routeAndQuery[0].split('/').filter(Boolean);
+    let name = parts[0] || (App.me ? 'lobby' : 'autorize');
+    let param = parts[1] ? decodeURIComponent(parts[1]) : null;
+    if (!param && routeAndQuery[1]) {
+      try { param = new URLSearchParams(routeAndQuery[1]).get('token') || new URLSearchParams(routeAndQuery[1]).get('resetToken'); } catch (e) {}
+    }
+    if (!param) {
+      try { const query = new URLSearchParams(location.search); param = query.get('token') || query.get('resetToken'); if (param && (!parts[0] || parts[0] === 'reset-password' || parts[0] === 'reset')) name = 'reset'; } catch (e) {}
+    }
+    if (parts[0] === 'reset-password' || /\/(reset-password|reset)\/?$/.test(location.pathname)) name = 'reset';
     this.current = { name, param }; this.apply();
   },
   apply() {
     const { name, param } = this.current;
     if (App.restoring) return;
     if (App.me && App.gameActive && !App.gameEnded && (name === 'arenas' || name === 'arenaPage')) { Router.go('lobby'); return; }
-    if (name === 'reset') { document.body.classList.add('login-active'); Router.show('resetScreen'); return; }
+    if (name === 'reset') { document.body.classList.add('login-active'); const hashToken = param || (location.hash.includes('?') ? new URLSearchParams(location.hash.split('?')[1]).get('token') : null); Auth.showResetToken(hashToken); Router.show('resetScreen'); return; }
     if (name === 'verify') { Router.go('autorize'); return; }
     if (name === 'login' || name === 'autorize' || !App.me) { document.body.classList.add('login-active'); Router.show('autorizeScreen'); return; }
     if (App.me && name !== 'reset' && name !== 'verify' && name !== 'login' && name !== 'autorize') {
