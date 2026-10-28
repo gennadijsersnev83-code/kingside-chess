@@ -19,11 +19,9 @@ const Utils = {
     if (!username) return '';
     const admin = (typeof isAdminFlag === 'boolean') ? isAdminFlag : (username === 'PeshkaSasha' || username === 'admin');
     const mod = (typeof isModFlag === 'boolean') ? isModFlag : (username === 'PeshkaSasha' || username === 'Debian');
-    const bot = !!isBotFlag;
     const crown = admin ? '<span class="crown">👑</span>' : '';
     const mark = (!admin && mod) ? '<span class="modMark" title="Модератор">!</span>' : '';
-    const botTag = bot ? '<span class="botBadge" style="margin-right:4px">🤖 BOT</span>' : '';
-    return `<span class="playerNick" data-player="${this.escapeHtml(username)}">${botTag}${crown}${mark}${this.escapeHtml(username)}</span>`;
+    return `<span class="playerNick" data-player="${this.escapeHtml(username)}">${crown}${mark}${this.escapeHtml(username)}</span>`;
   },
   onlineDotHtml(online) { return online ? '<span class="onlineDot" title="В сети"></span>' : '<span class="offlineDot" title="Не в сети"></span>'; },
   watchersHtml(n) { if (!n || n <= 0) return ''; return `<span class="watchersBadge" title="Зрителей">👁 <b>${n}</b></span>`; },
@@ -751,16 +749,16 @@ const Watch = {
     const g = this.watchingGame;
     const state = Chess.parseFen(g.fen);
     const flip = false;
-    const lmHash = g.lastMove ? g.lastMove.from.join(',') + '>' + g.lastMove.to.join(',') : '';
+    const lm = g.lastMove;
+    const lmHash = (lm && Array.isArray(lm.from) && Array.isArray(lm.to)) ? lm.from.join(',') + '>' + lm.to.join(',') : '';
     const hash = g.id + '|' + g.fen + '|' + g.turn + '|' + flip + '|' + (g.watchersCount || 0) + '|' + (g.finished ? 'F' : 'A') + '|' + lmHash;
     if (hash === this.lastBoardHash) return; this.lastBoardHash = hash;
     const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
     let squares = '';
-    const lm = g.lastMove;
     for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) {
       const r = flip ? 7 - dr : dr, c = flip ? 7 - dc : dc;
       let cls = 'sq ' + ((r + c) % 2 ? 'dark' : 'light');
-      if (lm && ((lm.from[0] === r && lm.from[1] === c) || (lm.to[0] === r && lm.to[1] === c))) cls += ' lastmove';
+      if (lm && Array.isArray(lm.from) && Array.isArray(lm.to) && ((lm.from[0] === r && lm.from[1] === c) || (lm.to[0] === r && lm.to[1] === c))) cls += ' lastmove';
       const p = state.board[r][c]; let inner = '';
       if (p) { const isW = p === p.toUpperCase(); inner = `<span class="piece ${isW?'w':'b'}">${Chess.pieceSvg(p)}</span>`; }
       let coords = '';
@@ -774,7 +772,7 @@ const Watch = {
       <div class="wbPlayers"><div class="wbPlayer ${blackActive?'active':''}"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span class="name">⚫ ${bBot}${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod, g.blackIsBot)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}</span><span class="time" id="watchTimeB">${Utils.formatTime(g.timeB)}</span></div><div class="wbPlayer ${whiteActive?'active':''}"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span class="name">⚪ ${wBot}${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod, g.whiteIsBot)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}</span><span class="time" id="watchTimeW">${Utils.formatTime(g.timeW)}</span></div></div>
       <div class="wbBoardWrap"><div class="wbBoard">${squares}</div></div>${finishedLine}
       <div style="text-align:center; margin-top:8px; font-size:12px; color:var(--muted); ${g.watchersCount > 0 ? '' : 'display:none;'}">👁 Зрителей: <b style="color:var(--accent)">${g.watchersCount || 0}</b></div>`;
-    this.startClock();
+    if (!g.finished) this.startClock();
   },
   startClock() {
     if (this.watchClockHandle) cancelAnimationFrame(this.watchClockHandle);
@@ -797,15 +795,22 @@ const Watch = {
     if (this.watchingGame && this.watchingGame.id === lobbyId) { this.watchingGame.watchersCount = count; this.lastBoardHash = ''; this.renderBoard(); }
     const ws = document.getElementById('watchScreen'); if (ws && ws.classList.contains('active')) this.refresh(false);
   },
-  onBoardUpdate({ lobbyId, fen, turn, san, from, to }) {
+  onBoardUpdate({ lobbyId, fen, turn, san, from, to, timeW, timeB }) {
     if (!this.watchingGame || this.watchingGame.id !== lobbyId) return;
-    this.watchingGame.fen = fen; if (turn) this.watchingGame.turn = turn; if (from && to) this.watchingGame.lastMove = { from, to };
+    this.watchingGame.fen = fen;
+    if (turn) this.watchingGame.turn = turn;
+    if (from && to) this.watchingGame.lastMove = { from, to };
+    if (typeof timeW === 'number') this.watchingGame.timeW = timeW;
+    if (typeof timeB === 'number') this.watchingGame.timeB = timeB;
     this.lastBoardHash = ''; this.renderBoard();
   },
   onTimeUpdate({ lobbyId, timeW, timeB, serverNow }) {
     if (!this.watchingGame || this.watchingGame.id !== lobbyId) return;
     this.watchingGame.timeW = timeW; this.watchingGame.timeB = timeB;
-    this.watchClockSyncedAt = performance.now(); this.watchClockW = timeW; this.watchClockB = timeB;
+    this.watchClockSyncedAt = performance.now();
+    this.watchClockW = timeW;
+    this.watchClockB = timeB;
+    if (this.watchingGame && !this.watchingGame.finished) this.startClock();
   },
   onGameEnded({ lobbyId, result, reason }) {
     if (!this.watchingGame || this.watchingGame.id !== lobbyId) return;
@@ -950,8 +955,6 @@ const Arena = {
     const serverNow = Date.now() + this.serverOffsetMs;
     if (row) row.classList.remove('live', 'finished');
 
-    // Use timestamps as the source of truth so the countdown keeps moving even
-    // if the phase update arrives a little late from the server.
     if (state.phase === 'finished' || (state.endsAt > 0 && serverNow >= state.endsAt)) {
       if (row) row.classList.add('finished');
       lbl.textContent = 'Завершена:';
@@ -999,12 +1002,12 @@ const Arena = {
   renderParticipants(arena, state) {
     const body = document.getElementById('arenaTableBody'); if (!body) return;
     const pag = document.getElementById('arenaPagination'); if (!pag) return;
-    
+
     const list = state.participants || [];
-    if (!list.length) { 
-      body.innerHTML = '<div class="arenasEmpty" style="padding:20px;">Пока никто не зарегистрировался</div>'; 
+    if (!list.length) {
+      body.innerHTML = '<div class="arenasEmpty" style="padding:20px;">Пока никто не зарегистрировался</div>';
       pag.innerHTML = '';
-      return; 
+      return;
     }
 
     const myName = App.me ? App.me.username : null;
@@ -1012,17 +1015,15 @@ const Arena = {
     const search = ((searchEl && searchEl.value) || '').trim().toLowerCase();
     const filtered = search ? list.filter(p => p.username.toLowerCase().includes(search)) : list;
 
-    // Пагинация: 10 игроков на страницу
     const pageSize = 10;
     const totalPages = Math.ceil(filtered.length / pageSize) || 1;
     if (this.currentPage >= totalPages) this.currentPage = totalPages - 1;
     if (this.currentPage < 0) this.currentPage = 0;
-    
+
     const startIdx = this.currentPage * pageSize;
     const endIdx = Math.min(startIdx + pageSize, filtered.length);
     const pageItems = filtered.slice(startIdx, endIdx);
 
-    // Рендер панели пагинации
     pag.innerHTML = `
       <button class="pageBtn" ${this.currentPage === 0 ? 'disabled' : ''} onclick="Arena.changePage(0)">|◀</button>
       <button class="pageBtn" ${this.currentPage === 0 ? 'disabled' : ''} onclick="Arena.changePage(Arena.currentPage - 1)">◀</button>
@@ -1039,12 +1040,10 @@ const Arena = {
       const greenDot = p.isBot ? '<span class="pgreen" style="color:#a56ce8">🤖</span>' : (p.online ? '<span class="pgreen">●</span>' : '');
       const pauseTag = p.paused ? '<span class="ppause">⏸</span>' : '';
 
-      // Огонёк показывает активную серию побед, без числового счётчика.
       const streakHtml = p.winStreak >= 3
         ? `<span class="streak-fire" title="Серия побед">🔥</span>`
         : '';
 
-      // История очков за каждую партию: 0 = поражение, 1 = ничья, 2/4 = победа.
       let resultsHtml = '<div class="arena-results">';
       if (p.history && p.history.length > 0) {
         for (const res of p.history) {
@@ -1075,18 +1074,18 @@ const Arena = {
       if (arena) this.renderParticipants(arena, this.currentArenaState);
     }
   },
-  filterParticipants() { 
+  filterParticipants() {
     this.currentPage = 0;
-    if (this.currentArenaState && this.currentArenaId) { 
-      const arena = this.cache.find(a => a.id === this.currentArenaId); 
-      if (arena) this.renderParticipants(arena, this.currentArenaState); 
-    } 
+    if (this.currentArenaState && this.currentArenaId) {
+      const arena = this.cache.find(a => a.id === this.currentArenaId);
+      if (arena) this.renderParticipants(arena, this.currentArenaState);
+    }
   },
 
   _ensureOverlay() {
     const listEl = document.getElementById('arenaGamesList');
     if (!listEl) return null;
-    const parent = listEl.parentElement; // .arenaRightCol
+    const parent = listEl.parentElement;
     if (!parent) return null;
     parent.style.position = 'relative';
     parent.style.overflow = 'hidden';
