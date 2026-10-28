@@ -32,6 +32,8 @@ function roundToMinute(ts) { return Math.round(ts / 60000) * 60000; }
 
 const ADMINS = new Set(['PeshkaSasha']);
 let adminDmClosed = false;
+let chatMessageIntervalSeconds = 0;
+const chatLastSentAt = new Map();
 const MODERATORS = new Set(['Debian']);
 const DEVS = new Set(['PeshkaSasha']);
 function roleOf(username) {
@@ -182,6 +184,8 @@ async function initDB() {
   await pool.query(`CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL DEFAULT '');`);
   const adminDmSetting = await pool.query(`SELECT value FROM app_settings WHERE key = 'admin_dm_closed'`);
   adminDmClosed = adminDmSetting.rows[0]?.value === 'true';
+  const chatIntervalSetting = await pool.query(`SELECT value FROM app_settings WHERE key = 'chat_message_interval_seconds'`);
+  chatMessageIntervalSeconds = Math.max(0, Math.min(120, Number.parseInt(chatIntervalSetting.rows[0]?.value || '0', 10) || 0));
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_pair ON messages (from_user, to_user, created_at);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_to ON messages (to_user, read_at);`);
   
@@ -2432,6 +2436,7 @@ io.on('connection', (socket) => {
     if (muteUntil > 0) { const mins = Math.ceil((muteUntil - Date.now()) / 60000); socket.emit('chatError', { msg: `Вы заглушены ещё ${mins} мин.` }); return; }
     if (typeof text !== 'string') return;
     text = text.trim().slice(0, 300); if (!text) return;
+    if (!chatIntervalAllows(socket)) return;
     const msg = { id: 'm' + Date.now() + Math.random().toString(36).slice(2, 6), user: socket.username, userIsAdmin: isAdmin(socket.username), userIsMod: isMod(socket.username), text, ts: Date.now() };
     l.chat.push(msg); if (l.chat.length > 50) l.chat.shift();
     emitToGameAndWatchers(lobbyId, 'chatMessage', msg);
@@ -2829,6 +2834,7 @@ io.on('connection', (socket) => {
     if (muteUntil > 0) { const mins = Math.ceil((muteUntil - Date.now()) / 60000); socket.emit('chatError', { msg: `Вы заглушены ещё ${mins} мин.` }); return; }
     if (typeof text !== 'string') return;
     text = text.trim().slice(0, 300); if (!text) return;
+    if (!chatIntervalAllows(socket)) return;
     const msg = { id: 'a' + Date.now() + Math.random().toString(36).slice(2, 6), user: socket.username, userIsAdmin: isAdmin(socket.username), userIsMod: isMod(socket.username), text, ts: Date.now(), arenaId };
     state.chat.push(msg); if (state.chat.length > 300) state.chat.shift();
     io.to('arena:' + arenaId).emit('arenaChatMessage', msg);
@@ -3014,6 +3020,41 @@ io.on('connection', (socket) => {
       cb({ ok: false, msg: 'Ошибка отправки письма.' });
     }
   });
+
+  socket.on('adminGetChatInterval', async (cb) => {
+    if (typeof cb !== 'function') return;
+    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    try {
+      const r = await pool.query(`SELECT value FROM app_settings WHERE key = 'chat_message_interval_seconds'`);
+      chatMessageIntervalSeconds = Math.max(0, Math.min(120, Number.parseInt(r.rows[0]?.value || '0', 10) || 0));
+      cb({ ok: true, seconds: chatMessageIntervalSeconds });
+    } catch (e) { cb({ ok: false, msg: 'Не удалось прочитать интервал' }); }
+  });
+
+  socket.on('adminSetChatInterval', async ({ seconds }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    seconds = Number(seconds);
+    if (!Number.isInteger(seconds) || seconds < 0 || seconds > 120) return cb({ ok: false, msg: 'Интервал должен быть от 0 до 120 секунд' });
+    try {
+      await pool.query(`INSERT INTO app_settings (key, value) VALUES ('chat_message_interval_seconds', $1) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [String(seconds)]);
+      chatMessageIntervalSeconds = seconds;
+      cb({ ok: true, seconds });
+    } catch (e) { cb({ ok: false, msg: 'Не удалось сохранить интервал' }); }
+  });
+
+  function chatIntervalAllows(socket) {
+    if (!socket.username || isAdmin(socket.username) || chatMessageIntervalSeconds <= 0) return true;
+    const now = Date.now();
+    const last = chatLastSentAt.get(socket.username) || 0;
+    const waitMs = chatMessageIntervalSeconds * 1000 - (now - last);
+    if (waitMs > 0) {
+      socket.emit('chatError', { msg: `Подождите ${Math.ceil(waitMs / 1000)} сек. перед следующим сообщением.` });
+      return false;
+    }
+    chatLastSentAt.set(socket.username, now);
+    return true;
+  }
 
   socket.on('adminGetDmSetting', async (cb) => {
     if (typeof cb !== 'function') return;
