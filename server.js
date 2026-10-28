@@ -20,6 +20,10 @@ const io = new Server(server, {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
+// Accept common password-reset URLs produced by existing mailer configurations.
+app.get(['/reset-password', '/reset'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 const MSK_OFFSET_MS = 3 * 3600 * 1000;
 function mskParts(ts) {
@@ -152,7 +156,9 @@ async function initDB() {
     ['muted_until','BIGINT DEFAULT 0'],['is_bot','BOOLEAN DEFAULT FALSE'],
     ['email','TEXT'], ['email_verified','BOOLEAN DEFAULT FALSE'], ['verify_token','TEXT'], ['verify_token_expires','BIGINT DEFAULT 0'],
     ['bio','TEXT DEFAULT \'\''], ['delete_token','TEXT'], ['delete_requested_at','BIGINT DEFAULT 0'], ['show_subseconds','BOOLEAN DEFAULT FALSE'],
-    ['is_banned','BOOLEAN DEFAULT FALSE'], ['banned_until','BIGINT DEFAULT 0'], ['role',"TEXT DEFAULT 'user'"]
+    ['is_banned','BOOLEAN DEFAULT FALSE'], ['banned_until','BIGINT DEFAULT 0'], ['role',"TEXT DEFAULT 'user'"],
+    ['accepted_honest_play','BOOLEAN DEFAULT FALSE'], ['accepted_platform_rules','BOOLEAN DEFAULT FALSE'],
+    ['accepted_terms_at','BIGINT DEFAULT 0'], ['accepted_terms_version',"TEXT DEFAULT ''"]
   ];
   for (const [name, type] of cols) await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${name} ${type};`);
   await pool.query(`UPDATE users SET role = 'moderator' WHERE username = 'Debian' AND (role IS NULL OR role = 'user')`);
@@ -221,6 +227,8 @@ async function loadDB() {
       showSubseconds: !!row.show_subseconds,
       isBanned: !!row.is_banned,
       bannedUntil: Number(row.banned_until || 0), role: row.role || 'user',
+      acceptedHonestPlay: !!row.accepted_honest_play, acceptedPlatformRules: !!row.accepted_platform_rules,
+      acceptedTermsAt: Number(row.accepted_terms_at || 0), acceptedTermsVersion: row.accepted_terms_version || '',
       categories: {
         classical: { rating: row.rating_classical != null ? row.rating_classical : row.rating, rd: row.rd_classical != null ? row.rd_classical : GLICKO2.DEFAULT_RD, vol: row.vol_classical != null ? row.vol_classical : GLICKO2.DEFAULT_VOL, wins: row.wins_classical || 0, losses: row.losses_classical || 0, games: row.games_classical || 0 },
         rapid:     { rating: row.rating_rapid     != null ? row.rating_rapid     : row.rating, rd: row.rd_rapid     != null ? row.rd_rapid     : GLICKO2.DEFAULT_RD, vol: row.vol_rapid     != null ? row.vol_rapid     : GLICKO2.DEFAULT_VOL, wins: row.wins_rapid     || 0, losses: row.losses_rapid     || 0, games: row.games_rapid     || 0 },
@@ -238,7 +246,7 @@ async function loadDB() {
       db.users[bot.name] = {
         passwordHash: '', salt: '', rating: startRating, rd: GLICKO2.DEFAULT_RD, vol: GLICKO2.DEFAULT_VOL,
         wins: 0, losses: 0, draws: 0, games: 0, createdAt: Date.now(), mutedUntil: 0, isBot: true,
-        email: null, emailVerified: true, verifyToken: null, verifyExpires: 0, bio: '', deleteToken: null, deleteRequestedAt: 0, showSubseconds: false, isBanned: false, bannedUntil: 0, role: 'user',
+        email: null, emailVerified: true, verifyToken: null, verifyExpires: 0, acceptedHonestPlay: false, acceptedPlatformRules: false, acceptedTermsAt: 0, acceptedTermsVersion: '', bio: '', deleteToken: null, deleteRequestedAt: 0, showSubseconds: false, isBanned: false, bannedUntil: 0, role: 'user',
         categories: { classical: emptyRatingBlock(startRating), rapid: emptyRatingBlock(startRating), blitz: emptyRatingBlock(startRating), bullet: emptyRatingBlock(startRating) }
       };
       try {
@@ -272,8 +280,8 @@ async function saveUser(username) {
                         losses_classical, losses_rapid, losses_blitz, losses_bullet,
                         games_classical, games_rapid, games_blitz, games_bullet,
                         muted_until, is_bot, email, email_verified, verify_token, verify_token_expires,
-                        bio, delete_token, delete_requested_at, show_subseconds, is_banned, banned_until)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48)
+                        bio, delete_token, delete_requested_at, show_subseconds, is_banned, banned_until, role, accepted_honest_play, accepted_platform_rules, accepted_terms_at, accepted_terms_version)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52)
      ON CONFLICT (username) DO UPDATE SET
        rating = EXCLUDED.rating, rd = EXCLUDED.rd, vol = EXCLUDED.vol,
        wins = EXCLUDED.wins, losses = EXCLUDED.losses, draws = EXCLUDED.draws, games = EXCLUDED.games,
@@ -293,7 +301,9 @@ async function saveUser(username) {
        email = EXCLUDED.email, email_verified = EXCLUDED.email_verified,
        verify_token = EXCLUDED.verify_token, verify_token_expires = EXCLUDED.verify_token_expires,
        bio = EXCLUDED.bio, delete_token = EXCLUDED.delete_token, delete_requested_at = EXCLUDED.delete_requested_at,
-       show_subseconds = EXCLUDED.show_subseconds, is_banned = EXCLUDED.is_banned, banned_until = EXCLUDED.banned_until, role = EXCLUDED.role`,
+       show_subseconds = EXCLUDED.show_subseconds, is_banned = EXCLUDED.is_banned, banned_until = EXCLUDED.banned_until, role = EXCLUDED.role,
+       accepted_honest_play = EXCLUDED.accepted_honest_play, accepted_platform_rules = EXCLUDED.accepted_platform_rules,
+       accepted_terms_at = EXCLUDED.accepted_terms_at, accepted_terms_version = EXCLUDED.accepted_terms_version`,
     [username, u.passwordHash, u.salt, u.rating, u.rd || GLICKO2.DEFAULT_RD, u.vol || GLICKO2.DEFAULT_VOL,
      u.wins, u.losses, u.draws, u.games, u.createdAt,
      c.classical ? c.classical.rating : u.rating, c.rapid ? c.rapid.rating : u.rating,
@@ -307,7 +317,8 @@ async function saveUser(username) {
      get('classical','games'), get('rapid','games'), get('blitz','games'), get('bullet','games'),
      u.mutedUntil || 0, !!u.isBot,
      u.email || null, !!u.emailVerified, u.verifyToken || null, u.verifyExpires || 0,
-     u.bio || '', u.deleteToken || null, u.deleteRequestedAt || 0, !!u.showSubseconds, !!u.isBanned, u.bannedUntil || 0, u.role || 'user']
+     u.bio || '', u.deleteToken || null, u.deleteRequestedAt || 0, !!u.showSubseconds, !!u.isBanned, u.bannedUntil || 0, u.role || 'user',
+     !!u.acceptedHonestPlay, !!u.acceptedPlatformRules, u.acceptedTermsAt || 0, u.acceptedTermsVersion || '']
   );
 }
 
@@ -1986,13 +1997,14 @@ io.on('connection', (socket) => {
 
   socket.on('checkEmail', async ({ email }, cb) => {
     if (typeof cb !== 'function') return;
+    email = typeof email === 'string' ? email.trim().toLowerCase() : '';
     if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) return cb({ available: false, msg: 'Некорректный email' });
-    const emailCheck = await pool.query('SELECT username FROM users WHERE email = $1', [email]);
+    const emailCheck = await pool.query('SELECT username FROM users WHERE LOWER(email) = LOWER($1)', [email]);
     if (emailCheck.rows.length > 0) return cb({ available: false, msg: 'Почта уже используется' });
     cb({ available: true, msg: 'Почта свободна' });
   });
 
-  socket.on('register', async ({ username, password, email }, cb) => {
+  socket.on('register', async ({ username, password, email, acceptsHonestPlay, acceptsPlatformRules }, cb) => {
     if (typeof cb !== 'function') return;
     if (!username || !password) return cb({ ok: false, msg: 'Заполните поля' });
     if (ALL_BOT_NAMES.has(username)) return cb({ ok: false, msg: 'Это имя зарезервировано' });
@@ -2020,10 +2032,14 @@ io.on('connection', (socket) => {
         }
       }
     } else {
-      if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) {
+      email = typeof email === 'string' ? email.trim().toLowerCase() : '';
+      if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email) || email.length > 254) {
         return cb({ ok: false, msg: 'Укажите корректный email' });
       }
-      const emailCheck = await pool.query('SELECT username FROM users WHERE email = $1', [email]);
+      if (password.length < 8) return cb({ ok: false, msg: 'Для нового аккаунта пароль должен содержать минимум 8 символов' });
+      if (acceptsHonestPlay !== true) return cb({ ok: false, msg: 'Подтвердите, что будете играть честно' });
+      if (acceptsPlatformRules !== true) return cb({ ok: false, msg: 'Подтвердите согласие с правилами платформы' });
+      const emailCheck = await pool.query('SELECT username FROM users WHERE LOWER(email) = LOWER($1)', [email]);
       if (emailCheck.rows.length > 0 && emailCheck.rows[0].username !== username) {
         return cb({ ok: false, msg: 'Этот email уже используется другим аккаунтом' });
       }
@@ -2039,11 +2055,12 @@ io.on('connection', (socket) => {
         wins: 0, losses: 0, draws: 0, games: 0,
         createdAt: Date.now(), mutedUntil: 0, isBot: false,
         email: email, emailVerified: false, verifyToken: verifyToken, verifyExpires: verifyExpires,
+        acceptedHonestPlay: true, acceptedPlatformRules: true, acceptedTermsAt: Date.now(), acceptedTermsVersion: '2026-10-28',
         bio: '', deleteToken: null, deleteRequestedAt: 0, showSubseconds: false, isBanned: false, bannedUntil: 0, role: 'user',
         categories: { classical: emptyRatingBlock(base), rapid: emptyRatingBlock(base), blitz: emptyRatingBlock(base), bullet: emptyRatingBlock(base) }
       };
 
-      try { await saveUser(username); } catch (err) { console.error(err); return cb({ ok: false, msg: 'Ошибка БД при создании' }); }
+      try { await saveUser(username); } catch (err) { delete db.users[username]; console.error('[Register] Ошибка сохранения пользователя:', err.message); return cb({ ok: false, msg: 'Не удалось сохранить аккаунт в базе данных. Попробуйте позже; если ошибка повторяется, администратору нужно проверить журнал сервера.' }); }
       try {
         await sendVerificationEmail(email, username, verifyToken);
         return cb({ ok: false, msg: 'Аккаунт создан! Проверьте почту и папку «Спам».', pending: true });
@@ -2924,10 +2941,11 @@ io.on('connection', (socket) => {
 
   socket.on('requestPasswordReset', async ({ email }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
-    if (!email) return cb({ ok: false, msg: 'Укажите email' });
+    email = typeof email === 'string' ? email.trim().toLowerCase() : '';
+    if (!email || !/^[^@]+@[^@]+\.[^@]+$/.test(email)) return cb({ ok: false, msg: 'Укажите корректный email' });
 
     try {
-      const r = await pool.query('SELECT username FROM users WHERE email = $1', [email]);
+      const r = await pool.query('SELECT username FROM users WHERE LOWER(email) = LOWER($1)', [email]);
       if (!r.rows.length) {
         return cb({ ok: true, msg: 'Если email зарегистрирован, письмо отправлено' });
       }
@@ -2936,6 +2954,7 @@ io.on('connection', (socket) => {
       const token = crypto.randomBytes(32).toString('hex');
       const expires = Date.now() + 60 * 60 * 1000;
 
+      await pool.query('UPDATE password_resets SET used = TRUE WHERE username = $1 AND used = FALSE', [username]);
       await pool.query(
         'INSERT INTO password_resets (username, token, expires_at) VALUES ($1, $2, $3)',
         [username, token, expires]
@@ -2956,8 +2975,8 @@ io.on('connection', (socket) => {
 
   socket.on('resetPassword', async ({ token, newPassword }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
-    if (!token || !newPassword || newPassword.length < 3) {
-      return cb({ ok: false, msg: 'Неверный токен или слишком короткий пароль' });
+    if (!token || !newPassword || newPassword.length < 8 || newPassword.length > 128) {
+      return cb({ ok: false, msg: 'Новый пароль должен содержать от 8 до 128 символов' });
     }
 
     try {
