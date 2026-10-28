@@ -534,6 +534,7 @@ const Router = {
     }
     if (name === 'admin_panel') {
       if (!AdminPanel.isRoot()) { Router.go('lobby'); return; }
+      const main = document.getElementById('mainContent'); if (main) main.style.display = 'none';
       AdminPanel.openPage();
       document.querySelectorAll('#mainNav a').forEach(a => a.classList.remove('active'));
       return;
@@ -2224,12 +2225,13 @@ const AdminPanel = {
   open() { if (!this.isRoot()) { alert('Нет прав'); return; } UserMenu.close(); this.closeTopMenu(); Router.go('admin_panel'); },
   openPage() {
     if (!this.isRoot()) return;
-    const overlay=document.getElementById('adminPanelOverlay'); if(overlay) overlay.style.display='flex';
+    const page=document.getElementById('adminPage'); if(page) page.style.display='block';
+    const main=document.getElementById('mainContent'); if(main) main.style.display='none';
     const color=document.getElementById('adminPrivateColor'); if(color && !color.value) color.value='#ff4d4f';
     const root=document.getElementById('adminTopDropdown'); if(root) root.style.display='';
     this.refresh(); this.setTab(this.tab || 'users');
   },
-  hidePage() { const overlay=document.getElementById('adminPanelOverlay'); if(overlay) overlay.style.display='none'; this.closeTopMenu(); },
+  hidePage() { const page=document.getElementById('adminPage'); if(page) page.style.display='none'; this.closeTopMenu(); },
   close() { if (location.hash.replace(/^#\/?/,'').split('/')[0] === 'admin_panel') Router.go('lobby'); else this.hidePage(); },
   toggleTopMenu(event) { if(event) event.stopPropagation(); const menu=document.getElementById('adminTopMenu'); if(!menu)return; const open=menu.style.display!=='block'; menu.style.display=open?'block':'none'; const btn=document.querySelector('#adminTopDropdown > button'); if(btn)btn.setAttribute('aria-expanded',String(open)); },
   closeTopMenu() { const menu=document.getElementById('adminTopMenu'); if(menu)menu.style.display='none'; const btn=document.querySelector('#adminTopDropdown > button'); if(btn)btn.setAttribute('aria-expanded','false'); },
@@ -2296,6 +2298,13 @@ const AdminPanel = {
   loadDmSetting() {
     if(!this.isRoot()||!App.socket)return;
     App.socket.emit('adminGetDmSetting',res=>{const c=document.getElementById('adminDmClosed');if(res&&res.ok&&c)c.checked=!!res.closed;});
+    App.socket.emit('adminGetChatInterval',res=>{const input=document.getElementById('adminChatInterval');if(res&&res.ok&&input)input.value=Number(res.seconds)||0;});
+  },
+  saveChatInterval() {
+    if(!this.isRoot()||!App.socket)return;
+    const input=document.getElementById('adminChatInterval');const seconds=Number(input?.value);
+    if(!Number.isInteger(seconds)||seconds<0||seconds>120){this.status('Интервал должен быть от 0 до 120 секунд',true);return;}
+    App.socket.emit('adminSetChatInterval',{seconds},res=>{if(!res||!res.ok){this.status((res&&res.msg)||'Не удалось сохранить интервал',true);return;}if(input)input.value=res.seconds;this.status(seconds===0?'Ограничение частоты сообщений отключено':`Интервал чата: ${seconds} сек.`);});
   },
   setDmClosed(closed) {
     App.socket.emit('adminSetDmSetting',{closed:!!closed},res=>{if(!res||!res.ok){this.status((res&&res.msg)||'Не удалось изменить настройку ЛС',true);this.loadDmSetting();return;}this.status(closed?'Входящие ЛС для вас отключены':'Входящие ЛС для вас включены');});
