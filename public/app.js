@@ -451,6 +451,12 @@ const App = {
     s.on('arenaUpdate', ({ arenaId }) => Arena.onUpdate(arenaId));
     s.on('arenaStarted', ({ arenaId }) => Arena.onUpdate(arenaId));
     s.on('arenaFinished', ({ arenaId, top3 }) => Arena.onFinished(arenaId, top3));
+    s.on('arenaTopUpdate', ({ arenaId }) => {
+      if (Arena.currentArenaId === arenaId) {
+        const aps = document.getElementById('arenaPageScreen');
+        if (aps && aps.classList.contains('active')) Arena.renderGamesList();
+      }
+    });
     s.on('liveGamesUpdate', (list) => { const ws = document.getElementById('watchScreen'); if (ws && ws.classList.contains('active')) Watch.refreshFromList(list); });
     s.on('msgNew', (msg) => Inbox.onNew(msg));
     s.on('msgUnread', ({ count }) => Inbox.setUnread(count));
@@ -830,6 +836,7 @@ const Arena = {
   openPlayerName: null,
   lastLiveGames: [], lastDoneGames: [],
   currentPage: 0,
+  _topGame: null, _topClockRaf: null, _topClockSyncedAt: 0, _topClockW: 0, _topClockB: 0, _topClockTurn: 'w',
 
   init() {
     document.addEventListener('DOMContentLoaded', () => this._ensureOverlay());
@@ -856,7 +863,7 @@ const Arena = {
     if (this.statusTickHandle) clearInterval(this.statusTickHandle);
     this.statusTickHandle = setInterval(() => this.tickStatus(), 1000);
     if (this.gamesRefreshHandle) clearInterval(this.gamesRefreshHandle);
-    this.gamesRefreshHandle = setInterval(() => { const aps = document.getElementById('arenaPageScreen'); if (aps && aps.classList.contains('active')) this.renderGamesList(); }, 3000);
+    this.gamesRefreshHandle = setInterval(() => { const aps = document.getElementById('arenaPageScreen'); if (aps && aps.classList.contains('active')) this.renderGamesList(); }, 1000);
     this._ensureOverlay();
   },
   leaveRoom() {
@@ -865,6 +872,8 @@ const Arena = {
     if (this.pageRefreshHandle) { clearInterval(this.pageRefreshHandle); this.pageRefreshHandle = null; }
     if (this.statusTickHandle) { clearInterval(this.statusTickHandle); this.statusTickHandle = null; }
     if (this.gamesRefreshHandle) { clearInterval(this.gamesRefreshHandle); this.gamesRefreshHandle = null; }
+    if (this._topClockRaf) { cancelAnimationFrame(this._topClockRaf); this._topClockRaf = null; }
+    this._topGame = null;
     this.openPlayerName = null;
   },
   refresh(force) {
@@ -1105,6 +1114,29 @@ const Arena = {
     if (listEl) listEl.style.display = hide ? 'none' : '';
   },
 
+  startTopClock() {
+    if (this._topClockRaf) cancelAnimationFrame(this._topClockRaf);
+    const g = this._topGame;
+    if (!g || !g.live) return;
+    this._topClockSyncedAt = performance.now();
+    this._topClockW = g.timeW;
+    this._topClockB = g.timeB;
+    this._topClockTurn = g.turn;
+    const self = this;
+    function tick() {
+      if (!self._topGame || !self._topGame.live) { self._topClockRaf = null; return; }
+      const elapsed = (performance.now() - self._topClockSyncedAt) / 1000;
+      let w = self._topClockW, b = self._topClockB;
+      if (self._topClockTurn === 'w') w = Math.max(0, w - elapsed); else b = Math.max(0, b - elapsed);
+      const elW = document.getElementById('arenaTopTimeW');
+      const elB = document.getElementById('arenaTopTimeB');
+      if (elW) elW.textContent = Utils.formatTime(w);
+      if (elB) elB.textContent = Utils.formatTime(b);
+      self._topClockRaf = requestAnimationFrame(tick);
+    }
+    this._topClockRaf = requestAnimationFrame(tick);
+  },
+
   renderGamesList() {
     const topEl = document.getElementById('arenaTopGame');
     const listEl = document.getElementById('arenaGamesList');
@@ -1131,10 +1163,14 @@ const Arena = {
           topEl.style.cursor = 'pointer';
           topEl.title = 'Смотреть партию';
           topEl.onclick = () => Watch.watch(topGame.lobbyId);
+          this._topGame = topGame;
+          this.startTopClock();
         } else {
           topEl.style.cursor = 'default';
           topEl.title = '';
           topEl.onclick = null;
+          this._topGame = null;
+          if (this._topClockRaf) { cancelAnimationFrame(this._topClockRaf); this._topClockRaf = null; }
           const phase = this.currentArenaState && this.currentArenaState.phase;
           if (phase === 'live' || phase === 'waiting') {
             topEl.innerHTML = this.renderTopGamePlaceholder(phase);
@@ -1216,9 +1252,9 @@ const Arena = {
     const bPlace = placeMap && placeMap.get(g.black);
     const wPlaceHtml = wPlace ? `<span class="agl-place">#${wPlace}</span>` : '';
     const bPlaceHtml = bPlace ? `<span class="agl-place">#${bPlace}</span>` : '';
-    return `<div class="arenaTopGamePlayers"><span class="playerRow">${bPlaceHtml}⚫ <span class="name">${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span><span class="time" style="${blackActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeB)}</span></div>
+    return `<div class="arenaTopGamePlayers"><span class="playerRow">${bPlaceHtml}⚫ <span class="name">${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span><span class="time" id="arenaTopTimeB" style="${blackActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeB)}</span></div>
       <div class="arenaTopGameBoard">${squares}</div>
-      <div class="arenaTopGamePlayers"><span class="playerRow">${wPlaceHtml}⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div>`;
+      <div class="arenaTopGamePlayers"><span class="playerRow">${wPlaceHtml}⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" id="arenaTopTimeW" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div>`;
   },
 
   openPlayer(username) {
