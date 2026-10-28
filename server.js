@@ -1444,30 +1444,42 @@ function finishArena(state) {
   state.finished = true; state.phase = 'finished';
   if (state.pairingInterval) { clearInterval(state.pairingInterval); state.pairingInterval = null; }
   for (const p of state.participants.values()) { p.isPlaying = false; p.lobbyId = null; }
+  
+  // Сортируем и вычисляем статистику для топ-3
   const all = [...state.participants.values()].sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
     if (b.wins !== a.wins) return b.wins - a.wins;
     return b.rating - a.rating;
   });
-  state.top3 = all.slice(0, 3).map(p => ({
-    username: p.username, rating: p.rating,
-    score: p.score || 0,
-    wins: p.wins || 0, draws: p.draws || 0, losses: p.losses || 0,
-    games: (p.wins || 0) + (p.draws || 0) + (p.losses || 0),
-    winStreak: p.winStreak || 0, drawStreak: p.drawStreak || 0
-  }));
+  
+  state.top3 = all.slice(0, 3).map(p => {
+    const games = (p.wins || 0) + (p.draws || 0) + (p.losses || 0);
+    let perf = '—';
+    if (games > 0) {
+      // Перформанс = средний рейтинг + бонус (упрощенно)
+      // В реальности нужно усреднять рейтинги соперников, но для простоты используем рейтинг игрока
+      perf = Math.round(p.rating + (p.wins - p.losses) * 10); 
+    }
+    const winPct = games > 0 ? Math.round((p.wins / games) * 100) : 0;
+    return {
+      username: p.username, rating: p.rating,
+      score: p.score || 0,
+      wins: p.wins || 0, draws: p.draws || 0, losses: p.losses || 0,
+      games: games,
+      winStreak: p.winStreak || 0, drawStreak: p.drawStreak || 0,
+      performance: perf,
+      winPct: winPct
+    };
+  });
+  
   const sysMsg = { id: 'sys' + Date.now(), system: true, text: `🏆 Арена "${state.name}" завершена!`, ts: Date.now(), arenaId: state.id };
   state.chat.push(sysMsg); if (state.chat.length > 300) state.chat.shift();
   io.emit('arenaChatMessage', sysMsg);
   io.emit('arenaFinished', { arenaId: state.id, arenaName: state.name, top3: state.top3 });
   io.emit('arenaUpdate', { arenaId: state.id });
-  for (const [name, p] of [...state.participants.entries()]) {
-    if (p.isBot) {
-      const bh = botInitBehavior(name);
-      if (bh.state === 'in_arena' && bh.activityId === state.id) { bh.state = 'idle'; bh.activityId = null; bh.lastChange = Date.now(); }
-      state.participants.delete(name);
-    }
-  }
+  
+  // НЕ удаляем ботов сразу! Оставляем их в списке участников для отображения результатов.
+  // Удаление произойдет только через cleanupTimer
   state.cleanupTimer = setTimeout(() => {
     if (state.chatViewers.size === 0) arenas.delete(state.id);
     else setTimeout(() => arenas.delete(state.id), 30 * 60 * 1000);
