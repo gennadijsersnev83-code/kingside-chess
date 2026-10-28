@@ -1091,7 +1091,7 @@ const Arena = {
     parent.style.position = 'relative';
     parent.style.overflow = 'hidden';
     parent.style.minHeight = '0';
-    // НЕ трогаем maxHeight
+    // НЕ трогаем maxHeight — родитель ограничен CSS
     let ov = document.getElementById('arenaPlayerOverlay');
     if (!ov) {
       ov = document.createElement('div');
