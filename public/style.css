@@ -225,13 +225,13 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .nowLine::before { content:'▼'; position:absolute; top:-2px; left:50%; transform:translateX(-50%); color:#e5484d; font-size:10px; }
 
 /* ============================================================
-   ARENA PAGE (Lichess style, без рамок, на всю ширину)
+   ARENA PAGE
    ============================================================ */
 
 .arenaPage {
   display: flex;
   justify-content: center;
-  align-items: stretch;
+  align-items: flex-start; /* было stretch — теперь колонки не растягиваются по самой высокой */
   gap: 20px;
   width: 100%;
   max-width: 1600px;
@@ -263,8 +263,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   position: relative;
   min-height: 0;
   overflow: hidden;
-  align-self: stretch;
-  max-height: 100%;
+  max-height: calc(100vh - 80px); /* жёсткий предел по высоте экрана */
 }
 
 @media (max-width: 1150px) {
@@ -393,7 +392,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 }
 .arenaTableBody { flex: 1; overflow-y: auto; overflow-x: hidden; max-height: 520px; }
 
-/* Пагинация (страницы) */
 .arenaPagination {
   display: flex;
   justify-content: center;
@@ -437,7 +435,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 
 .arenaTableRow {
   display: grid;
-  /* Место | игрок | история партий | сумма очков справа */
   grid-template-columns: 26px minmax(0,1fr) minmax(64px,auto) minmax(34px,auto);
   gap: 5px; padding: 0 8px; align-items: center;
   font-size: 14px; border-bottom: 1px solid rgba(58,56,51,.35);
@@ -461,7 +458,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaTableRow .pname .pgreen { color: var(--green-2); font-size: 11px; }
 .arenaTableRow .pname .ppause { color: var(--accent); font-size: 12px; }
 
-/* Суммарные очки всегда в крайней правой колонке. */
 .scoreBlock {
   display: flex;
   align-items: center;
@@ -504,7 +500,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .res-num.num-win { color: #4ade80; }
 .res-num.num-draw { color: #bf811d; }
 .res-num.num-loss { color: #a53030; }
-
 
 /* --- Правая колонка --- */
 .arenaRightCol {
@@ -555,9 +550,13 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 }
 .arenaGamesHeader::after { content: '👁'; font-size: 14px; opacity: .6; }
 .arenaGamesList {
-  flex: 1; overflow-y: auto; overflow-x: hidden;
-  display: flex; flex-direction: column; gap: 2px;
+  flex: 1 1 auto;
   min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 .arenaGameLine {
   display: flex; align-items: center; gap: 8px; padding: 6px 4px;
