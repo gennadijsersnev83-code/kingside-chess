@@ -357,6 +357,7 @@ const App = {
     const ua = document.getElementById('userAvatar'); if (ua) ua.textContent = this.me.username.charAt(0).toUpperCase();
     const uma = document.getElementById('umAvatar'); if (uma) uma.textContent = this.me.username.charAt(0).toUpperCase();
     const umn = document.getElementById('umName'); if (umn) umn.textContent = this.me.username;
+    const adminDrop = document.getElementById('adminTopDropdown'); if (adminDrop) adminDrop.style.display = (this.me.username === 'PeshkaSasha' && this.me.isAdmin) ? '' : 'none';
     if (this.socket) this.socket.emit('msgGetUnread', (r) => { if (r) Inbox.setUnread(r.count); });
   },
 
@@ -531,6 +532,13 @@ const Router = {
       const header = document.getElementById('mainHeader'); const main = document.getElementById('mainContent');
       if (header) header.style.display = ''; if (main) main.style.display = '';
     }
+    if (name === 'admin_panel') {
+      if (!AdminPanel.isRoot()) { Router.go('lobby'); return; }
+      AdminPanel.openPage();
+      document.querySelectorAll('#mainNav a').forEach(a => a.classList.remove('active'));
+      return;
+    }
+    if (AdminPanel && name !== 'admin_panel') AdminPanel.hidePage();
     if (App.me && App.gameActive && !App.gameEnded && App.lobbyId && name === 'lobby') {
       const opponent = document.getElementById('activeGameOpponent'); if (opponent) opponent.textContent = App.opponentName || 'соперником';
       this.show('lobbyScreen');
@@ -2213,20 +2221,35 @@ const Game = {
 const AdminPanel = {
   users: [], tab: 'users',
   isRoot() { return !!(App.me && App.me.username === 'PeshkaSasha' && App.me.isAdmin); },
-  open() {
-    if (!this.isRoot()) { alert('Нет прав'); return; }
+  open() { if (!this.isRoot()) { alert('Нет прав'); return; } UserMenu.close(); this.closeTopMenu(); Router.go('admin_panel'); },
+  openPage() {
+    if (!this.isRoot()) return;
     const overlay=document.getElementById('adminPanelOverlay'); if(overlay) overlay.style.display='flex';
-    UserMenu.close(); this.refresh();
     const color=document.getElementById('adminPrivateColor'); if(color && !color.value) color.value='#ff4d4f';
+    const root=document.getElementById('adminTopDropdown'); if(root) root.style.display='';
+    this.refresh(); this.setTab(this.tab || 'users');
   },
-  close() { const overlay=document.getElementById('adminPanelOverlay'); if(overlay) overlay.style.display='none'; },
+  hidePage() { const overlay=document.getElementById('adminPanelOverlay'); if(overlay) overlay.style.display='none'; this.closeTopMenu(); },
+  close() { if (location.hash.replace(/^#\/?/,'').split('/')[0] === 'admin_panel') Router.go('lobby'); else this.hidePage(); },
+  toggleTopMenu(event) { if(event) event.stopPropagation(); const menu=document.getElementById('adminTopMenu'); if(!menu)return; const open=menu.style.display!=='block'; menu.style.display=open?'block':'none'; const btn=document.querySelector('#adminTopDropdown > button'); if(btn)btn.setAttribute('aria-expanded',String(open)); },
+  closeTopMenu() { const menu=document.getElementById('adminTopMenu'); if(menu)menu.style.display='none'; const btn=document.querySelector('#adminTopDropdown > button'); if(btn)btn.setAttribute('aria-expanded','false'); },
+  goSection(section) { if(!this.isRoot())return; this.closeTopMenu(); if(location.hash.replace(/^#\/?/,'').split('/')[0] !== 'admin_panel') { this.tab=section; Router.go('admin_panel'); return; } this.setTab(section); },
   status(message, bad=false) { const el=document.getElementById('adminPanelStatus'); if(el){el.textContent=message||'';el.style.color=bad?'#ff8c91':'#8ddca4';} },
   setTab(tab,btn) {
+    if (tab === 'private' || tab === 'settings') tab = tab;
     this.tab=tab;
-    document.getElementById('adminUsersTab').style.display=tab==='users'?'':'none';
-    document.getElementById('adminChatTab').style.display=tab==='chat'?'':'none';
-    document.querySelectorAll('.adminPanelTabs button').forEach(b=>b.classList.toggle('active',b===btn));
+    const usersTab=document.getElementById('adminUsersTab'), chatTab=document.getElementById('adminChatTab');
+    if(usersTab) usersTab.style.display=tab==='users'?'':'none';
+    if(chatTab) chatTab.style.display=tab==='users'?'none':'';
+    const privateSection=document.getElementById('adminPrivateSection'), settingsSection=document.getElementById('adminSettingsSection'), moderationSection=document.getElementById('adminModerationSection');
+    if(privateSection) privateSection.style.display=tab==='private'?'':'none';
+    if(settingsSection) settingsSection.style.display=tab==='settings'?'':'none';
+    if(moderationSection) moderationSection.style.display=tab==='chat'?'':'none';
+    document.querySelectorAll('.adminPanelTabs button').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===tab));
     this.updateSelectedCount();
+    if(tab==='private') setTimeout(()=>document.getElementById('adminPrivateRecipient')?.focus(),0);
+    if(tab==='settings') setTimeout(()=>document.getElementById('adminDmClosed')?.focus(),0);
+    if(tab==='chat') setTimeout(()=>document.getElementById('adminChatModerationAnchor')?.scrollIntoView({behavior:'smooth',block:'start'}),0);
   },
   refresh() {
     if(!this.isRoot() || !App.socket) return;
@@ -2302,13 +2325,16 @@ const AdminPanel = {
     if(!this.isRoot()||!msg||msg.system||!msg.id)return;
     const box=document.getElementById(scope==='arena'?'arenaChatMessages':'chatMessages');this.ensureChatTools(box,scope);
     div.classList.add('adminSelectable');
+    const hotspot=document.createElement('label');hotspot.className='adminSelectHotspot';hotspot.title='Выбрать сообщение для удаления';hotspot.setAttribute('aria-label','Выбрать сообщение для удаления');
     const cb=document.createElement('input');cb.type='checkbox';cb.className='adminSelectMsg';cb.title='Выбрать сообщение для удаления';cb.dataset.msgId=String(msg.id);cb.dataset.scope=scope;
-    cb.addEventListener('change',()=>this.updateSelectedCount());
-    const first=div.firstChild;if(first)div.insertBefore(cb,first);else div.appendChild(cb);
+    cb.addEventListener('change',()=>{hotspot.classList.toggle('is-selected',cb.checked);this.updateSelectedCount();});
+    hotspot.appendChild(cb);
+    const first=div.firstChild;if(first)div.insertBefore(hotspot,first);else div.appendChild(hotspot);
   },
   updateSelectedCount() {
     const selected=[...document.querySelectorAll('.adminSelectMsg:checked')];
-    document.querySelectorAll('.adminInlineSelectedCount').forEach(el=>{const tools=el.closest('.adminChatInlineTools');const scope=tools?.dataset.scope;el.textContent=String(selected.filter(c=>c.dataset.scope===scope).length);});
+    document.querySelectorAll('.adminInlineSelectedCount').forEach(el=>{const tools=el.closest('.adminChatInlineTools');const scope=tools?.dataset.scope;const n=selected.filter(c=>c.dataset.scope===scope).length;el.textContent=String(n);if(tools)tools.style.display=n>0?'flex':'none';});
+    document.querySelectorAll('.adminSelectMsg').forEach(cb=>{const hot=cb.closest('.adminSelectHotspot');if(hot)hot.classList.toggle('is-selected',cb.checked);});
     const el=document.getElementById('adminSelectedCount');if(el)el.textContent=String(selected.length);
   },
   deleteSelected(scope) {
@@ -2338,6 +2364,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.Watch = Watch; window.Arena = Arena; window.Profile = Profile; window.Community = Community;
   window.Game = Game; window.Banners = Banners; window.Mod = Mod; window.Utils = Utils;
   window.UserMenu = UserMenu; window.Inbox = Inbox; window.Ping = Ping; window.Auth = Auth; window.AdminPanel = AdminPanel;
+  document.addEventListener('click', (event) => { const root=document.getElementById('adminTopDropdown'); if(root && !root.contains(event.target)) AdminPanel.closeTopMenu(); });
   App.init();
 });
 
