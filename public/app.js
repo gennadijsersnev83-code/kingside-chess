@@ -613,12 +613,11 @@ const Router = {
     const activeNotice = document.getElementById('activeGameNoticeScreen'); if (activeNotice) activeNotice.classList.remove('active');
     if (name !== 'watch' && Watch.autoRefreshHandle) { clearInterval(Watch.autoRefreshHandle); Watch.autoRefreshHandle = null; }
     if (name !== 'arenaPage' && Arena.currentArenaId) Arena.leaveRoom();
-    const map = { login: 'autorizeScreen', lobby: 'lobbyScreen', watch: 'watchScreen', arenas: 'arenasScreen', arenaPage: 'arenaPageScreen', profile: 'profileScreen', community: 'communityScreen', game: 'gameScreen', inbox: 'inboxScreen', analizer: 'analizerScreen' };
+    const map = { login: 'autorizeScreen', lobby: 'lobbyScreen', watch: 'watchScreen', arenas: 'arenasScreen', arenaPage: 'arenaPageScreen', profile: 'profileScreen', community: 'communityScreen', game: 'gameScreen', inbox: 'inboxScreen' };
     const screenId = map[name]; if (!screenId) { this.show('lobbyScreen'); return; }
     this.show(screenId);
     document.querySelectorAll('#mainNav a').forEach(a => { const nav = a.dataset.nav; a.classList.toggle('active', nav === name || (name === 'arenaPage' && nav === 'arenas')); });
     switch (name) {
-      case 'analizer': AnalysisPage.enter(); break;
       case 'lobby': Lobby.enter(); break;
       case 'watch': Watch.enter(param); break;
       case 'arenas': Arena.enterList(); break;
@@ -630,68 +629,6 @@ const Router = {
     }
   },
   show(screenId) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); const el = document.getElementById(screenId); if (el) el.classList.add('active'); }
-};
-
-// ============================================================
-// INTERNAL ANALYZER PAGE (#/analizer)
-// ============================================================
-const AnalysisPage = {
-  START: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
-  rec: null, fens: [], san: [], ply: 0, flipped: false, selected: null, variant: null,
-  save(winner, reason) {
-    try {
-      const white = App.myColor === 'w' ? (App.me && App.me.username || 'Белые') : (App.opponentName || 'Белые');
-      const black = App.myColor === 'b' ? (App.me && App.me.username || 'Чёрные') : (App.opponentName || 'Чёрные');
-      const result = winner === 'w' ? '1–0' : winner === 'b' ? '0–1' : '½–½';
-      const fens = [this.START, ...(Game.moveFens || [])];
-      while (fens.length < (Game.moveHistory || []).length + 1) fens.push(fens[fens.length - 1]);
-      localStorage.setItem('kingside_analysis_current', JSON.stringify({white, black, result, reason: reason || 'Партия завершена', moves: Game.moveHistory || [], fens, savedAt: Date.now()}));
-    } catch (e) { console.warn('Не удалось сохранить партию для анализа', e); }
-  },
-  enter() {
-    try { this.rec = JSON.parse(localStorage.getItem('kingside_analysis_current') || 'null'); } catch (_) { this.rec = null; }
-    this.variant = null; this.selected = null; this.flipped = false;
-    const status = document.getElementById('azStatus');
-    if (!this.rec) { if (status) status.textContent = 'Запись партии не найдена. Заверши партию и нажми «Анализ партии».'; this.san=[]; this.fens=[this.START]; this.ply=0; this.render(); this.renderMoves(); return; }
-    document.getElementById('azWhite').textContent = this.rec.white || 'Белые';
-    document.getElementById('azBlack').textContent = this.rec.black || 'Чёрные';
-    document.getElementById('azResult').textContent = this.rec.result || '—';
-    document.getElementById('azReason').textContent = this.rec.reason || 'Партия завершена';
-    this.san = Array.isArray(this.rec.moves) ? this.rec.moves : [];
-    this.fens = Array.isArray(this.rec.fens) && this.rec.fens.length ? this.rec.fens : [this.START];
-    while (this.fens.length < this.san.length + 1) this.fens.push(this.fens[this.fens.length - 1]);
-    this.ply = Math.min(this.san.length, this.fens.length - 1);
-    if (status) status.textContent = `Загружено ходов: ${this.san.length}. Можно перематывать партию и исследовать варианты.`;
-    this.renderMoves(); this.render();
-  },
-  fenAt(i) { return this.fens[Math.max(0, Math.min(i, this.fens.length - 1))] || this.START; },
-  render() {
-    const fen = this.variant ? this.variant.fen() : this.fenAt(this.ply);
-    const rows = fen.split(' ')[0].split('/'); const cells=[];
-    for (const line of rows) { const row=[]; for (const ch of line) { if (/[1-8]/.test(ch)) for(let j=0;j<Number(ch);j++) row.push(null); else row.push(ch); } cells.push(row); }
-    const board=document.getElementById('azBoard'); if(!board) return; board.innerHTML='';
-    for(let dr=0;dr<8;dr++) for(let dc=0;dc<8;dc++) {
-      const r=this.flipped?7-dr:dr, c=this.flipped?7-dc:dc; const sq=document.createElement('div');
-      sq.className='az-sq '+((r+c)%2?'dark':'light'); const name=String.fromCharCode(97+c)+(8-r); sq.dataset.sq=name;
-      if(this.selected===name) sq.classList.add('selected'); const p=cells[r][c];
-      if(p){const img=document.createElement('img');img.src=`https://lichess1.org/assets/piece/cburnett/${p===p.toUpperCase()?'w':'b'}${p.toUpperCase()}.svg`;img.alt=p;sq.appendChild(img);}
-      if(dr===7){const co=document.createElement('span');co.className='az-coord';co.textContent=String.fromCharCode(97+c);sq.appendChild(co);}
-      sq.onclick=()=>this.clickSq(name); board.appendChild(sq);
-    }
-    const cp=this.variant?this.variant.turn():new window.Chess(fen).turn();
-    document.getElementById('azPosition').textContent=`Полуход ${this.ply} · ${cp==='w'?'ход белых':'ход чёрных'}${this.variant?' · альтернативный вариант':''}`;
-    let score=0;for(const row of cells)for(const p of row)if(p)score+=(p===p.toUpperCase()?1:-1)*(({p:1,n:3,b:3,r:5,q:9,k:0})[p.toLowerCase()]||0);
-    document.getElementById('azEvalWhite').style.width=Math.max(5,Math.min(95,50+score*3))+'%';
-    document.getElementById('azEvalWhiteLabel').textContent='Белые: '+(score>0?'+':'')+score;
-    document.getElementById('azEvalBlackLabel').textContent='Чёрные: '+(score<0?'+':'')+(-score);
-    if(this.variant) document.getElementById('azVarStatus').textContent='Вариант: '+this.variant.history().join(' ');
-  },
-  renderMoves() { const el=document.getElementById('azMoves'); if(!el)return; el.innerHTML=''; for(let i=0;i<this.san.length;i+=2){const n=document.createElement('span');n.textContent=(i/2+1)+'.';el.appendChild(n);for(let j=i;j<Math.min(i+2,this.san.length);j++){const b=document.createElement('button');b.textContent=this.san[j];b.className=j===this.ply-1?'active':'';b.onclick=()=>{this.variant=null;this.selected=null;this.ply=j+1;this.renderMoves();this.render();};el.appendChild(b);}if(i+1>=this.san.length){const blank=document.createElement('span');el.appendChild(blank);}} },
-  go(n){this.variant=null;this.selected=null;this.ply=Math.max(0,Math.min(this.san.length,n));this.renderMoves();this.render();},
-  step(d){this.go(this.ply+d);}, flip(){this.flipped=!this.flipped;this.render();},
-  clickSq(sq){if(!window.Chess){document.getElementById('azVarStatus').textContent='Шахматная библиотека не загрузилась.';return;}if(!this.variant)this.variant=new window.Chess(this.fenAt(this.ply));if(!this.selected){this.selected=sq;this.render();return;}const move=this.variant.move({from:this.selected,to:sq,promotion:'q'});this.selected=null;if(move){this.render();}else{this.render();document.getElementById('azVarStatus').textContent='Нелегальный ход. Выбери другую клетку или введи ход в SAN.';}},
-  tryMove(){if(!window.Chess){document.getElementById('azVarStatus').textContent='Не удалось загрузить шахматную библиотеку.';return;}if(!this.variant)this.variant=new window.Chess(this.fenAt(this.ply));const input=document.getElementById('azSanInput');const moveText=input.value.trim();if(!moveText)return;const move=this.variant.move(moveText,{sloppy:true});if(!move){document.getElementById('azVarStatus').textContent='Такого легального хода нет в выбранной позиции.';return;}input.value='';this.selected=null;this.render();},
-  resetVariant(){this.variant=null;this.selected=null;this.render();}
 };
 
 // ============================================================
@@ -2213,8 +2150,6 @@ const Game = {
   endGame(winner, reason, fromServer, isArena) {
     if (App.gameEnded) return;
     App.gameEnded = true; App.gameActive = false;
-    AnalysisPage.save(winner, reason);
-    const analysisBtn = document.getElementById('grAnalysisBtn'); if (analysisBtn) analysisBtn.style.display = '';
     this.premove = null; this.rematchRequested = false; this.stopRematchSpinner();
     if (typeof isArena === 'boolean') App.currentGameIsArena = isArena;
     this.showResultBar(winner, reason);
