@@ -4,7 +4,7 @@
 // DATA / PERSISTENCE
 // ============================================================
 let DATA = {
-  version: 5,
+  version: 6,
   weights: {},
   params: {
     doubledPawn: 10,
@@ -12,8 +12,8 @@ let DATA = {
     passedPawnBase: 20,
     bishopPair: 30,
     kingShield: 10,
-    openFileRook: 25,
-    mobility: 2,
+    openFileRook: 40,   // FIX: было 25
+    mobility: 4,        // FIX: было 2
     tempo: 10,
   },
   games: 0,
@@ -42,7 +42,8 @@ function initWeights() {
     const isWhitePiece = p === upper;
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
       const sq = `${files[c]}${8 - r}`;
-      const idx = isWhitePiece ? r * 8 + c : (7 - r) * 8 + c;
+      // FIX: для чёрных зеркалим по обеим осям
+      const idx = isWhitePiece ? r * 8 + c : (7 - r) * 8 + (7 - c);
       DATA.weights[`${p}_${sq}`] = (table[idx] || 0) / 100;
     }
   }
@@ -58,7 +59,6 @@ const MAX_MISTAKES = 6000;
 function setPool(pool) { _pool = pool; }
 function positionKey(fen) { return String(fen || '').split(' ').slice(0, 4).join(' '); }
 function mistakeKey(pos, from, to) { return `${pos}|${from}|${to}`; }
-function squareFromRC(sq) { return sqName(sq[0], sq[1]); }
 
 function recordMistake(pos, from, to, penalty) {
   if (!pos || !from || !to || !(penalty > 0)) return;
@@ -80,7 +80,7 @@ function recordMistake(pos, from, to, penalty) {
       penalty = GREATEST(watcher_tactical_mistakes.penalty, EXCLUDED.penalty),
       seen = watcher_tactical_mistakes.seen + 1, updated_at = EXCLUDED.updated_at`,
       [pos, from, to, old.penalty, old.updated])
-      .catch(e => console.error('[Watcher] Ошибка сохранения тактической ошибки:', e.message));
+      .catch(e => console.error('[Watcher] Ошибка сохранения ошибки:', e.message));
   }
 }
 
@@ -101,7 +101,6 @@ async function loadFromDB() {
     if (wRes.rows.length === 0) {
       initWeights();
       await saveToDB();
-      console.log('[Watcher] Создал PST-веса в БД');
     } else {
       DATA.weights = {};
       for (const row of wRes.rows) DATA.weights[row.key] = Number(row.value);
@@ -132,9 +131,9 @@ async function loadFromDB() {
       const r = sRes.rows[0];
       DATA.games = r.games; DATA.wins = r.wins; DATA.losses = r.losses; DATA.draws = r.draws;
     }
-    console.log(`[Watcher] Загружено из БД: ${DATA.games} партий, W/L/D = ${DATA.wins}/${DATA.losses}/${DATA.draws}`);
+    console.log(`[Watcher] Загружено: ${DATA.games} партий, W/L/D = ${DATA.wins}/${DATA.losses}/${DATA.draws}`);
   } catch (e) {
-    console.error('[Watcher] Ошибка загрузки из БД:', e.message);
+    console.error('[Watcher] Ошибка загрузки:', e.message);
     initWeights();
   }
 }
@@ -166,11 +165,11 @@ async function saveToDB() {
       });
       await _pool.query(`INSERT INTO watcher_params (key, value) VALUES ${params.join(',')} ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, values);
     }
-    await _pool.query(`UPDATE watcher_stats SET games = $1, wins = $2, losses = $3, draws = $4, last_update = $5 WHERE id = 1`,
+    await _pool.query(`UPDATE watcher_stats SET games=$1, wins=$2, losses=$3, draws=$4, last_update=$5 WHERE id=1`,
       [DATA.games, DATA.wins, DATA.losses, DATA.draws, Date.now()]);
     DATA.lastUpdate = Date.now();
   } catch (e) {
-    console.error('[Watcher] Ошибка сохранения в БД:', e.message);
+    console.error('[Watcher] Ошибка сохранения:', e.message);
   }
 }
 
@@ -182,7 +181,7 @@ async function reloadFromDB() {
       DATA.weights = {};
       for (const row of wRes.rows) DATA.weights[row.key] = Number(row.value);
     }
-    const sRes = await _pool.query('SELECT games, wins, losses, draws FROM watcher_stats WHERE id = 1');
+    const sRes = await _pool.query('SELECT games, wins, losses, draws FROM watcher_stats WHERE id=1');
     if (sRes.rows.length) {
       const r = sRes.rows[0];
       DATA.games = r.games; DATA.wins = r.wins; DATA.losses = r.losses; DATA.draws = r.draws;
@@ -227,7 +226,7 @@ function toFen(state) {
 function sqName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
 
 // ============================================================
-// FAST isAttacked
+// isAttacked
 // ============================================================
 function isAttacked(state, r, c, byWhite) {
   const b = state.board;
@@ -255,8 +254,7 @@ function isAttacked(state, r, c, byWhite) {
     const p = b[rr][cc];
     if (p && isWhite(p) === byWhite && p.toLowerCase() === 'k') return true;
   }
-  const rookDirs = [[-1,0],[1,0],[0,-1],[0,1]];
-  for (const [dr, dc] of rookDirs) {
+  for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
     let rr = r + dr, cc = c + dc;
     while (inBoard(rr, cc)) {
       const p = b[rr][cc];
@@ -267,8 +265,7 @@ function isAttacked(state, r, c, byWhite) {
       rr += dr; cc += dc;
     }
   }
-  const bishopDirs = [[-1,-1],[-1,1],[1,-1],[1,1]];
-  for (const [dr, dc] of bishopDirs) {
+  for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
     let rr = r + dr, cc = c + dc;
     while (inBoard(rr, cc)) {
       const p = b[rr][cc];
@@ -360,19 +357,12 @@ function allLegalMoves(state, white) {
   return res;
 }
 
-function hasAnyLegalMove(state, white) {
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = state.board[r][c];
-    if (!p || isWhite(p) !== white) continue;
-    for (const [rr, cc] of pseudoMoves(state, r, c)) {
-      if (!inCheck(applyMove(state, [r, c], [rr, cc]), white)) return true;
-    }
-  }
-  return false;
-}
-
 function applyMove(state, from, to) {
-  const copy = { board: state.board.map(row => row.slice()), turn: state.turn, castling: state.castling, ep: state.ep, half: state.half, full: state.full };
+  const copy = {
+    board: state.board.map(row => row.slice()),
+    turn: state.turn, castling: state.castling, ep: state.ep,
+    half: state.half, full: state.full
+  };
   const [fr, fc] = from, [tr, tc] = to;
   const p = copy.board[fr][fc]; const white = isWhite(p); const type = p.toLowerCase();
   if (type === 'p' && copy.ep) {
@@ -418,9 +408,22 @@ const KING_ENDGAME_PST = [
   [-50,-30,-30,-30,-30,-30,-30,-50]
 ];
 
+// FIX: сколько материала висит без защиты у стороны
+function hangingMaterial(state, white) {
+  let lost = 0;
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = state.board[r][c];
+    if (!p || isWhite(p) !== white) continue;
+    const v = PIECE_VALUES[p.toLowerCase()] || 0;
+    if (v < 300) continue;
+    if (!isAttacked(state, r, c, !white)) continue;
+    if (!isAttacked(state, r, c, white)) lost += v;
+  }
+  return lost;
+}
+
 function evaluate(state, forWhite) {
   let score = 0;
-  let whitePieces = 0, blackPieces = 0;
   let whiteKing = null, blackKing = null;
   let wB = 0, bB = 0;
   const wpFile = [0,0,0,0,0,0,0,0];
@@ -441,7 +444,6 @@ function evaluate(state, forWhite) {
 
     if (p === 'K') whiteKing = [r, c];
     if (p === 'k') blackKing = [r, c];
-    if (t !== 'k') { if (isW) whitePieces++; else blackPieces++; }
     if (t === 'p') {
       if (isW) { wpFile[c]++; wPawns.push([r, c]); }
       else    { bpFile[c]++; bPawns.push([r, c]); }
@@ -457,16 +459,12 @@ function evaluate(state, forWhite) {
   for (let f = 0; f < 8; f++) {
     if (wpFile[f] > 1) score -= DATA.params.doubledPawn * (wpFile[f] - 1);
     if (bpFile[f] > 1) score += DATA.params.doubledPawn * (bpFile[f] - 1);
-  }
-  for (let f = 0; f < 8; f++) {
     if (wpFile[f] > 0) {
-      const left = f > 0 ? wpFile[f-1] : 0;
-      const right = f < 7 ? wpFile[f+1] : 0;
+      const left = f > 0 ? wpFile[f-1] : 0, right = f < 7 ? wpFile[f+1] : 0;
       if (left === 0 && right === 0) score -= DATA.params.isolatedPawn;
     }
     if (bpFile[f] > 0) {
-      const left = f > 0 ? bpFile[f-1] : 0;
-      const right = f < 7 ? bpFile[f+1] : 0;
+      const left = f > 0 ? bpFile[f-1] : 0, right = f < 7 ? bpFile[f+1] : 0;
       if (left === 0 && right === 0) score += DATA.params.isolatedPawn;
     }
   }
@@ -474,32 +472,27 @@ function evaluate(state, forWhite) {
   for (const [r, c] of wPawns) {
     let passed = true;
     for (const [br, bc] of bPawns) {
-      if ((bc === c || bc === c - 1 || bc === c + 1) && br < r) { passed = false; break; }
+      if ((bc === c || bc === c-1 || bc === c+1) && br < r) { passed = false; break; }
     }
     if (passed) {
       const rank = 7 - r;
-      const bonus = DATA.params.passedPawnBase + [0, 10, 20, 35, 60, 100, 160, 0][rank];
-      score += bonus;
+      score += DATA.params.passedPawnBase + [0,10,20,35,60,100,160,0][rank];
     }
   }
   for (const [r, c] of bPawns) {
     let passed = true;
     for (const [wr, wc] of wPawns) {
-      if ((wc === c || wc === c - 1 || wc === c + 1) && wr > r) { passed = false; break; }
+      if ((wc === c || wc === c-1 || wc === c+1) && wr > r) { passed = false; break; }
     }
     if (passed) {
-      const rank = r;
-      const bonus = DATA.params.passedPawnBase + [0, 10, 20, 35, 60, 100, 160, 0][rank];
-      score -= bonus;
+      score -= DATA.params.passedPawnBase + [0,10,20,35,60,100,160,0][r];
     }
   }
 
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = state.board[r][c]; if (!p) continue;
-    if (p.toLowerCase() !== 'r') continue;
+    const p = state.board[r][c]; if (!p || p.toLowerCase() !== 'r') continue;
     const isW = isWhite(p);
-    const own = isW ? wpFile : bpFile;
-    const opp = isW ? bpFile : wpFile;
+    const own = isW ? wpFile : bpFile, opp = isW ? bpFile : wpFile;
     if (own[c] === 0 && opp[c] === 0) score += isW ? DATA.params.openFileRook : -DATA.params.openFileRook;
     else if (own[c] === 0) score += isW ? DATA.params.openFileRook * 0.5 : -DATA.params.openFileRook * 0.5;
   }
@@ -508,10 +501,7 @@ function evaluate(state, forWhite) {
     if (whiteKing) {
       const [kr, kc] = whiteKing;
       let shield = 0;
-      for (const dc of [-1, 0, 1]) {
-        const rr = kr - 1, cc = kc + dc;
-        if (inBoard(rr, cc) && state.board[rr][cc] === 'P') shield++;
-      }
+      for (const dc of [-1, 0, 1]) if (inBoard(kr-1, kc+dc) && state.board[kr-1][kc+dc] === 'P') shield++;
       score += shield * DATA.params.kingShield;
       if (kc === 4 && kr >= 6) score -= 40;
       if (kr < 6) score -= 30;
@@ -519,35 +509,28 @@ function evaluate(state, forWhite) {
     if (blackKing) {
       const [kr, kc] = blackKing;
       let shield = 0;
-      for (const dc of [-1, 0, 1]) {
-        const rr = kr + 1, cc = kc + dc;
-        if (inBoard(rr, cc) && state.board[rr][cc] === 'p') shield++;
-      }
+      for (const dc of [-1, 0, 1]) if (inBoard(kr+1, kc+dc) && state.board[kr+1][kc+dc] === 'p') shield++;
       score -= shield * DATA.params.kingShield;
       if (kc === 4 && kr <= 1) score += 40;
       if (kr > 1) score += 30;
     }
   } else {
-    if (whiteKing) {
-      const [kr, kc] = whiteKing;
-      score += KING_ENDGAME_PST[kr][kc];
-    }
-    if (blackKing) {
-      const [kr, kc] = blackKing;
-      score -= KING_ENDGAME_PST[7 - kr][kc];
-    }
+    if (whiteKing) score += KING_ENDGAME_PST[whiteKing[0]][whiteKing[1]];
+    if (blackKing) score -= KING_ENDGAME_PST[7 - blackKing[0]][blackKing[1]];
     if (whiteKing && blackKing && totalMat <= 1500) {
-      const wc = whiteKing, bc = blackKing;
-      const dist = Math.abs(wc[0] - bc[0]) + Math.abs(wc[1] - bc[1]);
+      const dist = Math.abs(whiteKing[0]-blackKing[0]) + Math.abs(whiteKing[1]-blackKing[1]);
       score += (14 - dist) * 15;
-      const edgeB = Math.min(bc[0], 7 - bc[0], bc[1], 7 - bc[1]);
+      const edgeB = Math.min(blackKing[0], 7-blackKing[0], blackKing[1], 7-blackKing[1]);
       score -= edgeB * 30;
     }
   }
 
+  // FIX: мобильность только для N/B/R/Q (пешки и король шумят)
   let wm = 0, bm = 0;
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
+    const t = p.toLowerCase();
+    if (t === 'p' || t === 'k') continue;
     const n = pseudoMoves(state, r, c).length;
     if (isWhite(p)) wm += n; else bm += n;
   }
@@ -555,13 +538,19 @@ function evaluate(state, forWhite) {
 
   score += state.turn === 'w' ? DATA.params.tempo : -DATA.params.tempo;
 
+  // FIX: висящий материал как часть оценки (только значимые фигуры)
+  const hangW = hangingMaterial(state, true);
+  const hangB = hangingMaterial(state, false);
+  score -= hangW * 0.5;
+  score += hangB * 0.5;
+
   if (state.half >= 100) score = 0;
 
   return forWhite ? score : -score;
 }
 
 // ============================================================
-// LEARNING: mistake memory only
+// TACTICAL SAFETY (ужесточено)
 // ============================================================
 function tacticalSafetyPenalty(state, from, to, moverWhite) {
   const piece = state.board[from[0]][from[1]];
@@ -571,13 +560,10 @@ function tacticalSafetyPenalty(state, from, to, moverWhite) {
   if (!moved) return 0;
   const value = PIECE_VALUES[moved.toLowerCase()] || 0;
   if (value < 300) return 0;
-  
-  const attacked = isAttacked(next, to[0], to[1], !moverWhite);
-  if (!attacked) return 0;
-  
-  const defended = isAttacked(next, to[0], to[1], moverWhite);
-  
-  // Находим самого дешёвого атакующего
+
+  if (!isAttacked(next, to[0], to[1], !moverWhite)) return 0;
+
+  // FIX: ищем самого дешёвого атакующего; если он дороже нашей фигуры — штрафа нет
   let cheapestAttacker = Infinity;
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = next.board[r][c];
@@ -586,31 +572,23 @@ function tacticalSafetyPenalty(state, from, to, moverWhite) {
       cheapestAttacker = Math.min(cheapestAttacker, PIECE_VALUES[p.toLowerCase()] || 0);
     }
   }
-  
-  // Если фигура защищена и атакующий дороже — штрафа нет
-  if (defended && cheapestAttacker >= value) return 0;
-  
-  // Иначе штраф = разница в стоимости (не 88%!)
-  if (!defended) {
-    // Фигура висит. Штраф = её стоимость, но только если атакующий дешевле
-    if (cheapestAttacker < value) return value - cheapestAttacker;
-    return Math.round(value * 0.3); // Если атакующий дороже, штраф маленький
-  }
-  
-  // Фигура защищена, но атакующий дешевле — небольшой штраф
+
+  if (cheapestAttacker >= value) return 0; // размен невыгоден для атакующего
+
+  const defended = isAttacked(next, to[0], to[1], moverWhite);
+  if (!defended) return value - cheapestAttacker;
   return Math.round((value - cheapestAttacker) * 0.5);
 }
 
+// FIX: жёсткий потолок 120 очков, decay 14 дней, коэффициент 0.15
 function learnedMistakePenalty(state, from, to) {
   const key = mistakeKey(positionKey(toFen(state)), sqName(from[0], from[1]), sqName(to[0], to[1]));
   const item = mistakeMemory.get(key);
   if (!item) return 0;
-  const ageMs = Date.now() - (item.updated || 0);
-  const ageDays = ageMs / (1000 * 60 * 60 * 24);
-  const decay = Math.exp(-ageDays / 30);
-  const seenBoost = Math.min(1.5, 1 + Math.log2(Math.max(1, item.seen)) * 0.08);
-  // Уменьшаем штраф в 3 раза, чтобы он не перевешивал оценку
-  return Math.min(600, item.penalty * seenBoost * decay * 0.3);
+  const ageDays = (Date.now() - (item.updated || 0)) / (1000 * 60 * 60 * 24);
+  const decay = Math.exp(-ageDays / 14);
+  const seenBoost = Math.min(1.2, 1 + Math.log2(Math.max(1, item.seen)) * 0.05);
+  return Math.min(120, item.penalty * seenBoost * decay * 0.15);
 }
 
 // ============================================================
@@ -621,11 +599,7 @@ const TT_MAX = 500000;
 
 function ttKeyOf(state) {
   let s = '';
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      s += state.board[r][c] || '.';
-    }
-  }
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) s += state.board[r][c] || '.';
   return s + '|' + state.turn + '|' + state.castling + '|' + state.ep;
 }
 
@@ -639,7 +613,7 @@ function ttSet(k, depth, score, flag, move) {
 }
 
 // ============================================================
-// SEARCH: quiescence + negamax
+// QUIESCENCE
 // ============================================================
 function quiescence(state, alpha, beta, color, qdepth) {
   if (qdepth > 6) return evaluate(state, color === 1);
@@ -662,13 +636,18 @@ function quiescence(state, alpha, beta, color, qdepth) {
     if (target) captures.push([from, to]);
     else if (piece && piece.toLowerCase() === 'p' && from[1] !== to[1]) captures.push([from, to]);
   }
+
+  // FIX: безопасная сортировка (не падает на null при en passant)
   captures.sort((a, b) => {
-    const aP = state.board[a[0][0]][a[0][1]].toLowerCase();
-    const aV = state.board[a[1][0]][a[1][1]].toLowerCase();
-    const bP = state.board[b[0][0]][b[0][1]].toLowerCase();
-    const bV = state.board[b[1][0]][b[1][1]].toLowerCase();
-    return ((PIECE_VALUES[bV] || 0) * 10 - (PIECE_VALUES[bP] || 0)) -
-           ((PIECE_VALUES[aV] || 0) * 10 - (PIECE_VALUES[aP] || 0));
+    const aPiece = state.board[a[0][0]][a[0][1]];
+    const aTarget = state.board[a[1][0]][a[1][1]];
+    const bPiece = state.board[b[0][0]][b[0][1]];
+    const bTarget = state.board[b[1][0]][b[1][1]];
+    const aV = aTarget ? (PIECE_VALUES[aTarget.toLowerCase()] || 0) : 100;
+    const bV = bTarget ? (PIECE_VALUES[bTarget.toLowerCase()] || 0) : 100;
+    const aP = PIECE_VALUES[aPiece.toLowerCase()] || 0;
+    const bP = PIECE_VALUES[bPiece.toLowerCase()] || 0;
+    return (bV - bP) - (aV - aP);
   });
 
   for (const [from, to] of captures) {
@@ -680,6 +659,9 @@ function quiescence(state, alpha, beta, color, qdepth) {
   return alpha;
 }
 
+// ============================================================
+// MOVE ORDERING
+// ============================================================
 const killerMoves = [];
 const historyHeuristic = new Map();
 
@@ -709,6 +691,9 @@ function orderMoves(state, moves, ply, ttMove) {
   return scored.map(x => [x.from, x.to]);
 }
 
+// ============================================================
+// NEGAMAX
+// ============================================================
 let SEARCH_DEADLINE = 0;
 let SEARCH_ABORTED = false;
 
@@ -738,9 +723,9 @@ function negamax(state, depth, alpha, beta, color, ply) {
   }
 
   const ordered = orderMoves(state, legal, ply, ttMove);
-
   let best = -Infinity;
   let bestMove = null;
+
   for (let i = 0; i < ordered.length; i++) {
     if (Date.now() >= SEARCH_DEADLINE) { SEARCH_ABORTED = true; break; }
     const [from, to] = ordered[i];
@@ -799,32 +784,30 @@ function negamax(state, depth, alpha, beta, color, ply) {
 // ============================================================
 function isMateAfterMove(state, from, to, moverWhite) {
   const next = applyMove(state, from, to);
-  const oppWhite = !moverWhite;
-  return inCheck(next, oppWhite) && allLegalMoves(next, oppWhite).length === 0;
+  return inCheck(next, !moverWhite) && allLegalMoves(next, !moverWhite).length === 0;
 }
 
 function findMateInOne(state, white) {
-  const moves = allLegalMoves(state, white);
-  for (const [from, to] of moves) {
+  for (const [from, to] of allLegalMoves(state, white)) {
     if (isMateAfterMove(state, from, to, white)) return [from, to];
   }
   return null;
 }
 
+// FIX: ищем мат в 2 только по проверяющим ходам (иначе убивает время)
 function findMateInTwo(state, white) {
   const moves = allLegalMoves(state, white);
   for (const [from, to] of moves) {
     const next = applyMove(state, from, to);
-    const oppWhite = !white;
-    if (inCheck(next, oppWhite) && allLegalMoves(next, oppWhite).length === 0) continue;
-    const oppMoves = allLegalMoves(next, oppWhite);
+    if (!inCheck(next, !white)) continue;
+    if (allLegalMoves(next, !white).length === 0) continue;
+    const oppMoves = allLegalMoves(next, !white);
     if (oppMoves.length === 0) continue;
     let allLeadToMate = true;
     for (const [of, ot] of oppMoves) {
       const after = applyMove(next, of, ot);
-      const myMoves = allLegalMoves(after, white);
       let foundMate = false;
-      for (const [mf, mt] of myMoves) {
+      for (const [mf, mt] of allLegalMoves(after, white)) {
         if (isMateAfterMove(after, mf, mt, white)) { foundMate = true; break; }
       }
       if (!foundMate) { allLeadToMate = false; break; }
@@ -917,7 +900,7 @@ function uciToMove(uci) {
   return [[fr, fc], [tr, tc]];
 }
 
-function bookMove(fen, historyLine, legalSet) {
+function bookMove(historyLine, legalSet) {
   if (!historyLine) return null;
   const parts = historyLine.trim().split(/\s+/).filter(Boolean);
   for (let len = parts.length; len >= 1; len--) {
@@ -935,7 +918,7 @@ function bookMove(fen, historyLine, legalSet) {
 }
 
 // ============================================================
-// MAIN SEARCH DRIVER
+// MAIN SEARCH DRIVER (исправлено: штрафы НЕ трогают alpha)
 // ============================================================
 function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts) {
   const legal = allLegalMoves(state, isWhiteTurn);
@@ -947,20 +930,21 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
   const myTime = Math.max(0.5, timeMs / 1000);
   const moveCount = state.full;
 
-  // *** ДЕБЮТ: используем книгу, игнорируем штрафы ***
+  // Дебютная книга
   if (historyLine && moveCount <= 15) {
-    const bm = bookMove(toFen(state), historyLine, legalSet);
+    const bm = bookMove(historyLine, legalSet);
     if (bm) return bm;
   }
 
-  // Если книга не сработала, в дебюте (первые 10 ходов) применяем только оценку позиции
-  const openingPhase = moveCount <= 10;
-
-  // *** Явный поиск мата ***
+  // Мат в 1 всегда
   const mateIn1 = findMateInOne(state, isWhiteTurn);
   if (mateIn1) return mateIn1;
-  const mateIn2 = findMateInTwo(state, isWhiteTurn);
-  if (mateIn2) return mateIn2;
+
+  // Мат в 2 — только если хватает времени
+  if (myTime >= 1.0) {
+    const mateIn2 = findMateInTwo(state, isWhiteTurn);
+    if (mateIn2) return mateIn2;
+  }
 
   let maxDepth = 6;
   if (myTime < 3) maxDepth = 3;
@@ -992,51 +976,32 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
     for (const [from, to] of ordered) {
       if (Date.now() >= SEARCH_DEADLINE) { SEARCH_ABORTED = true; break; }
       const next = applyMove(state, from, to);
-      let score = -negamax(next, depth - 1, -beta, -alpha, -color, 1);
+      // FIX: чистый score для alpha
+      const score = -negamax(next, depth - 1, -beta, -alpha, -color, 1);
       if (SEARCH_ABORTED) break;
 
       const nextIsMate = inCheck(next, !isWhiteTurn) && allLegalMoves(next, !isWhiteTurn).length === 0;
 
-      // *** ШТРАФЫ ТОЛЬКО НЕ В ДЕБЮТЕ И ТОЛЬКО ЕСЛИ НЕ МАТ ***
-      if (!nextIsMate && !openingPhase) {
-        const safetyPenalty = tacticalSafetyPenalty(state, from, to, isWhiteTurn);
-        const memoryPenalty = learnedMistakePenalty(state, from, to);
-        
-        // Применяем safetyPenalty только если ход реально ухудшает позицию
-        if (safetyPenalty > 0) {
-          // Проверяем, есть ли у нас альтернативный ход без штрафа
-          // Если это единственный ход — не штрафуем
-          if (legal.length > 1) {
-            score -= safetyPenalty;
-          }
-        }
-        score -= memoryPenalty;
+      // FIX: штрафы ТОЛЬКО для финального выбора, alpha остаётся чистым
+      let adjusted = score;
+      if (!nextIsMate) {
+        const hangBefore = hangingMaterial(state, isWhiteTurn);
+        const hangAfter = hangingMaterial(next, isWhiteTurn);
+        const hangLoss = hangAfter - hangBefore;
+        if (hangLoss > 0) adjusted -= Math.min(hangLoss, 400);
+
+        const mem = learnedMistakePenalty(state, from, to);
+        if (mem > 0) adjusted -= mem;
 
         if (positionCounts && moveCount > 10) {
           const nextKey = positionKey(toFen(next));
           const c = positionCounts.get(nextKey) || 0;
-          if (c >= 2) score -= 50;
+          if (c >= 2) adjusted -= 50;
         }
       }
 
-      // В дебюте добавляем бонус за развитие
-      if (openingPhase) {
-        const piece = state.board[from[0]][from[1]];
-        if (piece && (piece.toLowerCase() === 'n' || piece.toLowerCase() === 'b')) {
-          const homeRow = isWhiteTurn ? 7 : 0;
-          if (from[0] === homeRow) score += 30; // Бонус за вывод фигуры
-        }
-        if (piece && piece.toLowerCase() === 'p') {
-          const centerCols = [3, 4];
-          if (centerCols.includes(to[1])) score += 15; // Бонус за пешку в центр
-        }
-        if (piece && piece.toLowerCase() === 'k' && Math.abs(to[1] - from[1]) === 2) {
-          score += 50; // Бонус за рокировку
-        }
-      }
-
-      if (score > localBestScore) { localBestScore = score; localBest = [from, to]; }
-      if (score > alpha) alpha = score;
+      if (adjusted > localBestScore) { localBestScore = adjusted; localBest = [from, to]; }
+      if (score > alpha) alpha = score; // ← ЧИСТЫЙ score
     }
 
     if (localBest && !SEARCH_ABORTED) {
@@ -1054,7 +1019,6 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
 // ============================================================
 function playSelfPlayGame() {
   let state = parseFen('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1');
-  const history = [];
   const moveLog = [];
   const positionCounts = new Map();
   let result = 0;
@@ -1065,7 +1029,6 @@ function playSelfPlayGame() {
     const legal = allLegalMoves(state, state.turn === 'w');
     if (legal.length === 0) {
       if (inCheck(state, state.turn === 'w')) result = state.turn === 'w' ? -1 : 1;
-      else result = 0;
       break;
     }
     if (state.half >= 100) { result = 0; break; }
@@ -1079,8 +1042,8 @@ function playSelfPlayGame() {
       if (Math.abs(evalNow) > 150) {
         const nonRepeating = legal.filter(([from, to]) => {
           const next = applyMove(state, from, to);
-          const nextKey = positionKey(toFen(next));
-          return !positionCounts.has(nextKey) || positionCounts.get(nextKey) < 2;
+          const nk = positionKey(toFen(next));
+          return !positionCounts.has(nk) || positionCounts.get(nk) < 2;
         });
         if (nonRepeating.length > 0) {
           const isW = state.turn === 'w';
@@ -1090,49 +1053,25 @@ function playSelfPlayGame() {
             const score = evaluate(next, !isW);
             if (score > bestScore) { bestScore = score; bestMv = [from, to]; }
           }
-          const pieceMoved = state.board[bestMv[0][0]][bestMv[0][1]];
-          const nextState = applyMove(state, bestMv[0], bestMv[1]);
-          const causedCheck = inCheck(nextState, !isW);
-          const isMate = causedCheck && allLegalMoves(nextState, !isW).length === 0;
-          history.push({
-            white: isW, pieceMoved,
-            sqFrom: sqName(bestMv[0][0], bestMv[0][1]),
-            sqTo: sqName(bestMv[1][0], bestMv[1][1]),
-            causedCheck, isMate
-          });
-          state = nextState;
+          state = applyMove(state, bestMv[0], bestMv[1]);
           moveLog.push({ from: bestMv[0], to: bestMv[1], byColor: isW ? 'w' : 'b', fenAfter: toFen(state) });
           continue;
         }
       }
-      result = 0;
-      break;
+      result = 0; break;
     }
 
     const isW = state.turn === 'w';
     const mv = pickMoveSearch(state, isW, 2000, null, positionCounts);
-    if (!mv || mv.length !== 2) break;
+    if (!mv) break;
 
-    const pieceMoved = state.board[mv[0][0]][mv[0][1]];
-    const nextState = applyMove(state, mv[0], mv[1]);
-    const causedCheck = inCheck(nextState, !isW);
-    const isMate = causedCheck && allLegalMoves(nextState, !isW).length === 0;
-
-    history.push({
-      white: isW, pieceMoved,
-      sqFrom: sqName(mv[0][0], mv[0][1]),
-      sqTo: sqName(mv[1][0], mv[1][1]),
-      causedCheck, isMate
-    });
-    state = nextState;
+    state = applyMove(state, mv[0], mv[1]);
     finalEval = evaluate(state, state.turn === 'w');
     moveLog.push({ from: mv[0], to: mv[1], byColor: isW ? 'w' : 'b', fenAfter: toFen(state) });
   }
 
   let adjustedResult = result;
-  if (result === 0 && Math.abs(finalEval) > 300) {
-    adjustedResult = finalEval > 0 ? 1 : -1;
-  }
+  if (result === 0 && Math.abs(finalEval) > 300) adjustedResult = finalEval > 0 ? 1 : -1;
 
   DATA.games++;
   if (adjustedResult === 1) DATA.wins++;
@@ -1158,10 +1097,8 @@ function getStats() {
 
 function pickMoveForServer(fen, color, timeInfo, availableMoves, line, positionCounts) {
   if (!fen || typeof fen !== 'string') return null;
-
   try {
     const state = parseFen(fen);
-
     const myTime = Number(timeInfo && timeInfo.timeLeft);
     const inc = Number(timeInfo && timeInfo.inc);
     const total = Number(timeInfo && timeInfo.total);
@@ -1186,19 +1123,8 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line, positionC
     const posCounts = positionCounts instanceof Map ? positionCounts : null;
     const move = pickMoveSearch(state, color === 'w', thinkMs, historyLine, posCounts);
 
-    if (!move || !Array.isArray(move) || move.length !== 2) {
-      const legal = allLegalMoves(state, color === 'w');
-      if (legal.length > 0) {
-        return { from: legal[0][0], to: legal[0][1] };
-      }
-      return null;
-    }
-    if (!Array.isArray(move[0]) || !Array.isArray(move[1])) {
-      const legal = allLegalMoves(state, color === 'w');
-      if (legal.length > 0) return { from: legal[0][0], to: legal[0][1] };
-      return null;
-    }
-    if (move[0].length !== 2 || move[1].length !== 2) {
+    if (!move || !Array.isArray(move) || move.length !== 2 ||
+        !Array.isArray(move[0]) || !Array.isArray(move[1])) {
       const legal = allLegalMoves(state, color === 'w');
       if (legal.length > 0) return { from: legal[0][0], to: legal[0][1] };
       return null;
@@ -1211,17 +1137,15 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line, positionC
         if (m && typeof m === 'object' && !Array.isArray(m)) {
           const from = m.from || m.fromSq;
           const to = m.to || m.toSq;
-          if (typeof from === 'string' && typeof to === 'string') {
-            return from + to === uci;
-          }
+          if (typeof from === 'string' && typeof to === 'string') return from + to === uci;
         }
         return false;
       });
       if (!ok) {
         for (const m of availableMoves) {
           if (typeof m === 'string' && m.length >= 4) {
-            const fallback = uciToMove(m);
-            if (fallback) return { from: fallback[0], to: fallback[1] };
+            const fb = uciToMove(m);
+            if (fb) return { from: fb[0], to: fb[1] };
           }
         }
       }
@@ -1250,16 +1174,11 @@ function learnFromObservedMove(prevFen, move, newFen, moverColor, timeControl, e
     const moverWhite = moverColor === 'w';
 
     function parseSq(v) {
-      if (Array.isArray(v) && v.length === 2 && Number.isFinite(v[0]) && Number.isFinite(v[1])) {
-        return [v[0], v[1]];
-      }
-      if (typeof v === 'string' && /^[a-h][1-8]$/.test(v)) {
-        return [8 - Number(v[1]), v.charCodeAt(0) - 97];
-      }
+      if (Array.isArray(v) && v.length === 2 && Number.isFinite(v[0]) && Number.isFinite(v[1])) return [v[0], v[1]];
+      if (typeof v === 'string' && /^[a-h][1-8]$/.test(v)) return [8 - Number(v[1]), v.charCodeAt(0) - 97];
       return null;
     }
-    const from = parseSq(move.from);
-    const to = parseSq(move.to);
+    const from = parseSq(move.from), to = parseSq(move.to);
     if (!from || !to) return;
     if (!before.board[from[0]] || !before.board[from[0]][from[1]]) return;
 
@@ -1281,7 +1200,7 @@ function learnFromObservedMove(prevFen, move, newFen, moverColor, timeControl, e
       recordMistake(positionKey(prevFen), sqName(from[0], from[1]), sqName(to[0], to[1]), penalty);
     }
   } catch (e) {
-    console.error('[Watcher] Ошибка анализа обучающего хода:', e.message);
+    console.error('[Watcher] Ошибка анализа хода:', e.message);
   }
 }
 
