@@ -613,11 +613,12 @@ const Router = {
     const activeNotice = document.getElementById('activeGameNoticeScreen'); if (activeNotice) activeNotice.classList.remove('active');
     if (name !== 'watch' && Watch.autoRefreshHandle) { clearInterval(Watch.autoRefreshHandle); Watch.autoRefreshHandle = null; }
     if (name !== 'arenaPage' && Arena.currentArenaId) Arena.leaveRoom();
-    const map = { login: 'autorizeScreen', lobby: 'lobbyScreen', watch: 'watchScreen', arenas: 'arenasScreen', arenaPage: 'arenaPageScreen', profile: 'profileScreen', community: 'communityScreen', game: 'gameScreen', inbox: 'inboxScreen' };
+    const map = { login: 'autorizeScreen', lobby: 'lobbyScreen', watch: 'watchScreen', arenas: 'arenasScreen', arenaPage: 'arenaPageScreen', profile: 'profileScreen', community: 'communityScreen', game: 'gameScreen', inbox: 'inboxScreen', analizer: 'analizerScreen' };
     const screenId = map[name]; if (!screenId) { this.show('lobbyScreen'); return; }
     this.show(screenId);
     document.querySelectorAll('#mainNav a').forEach(a => { const nav = a.dataset.nav; a.classList.toggle('active', nav === name || (name === 'arenaPage' && nav === 'arenas')); });
     switch (name) {
+      case 'analizer': AnalysisPage.enter(); break;
       case 'lobby': Lobby.enter(); break;
       case 'watch': Watch.enter(param); break;
       case 'arenas': Arena.enterList(); break;
@@ -629,6 +630,68 @@ const Router = {
     }
   },
   show(screenId) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); const el = document.getElementById(screenId); if (el) el.classList.add('active'); }
+};
+
+// ============================================================
+// INTERNAL ANALYZER PAGE (#/analizer)
+// ============================================================
+const AnalysisPage = {
+  START: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+  rec: null, fens: [], san: [], ply: 0, flipped: false, selected: null, variant: null,
+  save(winner, reason) {
+    try {
+      const white = App.myColor === 'w' ? (App.me && App.me.username || 'Белые') : (App.opponentName || 'Белые');
+      const black = App.myColor === 'b' ? (App.me && App.me.username || 'Чёрные') : (App.opponentName || 'Чёрные');
+      const result = winner === 'w' ? '1–0' : winner === 'b' ? '0–1' : '½–½';
+      const fens = [this.START, ...(Game.moveFens || [])];
+      while (fens.length < (Game.moveHistory || []).length + 1) fens.push(fens[fens.length - 1]);
+      localStorage.setItem('kingside_analysis_current', JSON.stringify({white, black, result, reason: reason || 'Партия завершена', moves: Game.moveHistory || [], fens, savedAt: Date.now()}));
+    } catch (e) { console.warn('Не удалось сохранить партию для анализа', e); }
+  },
+  enter() {
+    try { this.rec = JSON.parse(localStorage.getItem('kingside_analysis_current') || 'null'); } catch (_) { this.rec = null; }
+    this.variant = null; this.selected = null; this.flipped = false;
+    const status = document.getElementById('azStatus');
+    if (!this.rec) { if (status) status.textContent = 'Запись партии не найдена. Заверши партию и нажми «Анализ партии».'; this.san=[]; this.fens=[this.START]; this.ply=0; this.render(); this.renderMoves(); return; }
+    document.getElementById('azWhite').textContent = this.rec.white || 'Белые';
+    document.getElementById('azBlack').textContent = this.rec.black || 'Чёрные';
+    document.getElementById('azResult').textContent = this.rec.result || '—';
+    document.getElementById('azReason').textContent = this.rec.reason || 'Партия завершена';
+    this.san = Array.isArray(this.rec.moves) ? this.rec.moves : [];
+    this.fens = Array.isArray(this.rec.fens) && this.rec.fens.length ? this.rec.fens : [this.START];
+    while (this.fens.length < this.san.length + 1) this.fens.push(this.fens[this.fens.length - 1]);
+    this.ply = Math.min(this.san.length, this.fens.length - 1);
+    if (status) status.textContent = `Загружено ходов: ${this.san.length}. Можно перематывать партию и исследовать варианты.`;
+    this.renderMoves(); this.render();
+  },
+  fenAt(i) { return this.fens[Math.max(0, Math.min(i, this.fens.length - 1))] || this.START; },
+  render() {
+    const fen = this.variant ? this.variant.fen() : this.fenAt(this.ply);
+    const rows = fen.split(' ')[0].split('/'); const cells=[];
+    for (const line of rows) { const row=[]; for (const ch of line) { if (/[1-8]/.test(ch)) for(let j=0;j<Number(ch);j++) row.push(null); else row.push(ch); } cells.push(row); }
+    const board=document.getElementById('azBoard'); if(!board) return; board.innerHTML='';
+    for(let dr=0;dr<8;dr++) for(let dc=0;dc<8;dc++) {
+      const r=this.flipped?7-dr:dr, c=this.flipped?7-dc:dc; const sq=document.createElement('div');
+      sq.className='az-sq '+((r+c)%2?'dark':'light'); const name=String.fromCharCode(97+c)+(8-r); sq.dataset.sq=name;
+      if(this.selected===name) sq.classList.add('selected'); const p=cells[r][c];
+      if(p){const img=document.createElement('img');img.src=`https://lichess1.org/assets/piece/cburnett/${p===p.toUpperCase()?'w':'b'}${p.toUpperCase()}.svg`;img.alt=p;sq.appendChild(img);}
+      if(dr===7){const co=document.createElement('span');co.className='az-coord';co.textContent=String.fromCharCode(97+c);sq.appendChild(co);}
+      sq.onclick=()=>this.clickSq(name); board.appendChild(sq);
+    }
+    const cp=this.variant?this.variant.turn():new window.Chess(fen).turn();
+    document.getElementById('azPosition').textContent=`Полуход ${this.ply} · ${cp==='w'?'ход белых':'ход чёрных'}${this.variant?' · альтернативный вариант':''}`;
+    let score=0;for(const row of cells)for(const p of row)if(p)score+=(p===p.toUpperCase()?1:-1)*(({p:1,n:3,b:3,r:5,q:9,k:0})[p.toLowerCase()]||0);
+    document.getElementById('azEvalWhite').style.width=Math.max(5,Math.min(95,50+score*3))+'%';
+    document.getElementById('azEvalWhiteLabel').textContent='Белые: '+(score>0?'+':'')+score;
+    document.getElementById('azEvalBlackLabel').textContent='Чёрные: '+(score<0?'+':'')+(-score);
+    if(this.variant) document.getElementById('azVarStatus').textContent='Вариант: '+this.variant.history().join(' ');
+  },
+  renderMoves() { const el=document.getElementById('azMoves'); if(!el)return; el.innerHTML=''; for(let i=0;i<this.san.length;i+=2){const n=document.createElement('span');n.textContent=(i/2+1)+'.';el.appendChild(n);for(let j=i;j<Math.min(i+2,this.san.length);j++){const b=document.createElement('button');b.textContent=this.san[j];b.className=j===this.ply-1?'active':'';b.onclick=()=>{this.variant=null;this.selected=null;this.ply=j+1;this.renderMoves();this.render();};el.appendChild(b);}if(i+1>=this.san.length){const blank=document.createElement('span');el.appendChild(blank);}} },
+  go(n){this.variant=null;this.selected=null;this.ply=Math.max(0,Math.min(this.san.length,n));this.renderMoves();this.render();},
+  step(d){this.go(this.ply+d);}, flip(){this.flipped=!this.flipped;this.render();},
+  clickSq(sq){if(!window.Chess){document.getElementById('azVarStatus').textContent='Шахматная библиотека не загрузилась.';return;}if(!this.variant)this.variant=new window.Chess(this.fenAt(this.ply));if(!this.selected){this.selected=sq;this.render();return;}const move=this.variant.move({from:this.selected,to:sq,promotion:'q'});this.selected=null;if(move){this.render();}else{this.render();document.getElementById('azVarStatus').textContent='Нелегальный ход. Выбери другую клетку или введи ход в SAN.';}},
+  tryMove(){if(!window.Chess){document.getElementById('azVarStatus').textContent='Не удалось загрузить шахматную библиотеку.';return;}if(!this.variant)this.variant=new window.Chess(this.fenAt(this.ply));const input=document.getElementById('azSanInput');const moveText=input.value.trim();if(!moveText)return;const move=this.variant.move(moveText,{sloppy:true});if(!move){document.getElementById('azVarStatus').textContent='Такого легального хода нет в выбранной позиции.';return;}input.value='';this.selected=null;this.render();},
+  resetVariant(){this.variant=null;this.selected=null;this.render();}
 };
 
 // ============================================================
@@ -787,7 +850,7 @@ const Watch = {
   refresh(force) { App.socket.emit('getLiveGames', (list) => { this.refreshFromList(list); }); },
   refreshFromList(list) {
     const box = document.getElementById('watchListBody'); if (!box) return;
-    list = (list || []);
+    list = (list || []).filter(g => !g.isSelfPlay && !(g.id && g.id.startsWith('sp_')));
     const hash = JSON.stringify(list); if (hash === this.lastHash) return; this.lastHash = hash;
     if (!list.length) { box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>'; return; }
     box.innerHTML = list.map(g => {
@@ -803,7 +866,7 @@ const Watch = {
     }).join('');
   },
   watch(id) {
-    if (!id) return;
+    if (!id || id.startsWith('sp_')) { alert('Self-play партии недоступны для просмотра'); return; }
     if (this.watchingGameId === id) { if (Router.current.name !== 'watch') Router.go('watch', id); return; }
     if (this.watchingGameId) App.socket.emit('unwatchGame', { id: this.watchingGameId });
     this.watchingGameId = id; this.watchingGame = null; this.lastBoardHash = '';
@@ -812,14 +875,8 @@ const Watch = {
     App.socket.emit('watchGame', { id }, (res) => {
       if (reqId !== this.requestId) return;
       if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось начать просмотр'); this.watchingGameId = null; return; }
-      this.watchingGame = res.game;
-      if (this.watchingGame.selfPlayHistory && this.watchingGame.selfPlayHistory.length) {
-        const h = this.watchingGame.selfPlayHistory;
-        this.watchingGame.replayFens = ['rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', ...h.map(m => m.fenAfter).filter(Boolean)];
-        this.watchingGame.replayIndex = this.watchingGame.replayFens.length - 1;
-        this.watchingGame.fen = this.watchingGame.replayFens[this.watchingGame.replayIndex];
-      }
-      this.lastBoardHash = ''; this.renderBoard();
+      if (res.game && res.game.isSelfPlay) { alert('Self-play партии недоступны'); this.watchingGameId = null; return; }
+      this.watchingGame = res.game; this.lastBoardHash = ''; this.renderBoard();
     });
   },
   stop() {
@@ -833,8 +890,7 @@ const Watch = {
     const box = document.getElementById('watchBoardBox'); if (!box) return;
     if (!this.watchingGame) { box.innerHTML = '<div class="wbEmpty">Выбери партию слева</div>'; return; }
     const g = this.watchingGame;
-    const displayFen = g.replayFens ? g.replayFens[g.replayIndex || 0] : g.fen;
-    const state = Chess.parseFen(displayFen);
+    const state = Chess.parseFen(g.fen);
     const flip = false;
     const lm = g.lastMove;
     const lmHash = (lm && Array.isArray(lm.from) && Array.isArray(lm.to)) ? lm.from.join(',') + '>' + lm.to.join(',') : '';
@@ -858,14 +914,8 @@ const Watch = {
     box.innerHTML = `<div class="wbHeader"><div style="min-width:0; flex:1"><div class="wbTitle">Партия ${g.isArena ? 'турнира' : ''}${g.whiteIsBot || g.blackIsBot ? ' (с ботом)' : ''}</div><div class="wbSub">${g.timeControl}+${g.increment}${g.arenaName ? ' · '+Utils.escapeHtml(g.arenaName) : ''}</div></div><button class="secondary" onclick="Watch.stop()" style="flex-shrink:0">✕ Выйти</button></div>
       <div class="wbPlayers"><div class="wbPlayer ${blackActive?'active':''}"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span class="name">⚫ ${bBot}${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod, g.blackIsBot)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}</span><span class="time" id="watchTimeB">${Utils.formatTime(g.timeB)}</span></div><div class="wbPlayer ${whiteActive?'active':''}"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span class="name">⚪ ${wBot}${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod, g.whiteIsBot)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}</span><span class="time" id="watchTimeW">${Utils.formatTime(g.timeW)}</span></div></div>
       <div class="wbBoardWrap"><div class="wbBoard">${squares}</div></div>${finishedLine}
-      ${g.replayFens ? `<div style="display:flex;justify-content:center;gap:8px;margin-top:10px"><button class="secondary" onclick="Watch.replayStep(-999999)">⏮</button><button class="secondary" onclick="Watch.replayStep(-1)">←</button><span style="align-self:center;font-size:12px;color:var(--muted)">Ход ${g.replayIndex}/${g.replayFens.length-1}</span><button class="secondary" onclick="Watch.replayStep(1)">→</button><button class="secondary" onclick="Watch.replayStep(999999)">⏭</button></div>` : ''}
       <div style="text-align:center; margin-top:8px; font-size:12px; color:var(--muted); ${g.watchersCount > 0 ? '' : 'display:none;'}">👁 Зрителей: <b style="color:var(--accent)">${g.watchersCount || 0}</b></div>`;
-    if (!g.finished) this.startClock(); else if (this.watchClockHandle) { cancelAnimationFrame(this.watchClockHandle); this.watchClockHandle = null; }
-  },
-  replayStep(delta) {
-    const g = this.watchingGame; if (!g || !g.replayFens) return;
-    g.replayIndex = delta > 1000 ? g.replayFens.length - 1 : delta < -1000 ? 0 : Math.max(0, Math.min(g.replayFens.length - 1, g.replayIndex + delta));
-    g.fen = g.replayFens[g.replayIndex]; this.lastBoardHash = ''; this.renderBoard();
+    if (!g.finished) this.startClock();
   },
   startClock() {
     if (this.watchClockHandle) cancelAnimationFrame(this.watchClockHandle);
@@ -873,7 +923,7 @@ const Watch = {
     if (this.watchingGame) { this.watchClockW = this.watchingGame.timeW; this.watchClockB = this.watchingGame.timeB; this.watchClockTurn = this.watchingGame.turn; }
     const self = this;
     function tick() {
-      if (!self.watchingGame || self.watchingGame.finished) { self.watchClockHandle = null; return; }
+      if (!self.watchingGame) { self.watchClockHandle = null; return; }
       const elapsed = (performance.now() - self.watchClockSyncedAt) / 1000;
       let w = self.watchClockW, b = self.watchClockB;
       if (self.watchClockTurn === 'w') w = Math.max(0, w - elapsed); else b = Math.max(0, b - elapsed);
@@ -1323,8 +1373,7 @@ const Arena = {
   },
 
   renderTopGame(g, placeMap) {
-    const displayFen = g.replayFens ? g.replayFens[g.replayIndex || 0] : g.fen;
-    const state = Chess.parseFen(displayFen);
+    const state = Chess.parseFen(g.fen);
     const lm = g.lastMove;
     let squares = '';
     for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) {
@@ -2164,6 +2213,8 @@ const Game = {
   endGame(winner, reason, fromServer, isArena) {
     if (App.gameEnded) return;
     App.gameEnded = true; App.gameActive = false;
+    AnalysisPage.save(winner, reason);
+    const analysisBtn = document.getElementById('grAnalysisBtn'); if (analysisBtn) analysisBtn.style.display = '';
     this.premove = null; this.rematchRequested = false; this.stopRematchSpinner();
     if (typeof isArena === 'boolean') App.currentGameIsArena = isArena;
     this.showResultBar(winner, reason);
