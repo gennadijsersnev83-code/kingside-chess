@@ -447,13 +447,11 @@ function finishSelfPlayLobby(lobby, result) {
   lobby.finished = true;
   lobby.finishedAt = Date.now();
   lobby.result = result;
-  // Keep finished self-play games available for replay for 10 minutes.
-  broadcastLiveGames();
   setTimeout(() => {
     lobbies.delete(lobby.id);
     selfPlayLobbies.delete(lobby.id);
     broadcastLiveGames();
-  }, 10 * 60 * 1000);
+  }, 30000);
 }
 
 function countActiveLobbies() { let n = 0; for (const l of lobbies.values()) { if (l.finished) continue; if (l.started) n++; } return n; }
@@ -543,7 +541,7 @@ setInterval(cleanupStuckPlaying, 10000);
 function buildGamesList() {
   const list = [];
   for (const [id, l] of lobbies.entries()) {
-    if ((!l.isSelfPlay && l.finished) || !l.started) continue;
+    if (l.finished || !l.started) continue;
 
     if (l.isSelfPlay) {
       const whiteName = SELF_PLAY_BOT_ID;
@@ -2167,7 +2165,7 @@ io.on('connection', (socket) => {
 
   socket.on('watchGame', ({ id }, cb) => {
     const l = lobbies.get(id);
-    if (!l || (!l.isSelfPlay && l.finished) || !l.started) { if (typeof cb === 'function') cb({ ok: false, msg: 'Партия недоступна' }); return; }
+    if (!l || l.finished || !l.started) { if (typeof cb === 'function') cb({ ok: false, msg: 'Партия недоступна' }); return; }
     socket.join('watch:' + id);
     if (!l.watchers) l.watchers = new Set();
     l.watchers.add(socket.id);
@@ -2187,9 +2185,7 @@ io.on('connection', (socket) => {
       timeControl: l.time, increment: l.inc, fen: l.fen,
       lastMove: lastHist && lastHist.from && lastHist.to ? { from: lastHist.from, to: lastHist.to } : null,
       isArena: !!l.arenaId, arenaName: l.arenaName || null,
-      watchersCount: watchersCountOf(l),
-      finished: !!l.finished, reason: l.reason || (l.isSelfPlay && l.finished ? 'Self-play завершена' : null),
-      selfPlayHistory: l.isSelfPlay ? (l.selfPlayHistory || []) : null
+      watchersCount: watchersCountOf(l)
     }});
   });
 
