@@ -6,22 +6,11 @@
 <title>Kingside — Шахматы онлайн</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23161512'/%3E%3Ctext x='50%25' y='56%25' font-size='46' text-anchor='middle' dominant-baseline='middle' fill='%23bf811d' font-family='serif'%3E%E2%99%94%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="/style.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
 <style>
 body.login-active #mainHeader,
 body.login-active #userMenu,
 body.login-active #mainContent { display: none !important; }
 </style>
-
-<style>
-#analizerScreen{color:var(--text,#e9edf5);background:var(--bg,#171a20);min-height:calc(100vh - 60px)}
-#analizerScreen .az-header{display:flex;align-items:center;gap:14px;max-width:1250px;margin:0 auto 16px}#analizerScreen .az-header h2{margin:0;font-size:22px}#analizerScreen .az-muted{color:var(--muted,#9ca7b8);font-size:12px;line-height:1.5}#analizerScreen .az-header .az-muted{margin-left:auto}
-#analizerScreen .az-layout{max-width:1250px;margin:auto;display:grid;grid-template-columns:minmax(280px, min(62vw,700px)) minmax(260px,1fr);gap:18px}#analizerScreen .az-panel{background:var(--panel,#222730);border:1px solid var(--border,#373e49);border-radius:10px;padding:13px;margin-bottom:12px}#analizerScreen .az-panel h3{margin:0 0 10px;font-size:16px}#analizerScreen .az-players{display:flex;justify-content:space-between;gap:8px;align-items:center;font-weight:650}
-#analizerScreen .az-boardwrap{width:100%;aspect-ratio:1;background:#ddd;box-shadow:0 8px 30px #0005}#analizerScreen .az-board{display:grid;grid-template-columns:repeat(8,1fr);width:100%;height:100%}#analizerScreen .az-sq{display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer;user-select:none;min-width:0;min-height:0}#analizerScreen .az-sq.light{background:#ebecd0}#analizerScreen .az-sq.dark{background:#779556}#analizerScreen .az-sq img{width:90%;height:90%;object-fit:contain;pointer-events:none}#analizerScreen .az-sq.selected{outline:4px solid #e8c44f;outline-offset:-4px}#analizerScreen .az-sq.target:after{content:"";position:absolute;width:25%;height:25%;border-radius:50%;background:#16220d55}#analizerScreen .az-coord{position:absolute;bottom:2px;left:3px;font-size:10px;color:#25351c;pointer-events:none}
-#analizerScreen .az-controls{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}#analizerScreen .az-btn{border:1px solid var(--border,#373e49);background:#303742;color:var(--text,#e9edf5);border-radius:7px;padding:8px 11px;cursor:pointer}#analizerScreen .az-btn:hover{background:#414b59}#analizerScreen .az-eval{height:14px;background:#111;border-radius:5px;overflow:hidden;display:flex;margin:10px 0}#analizerScreen .az-eval div{background:#f2f2e9;width:50%;transition:width .2s}#analizerScreen .az-eval-label{display:flex;justify-content:space-between;font-size:12px;color:var(--muted,#9ca7b8)}#analizerScreen .az-moves{display:grid;grid-template-columns:36px 1fr 1fr;gap:4px;max-height:320px;overflow:auto;margin-top:10px}#analizerScreen .az-moves button{background:transparent;color:var(--text,#e9edf5);border:0;border-radius:4px;padding:6px;text-align:left;cursor:pointer}#analizerScreen .az-moves button.active{background:#65502b}#analizerScreen .az-variation{display:flex;gap:7px;margin-top:10px}#analizerScreen .az-variation input{flex:1;min-width:0;background:#11151b;color:var(--text,#e9edf5);border:1px solid var(--border,#373e49);border-radius:6px;padding:9px}#analizerScreen .az-status{padding:10px;background:#191d24;border-radius:7px;color:var(--muted,#9ca7b8);font-size:13px;margin-top:8px}
-@media(max-width:800px){#analizerScreen .az-layout{grid-template-columns:1fr;max-width:640px}#analizerScreen .az-header{flex-wrap:wrap}#analizerScreen{padding:12px!important}}
-</style>
-
 </head>
 <body>
 
@@ -168,8 +157,6 @@ body.login-active #mainContent { display: none !important; }
     </div>
     <div id="adminPanelStatus" class="adminStatus" aria-live="polite"></div>
   </section>
-
-
 </main>
 <style>
 /* Standalone admin route: normal document flow, compact and consistent with Kingside dark UI. */
@@ -453,27 +440,10 @@ body.login-active #mainContent { display: none !important; }
             <button class="grBtn pauseArenaBtn" id="grPauseBtn" onclick="Game.toggleArenaPause()" style="display:none;">⏸ ПАУЗА</button>
           </div>
           <button class="grBtn findOpp" id="grFindBtn" onclick="Game.findNewOpponent()">НАЙТИ ДРУГОГО СОПЕРНИКА</button>
-          <button class="grBtn" id="grAnalysisBtn" onclick="Router.go('analizer')" style="display:none; margin-top:8px;">♟ АНАЛИЗ ПАРТИИ</button>
         </div>
         <div class="playerStrip" id="bottomStrip"><div class="side"><span class="dot" id="bottomDot"></span><span class="nm" id="bottomName" onclick="Router.go('profile')">—</span></div><span class="rt" id="bottomRating"></span></div>
         <div class="clockBox" id="bottomClock"><div class="clockTime" id="bottomTime">--:--</div></div>
       </div>
-    </div>
-  </section>
-  <section id="analizerScreen" class="screen" style="padding:18px;">
-    <div class="az-header"><button class="az-btn" onclick="Router.go('lobby')">← Назад на сайт</button><h2>♟ Анализ партии</h2><span class="az-muted">Kingside</span></div>
-    <div class="az-layout">
-      <section>
-        <div class="az-panel az-players"><span id="azWhite">Белые</span><strong id="azResult">—</strong><span id="azBlack">Чёрные</span></div>
-        <div class="az-boardwrap"><div id="azBoard" class="az-board"></div></div>
-        <div class="az-controls"><button class="az-btn" onclick="AnalysisPage.go(0)" title="В начало">⏮</button><button class="az-btn" onclick="AnalysisPage.step(-1)" title="Назад">◀</button><button class="az-btn" onclick="AnalysisPage.step(1)" title="Вперёд">▶</button><button class="az-btn" onclick="AnalysisPage.go(AnalysisPage.san.length)" title="В конец">⏭</button><button class="az-btn" onclick="AnalysisPage.flip()">⇅ Перевернуть</button></div>
-        <div class="az-panel"><h3>Позиция</h3><div id="azPosition" class="az-muted">Загрузка партии…</div><div class="az-eval"><div id="azEvalWhite"></div></div><div class="az-eval-label"><span id="azEvalBlackLabel">Чёрные: 0</span><span id="azEvalWhiteLabel">Белые: 0</span></div><p class="az-muted">Полоса показывает материальный баланс, а не оценку Stockfish. Полноценный движок пока не подключён.</p></div>
-      </section>
-      <aside>
-        <div class="az-panel"><h3>Ходы партии</h3><div id="azReason" class="az-muted"></div><div id="azMoves" class="az-moves"></div></div>
-        <div class="az-panel"><h3>Исследовать вариант</h3><div class="az-muted">Выбери позицию, затем введи ход в SAN (например, Nf3, e4 или O-O). Вариант не меняет завершённую партию.</div><div class="az-variation"><input id="azSanInput" placeholder="e4 или Nf3"><button class="az-btn" onclick="AnalysisPage.tryMove()">Сделать ход</button></div><div id="azVarStatus" class="az-status">Выбери позицию партии, чтобы начать вариант.</div><button class="az-btn" style="margin-top:8px" onclick="AnalysisPage.resetVariant()">Сбросить вариант</button></div>
-        <div class="az-panel"><div id="azStatus" class="az-status">Ожидаю запись завершённой партии…</div></div>
-      </aside>
     </div>
   </section>
 </main>
