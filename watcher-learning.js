@@ -616,43 +616,66 @@ function ttSet(k, depth, score, flag, move) {
 // QUIESCENCE
 // ============================================================
 function quiescence(state, alpha, beta, color, qdepth) {
-  if (qdepth > 6) return evaluate(state, color === 1);
-  const standPat = evaluate(state, color === 1);
-  if (standPat >= beta) return beta;
-  if (standPat + 200 < alpha) return alpha;
-  if (alpha < standPat) alpha = standPat;
-
   const isW = color === 1;
+  const checked = inCheck(state, isW);
+
+  // В шахе нельзя делать stand-pat и нельзя ограничиваться взятиями:
+  // нужно рассматривать ВСЕ легальные ответы на шах.
+  // Лимит глубины оставлен страховкой от длинных шахующих циклов.
+  if (qdepth >= 10) return evaluate(state, isW);
+
+  let standPat = -Infinity;
+  if (!checked) {
+    standPat = evaluate(state, isW);
+    if (standPat >= beta) return beta;
+    if (standPat > alpha) alpha = standPat;
+  }
+
   const legal = allLegalMoves(state, isW);
   if (legal.length === 0) {
-    if (inCheck(state, isW)) return -MATE_SCORE + qdepth;
+    if (checked) return -MATE_SCORE + qdepth;
     return 0;
   }
 
-  const captures = [];
-  for (const [from, to] of legal) {
-    const target = state.board[to[0]][to[1]];
-    const piece = state.board[from[0]][from[1]];
-    if (target) captures.push([from, to]);
-    else if (piece && piece.toLowerCase() === 'p' && from[1] !== to[1]) captures.push([from, to]);
+  let candidates;
+  if (checked) {
+    candidates = legal;
+  } else {
+    candidates = [];
+    for (const [from, to] of legal) {
+      const target = state.board[to[0]][to[1]];
+      const piece = state.board[from[0]][from[1]];
+      if (target || (piece && piece.toLowerCase() === 'p' &&
+          from[1] !== to[1] && state.ep !== '-')) {
+        candidates.push([from, to]);
+      }
+    }
   }
 
-  // FIX: безопасная сортировка (не падает на null при en passant)
-  captures.sort((a, b) => {
-    const aPiece = state.board[a[0][0]][a[0][1]];
-    const aTarget = state.board[a[1][0]][a[1][1]];
-    const bPiece = state.board[b[0][0]][b[0][1]];
-    const bTarget = state.board[b[1][0]][b[1][1]];
-    const aV = aTarget ? (PIECE_VALUES[aTarget.toLowerCase()] || 0) : 100;
-    const bV = bTarget ? (PIECE_VALUES[bTarget.toLowerCase()] || 0) : 100;
-    const aP = PIECE_VALUES[aPiece.toLowerCase()] || 0;
-    const bP = PIECE_VALUES[bPiece.toLowerCase()] || 0;
-    return (bV - bP) - (aV - aP);
+  // MVV-LVA-подобная сортировка, безопасная для en-passant.
+  candidates.sort((a, b) => {
+    const scoreMove = ([from, to]) => {
+      const attacker = state.board[from[0]][from[1]];
+      let victim = state.board[to[0]][to[1]];
+      if (!victim && attacker && attacker.toLowerCase() === 'p' &&
+          from[1] !== to[1]) victim = isW ? 'p' : 'P';
+      const victimValue = victim ? (PIECE_VALUES[victim.toLowerCase()] || 0) : 0;
+      const attackerValue = attacker ? (PIECE_VALUES[attacker.toLowerCase()] || 0) : 0;
+      const promotion = attacker && attacker.toLowerCase() === 'p' &&
+        (to[0] === 0 || to[0] === 7) ? 800 : 0;
+      return victimValue * 10 - attackerValue + promotion;
+    };
+    return scoreMove(b) - scoreMove(a);
   });
 
-  for (const [from, to] of captures) {
+  for (const [from, to] of candidates) {
+    if (Date.now() >= SEARCH_DEADLINE) {
+      SEARCH_ABORTED = true;
+      return alpha;
+    }
     const next = applyMove(state, from, to);
     const score = -quiescence(next, -beta, -alpha, -color, qdepth + 1);
+    if (SEARCH_ABORTED) return alpha;
     if (score >= beta) return beta;
     if (score > alpha) alpha = score;
   }
@@ -946,10 +969,14 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
     if (mateIn2) return mateIn2;
   }
 
-  let maxDepth = 6;
-  if (myTime < 3) maxDepth = 3;
-  else if (myTime < 8) maxDepth = 4;
-  else if (myTime < 20) maxDepth = 5;
+  // Итеративное углубление: верхний предел повышен, но поиск всегда
+  // прекращается по дедлайну, поэтому короткий контроль не блокируется.
+  let maxDepth = 10;
+  if (myTime < 0.25) maxDepth = 2;
+  else if (myTime < 0.6) maxDepth = 3;
+  else if (myTime < 1.2) maxDepth = 5;
+  else if (myTime < 3) maxDepth = 7;
+  else if (myTime < 8) maxDepth = 8;
 
   SEARCH_ABORTED = false;
   SEARCH_DEADLINE = Date.now() + Math.max(40, timeMs);
