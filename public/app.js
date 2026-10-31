@@ -787,7 +787,7 @@ const Watch = {
   refresh(force) { App.socket.emit('getLiveGames', (list) => { this.refreshFromList(list); }); },
   refreshFromList(list) {
     const box = document.getElementById('watchListBody'); if (!box) return;
-    list = (list || []).filter(g => !g.isSelfPlay && !(g.id && g.id.startsWith('sp_')));
+    list = (list || []);
     const hash = JSON.stringify(list); if (hash === this.lastHash) return; this.lastHash = hash;
     if (!list.length) { box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>'; return; }
     box.innerHTML = list.map(g => {
@@ -803,7 +803,7 @@ const Watch = {
     }).join('');
   },
   watch(id) {
-    if (!id || id.startsWith('sp_')) { alert('Self-play партии недоступны для просмотра'); return; }
+    if (!id) return;
     if (this.watchingGameId === id) { if (Router.current.name !== 'watch') Router.go('watch', id); return; }
     if (this.watchingGameId) App.socket.emit('unwatchGame', { id: this.watchingGameId });
     this.watchingGameId = id; this.watchingGame = null; this.lastBoardHash = '';
@@ -812,8 +812,14 @@ const Watch = {
     App.socket.emit('watchGame', { id }, (res) => {
       if (reqId !== this.requestId) return;
       if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось начать просмотр'); this.watchingGameId = null; return; }
-      if (res.game && res.game.isSelfPlay) { alert('Self-play партии недоступны'); this.watchingGameId = null; return; }
-      this.watchingGame = res.game; this.lastBoardHash = ''; this.renderBoard();
+      this.watchingGame = res.game;
+      if (this.watchingGame.selfPlayHistory && this.watchingGame.selfPlayHistory.length) {
+        const h = this.watchingGame.selfPlayHistory;
+        this.watchingGame.replayFens = ['rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', ...h.map(m => m.fenAfter).filter(Boolean)];
+        this.watchingGame.replayIndex = this.watchingGame.replayFens.length - 1;
+        this.watchingGame.fen = this.watchingGame.replayFens[this.watchingGame.replayIndex];
+      }
+      this.lastBoardHash = ''; this.renderBoard();
     });
   },
   stop() {
@@ -827,7 +833,8 @@ const Watch = {
     const box = document.getElementById('watchBoardBox'); if (!box) return;
     if (!this.watchingGame) { box.innerHTML = '<div class="wbEmpty">Выбери партию слева</div>'; return; }
     const g = this.watchingGame;
-    const state = Chess.parseFen(g.fen);
+    const displayFen = g.replayFens ? g.replayFens[g.replayIndex || 0] : g.fen;
+    const state = Chess.parseFen(displayFen);
     const flip = false;
     const lm = g.lastMove;
     const lmHash = (lm && Array.isArray(lm.from) && Array.isArray(lm.to)) ? lm.from.join(',') + '>' + lm.to.join(',') : '';
@@ -851,8 +858,14 @@ const Watch = {
     box.innerHTML = `<div class="wbHeader"><div style="min-width:0; flex:1"><div class="wbTitle">Партия ${g.isArena ? 'турнира' : ''}${g.whiteIsBot || g.blackIsBot ? ' (с ботом)' : ''}</div><div class="wbSub">${g.timeControl}+${g.increment}${g.arenaName ? ' · '+Utils.escapeHtml(g.arenaName) : ''}</div></div><button class="secondary" onclick="Watch.stop()" style="flex-shrink:0">✕ Выйти</button></div>
       <div class="wbPlayers"><div class="wbPlayer ${blackActive?'active':''}"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span class="name">⚫ ${bBot}${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod, g.blackIsBot)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}</span><span class="time" id="watchTimeB">${Utils.formatTime(g.timeB)}</span></div><div class="wbPlayer ${whiteActive?'active':''}"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span class="name">⚪ ${wBot}${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod, g.whiteIsBot)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}</span><span class="time" id="watchTimeW">${Utils.formatTime(g.timeW)}</span></div></div>
       <div class="wbBoardWrap"><div class="wbBoard">${squares}</div></div>${finishedLine}
+      ${g.replayFens ? `<div style="display:flex;justify-content:center;gap:8px;margin-top:10px"><button class="secondary" onclick="Watch.replayStep(-999999)">⏮</button><button class="secondary" onclick="Watch.replayStep(-1)">←</button><span style="align-self:center;font-size:12px;color:var(--muted)">Ход ${g.replayIndex}/${g.replayFens.length-1}</span><button class="secondary" onclick="Watch.replayStep(1)">→</button><button class="secondary" onclick="Watch.replayStep(999999)">⏭</button></div>` : ''}
       <div style="text-align:center; margin-top:8px; font-size:12px; color:var(--muted); ${g.watchersCount > 0 ? '' : 'display:none;'}">👁 Зрителей: <b style="color:var(--accent)">${g.watchersCount || 0}</b></div>`;
-    if (!g.finished) this.startClock();
+    if (!g.finished) this.startClock(); else if (this.watchClockHandle) { cancelAnimationFrame(this.watchClockHandle); this.watchClockHandle = null; }
+  },
+  replayStep(delta) {
+    const g = this.watchingGame; if (!g || !g.replayFens) return;
+    g.replayIndex = delta > 1000 ? g.replayFens.length - 1 : delta < -1000 ? 0 : Math.max(0, Math.min(g.replayFens.length - 1, g.replayIndex + delta));
+    g.fen = g.replayFens[g.replayIndex]; this.lastBoardHash = ''; this.renderBoard();
   },
   startClock() {
     if (this.watchClockHandle) cancelAnimationFrame(this.watchClockHandle);
@@ -860,7 +873,7 @@ const Watch = {
     if (this.watchingGame) { this.watchClockW = this.watchingGame.timeW; this.watchClockB = this.watchingGame.timeB; this.watchClockTurn = this.watchingGame.turn; }
     const self = this;
     function tick() {
-      if (!self.watchingGame) { self.watchClockHandle = null; return; }
+      if (!self.watchingGame || self.watchingGame.finished) { self.watchClockHandle = null; return; }
       const elapsed = (performance.now() - self.watchClockSyncedAt) / 1000;
       let w = self.watchClockW, b = self.watchClockB;
       if (self.watchClockTurn === 'w') w = Math.max(0, w - elapsed); else b = Math.max(0, b - elapsed);
@@ -1310,7 +1323,8 @@ const Arena = {
   },
 
   renderTopGame(g, placeMap) {
-    const state = Chess.parseFen(g.fen);
+    const displayFen = g.replayFens ? g.replayFens[g.replayIndex || 0] : g.fen;
+    const state = Chess.parseFen(displayFen);
     const lm = g.lastMove;
     let squares = '';
     for (let dr = 0; dr < 8; dr++) for (let dc = 0; dc < 8; dc++) {
