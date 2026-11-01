@@ -65,21 +65,23 @@ for (const b of BOTS) BOT_STRENGTH[b.name] = b.strength;
 
 const GLICKO2 = {
   TAU: 0.5, EPSILON: 1e-6, SCALE: 173.7178,
-  DEFAULT_RATING: 1200, DEFAULT_RD: 350, DEFAULT_VOL: 0.06,
-  MIN_RD: 30, MAX_RD: 350, MIN_RATING: 400, MAX_RATING: 3500
+  DEFAULT_RATING: 1500, DEFAULT_RD: 500, DEFAULT_VOL: 0.09,
+  MIN_RD: 45, MAX_RD: 500, MIN_RATING: 400, MAX_RATING: 4000,
+  PERIODS_PER_DAY: 0.21436, MAX_RATING_DELTA: 700, PROVISIONAL_RD: 110
 };
-function glicko2Scale(r) { return (r - GLICKO2.DEFAULT_RATING) / GLICKO2.SCALE; }
-function glicko2Unscale(mu) { return mu * GLICKO2.SCALE + GLICKO2.DEFAULT_RATING; }
+function glicko2Scale(r) { return (r - 1500) / GLICKO2.SCALE; }
+function glicko2Unscale(mu) { return mu * GLICKO2.SCALE + 1500; }
 function glicko2G(phi) { return 1 / Math.sqrt(1 + (3 * phi * phi) / (Math.PI * Math.PI)); }
 function glicko2E(mu, muJ, phiJ) { return 1 / (1 + Math.exp(-glicko2G(phiJ) * (mu - muJ))); }
-function updateGlicko2(rating, rd, vol, results) {
+function updateGlicko2(rating, rd, vol, results, elapsedDays = 0) {
+  // Lichess-style fractional rating periods: uncertainty grows with inactivity.
+  const periods = Math.max(0, Number(elapsedDays) || 0) * GLICKO2.PERIODS_PER_DAY;
+  const phi = Math.sqrt(Math.pow(rd / GLICKO2.SCALE, 2) + periods * vol * vol);
   if (!results || results.length === 0) {
-    const phi = rd / GLICKO2.SCALE;
-    const newPhi = Math.sqrt(phi * phi + vol * vol);
+    const newPhi = phi;
     return { rating, rd: Math.max(GLICKO2.MIN_RD, Math.min(GLICKO2.MAX_RD, newPhi * GLICKO2.SCALE)), vol };
   }
   const mu = glicko2Scale(rating);
-  const phi = rd / GLICKO2.SCALE;
   const sigma = vol;
   let v = 0, deltaSum = 0;
   for (const res of results) {
@@ -114,7 +116,7 @@ function updateGlicko2(rating, rd, vol, results) {
   const newPhi = 1 / Math.sqrt(1 / (phiStar * phiStar) + 1 / v);
   const newMu = mu + newPhi * newPhi * deltaSum;
   return {
-    rating: Math.round(Math.max(GLICKO2.MIN_RATING, Math.min(GLICKO2.MAX_RATING, glicko2Unscale(newMu)))),
+    rating: Math.round(Math.max(GLICKO2.MIN_RATING, Math.min(GLICKO2.MAX_RATING, rating + Math.max(-GLICKO2.MAX_RATING_DELTA, Math.min(GLICKO2.MAX_RATING_DELTA, glicko2Unscale(newMu) - rating))))),
     rd: Math.max(GLICKO2.MIN_RD, Math.min(GLICKO2.MAX_RD, newPhi * GLICKO2.SCALE)),
     vol: newSigma
   };
@@ -142,14 +144,14 @@ let db = { users: {}, totalGames: 0 };
 async function initDB() {
   await pool.query(`CREATE TABLE IF NOT EXISTS users (
     username TEXT PRIMARY KEY, password_hash TEXT NOT NULL, salt TEXT NOT NULL,
-    rating INTEGER NOT NULL DEFAULT 1200, rd REAL NOT NULL DEFAULT 350, vol REAL NOT NULL DEFAULT 0.06,
+    rating INTEGER NOT NULL DEFAULT 1500, rd REAL NOT NULL DEFAULT 500, vol REAL NOT NULL DEFAULT 0.09,
     wins INTEGER NOT NULL DEFAULT 0, losses INTEGER NOT NULL DEFAULT 0, draws INTEGER NOT NULL DEFAULT 0,
     games INTEGER NOT NULL DEFAULT 0, created_at BIGINT NOT NULL);`);
   const cols = [
-    ['rd','REAL DEFAULT 350'],['vol','REAL DEFAULT 0.06'],
+    ['rd','REAL DEFAULT 500'],['vol','REAL DEFAULT 0.09'],
     ['rating_classical','INTEGER'],['rating_rapid','INTEGER'],['rating_blitz','INTEGER'],['rating_bullet','INTEGER'],
-    ['rd_classical','REAL DEFAULT 350'],['rd_rapid','REAL DEFAULT 350'],['rd_blitz','REAL DEFAULT 350'],['rd_bullet','REAL DEFAULT 350'],
-    ['vol_classical','REAL DEFAULT 0.06'],['vol_rapid','REAL DEFAULT 0.06'],['vol_blitz','REAL DEFAULT 0.06'],['vol_bullet','REAL DEFAULT 0.06'],
+    ['rd_classical','REAL DEFAULT 500'],['rd_rapid','REAL DEFAULT 500'],['rd_blitz','REAL DEFAULT 500'],['rd_bullet','REAL DEFAULT 500'],
+    ['vol_classical','REAL DEFAULT 0.09'],['vol_rapid','REAL DEFAULT 0.09'],['vol_blitz','REAL DEFAULT 0.09'],['vol_bullet','REAL DEFAULT 0.09'],
     ['wins_classical','INTEGER DEFAULT 0'],['wins_rapid','INTEGER DEFAULT 0'],['wins_blitz','INTEGER DEFAULT 0'],['wins_bullet','INTEGER DEFAULT 0'],
     ['losses_classical','INTEGER DEFAULT 0'],['losses_rapid','INTEGER DEFAULT 0'],['losses_blitz','INTEGER DEFAULT 0'],['losses_bullet','INTEGER DEFAULT 0'],
     ['games_classical','INTEGER DEFAULT 0'],['games_rapid','INTEGER DEFAULT 0'],['games_blitz','INTEGER DEFAULT 0'],['games_bullet','INTEGER DEFAULT 0'],
@@ -230,10 +232,10 @@ async function loadDB() {
       acceptedHonestPlay: !!row.accepted_honest_play, acceptedPlatformRules: !!row.accepted_platform_rules,
       acceptedTermsAt: Number(row.accepted_terms_at || 0), acceptedTermsVersion: row.accepted_terms_version || '',
       categories: {
-        classical: { rating: row.rating_classical != null ? row.rating_classical : row.rating, rd: row.rd_classical != null ? row.rd_classical : GLICKO2.DEFAULT_RD, vol: row.vol_classical != null ? row.vol_classical : GLICKO2.DEFAULT_VOL, wins: row.wins_classical || 0, losses: row.losses_classical || 0, games: row.games_classical || 0 },
-        rapid:     { rating: row.rating_rapid     != null ? row.rating_rapid     : row.rating, rd: row.rd_rapid     != null ? row.rd_rapid     : GLICKO2.DEFAULT_RD, vol: row.vol_rapid     != null ? row.vol_rapid     : GLICKO2.DEFAULT_VOL, wins: row.wins_rapid     || 0, losses: row.losses_rapid     || 0, games: row.games_rapid     || 0 },
-        blitz:     { rating: row.rating_blitz     != null ? row.rating_blitz     : row.rating, rd: row.rd_blitz     != null ? row.rd_blitz     : GLICKO2.DEFAULT_RD, vol: row.vol_blitz     != null ? row.vol_blitz     : GLICKO2.DEFAULT_VOL, wins: row.wins_blitz     || 0, losses: row.losses_blitz     || 0, games: row.games_blitz     || 0 },
-        bullet:    { rating: row.rating_bullet    != null ? row.rating_bullet    : row.rating, rd: row.rd_bullet    != null ? row.rd_bullet    : GLICKO2.DEFAULT_RD, vol: row.vol_bullet    != null ? row.vol_bullet    : GLICKO2.DEFAULT_VOL, wins: row.wins_bullet    || 0, losses: row.losses_bullet    || 0, games: row.games_bullet    || 0 }
+        classical: { rating: row.rating_classical != null ? row.rating_classical : GLICKO2.DEFAULT_RATING, rd: row.rd_classical != null ? row.rd_classical : GLICKO2.DEFAULT_RD, vol: row.vol_classical != null ? row.vol_classical : GLICKO2.DEFAULT_VOL, wins: row.wins_classical || 0, losses: row.losses_classical || 0, games: row.games_classical || 0 },
+        rapid:     { rating: row.rating_rapid     != null ? row.rating_rapid     : GLICKO2.DEFAULT_RATING, rd: row.rd_rapid     != null ? row.rd_rapid     : GLICKO2.DEFAULT_RD, vol: row.vol_rapid     != null ? row.vol_rapid     : GLICKO2.DEFAULT_VOL, wins: row.wins_rapid     || 0, losses: row.losses_rapid     || 0, games: row.games_rapid     || 0 },
+        blitz:     { rating: row.rating_blitz     != null ? row.rating_blitz     : GLICKO2.DEFAULT_RATING, rd: row.rd_blitz     != null ? row.rd_blitz     : GLICKO2.DEFAULT_RD, vol: row.vol_blitz     != null ? row.vol_blitz     : GLICKO2.DEFAULT_VOL, wins: row.wins_blitz     || 0, losses: row.losses_blitz     || 0, games: row.games_blitz     || 0 },
+        bullet:    { rating: row.rating_bullet    != null ? row.rating_bullet    : GLICKO2.DEFAULT_RATING, rd: row.rd_bullet    != null ? row.rd_bullet    : GLICKO2.DEFAULT_RD, vol: row.vol_bullet    != null ? row.vol_bullet    : GLICKO2.DEFAULT_VOL, wins: row.wins_bullet    || 0, losses: row.losses_bullet    || 0, games: row.games_bullet    || 0 }
       }
     };
   }
@@ -799,8 +801,18 @@ async function finishGame(lobbyId, result, reason) {
   const bVol = (typeof bc.vol === 'number' && bc.vol > 0) ? bc.vol : GLICKO2.DEFAULT_VOL;
   let whiteRes, blackRes;
   try {
-    whiteRes = updateGlicko2(wc.rating, wRd, wVol, [{ rating: bc.rating, rd: bRd, score: whiteScore }]);
-    blackRes = updateGlicko2(bc.rating, bRd, bVol, [{ rating: wc.rating, rd: wRd, score: blackScore }]);
+    const nowForRating = Date.now();
+    const lastGames = await pool.query(
+      `SELECT username, MAX(finished_at)::bigint AS last_at FROM (
+         SELECT white AS username, finished_at FROM games WHERE category = $1 AND (white = $2 OR white = $3)
+         UNION ALL SELECT black AS username, finished_at FROM games WHERE category = $1 AND (black = $2 OR black = $3)
+       ) recent GROUP BY username`, [cat, whiteName, blackName]
+    );
+    const lastAt = Object.fromEntries(lastGames.rows.map(row => [row.username, Number(row.last_at)]));
+    const elapsedDaysW = lastAt[whiteName] ? Math.max(0, (nowForRating - lastAt[whiteName]) / 86400000) : 0;
+    const elapsedDaysB = lastAt[blackName] ? Math.max(0, (nowForRating - lastAt[blackName]) / 86400000) : 0;
+    whiteRes = updateGlicko2(wc.rating, wRd, wVol, [{ rating: bc.rating, rd: bRd, score: whiteScore }], elapsedDaysW);
+    blackRes = updateGlicko2(bc.rating, bRd, bVol, [{ rating: wc.rating, rd: wRd, score: blackScore }], elapsedDaysB);
   } catch (e) { whiteRes = { rating: wc.rating, rd: wRd, vol: wVol }; blackRes = { rating: bc.rating, rd: bRd, vol: bVol }; }
   const whiteAfter = whiteRes.rating; const blackAfter = blackRes.rating;
   const whiteIsWatcher = whiteName === WATCHER_NAME; const blackIsWatcher = blackName === WATCHER_NAME;
@@ -2046,7 +2058,7 @@ io.on('connection', (socket) => {
 
       const salt = newSalt();
       const passwordHash = hashPassword(password, salt);
-      const base = 1200;
+      const base = GLICKO2.DEFAULT_RATING;
       const verifyToken = crypto.randomBytes(32).toString('hex');
       const verifyExpires = Date.now() + 24 * 60 * 60 * 1000;
 
