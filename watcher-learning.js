@@ -525,21 +525,6 @@ function evaluate(state, forWhite) {
     }
   }
 
-  // Стратегическая оценка центра: учитываем контроль полей пешками и фигурами,
-  // а также фактическое занятие центра. Никакие дебютные ходы не предписываются.
-  const centralSquares = [[3,3],[3,4],[4,3],[4,4]];
-  const nearCenter = [[2,2],[2,3],[2,4],[2,5],[3,2],[3,5],[4,2],[4,5],[5,2],[5,3],[5,4],[5,5]];
-  for (const [r, c] of centralSquares) {
-    if (isAttacked(state, r, c, true)) score += 9;
-    if (isAttacked(state, r, c, false)) score -= 9;
-    const occupant = state.board[r][c];
-    if (occupant) score += isWhite(occupant) ? 7 : -7;
-  }
-  for (const [r, c] of nearCenter) {
-    if (isAttacked(state, r, c, true)) score += 2;
-    if (isAttacked(state, r, c, false)) score -= 2;
-  }
-
   // FIX: мобильность только для N/B/R/Q (пешки и король шумят)
   let wm = 0, bm = 0;
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
@@ -855,11 +840,105 @@ function findMateInTwo(state, white) {
   return null;
 }
 
+// ============================================================
+// OPENING BOOK
+// ============================================================
+const OPENING_BOOK = [
+  { line: 'e2e4', weight: 40 },
+  { line: 'e2e4 e7e5 g1f3', weight: 30 },
+  { line: 'e2e4 e7e5 g1f3 b8c6 f1b5', weight: 20 },
+  { line: 'e2e4 e7e5 g1f3 b8c6 f1c4', weight: 15 },
+  { line: 'e2e4 e7e5 g1f3 b8c6 d2d4', weight: 10 },
+  { line: 'e2e4 e7e5 g1f3 b8c6 f1b5 a7a6', weight: 10 },
+  { line: 'e2e4 e7e5 g1f3 b8c6 f1c4 f8c5', weight: 10 },
+  { line: 'e2e4 e7e5 g1f3 b8c6 d2d4 e5d4 f3d4', weight: 8 },
+  { line: 'e2e4 e7e5 g1f3 g8f6', weight: 8 },
+  { line: 'e2e4 e7e5 g1f3 d7d6', weight: 6 },
+  { line: 'e2e4 c7c5', weight: 25 },
+  { line: 'e2e4 c7c5 g1f3 d7d6', weight: 15 },
+  { line: 'e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4', weight: 12 },
+  { line: 'e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6', weight: 10 },
+  { line: 'e2e4 c7c5 g1f3 b8c6', weight: 10 },
+  { line: 'e2e4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4', weight: 8 },
+  { line: 'e2e4 c7c5 g1f3 b8c6 f1b5', weight: 6 },
+  { line: 'e2e4 c7c5 c2c3', weight: 5 },
+  { line: 'e2e4 c7c5 b1c3', weight: 4 },
+  { line: 'e2e4 e7e6', weight: 12 },
+  { line: 'e2e4 e7e6 d2d4 d7d5', weight: 10 },
+  { line: 'e2e4 e7e6 d2d4 d7d5 b1c3', weight: 6 },
+  { line: 'e2e4 e7e6 d2d4 d7d5 b1d2', weight: 4 },
+  { line: 'e2e4 c7c6', weight: 12 },
+  { line: 'e2e4 c7c6 d2d4 d7d5', weight: 10 },
+  { line: 'e2e4 c7c6 d2d4 d7d5 b1c3', weight: 5 },
+  { line: 'e2e4 c7c6 d2d4 d7d5 e4e5', weight: 4 },
+  { line: 'e2e4 d7d6', weight: 5 },
+  { line: 'e2e4 g8f6', weight: 4 },
+  { line: 'e2e4 d7d5', weight: 4 },
+  { line: 'd2d4', weight: 30 },
+  { line: 'd2d4 d7d5', weight: 20 },
+  { line: 'd2d4 d7d5 c2c4', weight: 18 },
+  { line: 'd2d4 d7d5 c2c4 e7e6', weight: 12 },
+  { line: 'd2d4 d7d5 c2c4 e7e6 b1c3', weight: 8 },
+  { line: 'd2d4 d7d5 c2c4 c7c6', weight: 8 },
+  { line: 'd2d4 d7d5 c2c4 d5c4', weight: 6 },
+  { line: 'd2d4 d7d5 g1f3', weight: 6 },
+  { line: 'd2d4 g8f6', weight: 15 },
+  { line: 'd2d4 g8f6 c2c4', weight: 12 },
+  { line: 'd2d4 g8f6 c2c4 g7g6', weight: 8 },
+  { line: 'd2d4 g8f6 c2c4 e7e6', weight: 10 },
+  { line: 'd2d4 f7f5', weight: 4 },
+  { line: 'c2c4', weight: 12 },
+  { line: 'c2c4 e7e5', weight: 6 },
+  { line: 'c2c4 g8f6', weight: 6 },
+  { line: 'g1f3', weight: 8 },
+  { line: 'g1f3 d7d5', weight: 5 },
+  { line: 'g1f3 g8f6', weight: 4 },
+  { line: 'g2g3', weight: 3 },
+];
+
+const OPENING_INDEX = new Map();
+(function buildOpeningIndex() {
+  for (const entry of OPENING_BOOK) {
+    const moves = entry.line.split(' ').filter(Boolean);
+    for (let i = 1; i <= moves.length; i++) {
+      const prefix = moves.slice(0, i).join(' ');
+      if (!OPENING_INDEX.has(prefix)) OPENING_INDEX.set(prefix, []);
+      OPENING_INDEX.get(prefix).push({ move: moves[i - 1], weight: entry.weight });
+    }
+  }
+})();
+
 function uciFromTo(from, to) {
   return String.fromCharCode(97 + from[1]) + (8 - from[0]) +
          String.fromCharCode(97 + to[1]) + (8 - to[0]);
 }
 
+function uciToMove(uci) {
+  if (!uci || uci.length < 4) return null;
+  const fc = uci.charCodeAt(0) - 97;
+  const fr = 8 - parseInt(uci[1], 10);
+  const tc = uci.charCodeAt(2) - 97;
+  const tr = 8 - parseInt(uci[3], 10);
+  if (!inBoard(fr, fc) || !inBoard(tr, tc)) return null;
+  return [[fr, fc], [tr, tc]];
+}
+
+function bookMove(historyLine, legalSet) {
+  if (!historyLine) return null;
+  const parts = historyLine.trim().split(/\s+/).filter(Boolean);
+  for (let len = parts.length; len >= 1; len--) {
+    const prefix = parts.slice(0, len).join(' ');
+    const candidates = OPENING_INDEX.get(prefix);
+    if (!candidates || !candidates.length) continue;
+    const filtered = candidates.filter(c => legalSet.has(c.move));
+    if (!filtered.length) continue;
+    const total = filtered.reduce((s, c) => s + c.weight, 0);
+    let r = Math.random() * total;
+    for (const c of filtered) { r -= c.weight; if (r <= 0) return uciToMove(c.move); }
+    return uciToMove(filtered[0].move);
+  }
+  return null;
+}
 
 // ============================================================
 // MAIN SEARCH DRIVER (исправлено: штрафы НЕ трогают alpha)
@@ -869,19 +948,18 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
   if (legal.length === 0) return null;
   if (legal.length === 1) return legal[0];
 
+  const legalSet = new Set(legal.map(([f, t]) => uciFromTo(f, t)));
   const color = isWhiteTurn ? 1 : -1;
   const myTime = Math.max(0.5, timeMs / 1000);
   const moveCount = state.full;
+
+  // Opening book disabled: Watcher chooses every move through search.
 
   // Мат в 1 всегда
   const mateIn1 = findMateInOne(state, isWhiteTurn);
   if (mateIn1) return mateIn1;
 
-  // Мат в 2 — только если хватает времени
-  if (myTime >= 1.0) {
-    const mateIn2 = findMateInTwo(state, isWhiteTurn);
-    if (mateIn2) return mateIn2;
-  }
+  // Mate-in-two is handled by the timed search; no unbounded pre-search.
 
   // Итеративное углубление: верхний предел повышен, но поиск всегда
   // прекращается по дедлайну, поэтому короткий контроль не блокируется.
@@ -1164,3 +1242,4 @@ module.exports = {
   reloadWeights,
   setPool,
 };
+
