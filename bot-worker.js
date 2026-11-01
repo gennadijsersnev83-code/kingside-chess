@@ -327,6 +327,21 @@ function botEval(state) {
     }
   }
 
+  // Центр оценивается по реальному контролю полей всеми фигурами и пешками,
+  // а не по заранее заданным дебютным ходам.
+  const centralSquares = [[3,3],[3,4],[4,3],[4,4]];
+  const nearCenter = [[2,2],[2,3],[2,4],[2,5],[3,2],[3,5],[4,2],[4,5],[5,2],[5,3],[5,4],[5,5]];
+  for (const [r, c] of centralSquares) {
+    if (botIsAttacked(state, r, c, true)) score += 9;
+    if (botIsAttacked(state, r, c, false)) score -= 9;
+    const occupant = state.board[r][c];
+    if (occupant) score += botIsWhite(occupant) ? 7 : -7;
+  }
+  for (const [r, c] of nearCenter) {
+    if (botIsAttacked(state, r, c, true)) score += 2;
+    if (botIsAttacked(state, r, c, false)) score -= 2;
+  }
+
   let wm = 0, bm = 0;
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
@@ -343,218 +358,12 @@ function botEval(state) {
   return score;
 }
 
-// ============================================================
-// OPENING BOOK
-// ============================================================
-const OPENING_BOOK = [
-  { line: 'e2e4', weight: 40 },
-  { line: 'e2e4 e7e5 g1f3', weight: 30 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 f1b5', weight: 20 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 f1c4', weight: 15 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 d2d4', weight: 10 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 f1b5 a7a6', weight: 10 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4', weight: 6 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5c6', weight: 4 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 f1c4 f8c5', weight: 10 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 c2c3', weight: 6 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 d2d4 e5d4 f3d4', weight: 8 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 d2d4 e5d4 f3d4 g8f6', weight: 5 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 d2d4 e5d4 f3d4 f8c5', weight: 4 },
-  { line: 'e2e4 e7e5 g1f3 g8f6', weight: 8 },
-  { line: 'e2e4 e7e5 g1f3 g8f6 f3e5 d7d6', weight: 5 },
-  { line: 'e2e4 e7e5 g1f3 d7d6', weight: 6 },
-  { line: 'e2e4 e7e5 g1f3 d7d6 d2d4', weight: 4 },
-  { line: 'e2e4 e7e5 f1c4', weight: 5 },
-  { line: 'e2e4 e7e5 b1c3', weight: 4 },
-  { line: 'e2e4 c7c5', weight: 25 },
-  { line: 'e2e4 c7c5 g1f3 d7d6', weight: 15 },
-  { line: 'e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4', weight: 12 },
-  { line: 'e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6', weight: 10 },
-  { line: 'e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3', weight: 8 },
-  { line: 'e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3 a7a6', weight: 6 },
-  { line: 'e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3 g7g6', weight: 5 },
-  { line: 'e2e4 c7c5 g1f3 b8c6', weight: 10 },
-  { line: 'e2e4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4', weight: 8 },
-  { line: 'e2e4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4 g7g6', weight: 4 },
-  { line: 'e2e4 c7c5 g1f3 b8c6 f1b5', weight: 6 },
-  { line: 'e2e4 c7c5 g1f3 e7e6', weight: 6 },
-  { line: 'e2e4 c7c5 g1f3 e7e6 d2d4 c5d4 f3d4', weight: 4 },
-  { line: 'e2e4 c7c5 c2c3', weight: 5 },
-  { line: 'e2e4 c7c5 c2c3 d7d5', weight: 4 },
-  { line: 'e2e4 c7c5 b1c3', weight: 4 },
-  { line: 'e2e4 e7e6', weight: 12 },
-  { line: 'e2e4 e7e6 d2d4 d7d5', weight: 10 },
-  { line: 'e2e4 e7e6 d2d4 d7d5 b1c3', weight: 6 },
-  { line: 'e2e4 e7e6 d2d4 d7d5 b1d2', weight: 4 },
-  { line: 'e2e4 e7e6 d2d4 d7d5 e4e5', weight: 3 },
-  { line: 'e2e4 c7c6', weight: 12 },
-  { line: 'e2e4 c7c6 d2d4 d7d5', weight: 10 },
-  { line: 'e2e4 c7c6 d2d4 d7d5 b1c3', weight: 5 },
-  { line: 'e2e4 c7c6 d2d4 d7d5 e4e5', weight: 4 },
-  { line: 'e2e4 c7c6 d2d4 d7d5 b1d2', weight: 4 },
-  { line: 'e2e4 d7d6', weight: 5 },
-  { line: 'e2e4 d7d6 d2d4 g8f6', weight: 3 },
-  { line: 'e2e4 g7g6', weight: 5 },
-  { line: 'e2e4 g8f6', weight: 4 },
-  { line: 'e2e4 g8f6 e4e5 f6d5 d2d4', weight: 3 },
-  { line: 'e2e4 d7d5', weight: 4 },
-  { line: 'e2e4 d7d5 e4d5 d8d5 b1c3', weight: 3 },
-  { line: 'd2d4', weight: 30 },
-  { line: 'd2d4 d7d5', weight: 20 },
-  { line: 'd2d4 d7d5 c2c4', weight: 18 },
-  { line: 'd2d4 d7d5 c2c4 e7e6', weight: 12 },
-  { line: 'd2d4 d7d5 c2c4 e7e6 b1c3', weight: 8 },
-  { line: 'd2d4 d7d5 c2c4 e7e6 b1c3 g8f6', weight: 6 },
-  { line: 'd2d4 d7d5 c2c4 e7e6 b1c3 g8f6 c1g5', weight: 4 },
-  { line: 'd2d4 d7d5 c2c4 d5c4', weight: 6 },
-  { line: 'd2d4 d7d5 c2c4 c7c6', weight: 8 },
-  { line: 'd2d4 d7d5 c2c4 c7c6 g1f3', weight: 5 },
-  { line: 'd2d4 d7d5 c2c4 c7c6 b1c3', weight: 4 },
-  { line: 'd2d4 d7d5 g1f3', weight: 6 },
-  { line: 'd2d4 d7d5 g1f3 g8f6', weight: 4 },
-  { line: 'd2d4 d7d5 c1f4', weight: 3 },
-  { line: 'd2d4 g8f6', weight: 15 },
-  { line: 'd2d4 g8f6 c2c4', weight: 12 },
-  { line: 'd2d4 g8f6 c2c4 g7g6', weight: 8 },
-  { line: 'd2d4 g8f6 c2c4 g7g6 b1c3', weight: 6 },
-  { line: 'd2d4 g8f6 c2c4 g7g6 b1c3 d7d5', weight: 4 },
-  { line: 'd2d4 g8f6 c2c4 g7g6 b1c3 f8g7', weight: 4 },
-  { line: 'd2d4 g8f6 c2c4 e7e6', weight: 10 },
-  { line: 'd2d4 g8f6 c2c4 e7e6 b1c3', weight: 8 },
-  { line: 'd2d4 g8f6 c2c4 e7e6 b1c3 f8b4', weight: 5 },
-  { line: 'd2d4 g8f6 c2c4 e7e6 g1f3', weight: 5 },
-  { line: 'd2d4 g8f6 c2c4 e7e6 g1f3 b7b6', weight: 3 },
-  { line: 'd2d4 g8f6 c2c4 c7c5', weight: 4 },
-  { line: 'd2d4 g8f6 c2c4 d7d5', weight: 4 },
-  { line: 'd2d4 f7f5', weight: 4 },
-  { line: 'd2d4 f7f5 c2c4', weight: 3 },
-  { line: 'd2d4 e7e6', weight: 4 },
-  { line: 'd2d4 e7e6 c2c4', weight: 3 },
-  { line: 'd2d4 c7c5', weight: 4 },
-  { line: 'd2d4 c7c5 d4d5', weight: 3 },
-  { line: 'c2c4', weight: 12 },
-  { line: 'c2c4 e7e5', weight: 6 },
-  { line: 'c2c4 e7e5 b1c3', weight: 4 },
-  { line: 'c2c4 g8f6', weight: 6 },
-  { line: 'c2c4 g8f6 b1c3', weight: 5 },
-  { line: 'c2c4 g8f6 b1c3 g7g6', weight: 3 },
-  { line: 'c2c4 c7c5', weight: 5 },
-  { line: 'c2c4 e7e6', weight: 4 },
-  { line: 'c2c4 e7e6 b1c3', weight: 3 },
-  { line: 'c2c4 g7g6', weight: 3 },
-  { line: 'g1f3', weight: 8 },
-  { line: 'g1f3 d7d5', weight: 5 },
-  { line: 'g1f3 d7d5 g2g3', weight: 3 },
-  { line: 'g1f3 g8f6', weight: 4 },
-  { line: 'g1f3 g8f6 c2c4', weight: 3 },
-  { line: 'g1f3 c7c5', weight: 4 },
-  { line: 'g1f3 c7c5 c2c4', weight: 3 },
-  { line: 'g2g3', weight: 3 },
-  { line: 'g2g3 d7d5', weight: 2 },
-  { line: 'b2b3', weight: 2 },
-  { line: 'b2b3 e7e5', weight: 2 }
-];
-
-const OPENING_INDEX = new Map();
-(function buildOpeningIndex() {
-  for (const entry of OPENING_BOOK) {
-    const moves = entry.line.split(' ').filter(Boolean);
-    for (let i = 1; i <= moves.length; i++) {
-      const prefix = moves.slice(0, i).join(' ');
-      if (!OPENING_INDEX.has(prefix)) OPENING_INDEX.set(prefix, []);
-      OPENING_INDEX.get(prefix).push({ move: moves[i - 1], weight: entry.weight });
-    }
-  }
-})();
-
 function uciFromTo(from, to) {
   const f = String.fromCharCode(97 + from[1]) + (8 - from[0]);
   const t = String.fromCharCode(97 + to[1]) + (8 - to[0]);
   return f + t;
 }
 
-function uciToMove(uci) {
-  if (!uci || uci.length < 4) return null;
-  const fc = uci.charCodeAt(0) - 97;
-  const fr = 8 - parseInt(uci[1], 10);
-  const tc = uci.charCodeAt(2) - 97;
-  const tr = 8 - parseInt(uci[3], 10);
-  if (!botInBoard(fr, fc) || !botInBoard(tr, tc)) return null;
-  return [[fr, fc], [tr, tc]];
-}
-
-function bookMove(fen, historyLine) {
-  if (!historyLine) return null;
-  const trimmed = historyLine.trim();
-  const parts = trimmed ? trimmed.split(' ') : [];
-  for (let len = parts.length; len >= 1; len--) {
-    const prefix = parts.slice(0, len).join(' ');
-    const candidates = OPENING_INDEX.get(prefix);
-    if (!candidates || !candidates.length) continue;
-    const state = botParseFen(fen);
-    const legal = botAllLegalMoves(state, state.turn === 'w');
-    const legalSet = new Set(legal.map(([f, t]) => uciFromTo(f, t)));
-    const filtered = candidates.filter(c => legalSet.has(c.move));
-    if (!filtered.length) continue;
-    const total = filtered.reduce((s, c) => s + c.weight, 0);
-    let r = Math.random() * total;
-    for (const c of filtered) { r -= c.weight; if (r <= 0) return uciToMove(c.move); }
-    return uciToMove(filtered[0].move);
-  }
-  return null;
-}
-
-// ============================================================
-// OPENING HEURISTIC (fallback)
-// ============================================================
-function openingHeuristic(state, from, to, moveCount) {
-  if (moveCount > 12) return 0;
-  const piece = state.board[from[0]][from[1]];
-  if (!piece) return 0;
-  const white = botIsWhite(piece);
-  const type = piece.toLowerCase();
-  let bonus = 0;
-  const target = state.board[to[0]][to[1]];
-  if (target) return 0;
-
-  if (type === 'n' || type === 'b') {
-    const homeRow = white ? 7 : 0;
-    if (from[0] === homeRow) bonus += 18;
-    else bonus -= 6;
-    if (type === 'n' && ((to[0] === 3 || to[0] === 4) && (to[1] === 2 || to[1] === 5))) bonus += 8;
-  }
-  if (type === 'q') {
-    const homeRow = white ? 7 : 0;
-    if (from[0] === homeRow) bonus -= 40;
-    const developedKnights = (() => {
-      let n = 0;
-      for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-        const p = state.board[r][c]; if (!p) continue;
-        if (p.toLowerCase() !== 'n') continue;
-        if (botIsWhite(p) !== white) continue;
-        const hr = white ? 7 : 0;
-        if (r !== hr) n++;
-      }
-      return n;
-    })();
-    if (developedKnights < 2) bonus -= 25;
-    if (moveCount <= 4) bonus -= 30;
-    if ((to[0] === 3 || to[0] === 4) && (to[1] === 3 || to[1] === 4) && moveCount <= 8) bonus -= 40;
-  }
-  if (type === 'r' && moveCount <= 8) {
-    const castlingDone = white ? !state.castling.includes('K') && !state.castling.includes('Q') : !state.castling.includes('k') && !state.castling.includes('q');
-    if (!castlingDone) bonus -= 15;
-  }
-  if (type === 'k' && Math.abs(to[1] - from[1]) === 2) bonus += 50;
-  if (type === 'k' && Math.abs(to[1] - from[1]) !== 2 && moveCount <= 10) bonus -= 30;
-  if (type === 'p') {
-    if ((to[1] === 3 || to[1] === 4) && (to[0] === 3 || to[0] === 4)) bonus += 12;
-    const homeRow = white ? 6 : 1;
-    const twoStep = Math.abs(to[0] - from[0]) === 2;
-    if (from[0] === homeRow && !twoStep) bonus -= 4;
-  }
-  return bonus;
-}
 
 // ============================================================
 // SEARCH
@@ -826,14 +635,6 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
 
   const moveCount = state.full;
 
-  if (moveCount <= 15 && historyLine) {
-    const bm = bookMove(fen, historyLine);
-    if (bm) {
-      const legalSet = new Set(moves.map(([f, t]) => uciFromTo(f, t)));
-      if (legalSet.has(uciFromTo(bm[0], bm[1]))) return bm;
-    }
-  }
-
   const params = getBotParams(rating, baseTimeMin, timeLeftSec, incrementSec);
 
   if (rating >= 1800) {
@@ -844,11 +645,6 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
     const mate2 = findMateInTwo(state, white);
     if (mate2) return mate2;
   }
-
-  const openingPhase = moveCount <= 12;
-  const openingBonus = openingPhase
-    ? new Map(moves.map(([from, to]) => [uciFromTo(from, to), openingHeuristic(state, from, to, moveCount)]))
-    : null;
 
   SEARCH_ABORTED = false;
   SEARCH_DEADLINE = Date.now() + Math.max(40, params.timeBudgetMs);
@@ -866,10 +662,6 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
       let score = botMinimax(next, d - 1, -Infinity, Infinity, 1, null, moveCount + 1);
       if (SEARCH_ABORTED) break;
       if (params.noise > 0) score += (Math.random() * 2 - 1) * params.noise;
-      if (openingBonus) {
-        const b = openingBonus.get(uciFromTo(from, to)) || 0;
-        score += white ? b : -b;
-      }
       scored.push({ from, to, score });
       if (white ? score > curScore : score < curScore) {
         curScore = score;
