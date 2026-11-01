@@ -953,13 +953,21 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
   const myTime = Math.max(0.5, timeMs / 1000);
   const moveCount = state.full;
 
-  // Opening book disabled: Watcher chooses every move through search.
+  // Дебютная книга
+  if (historyLine && moveCount <= 15) {
+    const bm = bookMove(historyLine, legalSet);
+    if (bm) return bm;
+  }
 
   // Мат в 1 всегда
   const mateIn1 = findMateInOne(state, isWhiteTurn);
   if (mateIn1) return mateIn1;
 
-  // Mate-in-two is handled by the timed search; no unbounded pre-search.
+  // Мат в 2 — только если хватает времени
+  if (myTime >= 1.0) {
+    const mateIn2 = findMateInTwo(state, isWhiteTurn);
+    if (mateIn2) return mateIn2;
+  }
 
   // Итеративное углубление: верхний предел повышен, но поиск всегда
   // прекращается по дедлайну, поэтому короткий контроль не блокируется.
@@ -1242,4 +1250,3 @@ module.exports = {
   reloadWeights,
   setPool,
 };
-
