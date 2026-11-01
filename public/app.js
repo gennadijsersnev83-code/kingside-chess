@@ -1523,7 +1523,7 @@ const Profile = {
     const rb = document.getElementById('pRoleBadges'); if (rb) rb.innerHTML = badges.join(' ');
     const date = new Date(user.createdAt);
     const sub = document.getElementById('pSub'); if (sub) sub.textContent = `На сайте с ${date.toLocaleDateString('ru-RU')} · ${user.games} партий`;
-    const pr = document.getElementById('pRating'); if (pr) pr.textContent = user.rating;
+    const pr = document.getElementById('pRating'); if (pr) pr.textContent = `${user.rating}${Number(user.rd) > 110 ? '?' : ''}`;
     const pg = document.getElementById('pGames'); if (pg) pg.textContent = user.games;
     const pw = document.getElementById('pWins'); if (pw) pw.textContent = user.wins;
     const pwr = document.getElementById('pWinrate'); if (pwr) pwr.textContent = (user.games ? Math.round((user.wins/user.games)*100) : 0) + '%';
@@ -1537,8 +1537,9 @@ const Profile = {
           { key:'classical', name:'Классика', icon:'🐢', color:'#a78bfa' }
         ];
         catEl.innerHTML = cats.map(c => {
-          const r = user.categories[c.key] || { rating:user.rating, games:0 };
-          return `<div class="catCard ${c.key}"><div class="catIcon">${c.icon}</div><div class="catName">${c.name}</div><div class="catRating">${r.rating}</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">${r.games||0} партий</div></div>`;
+          const r = user.categories[c.key] || { rating:1500, rd:500, games:0 };
+          const provisional = Number(r.rd) > 110;
+          return `<div class="catCard ${c.key}"><div class="catIcon">${c.icon}</div><div class="catName">${c.name}</div><div class="catRating">${r.rating}${provisional ? '?' : ''}</div><div style="font-size:11px;color:var(--muted);margin-top:2px;">${r.games||0} партий</div></div>`;
         }).join('');
       } else catEl.innerHTML = '';
     }
