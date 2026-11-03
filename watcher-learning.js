@@ -977,13 +977,12 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
   const mateIn1 = findMateInOne(state, isWhiteTurn);
   if (mateIn1) return mateIn1;
 
-  // УВЕЛИЧИЛИ ГЛУБИНУ ДЛЯ РАПИДА
-  let maxDepth = 12;
+  let maxDepth = 10;
   if (myTime < 0.25) maxDepth = 3;
   else if (myTime < 0.6) maxDepth = 4;
   else if (myTime < 1.2) maxDepth = 6;
-  else if (myTime < 3) maxDepth = 8;
-  else if (myTime < 8) maxDepth = 10;
+  else if (myTime < 3) maxDepth = 7;
+  else if (myTime < 8) maxDepth = 8;
 
   SEARCH_ABORTED = false;
   SEARCH_DEADLINE = Date.now() + Math.max(1500, timeMs);
@@ -991,7 +990,6 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
   let bestMove = legal[0];
   let ordered = orderMoves(state, legal, 0, null);
   let prevPv = null;
-  let deepestReached = 0;
 
   for (let depth = 1; depth <= maxDepth; depth++) {
     if (Date.now() >= SEARCH_DEADLINE) break;
@@ -1044,14 +1042,8 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
     if (localBest && !SEARCH_ABORTED) {
       bestMove = localBest;
       prevPv = localBest;
-      deepestReached = depth;
     }
     if (Date.now() >= SEARCH_DEADLINE) break;
-  }
-
-  // Логируем глубину (чтобы ты видел в консоли)
-  if (myTime >= 2) {
-    console.log(`[Watcher] think=${Math.round(timeMs)}ms, depth=${deepestReached}, move=${uciFromTo(bestMove[0], bestMove[1])}`);
   }
 
   return bestMove;
@@ -1150,14 +1142,13 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line, positionC
     const safeInc = Number.isFinite(inc) && inc > 0 ? inc : 0;
     const safeTotal = Number.isFinite(total) && total > 0 ? total : 600;
 
-    // УВЕЛИЧИЛИ ВРЕМЯ ДЛЯ РАПИДА И БОЛЬШЕ
     let thinkMs;
     if (safeTotal <= 1) thinkMs = 500;
     else if (safeTotal <= 3) thinkMs = 1000;
     else if (safeTotal <= 5) thinkMs = 1500;
-    else if (safeTotal <= 10) thinkMs = 3000;
-    else if (safeTotal <= 30) thinkMs = 4000;
-    else thinkMs = 5000; // 10+ минут → 5 секунд на ход
+    else if (safeTotal <= 10) thinkMs = 2000;
+    else if (safeTotal <= 30) thinkMs = 2500;
+    else thinkMs = 3000;
 
     const allowedByClock = (safeMyTime + safeInc) * 0.10 * 1000;
     if (allowedByClock > 0) {
