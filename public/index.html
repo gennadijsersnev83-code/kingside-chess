@@ -252,7 +252,21 @@ body.login-active #mainContent { display: none !important; }
         <div class="ahLeft"><h1>Турниры</h1><span class="ahNow"><span class="ahLabel">Сейчас:</span><span id="arenasNowClock">--:--</span> МСК</span></div>
         <button class="primary" onclick="Arena.refresh(true)">↻ Обновить</button>
       </div>
-      <div class="arenasGridWrap" id="arenasGridWrap"><div class="arenasEmpty">Загрузка расписания...</div></div>
+      <!-- ИСПРАВЛЕНО: Сузили окно арен и добавили панель лучших игроков слева -->
+      <div style="display: flex; gap: 20px; align-items: flex-start;">
+        <div style="flex: 1; min-width: 0;">
+          <div class="arenasGridWrap" id="arenasGridWrap"><div class="arenasEmpty">Загрузка расписания...</div></div>
+        </div>
+        <div style="width: 280px; flex-shrink: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden;">
+          <div style="padding: 12px 14px; background: var(--panel-2); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-bright); text-transform: uppercase; letter-spacing: .5px; font-weight: 700; display: flex; justify-content: space-between; align-items: center;">
+            <span>🏆 Лучшие игроки</span>
+            <span style="font-size: 10px; color: var(--muted); text-transform: none;">Рапид & Блиц</span>
+          </div>
+          <div id="bestPlayersList" style="padding: 4px 0;">
+            <div class="arenaEmpty" style="padding: 10px; font-size: 12px;">Загрузка...</div>
+          </div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -302,7 +316,6 @@ body.login-active #mainContent { display: none !important; }
           <div id="arenaJoinBtnWrap"><button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button></div>
         </div>
         
-        <!-- Изменено: убран заголовок таблицы, добавлена пагинация -->
         <div class="arenaParticipantsTable">
           <div class="arenaTableBody" id="arenaTableBody"><div class="arenasEmpty">Загрузка участников...</div></div>
           <div class="arenaPagination" id="arenaPagination"></div>
@@ -313,10 +326,8 @@ body.login-active #mainContent { display: none !important; }
       
       <aside class="arenaRight">
         <div class="arenaRightCol">
-          <!-- Сама доска -->
           <div class="arenaTopGame" id="arenaTopGame"><div class="arenaTopGameEmpty">Сейчас никто не играет</div></div>
           
-          <!-- Блок лучших игр -->
           <div class="arenaGamesHeader" style="border-top:1px solid var(--border);">🏆 ЛУЧШИЕ ИГРЫ</div>
           <div class="arenaGamesList" id="arenaGamesList"><div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div></div>
           
