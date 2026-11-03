@@ -2594,13 +2594,12 @@ const AdminPanel = {
 };
 
 // ============================================================
-// LANDING PAGE LOGIC (Только для неавторизованных)
+// LANDING PAGE LOGIC
 // ============================================================
 const Landing = {
   init() {
     this.renderDemoBoard();
     
-    // Загружаем статистику с сервера
     App.socket.emit('getStats', (stats) => {
       if (!stats) return;
       const online = document.getElementById('landingStatOnline');
@@ -2611,7 +2610,6 @@ const Landing = {
       if (total) total.textContent = stats.online || 0; 
     });
 
-    // Загружаем топ игроков
     App.socket.emit('getCommunityOnline', (players) => {
       if (!players) return;
       const top = players.sort((a, b) => b.rating - a.rating).slice(0, 8);
@@ -2655,16 +2653,23 @@ const Landing = {
   }
 };
 
-// Вызов Landing.init() при загрузке, если мы на лендинге
 document.addEventListener('DOMContentLoaded', () => {
   setTimeout(() => {
-    const landing = document.getElementById('landingScreen');
-    if (landing && landing.classList.contains('active')) {
-      Landing.init();
-    }
+    // Если пользователь не авторизован, принудительно скрываем всё лишнее
     if (!App.me) {
       document.body.classList.remove('login-active');
-      Router.show('landingScreen');
+      document.getElementById('mainHeader').style.display = 'none';
+      document.getElementById('mainContent').style.display = 'none';
+      document.getElementById('adminPage').style.display = 'none';
+      
+      // Если хеша нет, ставим лендинг
+      if (!location.hash || location.hash === '#' || location.hash === '#/') {
+        Router.go('landing');
+      } else {
+        Router.handle();
+      }
+      
+      Landing.init();
     }
   }, 100);
 });
