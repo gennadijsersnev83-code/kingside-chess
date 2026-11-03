@@ -4,7 +4,7 @@
 // DATA / PERSISTENCE
 // ============================================================
 let DATA = {
-  version: 6,
+  version: 7,
   weights: {},
   params: {
     doubledPawn: 10,
@@ -12,8 +12,8 @@ let DATA = {
     passedPawnBase: 20,
     bishopPair: 30,
     kingShield: 10,
-    openFileRook: 40,   // FIX: было 25
-    mobility: 4,        // FIX: было 2
+    openFileRook: 40,
+    mobility: 4,
     tempo: 10,
   },
   games: 0,
@@ -42,7 +42,6 @@ function initWeights() {
     const isWhitePiece = p === upper;
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
       const sq = `${files[c]}${8 - r}`;
-      // FIX: для чёрных зеркалим по обеим осям
       const idx = isWhitePiece ? r * 8 + c : (7 - r) * 8 + (7 - c);
       DATA.weights[`${p}_${sq}`] = (table[idx] || 0) / 100;
     }
@@ -226,7 +225,7 @@ function toFen(state) {
 function sqName(r, c) { return String.fromCharCode(97 + c) + (8 - r); }
 
 // ============================================================
-// isAttacked
+// ATTACK DETECTION
 // ============================================================
 function isAttacked(state, r, c, byWhite) {
   const b = state.board;
@@ -395,7 +394,55 @@ function applyMove(state, from, to) {
 }
 
 // ============================================================
-// EVALUATION
+// SEE (упрощённая)
+// ============================================================
+function see(state, from, to, depth) {
+  depth = depth || 0;
+  if (depth > 4) return 0;
+  const target = state.board[to[0]][to[1]];
+  const piece = state.board[from[0]][from[1]];
+  if (!piece) return 0;
+  const gain = target ? (PIECE_VALUES[target.toLowerCase()] || 0) : 0;
+  const next = applyMove(state, from, to);
+  if (!findKing(next, true) || !findKing(next, false)) return gain;
+  const oppWhite = !isWhite(piece);
+  let bestAttacker = null, bestVal = Infinity;
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = next.board[r][c];
+    if (!p || isWhite(p) !== oppWhite) continue;
+    if (!canAttack(next, r, c, to[0], to[1])) continue;
+    const v = PIECE_VALUES[p.toLowerCase()] || 0;
+    if (v < bestVal) { bestVal = v; bestAttacker = [r, c]; }
+  }
+  if (!bestAttacker) return gain;
+  return Math.max(0, gain - see(next, bestAttacker, to, depth + 1));
+}
+
+function canAttack(state, r, c, tr, tc) {
+  const p = state.board[r][c]; if (!p) return false;
+  const t = p.toLowerCase();
+  const dr = tr - r, dc = tc - c;
+  const adr = Math.abs(dr), adc = Math.abs(dc);
+  if (t === 'p') { const d = isWhite(p) ? -1 : 1; return dr === d && adc === 1; }
+  if (t === 'n') return (adr === 2 && adc === 1) || (adr === 1 && adc === 2);
+  if (t === 'k') return Math.max(adr, adc) === 1;
+  if (t === 'r' || t === 'q') {
+    if (r === tr) { for (let x = Math.min(c, tc) + 1; x < Math.max(c, tc); x++) if (state.board[r][x]) return false; return true; }
+    if (c === tc) { for (let y = Math.min(r, tr) + 1; y < Math.max(r, tr); y++) if (state.board[y][c]) return false; return true; }
+  }
+  if (t === 'b' || t === 'q') {
+    if (adr === adc) {
+      const sr = dr > 0 ? 1 : -1, sc = dc > 0 ? 1 : -1;
+      let y = r + sr, x = c + sc;
+      while (y !== tr && x !== tc) { if (state.board[y][x]) return false; y += sr; x += sc; }
+      return true;
+    }
+  }
+  return false;
+}
+
+// ============================================================
+// EVALUATION (с дебютной коррекцией и висящим материалом)
 // ============================================================
 const KING_ENDGAME_PST = [
   [-50,-40,-30,-20,-20,-30,-40,-50],
@@ -408,7 +455,6 @@ const KING_ENDGAME_PST = [
   [-50,-30,-30,-30,-30,-30,-30,-50]
 ];
 
-// FIX: сколько материала висит без защиты у стороны
 function hangingMaterial(state, white) {
   let lost = 0;
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
@@ -420,6 +466,47 @@ function hangingMaterial(state, white) {
     if (!isAttacked(state, r, c, white)) lost += v;
   }
   return lost;
+}
+
+function debutScore(state) {
+  let s = 0;
+  if (state.full > 15) return 0;
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = state.board[r][c]; if (!p) continue;
+    const white = isWhite(p);
+    const t = p.toLowerCase();
+    const homeRow = white ? 7 : 0;
+    const sign = white ? 1 : -1;
+    if (t === 'p') {
+      if (c === 3 || c === 4) {
+        if (r === 3 || r === 4) s += 35 * sign;
+        else s += 15 * sign;
+      }
+      if (c === 0 || c === 7) s -= 8 * sign;
+    }
+    if (t === 'n') {
+      if (r !== homeRow) {
+        if (c === 2 || c === 5) s -= 3 * sign;
+        else s -= 18 * sign;
+      }
+      if (c === 0 || c === 7) s -= 25 * sign;
+    }
+    if (t === 'q' && r !== homeRow && state.full <= 8) s -= 30 * sign;
+    if (t === 'r' && r !== homeRow) s -= 15 * sign;
+  }
+  if (state.full > 5) {
+    const whiteCastled = !state.castling.includes('K') && !state.castling.includes('Q');
+    const blackCastled = !state.castling.includes('k') && !state.castling.includes('q');
+    if (whiteCastled) {
+      const k = findKing(state, true);
+      if (k) s += k[1] > 3 ? 30 : -20;
+    }
+    if (blackCastled) {
+      const k = findKing(state, false);
+      if (k) s -= k[1] > 3 ? 30 : -20;
+    }
+  }
+  return s;
 }
 
 function evaluate(state, forWhite) {
@@ -525,7 +612,6 @@ function evaluate(state, forWhite) {
     }
   }
 
-  // FIX: мобильность только для N/B/R/Q (пешки и король шумят)
   let wm = 0, bm = 0;
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = state.board[r][c]; if (!p) continue;
@@ -538,11 +624,12 @@ function evaluate(state, forWhite) {
 
   score += state.turn === 'w' ? DATA.params.tempo : -DATA.params.tempo;
 
-  // FIX: висящий материал как часть оценки (только значимые фигуры)
   const hangW = hangingMaterial(state, true);
   const hangB = hangingMaterial(state, false);
   score -= hangW * 0.5;
   score += hangB * 0.5;
+
+  score += debutScore(state);
 
   if (state.half >= 100) score = 0;
 
@@ -550,7 +637,7 @@ function evaluate(state, forWhite) {
 }
 
 // ============================================================
-// TACTICAL SAFETY (ужесточено)
+// TACTICAL SAFETY
 // ============================================================
 function tacticalSafetyPenalty(state, from, to, moverWhite) {
   const piece = state.board[from[0]][from[1]];
@@ -560,27 +647,21 @@ function tacticalSafetyPenalty(state, from, to, moverWhite) {
   if (!moved) return 0;
   const value = PIECE_VALUES[moved.toLowerCase()] || 0;
   if (value < 300) return 0;
-
   if (!isAttacked(next, to[0], to[1], !moverWhite)) return 0;
-
-  // FIX: ищем самого дешёвого атакующего; если он дороже нашей фигуры — штрафа нет
   let cheapestAttacker = Infinity;
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = next.board[r][c];
     if (!p || isWhite(p) !== !moverWhite) continue;
-    if (pseudoMoves(next, r, c).some(([rr, cc]) => rr === to[0] && cc === to[1])) {
+    if (canAttack(next, r, c, to[0], to[1])) {
       cheapestAttacker = Math.min(cheapestAttacker, PIECE_VALUES[p.toLowerCase()] || 0);
     }
   }
-
-  if (cheapestAttacker >= value) return 0; // размен невыгоден для атакующего
-
+  if (cheapestAttacker >= value) return 0;
   const defended = isAttacked(next, to[0], to[1], moverWhite);
   if (!defended) return value - cheapestAttacker;
   return Math.round((value - cheapestAttacker) * 0.5);
 }
 
-// FIX: жёсткий потолок 120 очков, decay 14 дней, коэффициент 0.15
 function learnedMistakePenalty(state, from, to) {
   const key = mistakeKey(positionKey(toFen(state)), sqName(from[0], from[1]), sqName(to[0], to[1]));
   const item = mistakeMemory.get(key);
@@ -596,13 +677,11 @@ function learnedMistakePenalty(state, from, to) {
 // ============================================================
 const TT = new Map();
 const TT_MAX = 500000;
-
 function ttKeyOf(state) {
   let s = '';
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) s += state.board[r][c] || '.';
   return s + '|' + state.turn + '|' + state.castling + '|' + state.ep;
 }
-
 function ttGet(k) { return TT.get(k); }
 function ttSet(k, depth, score, flag, move) {
   if (TT.size > TT_MAX) {
@@ -613,16 +692,19 @@ function ttSet(k, depth, score, flag, move) {
 }
 
 // ============================================================
-// QUIESCENCE
+// SEARCH DEADLINE / ABORT
+// ============================================================
+let SEARCH_DEADLINE = 0;
+let SEARCH_ABORTED = false;
+
+// ============================================================
+// QUIESCENCE (с проверкой шаха и SEE-фильтром)
 // ============================================================
 function quiescence(state, alpha, beta, color, qdepth) {
+  if (Date.now() >= SEARCH_DEADLINE) { SEARCH_ABORTED = true; return evaluate(state, color === 1); }
   const isW = color === 1;
   const checked = inCheck(state, isW);
-
-  // В шахе нельзя делать stand-pat и нельзя ограничиваться взятиями:
-  // нужно рассматривать ВСЕ легальные ответы на шах.
-  // Лимит глубины оставлен страховкой от длинных шахующих циклов.
-  if (qdepth >= 10) return evaluate(state, isW);
+  if (qdepth >= 8) return evaluate(state, isW);
 
   let standPat = -Infinity;
   if (!checked) {
@@ -650,29 +732,25 @@ function quiescence(state, alpha, beta, color, qdepth) {
         candidates.push([from, to]);
       }
     }
+    // SEE-фильтр: только неотрицательные взятия
+    candidates = candidates.filter(([f, t]) => see(state, f, t) >= 0);
   }
 
-  // MVV-LVA-подобная сортировка, безопасная для en-passant.
   candidates.sort((a, b) => {
     const scoreMove = ([from, to]) => {
       const attacker = state.board[from[0]][from[1]];
       let victim = state.board[to[0]][to[1]];
-      if (!victim && attacker && attacker.toLowerCase() === 'p' &&
-          from[1] !== to[1]) victim = isW ? 'p' : 'P';
+      if (!victim && attacker && attacker.toLowerCase() === 'p' && from[1] !== to[1]) victim = isW ? 'p' : 'P';
       const victimValue = victim ? (PIECE_VALUES[victim.toLowerCase()] || 0) : 0;
       const attackerValue = attacker ? (PIECE_VALUES[attacker.toLowerCase()] || 0) : 0;
-      const promotion = attacker && attacker.toLowerCase() === 'p' &&
-        (to[0] === 0 || to[0] === 7) ? 800 : 0;
+      const promotion = attacker && attacker.toLowerCase() === 'p' && (to[0] === 0 || to[0] === 7) ? 800 : 0;
       return victimValue * 10 - attackerValue + promotion;
     };
     return scoreMove(b) - scoreMove(a);
   });
 
   for (const [from, to] of candidates) {
-    if (Date.now() >= SEARCH_DEADLINE) {
-      SEARCH_ABORTED = true;
-      return alpha;
-    }
+    if (SEARCH_ABORTED) return alpha;
     const next = applyMove(state, from, to);
     const score = -quiescence(next, -beta, -alpha, -color, qdepth + 1);
     if (SEARCH_ABORTED) return alpha;
@@ -698,8 +776,10 @@ function orderMoves(state, moves, ply, ttMove) {
     const cap = state.board[to[0]][to[1]];
     const piece = state.board[from[0]][from[1]];
     if (cap) {
-      s += 10000 + (PIECE_VALUES[cap.toLowerCase()] || 0) * 10 -
-           (PIECE_VALUES[piece.toLowerCase()] || 0);
+      let se = 0;
+      try { se = see(state, from, to); } catch (_) { se = 0; }
+      if (se >= 0) s += 10000 + (PIECE_VALUES[cap.toLowerCase()] || 0) * 10 - (PIECE_VALUES[piece.toLowerCase()] || 0);
+      else s += 2000 + (PIECE_VALUES[cap.toLowerCase()] || 0);
     }
     if (piece && piece.toLowerCase() === 'p' && (to[0] === 0 || to[0] === 7)) s += 9000;
     const hk = ply + '|' + historyKeyOf(from, to);
@@ -715,11 +795,8 @@ function orderMoves(state, moves, ply, ttMove) {
 }
 
 // ============================================================
-// NEGAMAX
+// NEGAMAX + PVS + LMR + TT
 // ============================================================
-let SEARCH_DEADLINE = 0;
-let SEARCH_ABORTED = false;
-
 function negamax(state, depth, alpha, beta, color, ply) {
   if (Date.now() >= SEARCH_DEADLINE) { SEARCH_ABORTED = true; return evaluate(state, color === 1); }
 
@@ -761,11 +838,12 @@ function negamax(state, depth, alpha, beta, color, ply) {
                     (to[0] === 0 || to[0] === 7);
 
     let extension = 0;
-    if (givesCheck && depth >= 3) extension = 1;
+    if (givesCheck && depth >= 2) extension = 1;
     else if (isPromo) extension = 1;
 
     let reduction = 0;
     if (isQuiet && !givesCheck && !isPromo && i >= 4 && depth >= 3) reduction = 1;
+    if (reduction && depth >= 5 && i >= 8) reduction = 2;
 
     let score;
     if (i === 0) {
@@ -794,11 +872,12 @@ function negamax(state, depth, alpha, beta, color, ply) {
     }
   }
 
-  let flag = 'EXACT';
-  if (best <= alphaOrig) flag = 'UPPER';
-  else if (best >= betaOrig) flag = 'LOWER';
-  ttSet(key, depth, best, flag, bestMove);
-
+  if (best !== Infinity && best !== -Infinity) {
+    let flag = 'EXACT';
+    if (best <= alphaOrig) flag = 'UPPER';
+    else if (best >= betaOrig) flag = 'LOWER';
+    ttSet(key, depth, best, flag, bestMove);
+  }
   return best;
 }
 
@@ -817,29 +896,6 @@ function findMateInOne(state, white) {
   return null;
 }
 
-// FIX: ищем мат в 2 только по проверяющим ходам (иначе убивает время)
-function findMateInTwo(state, white) {
-  const moves = allLegalMoves(state, white);
-  for (const [from, to] of moves) {
-    const next = applyMove(state, from, to);
-    if (!inCheck(next, !white)) continue;
-    if (allLegalMoves(next, !white).length === 0) continue;
-    const oppMoves = allLegalMoves(next, !white);
-    if (oppMoves.length === 0) continue;
-    let allLeadToMate = true;
-    for (const [of, ot] of oppMoves) {
-      const after = applyMove(next, of, ot);
-      let foundMate = false;
-      for (const [mf, mt] of allLegalMoves(after, white)) {
-        if (isMateAfterMove(after, mf, mt, white)) { foundMate = true; break; }
-      }
-      if (!foundMate) { allLeadToMate = false; break; }
-    }
-    if (allLeadToMate) return [from, to];
-  }
-  return null;
-}
-
 // ============================================================
 // OPENING BOOK
 // ============================================================
@@ -848,52 +904,16 @@ const OPENING_BOOK = [
   { line: 'e2e4 e7e5 g1f3', weight: 30 },
   { line: 'e2e4 e7e5 g1f3 b8c6 f1b5', weight: 20 },
   { line: 'e2e4 e7e5 g1f3 b8c6 f1c4', weight: 15 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 d2d4', weight: 10 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 f1b5 a7a6', weight: 10 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 f1c4 f8c5', weight: 10 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 d2d4 e5d4 f3d4', weight: 8 },
-  { line: 'e2e4 e7e5 g1f3 g8f6', weight: 8 },
-  { line: 'e2e4 e7e5 g1f3 d7d6', weight: 6 },
   { line: 'e2e4 c7c5', weight: 25 },
-  { line: 'e2e4 c7c5 g1f3 d7d6', weight: 15 },
   { line: 'e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4', weight: 12 },
-  { line: 'e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6', weight: 10 },
-  { line: 'e2e4 c7c5 g1f3 b8c6', weight: 10 },
-  { line: 'e2e4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4', weight: 8 },
-  { line: 'e2e4 c7c5 g1f3 b8c6 f1b5', weight: 6 },
-  { line: 'e2e4 c7c5 c2c3', weight: 5 },
-  { line: 'e2e4 c7c5 b1c3', weight: 4 },
-  { line: 'e2e4 e7e6', weight: 12 },
   { line: 'e2e4 e7e6 d2d4 d7d5', weight: 10 },
-  { line: 'e2e4 e7e6 d2d4 d7d5 b1c3', weight: 6 },
-  { line: 'e2e4 e7e6 d2d4 d7d5 b1d2', weight: 4 },
-  { line: 'e2e4 c7c6', weight: 12 },
   { line: 'e2e4 c7c6 d2d4 d7d5', weight: 10 },
-  { line: 'e2e4 c7c6 d2d4 d7d5 b1c3', weight: 5 },
-  { line: 'e2e4 c7c6 d2d4 d7d5 e4e5', weight: 4 },
-  { line: 'e2e4 d7d6', weight: 5 },
-  { line: 'e2e4 g8f6', weight: 4 },
-  { line: 'e2e4 d7d5', weight: 4 },
   { line: 'd2d4', weight: 30 },
-  { line: 'd2d4 d7d5', weight: 20 },
   { line: 'd2d4 d7d5 c2c4', weight: 18 },
-  { line: 'd2d4 d7d5 c2c4 e7e6', weight: 12 },
-  { line: 'd2d4 d7d5 c2c4 e7e6 b1c3', weight: 8 },
-  { line: 'd2d4 d7d5 c2c4 c7c6', weight: 8 },
-  { line: 'd2d4 d7d5 c2c4 d5c4', weight: 6 },
-  { line: 'd2d4 d7d5 g1f3', weight: 6 },
-  { line: 'd2d4 g8f6', weight: 15 },
   { line: 'd2d4 g8f6 c2c4', weight: 12 },
   { line: 'd2d4 g8f6 c2c4 g7g6', weight: 8 },
-  { line: 'd2d4 g8f6 c2c4 e7e6', weight: 10 },
-  { line: 'd2d4 f7f5', weight: 4 },
   { line: 'c2c4', weight: 12 },
-  { line: 'c2c4 e7e5', weight: 6 },
-  { line: 'c2c4 g8f6', weight: 6 },
   { line: 'g1f3', weight: 8 },
-  { line: 'g1f3 d7d5', weight: 5 },
-  { line: 'g1f3 g8f6', weight: 4 },
-  { line: 'g2g3', weight: 3 },
 ];
 
 const OPENING_INDEX = new Map();
@@ -912,7 +932,6 @@ function uciFromTo(from, to) {
   return String.fromCharCode(97 + from[1]) + (8 - from[0]) +
          String.fromCharCode(97 + to[1]) + (8 - to[0]);
 }
-
 function uciToMove(uci) {
   if (!uci || uci.length < 4) return null;
   const fc = uci.charCodeAt(0) - 97;
@@ -922,7 +941,6 @@ function uciToMove(uci) {
   if (!inBoard(fr, fc) || !inBoard(tr, tc)) return null;
   return [[fr, fc], [tr, tc]];
 }
-
 function bookMove(historyLine, legalSet) {
   if (!historyLine) return null;
   const parts = historyLine.trim().split(/\s+/).filter(Boolean);
@@ -941,7 +959,7 @@ function bookMove(historyLine, legalSet) {
 }
 
 // ============================================================
-// MAIN SEARCH DRIVER (исправлено: штрафы НЕ трогают alpha)
+// MAIN SEARCH DRIVER
 // ============================================================
 function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts) {
   const legal = allLegalMoves(state, isWhiteTurn);
@@ -950,27 +968,17 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
 
   const legalSet = new Set(legal.map(([f, t]) => uciFromTo(f, t)));
   const color = isWhiteTurn ? 1 : -1;
-  const myTime = Math.max(0.5, timeMs / 1000);
+  const myTime = Math.max(0.05, timeMs / 1000);
   const moveCount = state.full;
 
-  // Дебютная книга
   if (historyLine && moveCount <= 15) {
     const bm = bookMove(historyLine, legalSet);
     if (bm) return bm;
   }
 
-  // Мат в 1 всегда
   const mateIn1 = findMateInOne(state, isWhiteTurn);
   if (mateIn1) return mateIn1;
 
-  // Мат в 2 — только если хватает времени
-  if (myTime >= 1.0) {
-    const mateIn2 = findMateInTwo(state, isWhiteTurn);
-    if (mateIn2) return mateIn2;
-  }
-
-  // Итеративное углубление: верхний предел повышен, но поиск всегда
-  // прекращается по дедлайну, поэтому короткий контроль не блокируется.
   let maxDepth = 10;
   if (myTime < 0.25) maxDepth = 2;
   else if (myTime < 0.6) maxDepth = 3;
@@ -1003,13 +1011,11 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
     for (const [from, to] of ordered) {
       if (Date.now() >= SEARCH_DEADLINE) { SEARCH_ABORTED = true; break; }
       const next = applyMove(state, from, to);
-      // FIX: чистый score для alpha
       const score = -negamax(next, depth - 1, -beta, -alpha, -color, 1);
       if (SEARCH_ABORTED) break;
 
       const nextIsMate = inCheck(next, !isWhiteTurn) && allLegalMoves(next, !isWhiteTurn).length === 0;
 
-      // FIX: штрафы ТОЛЬКО для финального выбора, alpha остаётся чистым
       let adjusted = score;
       if (!nextIsMate) {
         const hangBefore = hangingMaterial(state, isWhiteTurn);
@@ -1028,7 +1034,7 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
       }
 
       if (adjusted > localBestScore) { localBestScore = adjusted; localBest = [from, to]; }
-      if (score > alpha) alpha = score; // ← ЧИСТЫЙ score
+      if (score > alpha) alpha = score;
     }
 
     if (localBest && !SEARCH_ABORTED) {
@@ -1135,16 +1141,16 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line, positionC
     const safeTotal = Number.isFinite(total) ? total : safeMyTime;
 
     let thinkMs;
-    if (safeTotal <= 1) thinkMs = 50;
-    else if (safeTotal <= 3) thinkMs = 150;
-    else if (safeTotal <= 5) thinkMs = 300;
-    else if (safeTotal <= 10) thinkMs = 600;
-    else if (safeTotal <= 30) thinkMs = 1200;
-    else thinkMs = 2000;
+    if (safeTotal <= 1) thinkMs = 80;
+    else if (safeTotal <= 3) thinkMs = 250;
+    else if (safeTotal <= 5) thinkMs = 500;
+    else if (safeTotal <= 10) thinkMs = 900;
+    else if (safeTotal <= 30) thinkMs = 1500;
+    else thinkMs = 2500;
 
-    const allowedByClock = (safeMyTime + safeInc) * 0.08 * 1000;
+    const allowedByClock = (safeMyTime + safeInc) * 0.10 * 1000;
     thinkMs = Math.min(thinkMs, allowedByClock);
-    thinkMs = Math.max(30, thinkMs);
+    thinkMs = Math.max(60, thinkMs);
 
     const historyLine = line || null;
     const posCounts = positionCounts instanceof Map ? positionCounts : null;
