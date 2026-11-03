@@ -977,12 +977,13 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
   const mateIn1 = findMateInOne(state, isWhiteTurn);
   if (mateIn1) return mateIn1;
 
-  let maxDepth = 10;
+  let maxDepth = 12;
   if (myTime < 0.25) maxDepth = 3;
   else if (myTime < 0.6) maxDepth = 4;
-  else if (myTime < 1.2) maxDepth = 6;
-  else if (myTime < 3) maxDepth = 7;
-  else if (myTime < 8) maxDepth = 8;
+  else if (myTime < 1.2) maxDepth = 5;
+  else if (myTime < 3) maxDepth = 6;
+  else if (myTime < 6) maxDepth = 8;
+  else if (myTime < 10) maxDepth = 10;
 
   SEARCH_ABORTED = false;
   SEARCH_DEADLINE = Date.now() + Math.max(1000, timeMs);
@@ -990,6 +991,7 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
   let bestMove = legal[0];
   let ordered = orderMoves(state, legal, 0, null);
   let prevPv = null;
+  let deepestReached = 0;
 
   for (let depth = 1; depth <= maxDepth; depth++) {
     if (Date.now() >= SEARCH_DEADLINE) break;
@@ -1042,8 +1044,13 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
     if (localBest && !SEARCH_ABORTED) {
       bestMove = localBest;
       prevPv = localBest;
+      deepestReached = depth;
     }
     if (Date.now() >= SEARCH_DEADLINE) break;
+  }
+
+  if (myTime >= 2) {
+    console.log(`[Watcher] think=${Math.round(timeMs)}ms, depth=${deepestReached}, move=${uciFromTo(bestMove[0], bestMove[1])}`);
   }
 
   return bestMove;
@@ -1142,22 +1149,24 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line, positionC
     const safeInc = Number.isFinite(inc) && inc > 0 ? inc : 0;
     const safeTotal = Number.isFinite(total) && total > 0 ? total : 600; 
 
-    // --- КОНТРОЛЬ ВРЕМЕНИ ---
+    // --- ДИНАМИЧЕСКОЕ РАСПРЕДЕЛЕНИЕ ВРЕМЕНИ ---
     let thinkMs;
-    if (safeTotal <= 1) thinkMs = 500;
-    else if (safeTotal <= 3) thinkMs = 1000;
-    else if (safeTotal <= 5) thinkMs = 1500;
-    else if (safeTotal <= 10) thinkMs = 2000;
-    else if (safeTotal <= 30) thinkMs = 2500;
-    else thinkMs = 3000; 
+    if (safeTotal <= 1) thinkMs = 500;           // Пуля 1+0
+    else if (safeTotal <= 3) thinkMs = 1200;     // Блиц 3+0
+    else if (safeTotal <= 5) thinkMs = 2500;     // Блиц 5+0
+    else if (safeTotal <= 10) thinkMs = 5000;    // Рапид 10+0
+    else if (safeTotal <= 30) thinkMs = 7000;    // Рапид 30+0
+    else thinkMs = 8000;                          // Классика 60+ минут
 
-    // Защита от цейтнота: если времени мало, уменьшаем время на ход
+    // --- ЗАЩИТА ОТ ЦЕЙТНОТА ---
     if (safeMyTime <= 5) thinkMs = Math.min(thinkMs, 400);
-    else if (safeMyTime <= 15) thinkMs = Math.min(thinkMs, 800);
-    else if (safeMyTime <= 30) thinkMs = Math.min(thinkMs, 1500);
-    else if (safeMyTime <= 60) thinkMs = Math.min(thinkMs, 2500);
+    else if (safeMyTime <= 15) thinkMs = Math.min(thinkMs, 1000);
+    else if (safeMyTime <= 30) thinkMs = Math.min(thinkMs, 2000);
+    else if (safeMyTime <= 60) thinkMs = Math.min(thinkMs, 3000);
+    else if (safeMyTime <= 120) thinkMs = Math.min(thinkMs, 4000);
 
-    const allowedByClock = (safeMyTime + safeInc) * 0.05 * 1000;
+    // --- ОГРАНИЧЕНИЕ ПО ПРОЦЕНТУ ВРЕМЕНИ ---
+    const allowedByClock = (safeMyTime + safeInc) * 0.08 * 1000;
     if (allowedByClock > 0) {
       thinkMs = Math.min(thinkMs, allowedByClock);
     }
