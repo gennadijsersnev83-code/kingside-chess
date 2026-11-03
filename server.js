@@ -121,11 +121,25 @@ function updateGlicko2(rating, rd, vol, results, elapsedDays = 0) {
 }
 function glicko2PhiJ(phi) { return glicko2G(phi); }
 
+// --- Основная БД (игроки, партии) ---
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
+// --- Отдельная БД только для истории арен ---
+let arenaPool = null;
+if (process.env.DATABASE_URL_ARENAS) {
+  arenaPool = new Pool({
+    connectionString: process.env.DATABASE_URL_ARENAS,
+    ssl: process.env.DATABASE_URL_ARENAS ? { rejectUnauthorized: false } : false
+  });
+  console.log('[ArenaDB] Подключено отдельное хранилище арен');
+} else {
+  console.warn('[ArenaDB] DATABASE_URL_ARENAS не задан — история арен НЕ будет сохраняться в БД, только в памяти');
+}
+
+// --- БД весов Watcher ---
 let watcherDbPool = null;
 if (process.env.DATABASE_URL_WATCHER) {
   watcherDbPool = new Pool({
@@ -194,10 +208,38 @@ async function initDB() {
   chatMessageIntervalSeconds = Math.max(0, Math.min(120, Number.parseInt(chatIntervalSetting.rows[0]?.value || '0', 10) || 0));
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_pair ON messages (from_user, to_user, created_at);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_to ON messages (to_user, read_at);`);
-  
   await pool.query(`CREATE TABLE IF NOT EXISTS reports (
     id SERIAL PRIMARY KEY, reporter TEXT NOT NULL, target TEXT NOT NULL, reason TEXT NOT NULL, created_at BIGINT NOT NULL, resolved BOOLEAN DEFAULT FALSE
   );`);
+
+  // --- Таблица для истории арен (в отдельной БД) ---
+  if (arenaPool) {
+    try {
+      await arenaPool.query(`
+        CREATE TABLE IF NOT EXISTS arena_history (
+          id TEXT PRIMARY KEY,
+          template_id TEXT,
+          name TEXT NOT NULL,
+          description TEXT,
+          time_control REAL NOT NULL,
+          increment INTEGER NOT NULL,
+          color TEXT,
+          bot_friendly BOOLEAN DEFAULT FALSE,
+          starts_at BIGINT NOT NULL,
+          ends_at BIGINT NOT NULL,
+          phase TEXT NOT NULL,
+          top3 JSONB,
+          participants JSONB,
+          finished_games JSONB,
+          created_at BIGINT NOT NULL DEFAULT 0
+        );
+      `);
+      await arenaPool.query(`CREATE INDEX IF NOT EXISTS idx_arena_history_ends_at ON arena_history (ends_at DESC);`);
+      console.log('[ArenaDB] Таблица arena_history готова');
+    } catch (e) {
+      console.error('[ArenaDB] Ошибка создания таблицы arena_history:', e.message);
+    }
+  }
 
   const cnt = await pool.query('SELECT COUNT(*)::int AS n FROM games');
   db.totalGames = cnt.rows[0].n || 0;
@@ -1089,7 +1131,7 @@ function botCloseOwnWaitingLobby(botName) {
 }
 function botLeaveArena(botName, arenaId) {
   const state = arenas.get(arenaId); if (!state) return;
-  if (state.phase === 'live') return; // Нельзя выйти с арены во время её хода
+  if (state.phase === 'live') return;
   const p = state.participants.get(botName);
   if (p && !p.isPlaying) {
     state.participants.delete(botName);
@@ -1154,7 +1196,6 @@ function botBehaviorTick() {
           if (!p.paused) p.waitingSince = Date.now();
           io.emit('arenaUpdate', { arenaId: beh.activityId });
         }
-        // Бот может выйти только если арена ещё не началась
         if (state.phase !== 'live' && Math.random() < 0.04) {
           botLeaveArena(bot.name, beh.activityId);
           beh.state = 'idle'; beh.activityId = null; beh.lastChange = now;
@@ -1195,10 +1236,9 @@ function watcherTick() {
   const now = Date.now();
   const beh = botInitBehavior(WATCHER_NAME);
 
-  // Если Watcher уже в игре или в активной арене — ничего не делаем
   if (beh.state === 'playing' || watcherHasActiveLobby() || watcherInAnyArena()) return;
 
-  // Если Watcher застрял в завершённой арене — выводим его оттуда
+  // Если Watcher застрял в завершённой арене — выводим
   if (beh.state === 'in_arena') {
     const state = arenas.get(beh.activityId);
     if (!state || state.finished || state.phase === 'finished') {
@@ -1206,8 +1246,29 @@ function watcherTick() {
     }
   }
 
-  // Если Watcher не занят, он может создать лобби в зале ожидания (с шансом 35%)
-  if (beh.state === 'idle' && Math.random() < 0.35) {
+  // Приоритетно идём в арену, где уже есть люди
+  if (beh.state === 'idle' || beh.state === 'in_arena') {
+    const allArenas = [...arenas.values()].filter(s => !s.finished && s.botFriendly && !s.participants.has(WATCHER_NAME));
+    const withHumans = allArenas.filter(s => {
+      for (const p of s.participants.values()) if (!p.isBot) return true;
+      return false;
+    });
+    let chosen = null;
+    if (withHumans.length > 0) {
+      // Идём в арену с людьми, ближайшую по времени
+      chosen = withHumans.sort((a, b) => a.startsAt - b.startsAt)[0];
+    } else if (allArenas.length > 0) {
+      // Свободных арен с людьми нет — идём в любую активную
+      chosen = allArenas.sort((a, b) => a.startsAt - b.startsAt)[0];
+    }
+    if (chosen && botJoinArena(WATCHER_NAME, chosen.id)) {
+      beh.state = 'in_arena'; beh.activityId = chosen.id; beh.lastChange = now;
+      return;
+    }
+  }
+
+  // Если арен нет — идём в зал ожидания
+  if (beh.state === 'idle') {
     let hasOwnLobby = false;
     for (const [id, l] of lobbies.entries()) if (!l.finished && !l.started && !l.isSelfPlay && l.host === WATCHER_NAME) { hasOwnLobby = true; break; }
     if (!hasOwnLobby) {
@@ -1235,7 +1296,7 @@ function watcherTick() {
     }
   }
 }
-setInterval(watcherTick, 15000);
+setInterval(watcherTick, 10000);
 setTimeout(watcherTick, 5000);
 
 // --- ЧЕСТНАЯ ЖЕРЕБЬЁВКА ---
@@ -1259,7 +1320,6 @@ function tryPair(state) {
       return;
     }
     
-    // Сортируем по времени ожидания
     available.sort((a, b) => a.waitingSince - b.waitingSince);
 
     const used = new Set();
@@ -1268,23 +1328,26 @@ function tryPair(state) {
     const MAX_PAIRS_PER_TICK = hasWatcher ? 2 : 4;
     let watcherPairsThisTick = 0;
 
-    // Строим карту сыгранных пар в этой арене
-    const playedPairs = new Set();
-    for (const g of (state.finishedGames || [])) {
-      playedPairs.add([g.white, g.black].sort().join(':'));
-    }
+    const lastPlayedMap = new Map();
+    const allGames = [...(state.finishedGames || [])];
     for (const l of lobbies.values()) {
       if (l.finished || l.arenaId !== state.id) continue;
       const w = l.hostColor === 'w' ? l.host : l.guest;
       const b = l.hostColor === 'b' ? l.host : l.guest;
-      if (w && b) playedPairs.add([w, b].sort().join(':'));
+      if (w && b) allGames.push({ white: w, black: b });
     }
+    allGames.forEach((g, idx) => {
+      const key = [g.white, g.black].sort().join(':');
+      lastPlayedMap.set(key, idx);
+    });
 
     for (let i = 0; i < available.length && pairsCreated < MAX_PAIRS_PER_TICK; i++) {
       const a = available[i];
       if (used.has(a.username) || a.isPlaying || a.lobbyId) continue;
       
-      let best = null, bestScore = Infinity;
+      let best = null;
+      let bestPriority = Infinity;
+      let bestLastPlayedIdx = Infinity;
       let bestCandidates = [];
 
       for (let j = 0; j < available.length; j++) {
@@ -1311,21 +1374,29 @@ function tryPair(state) {
           if (humanGamesInArena(state.id) >= MAX_HUMAN_GAMES_PER_ARENA) continue;
         }
         
-        // ПРОВЕРКА ЧЕСТНОСТИ: если уже играли — штраф
         const pairKey = [a.username, b.username].sort().join(':');
-        let score = Math.abs((a.score || 0) - (b.score || 0));
-        if (playedPairs.has(pairKey)) {
-           score += 1000; // огромный штраф, чтобы не выбрать, если есть альтернатива
-        }
+        const lastIdx = lastPlayedMap.has(pairKey) ? lastPlayedMap.get(pairKey) : -1;
         
-        if (score < bestScore) { bestScore = score; bestCandidates = [b]; }
-        else if (score === bestScore) bestCandidates.push(b);
+        let priority;
+        if (lastIdx === -1) priority = 1;
+        else priority = 2;
+        
+        if (priority < bestPriority) {
+          bestPriority = priority;
+          bestLastPlayedIdx = lastIdx;
+          bestCandidates = [b];
+        } else if (priority === bestPriority) {
+          if (lastIdx < bestLastPlayedIdx) {
+            bestLastPlayedIdx = lastIdx;
+            bestCandidates = [b];
+          } else if (lastIdx === bestLastPlayedIdx) {
+            bestCandidates.push(b);
+          }
+        }
       }
+      
       if (bestCandidates.length) {
-        // Если есть кандидаты без повтора, выбираем среди них случайно
-        const filtered = bestCandidates.filter(c => !playedPairs.has([a.username, c.username].sort().join(':')));
-        if (filtered.length > 0) best = filtered[Math.floor(Math.random() * filtered.length)];
-        else best = bestCandidates[Math.floor(Math.random() * bestCandidates.length)];
+        best = bestCandidates[Math.floor(Math.random() * bestCandidates.length)];
       }
       
       if (!best) continue;
@@ -1480,6 +1551,46 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   io.to('arena:' + arenaId).emit('arenaUpdate', { arenaId });
   broadcastLiveGames();
 }
+
+// Сохранение завершённой арены в БД (если ≥2 участника)
+async function saveArenaToDB(state) {
+  if (!arenaPool) return;
+  const participantsArray = [...state.participants.values()].map(p => ({
+    username: p.username, rating: p.rating,
+    score: p.score, wins: p.wins, draws: p.draws, losses: p.losses,
+    winStreak: p.winStreak || 0, drawStreak: p.drawStreak || 0,
+    isBot: !!p.isBot,
+    history: p.history || []
+  }));
+  if (participantsArray.length < 2) {
+    console.log(`[ArenaDB] Арена ${state.id} не сохранена — меньше 2 участников (${participantsArray.length})`);
+    return;
+  }
+  const top3 = state.top3 || [];
+  const finishedGames = state.finishedGames || [];
+  try {
+    await arenaPool.query(
+      `INSERT INTO arena_history (id, template_id, name, description, time_control, increment, color, bot_friendly, starts_at, ends_at, phase, top3, participants, finished_games, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+       ON CONFLICT (id) DO UPDATE SET
+         phase = EXCLUDED.phase,
+         top3 = EXCLUDED.top3,
+         participants = EXCLUDED.participants,
+         finished_games = EXCLUDED.finished_games`,
+      [
+        state.id, state.templateId, state.name, state.description,
+        state.timeControl, state.increment, state.color, !!state.botFriendly,
+        state.startsAt, state.endsAt, state.phase || 'finished',
+        JSON.stringify(top3), JSON.stringify(participantsArray), JSON.stringify(finishedGames),
+        Date.now()
+      ]
+    );
+    console.log(`[ArenaDB] Арена ${state.id} сохранена (${participantsArray.length} участников, top3: ${top3.length})`);
+  } catch (e) {
+    console.error('[ArenaDB] Ошибка сохранения арены:', e.message);
+  }
+}
+
 function finishArena(state) {
   if (state.finished) return;
   state.finished = true; state.phase = 'finished';
@@ -1516,14 +1627,15 @@ function finishArena(state) {
   io.emit('arenaFinished', { arenaId: state.id, arenaName: state.name, top3: state.top3 });
   io.emit('arenaUpdate', { arenaId: state.id });
   
-  // Ссылки на арену остаются навсегда (24 часа), не удаляем
+  // Сохраняем в БД, если ≥2 участника
+  saveArenaToDB(state).catch(e => console.error('[ArenaDB] saveArenaToDB error:', e.message));
+
+  // В памяти храним 24 часа (на случай, если БД не подключена — ссылки всё равно работают)
   state.cleanupTimer = setTimeout(() => {
-    if (state.chatViewers.size === 0) arenas.delete(state.id);
-    else setTimeout(() => arenas.delete(state.id), 24 * 60 * 60 * 1000); // 24 часа
+    arenas.delete(state.id);
   }, 24 * 60 * 60 * 1000);
 }
 
-// Собираем список последних завершённых арен для панели "Лучшие игроки"
 function getRecentArenaWinners() {
   const relevant = [];
   for (const state of arenas.values()) {
@@ -1961,6 +2073,44 @@ async function unreadCount(username) {
   return r.rows[0].n || 0;
 }
 
+// Загружаем завершённые арены из БД (для постоянных ссылок)
+async function loadFinishedArenaFromDB(arenaId) {
+  if (!arenaPool) return null;
+  try {
+    const r = await arenaPool.query(`SELECT * FROM arena_history WHERE id = $1`, [arenaId]);
+    if (!r.rows.length) return null;
+    const row = r.rows[0];
+    return {
+      id: row.id,
+      templateId: row.template_id,
+      name: row.name,
+      description: row.description,
+      timeControl: Number(row.time_control),
+      increment: row.increment,
+      color: row.color,
+      botFriendly: !!row.bot_friendly,
+      startsAt: Number(row.starts_at),
+      endsAt: Number(row.ends_at),
+      phase: row.phase || 'finished',
+      top3: row.top3 || [],
+      finished: true,
+      participants: new Map((row.participants || []).map(p => [p.username, {
+        username: p.username, rating: p.rating, score: p.score || 0,
+        wins: p.wins || 0, draws: p.draws || 0, losses: p.losses || 0,
+        winStreak: p.winStreak || 0, drawStreak: p.drawStreak || 0,
+        isBot: !!p.isBot, history: p.history || [],
+        isPlaying: false, paused: false, lobbyId: null, inArenaRoom: false
+      }])),
+      finishedGames: row.finished_games || [],
+      chat: [], chatViewers: new Set(), activeLobbies: new Set(),
+      botsJoined: true
+    };
+  } catch (e) {
+    console.error('[ArenaDB] loadFinishedArenaFromDB error:', e.message);
+    return null;
+  }
+}
+
 app.get('/api/verify', async (req, res) => {
   const { token } = req.query;
   if (!token) return res.status(400).send('Токен не указан');
@@ -2170,8 +2320,6 @@ io.on('connection', (socket) => {
   });
   socket.on('getTopArenas', (cb) => { if (typeof cb === 'function') cb(getTopLiveArenas()); });
   socket.on('getLiveGames', (cb) => { if (typeof cb === 'function') cb(buildGamesList()); });
-  
-  // НОВЫЙ ОБРАБОТЧИК: Топ-3 победителей последних арен
   socket.on('getTopArenaWinners', (cb) => { if (typeof cb === 'function') cb(getRecentArenaWinners()); });
 
   socket.on('getBots', (cb) => {
@@ -2201,7 +2349,7 @@ io.on('connection', (socket) => {
       time: l.time, inc: l.inc, timeW: l.timeW, timeB: l.timeB, turn: l.turn,
       fen: l.fen, chat: l.chat, arenaId: l.arenaId, arenaName: l.arenaName,
       finished: l.finished, isSelfPlay: !!l.isSelfPlay, isBot: !!l.isBot && !l.isSelfPlay && l.host !== WATCHER_NAME && l.guest !== WATCHER_NAME,
-      history: l.history || [], // ИСПРАВЛЕНО: отдаём историю ходов!
+      history: l.history || [],
       watchersCount: watchersCountOf(l)
     }});
   });
@@ -2429,7 +2577,7 @@ io.on('connection', (socket) => {
       }
       if (!l.history) l.history = [];
       l.history.push({ from: fromSq, to: toSq, captured, byColor: myColor, ts: Date.now(), san: san || null });
-      if (l.history.length > 400) l.history.shift(); // Увеличили лимит, чтобы вся партия влезала
+      if (l.history.length > 400) l.history.shift();
     } catch (e) {}
     const prevFenForWatcher = l.fen;
     const now = Date.now();
@@ -2712,10 +2860,16 @@ io.on('connection', (socket) => {
     cb({ states, serverNow: Date.now() });
   });
 
-  socket.on('getArenaState', ({ arenaId }, cb) => {
+  socket.on('getArenaState', async ({ arenaId }, cb) => {
     if (typeof cb !== 'function') return;
-    const state = arenas.get(arenaId);
-    if (!state) return cb({ joined: false, paused: false, participants: [], participantsCount: 0, phase: 'waiting', timeLeftMin: 0, timeLeftMs: 0, top3: null, pairingNow: null, startsAt: 0, endsAt: 0, serverNow: Date.now(), botFriendly: false, chatViewersCount: 0 });
+    let state = arenas.get(arenaId);
+    if (!state) {
+      // Пытаемся загрузить из БД — ссылка на завершённую арену
+      state = await loadFinishedArenaFromDB(arenaId);
+      if (!state) {
+        return cb({ joined: false, paused: false, participants: [], participantsCount: 0, phase: 'finished', timeLeftMin: 0, timeLeftMs: 0, top3: null, pairingNow: null, startsAt: 0, endsAt: 0, serverNow: Date.now(), botFriendly: false, chatViewersCount: 0 });
+      }
+    }
     for (const p of state.participants.values()) {
       if (p.isPlaying) {
         const l = p.lobbyId ? lobbies.get(p.lobbyId) : null;
@@ -2747,28 +2901,31 @@ io.on('connection', (socket) => {
       timeLeftMin: Math.round(Math.max(0, state.endsAt - Date.now()) / 60000),
       top3: state.top3, pairingNow: state.pairingNow,
       startsAt: state.startsAt, endsAt: state.endsAt, serverNow: Date.now(),
-      botFriendly: !!state.botFriendly, chatViewersCount: state.chatViewers.size
+      botFriendly: !!state.botFriendly, chatViewersCount: (state.chatViewers && state.chatViewers.size) || 0
     });
   });
 
-  socket.on('joinArenaRoom', ({ arenaId }, cb) => {
+  socket.on('joinArenaRoom', async ({ arenaId }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
-    const state = arenas.get(arenaId);
+    let state = arenas.get(arenaId);
+    if (!state) {
+      state = await loadFinishedArenaFromDB(arenaId);
+    }
     if (!state) return cb({ ok: false, msg: 'Арена не найдена' });
     socket.join('arena:' + arenaId);
-    state.chatViewers.add(socket.id);
-    if (socket.username) {
+    if (state.chatViewers) state.chatViewers.add(socket.id);
+    if (socket.username && state.participants) {
       const p = state.participants.get(socket.username);
       if (p) p.inArenaRoom = true;
     }
     cb({ ok: true, chat: state.chat || [] });
-    tryPair(state);
+    if (!state.finished) tryPair(state);
   });
   socket.on('leaveArenaRoom', ({ arenaId }) => {
     const state = arenas.get(arenaId);
     socket.leave('arena:' + arenaId);
     if (state) {
-      state.chatViewers.delete(socket.id);
+      if (state.chatViewers) state.chatViewers.delete(socket.id);
       if (socket.username) {
         const p = state.participants.get(socket.username);
         if (p && !p.isPlaying) p.inArenaRoom = false;
@@ -2815,7 +2972,7 @@ io.on('connection', (socket) => {
     if (state) for (const p of state.participants.values()) if (p.rating > topRating) topRating = p.rating;
     live.sort((a, b) => Math.max(b.whiteRating||0, b.blackRating||0) - Math.max(a.whiteRating||0, a.blackRating||0));
     done.sort((a, b) => Math.max(b.whiteRating||0, b.blackRating||0) - Math.max(a.whiteRating||0, a.blackRating||0));
-    cb({ live, done, topRating, featured: live[0] || done[0] || null, participantsCount: state ? state.participants.size : 0, chatViewersCount: state ? state.chatViewers.size : 0 });
+    cb({ live, done, topRating, featured: live[0] || done[0] || null, participantsCount: state ? state.participants.size : 0, chatViewersCount: state && state.chatViewers ? state.chatViewers.size : 0 });
   });
 
   socket.on('joinArena', ({ arenaId }, cb) => {
@@ -2892,6 +3049,7 @@ io.on('connection', (socket) => {
   socket.on('arenaChat', ({ arenaId, text }) => {
     const state = arenas.get(arenaId);
     if (!state || !socket.username) return;
+    if (state.finished) return;
     const muteUntil = checkMute(socket.username);
     if (muteUntil > 0) { const mins = Math.ceil((muteUntil - Date.now()) / 60000); socket.emit('chatError', { msg: `Вы заглушены ещё ${mins} мин.` }); return; }
     if (typeof text !== 'string') return;
@@ -3273,7 +3431,7 @@ io.on('connection', (socket) => {
       broadcastOnline();
     }
     for (const state of arenas.values()) {
-      if (state.chatViewers.has(socket.id)) {
+      if (state.chatViewers && state.chatViewers.has(socket.id)) {
         state.chatViewers.delete(socket.id);
         if (name) {
           const p = state.participants.get(name);
@@ -3337,6 +3495,7 @@ io.on('connection', (socket) => {
     console.log('  Kingside — сервер запущен');
     console.log(`  Порт: ${PORT}`);
     console.log('  Watcher: self-play в worker-потоке');
+    console.log('  ArenaDB:', arenaPool ? 'подключена' : 'НЕ подключена');
     console.log('==================================================');
   });
 })();
