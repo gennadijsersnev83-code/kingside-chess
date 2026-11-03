@@ -253,7 +253,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   display: flex;
   flex-direction: column;
   gap: 12px;
-  align-self: flex-start; /* средняя не растягивается по высоте соседей */
+  align-self: flex-start;
 }
 
 .arenaRight {
@@ -263,8 +263,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   flex-direction: column;
   position: relative;
   min-height: 0;
-  align-self: stretch; /* растягивается минимум до высоты левой */
-  /* НЕТ фиксированной height / max-height — растёт по контенту */
+  align-self: stretch;
 }
 
 @media (max-width: 1150px) {
@@ -553,7 +552,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaGamesList {
   flex: 1 1 auto;
   min-height: 0;
-  max-height: 420px;   /* список партий не выше 420px — иначе скролл внутри списка */
+  max-height: 420px;
   overflow-y: auto;
   overflow-x: hidden;
   display: flex;
@@ -629,7 +628,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 @keyframes arenaConfettiFall { to { transform: translate3d(var(--drift),110vh,0) rotate(900deg); opacity:.15; } }
 @media (max-width: 600px) { .awbPodium { gap: 5px; } .awbItem { padding: 9px 5px; width: 33.333%; } .awbItem .place { font-size: 25px; } .awbItem .n { font-size: 11px; } .awbStats { font-size: 10px; } }
 
-/* Overlay-карточка поверх панели партий */
 #arenaPlayerOverlay {
   position: absolute; inset: 0;
   background: var(--panel, #1e1d1a);
