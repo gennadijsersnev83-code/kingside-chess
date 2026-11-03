@@ -2539,6 +2539,82 @@ const AdminPanel = {
 };
 
 // ============================================================
+// LANDING PAGE LOGIC (Только для неавторизованных)
+// ============================================================
+const Landing = {
+  init() {
+    this.renderDemoBoard();
+    
+    // Загружаем статистику с сервера
+    App.socket.emit('getStats', (stats) => {
+      if (!stats) return;
+      const online = document.getElementById('landingStatOnline');
+      const games = document.getElementById('landingStatGames');
+      const total = document.getElementById('landingStatTotal');
+      if (online) online.textContent = stats.online || 0;
+      if (games) games.textContent = stats.games || 0;
+      if (total) total.textContent = stats.online || 0; 
+    });
+
+    // Загружаем топ игроков
+    App.socket.emit('getCommunityOnline', (players) => {
+      if (!players) return;
+      const top = players.sort((a, b) => b.rating - a.rating).slice(0, 8);
+      const list = document.getElementById('landingTopPlayers');
+      if (list) {
+        if (!top.length) {
+          list.innerHTML = '<div class="players-empty">Пока нет игроков в рейтинге.<br>Стань первым!</div>';
+          return;
+        }
+        list.innerHTML = top.map(p => `
+          <div class="player">
+            <div class="avatar">${p.username[0].toUpperCase()}</div>
+            <div class="info">
+              <b>${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}</b>
+              <span>${p.online ? 'В сети' : 'Не в сети'}</span>
+            </div>
+            <div class="rating">${p.rating}</div>
+          </div>
+        `).join('');
+      }
+    });
+  },
+
+  renderDemoBoard() {
+    const board = document.getElementById('demoBoard');
+    if (!board) return;
+    const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    const state = Chess.parseFen(startFen);
+    
+    let html = '';
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const isLight = (r + c) % 2 === 0;
+        const p = state.board[r][c];
+        html += `<div class="sq ${isLight ? 'light' : 'dark'}">`;
+        if (p) html += `<span class="piece">${Chess.pieceSvg(p)}</span>`;
+        html += `</div>`;
+      }
+    }
+    board.innerHTML = html;
+  }
+};
+
+// Вызов Landing.init() при загрузке, если мы на лендинге
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    const landing = document.getElementById('landingScreen');
+    if (landing && landing.classList.contains('active')) {
+      Landing.init();
+    }
+    if (!App.me) {
+      document.body.classList.remove('login-active');
+      Router.show('landingScreen');
+    }
+  }, 100);
+});
+
+// ============================================================
 // BOOT
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
