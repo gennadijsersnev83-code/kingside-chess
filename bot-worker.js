@@ -187,6 +187,60 @@ function botAllLegalMoves(state, white) {
 }
 
 // ============================================================
+// SEE (Static Exchange Evaluation)
+// ============================================================
+function seeValue(p) { return p ? (PIECE_VALUES[p.toLowerCase()] || 0) : 0; }
+
+function canAttack(state, r, c, tr, tc) {
+  const p = state.board[r][c]; if (!p) return false;
+  const t = p.toLowerCase();
+  const dr = tr - r, dc = tc - c;
+  const adr = Math.abs(dr), adc = Math.abs(dc);
+  if (t === 'p') { const dir = botIsWhite(p) ? -1 : 1; return dr === dir && adc === 1; }
+  if (t === 'n') return (adr === 2 && adc === 1) || (adr === 1 && adc === 2);
+  if (t === 'k') return Math.max(adr, adc) === 1;
+  if (t === 'r' || t === 'q') {
+    if (r === tr) { for (let x = Math.min(c, tc) + 1; x < Math.max(c, tc); x++) if (state.board[r][x]) return false; return true; }
+    if (c === tc) { for (let y = Math.min(r, tr) + 1; y < Math.max(r, tr); y++) if (state.board[y][c]) return false; return true; }
+  }
+  if (t === 'b' || t === 'q') {
+    if (adr === adc) {
+      const sr = dr > 0 ? 1 : -1, sc = dc > 0 ? 1 : -1;
+      let y = r + sr, x = c + sc;
+      while (y !== tr && x !== tc) { if (state.board[y][x]) return false; y += sr; x += sc; }
+      return true;
+    }
+  }
+  return false;
+}
+
+function seeAttackers(state, tr, tc, byWhite) {
+  const res = [];
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = state.board[r][c];
+    if (!p || botIsWhite(p) !== byWhite) continue;
+    if (canAttack(state, r, c, tr, tc)) res.push([r, c]);
+  }
+  return res;
+}
+
+function see(state, from, to, depth) {
+  depth = depth || 0;
+  if (depth > 12) return 0;
+  const target = state.board[to[0]][to[1]];
+  const piece = state.board[from[0]][from[1]];
+  if (!piece) return 0;
+  const gain = seeValue(target);
+  const next = botApplyMove(state, from, to);
+  const oppWhite = !botIsWhite(piece);
+  const attackers = seeAttackers(next, to[0], to[1], oppWhite);
+  if (attackers.length === 0) return gain;
+  attackers.sort((a, b) => seeValue(next.board[a[0]][a[1]]) - seeValue(next.board[b[0]][b[1]]));
+  const [af, at] = attackers[0];
+  return Math.max(0, gain - see(next, af, at, depth + 1));
+}
+
+// ============================================================
 // EVALUATION
 // ============================================================
 function materialOf(state) {
@@ -338,121 +392,60 @@ function botEval(state) {
   if (botInCheck(state, true)) score -= 200;
   if (botInCheck(state, false)) score += 200;
 
-  if (state.half >= 100) score = 0;
+  // --- АНТИ-ГУЛЯНИЕ В ДЕБЮТЕ ---
+  if (state.full <= 15) {
+    for (let r = 0; r < 8; r++) {
+      for (const c of [0, 7]) {
+        const p = state.board[r][c];
+        if (p && p.toLowerCase() === 'n') score += botIsWhite(p) ? -12 : 12;
+      }
+    }
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = state.board[r][c];
+      if (!p || p.toLowerCase() !== 'r') continue;
+      const white = botIsWhite(p);
+      const homeRow = white ? 7 : 0;
+      const onHome = r === homeRow && (c === 0 || c === 7);
+      let fileOpen = true;
+      for (let rr = 0; rr < 8; rr++) {
+        if (rr === r) continue;
+        const q = state.board[rr][c];
+        if (q && q.toLowerCase() === 'p' && botIsWhite(q) === white) { fileOpen = false; break; }
+      }
+      if (!onHome && !fileOpen) score += white ? -8 : 8;
+    }
+    // ранняя активность ферзя
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = state.board[r][c];
+      if (!p || p.toLowerCase() !== 'q') continue;
+      const white = botIsWhite(p);
+      const homeRow = white ? 7 : 0;
+      if (r !== homeRow && state.full <= 6) score += white ? -15 : 15;
+    }
+  }
 
+  if (state.half >= 100) score = 0;
   return score;
 }
 
 // ============================================================
-// OPENING BOOK
+// OPENING BOOK (index built, но не используется по умолчанию)
 // ============================================================
 const OPENING_BOOK = [
   { line: 'e2e4', weight: 40 },
   { line: 'e2e4 e7e5 g1f3', weight: 30 },
   { line: 'e2e4 e7e5 g1f3 b8c6 f1b5', weight: 20 },
   { line: 'e2e4 e7e5 g1f3 b8c6 f1c4', weight: 15 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 d2d4', weight: 10 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 f1b5 a7a6', weight: 10 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5a4', weight: 6 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 f1b5 a7a6 b5c6', weight: 4 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 f1c4 f8c5', weight: 10 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 c2c3', weight: 6 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 d2d4 e5d4 f3d4', weight: 8 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 d2d4 e5d4 f3d4 g8f6', weight: 5 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 d2d4 e5d4 f3d4 f8c5', weight: 4 },
-  { line: 'e2e4 e7e5 g1f3 g8f6', weight: 8 },
-  { line: 'e2e4 e7e5 g1f3 g8f6 f3e5 d7d6', weight: 5 },
-  { line: 'e2e4 e7e5 g1f3 d7d6', weight: 6 },
-  { line: 'e2e4 e7e5 g1f3 d7d6 d2d4', weight: 4 },
-  { line: 'e2e4 e7e5 f1c4', weight: 5 },
-  { line: 'e2e4 e7e5 b1c3', weight: 4 },
   { line: 'e2e4 c7c5', weight: 25 },
-  { line: 'e2e4 c7c5 g1f3 d7d6', weight: 15 },
   { line: 'e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4', weight: 12 },
-  { line: 'e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6', weight: 10 },
-  { line: 'e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3', weight: 8 },
-  { line: 'e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3 a7a6', weight: 6 },
-  { line: 'e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4 g8f6 b1c3 g7g6', weight: 5 },
-  { line: 'e2e4 c7c5 g1f3 b8c6', weight: 10 },
-  { line: 'e2e4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4', weight: 8 },
-  { line: 'e2e4 c7c5 g1f3 b8c6 d2d4 c5d4 f3d4 g7g6', weight: 4 },
-  { line: 'e2e4 c7c5 g1f3 b8c6 f1b5', weight: 6 },
-  { line: 'e2e4 c7c5 g1f3 e7e6', weight: 6 },
-  { line: 'e2e4 c7c5 g1f3 e7e6 d2d4 c5d4 f3d4', weight: 4 },
-  { line: 'e2e4 c7c5 c2c3', weight: 5 },
-  { line: 'e2e4 c7c5 c2c3 d7d5', weight: 4 },
-  { line: 'e2e4 c7c5 b1c3', weight: 4 },
-  { line: 'e2e4 e7e6', weight: 12 },
   { line: 'e2e4 e7e6 d2d4 d7d5', weight: 10 },
-  { line: 'e2e4 e7e6 d2d4 d7d5 b1c3', weight: 6 },
-  { line: 'e2e4 e7e6 d2d4 d7d5 b1d2', weight: 4 },
-  { line: 'e2e4 e7e6 d2d4 d7d5 e4e5', weight: 3 },
-  { line: 'e2e4 c7c6', weight: 12 },
   { line: 'e2e4 c7c6 d2d4 d7d5', weight: 10 },
-  { line: 'e2e4 c7c6 d2d4 d7d5 b1c3', weight: 5 },
-  { line: 'e2e4 c7c6 d2d4 d7d5 e4e5', weight: 4 },
-  { line: 'e2e4 c7c6 d2d4 d7d5 b1d2', weight: 4 },
-  { line: 'e2e4 d7d6', weight: 5 },
-  { line: 'e2e4 d7d6 d2d4 g8f6', weight: 3 },
-  { line: 'e2e4 g7g6', weight: 5 },
-  { line: 'e2e4 g8f6', weight: 4 },
-  { line: 'e2e4 g8f6 e4e5 f6d5 d2d4', weight: 3 },
-  { line: 'e2e4 d7d5', weight: 4 },
-  { line: 'e2e4 d7d5 e4d5 d8d5 b1c3', weight: 3 },
   { line: 'd2d4', weight: 30 },
-  { line: 'd2d4 d7d5', weight: 20 },
   { line: 'd2d4 d7d5 c2c4', weight: 18 },
-  { line: 'd2d4 d7d5 c2c4 e7e6', weight: 12 },
-  { line: 'd2d4 d7d5 c2c4 e7e6 b1c3', weight: 8 },
-  { line: 'd2d4 d7d5 c2c4 e7e6 b1c3 g8f6', weight: 6 },
-  { line: 'd2d4 d7d5 c2c4 e7e6 b1c3 g8f6 c1g5', weight: 4 },
-  { line: 'd2d4 d7d5 c2c4 d5c4', weight: 6 },
-  { line: 'd2d4 d7d5 c2c4 c7c6', weight: 8 },
-  { line: 'd2d4 d7d5 c2c4 c7c6 g1f3', weight: 5 },
-  { line: 'd2d4 d7d5 c2c4 c7c6 b1c3', weight: 4 },
-  { line: 'd2d4 d7d5 g1f3', weight: 6 },
-  { line: 'd2d4 d7d5 g1f3 g8f6', weight: 4 },
-  { line: 'd2d4 d7d5 c1f4', weight: 3 },
-  { line: 'd2d4 g8f6', weight: 15 },
   { line: 'd2d4 g8f6 c2c4', weight: 12 },
   { line: 'd2d4 g8f6 c2c4 g7g6', weight: 8 },
-  { line: 'd2d4 g8f6 c2c4 g7g6 b1c3', weight: 6 },
-  { line: 'd2d4 g8f6 c2c4 g7g6 b1c3 d7d5', weight: 4 },
-  { line: 'd2d4 g8f6 c2c4 g7g6 b1c3 f8g7', weight: 4 },
-  { line: 'd2d4 g8f6 c2c4 e7e6', weight: 10 },
-  { line: 'd2d4 g8f6 c2c4 e7e6 b1c3', weight: 8 },
-  { line: 'd2d4 g8f6 c2c4 e7e6 b1c3 f8b4', weight: 5 },
-  { line: 'd2d4 g8f6 c2c4 e7e6 g1f3', weight: 5 },
-  { line: 'd2d4 g8f6 c2c4 e7e6 g1f3 b7b6', weight: 3 },
-  { line: 'd2d4 g8f6 c2c4 c7c5', weight: 4 },
-  { line: 'd2d4 g8f6 c2c4 d7d5', weight: 4 },
-  { line: 'd2d4 f7f5', weight: 4 },
-  { line: 'd2d4 f7f5 c2c4', weight: 3 },
-  { line: 'd2d4 e7e6', weight: 4 },
-  { line: 'd2d4 e7e6 c2c4', weight: 3 },
-  { line: 'd2d4 c7c5', weight: 4 },
-  { line: 'd2d4 c7c5 d4d5', weight: 3 },
   { line: 'c2c4', weight: 12 },
-  { line: 'c2c4 e7e5', weight: 6 },
-  { line: 'c2c4 e7e5 b1c3', weight: 4 },
-  { line: 'c2c4 g8f6', weight: 6 },
-  { line: 'c2c4 g8f6 b1c3', weight: 5 },
-  { line: 'c2c4 g8f6 b1c3 g7g6', weight: 3 },
-  { line: 'c2c4 c7c5', weight: 5 },
-  { line: 'c2c4 e7e6', weight: 4 },
-  { line: 'c2c4 e7e6 b1c3', weight: 3 },
-  { line: 'c2c4 g7g6', weight: 3 },
-  { line: 'g1f3', weight: 8 },
-  { line: 'g1f3 d7d5', weight: 5 },
-  { line: 'g1f3 d7d5 g2g3', weight: 3 },
-  { line: 'g1f3 g8f6', weight: 4 },
-  { line: 'g1f3 g8f6 c2c4', weight: 3 },
-  { line: 'g1f3 c7c5', weight: 4 },
-  { line: 'g1f3 c7c5 c2c4', weight: 3 },
-  { line: 'g2g3', weight: 3 },
-  { line: 'g2g3 d7d5', weight: 2 },
-  { line: 'b2b3', weight: 2 },
-  { line: 'b2b3 e7e5', weight: 2 }
+  { line: 'g1f3', weight: 8 }
 ];
 
 const OPENING_INDEX = new Map();
@@ -472,7 +465,6 @@ function uciFromTo(from, to) {
   const t = String.fromCharCode(97 + to[1]) + (8 - to[0]);
   return f + t;
 }
-
 function uciToMove(uci) {
   if (!uci || uci.length < 4) return null;
   const fc = uci.charCodeAt(0) - 97;
@@ -481,27 +473,6 @@ function uciToMove(uci) {
   const tr = 8 - parseInt(uci[3], 10);
   if (!botInBoard(fr, fc) || !botInBoard(tr, tc)) return null;
   return [[fr, fc], [tr, tc]];
-}
-
-function bookMove(fen, historyLine) {
-  if (!historyLine) return null;
-  const trimmed = historyLine.trim();
-  const parts = trimmed ? trimmed.split(' ') : [];
-  for (let len = parts.length; len >= 1; len--) {
-    const prefix = parts.slice(0, len).join(' ');
-    const candidates = OPENING_INDEX.get(prefix);
-    if (!candidates || !candidates.length) continue;
-    const state = botParseFen(fen);
-    const legal = botAllLegalMoves(state, state.turn === 'w');
-    const legalSet = new Set(legal.map(([f, t]) => uciFromTo(f, t)));
-    const filtered = candidates.filter(c => legalSet.has(c.move));
-    if (!filtered.length) continue;
-    const total = filtered.reduce((s, c) => s + c.weight, 0);
-    let r = Math.random() * total;
-    for (const c of filtered) { r -= c.weight; if (r <= 0) return uciToMove(c.move); }
-    return uciToMove(filtered[0].move);
-  }
-  return null;
 }
 
 // ============================================================
@@ -522,22 +493,18 @@ function openingHeuristic(state, from, to, moveCount) {
     if (from[0] === homeRow) bonus += 18;
     else bonus -= 6;
     if (type === 'n' && ((to[0] === 3 || to[0] === 4) && (to[1] === 2 || to[1] === 5))) bonus += 8;
+    if (type === 'n' && (to[1] === 0 || to[1] === 7)) bonus -= 25;
   }
   if (type === 'q') {
     const homeRow = white ? 7 : 0;
     if (from[0] === homeRow) bonus -= 40;
-    const developedKnights = (() => {
-      let n = 0;
-      for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-        const p = state.board[r][c]; if (!p) continue;
-        if (p.toLowerCase() !== 'n') continue;
-        if (botIsWhite(p) !== white) continue;
-        const hr = white ? 7 : 0;
-        if (r !== hr) n++;
-      }
-      return n;
-    })();
-    if (developedKnights < 2) bonus -= 25;
+    let devN = 0;
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = state.board[r][c]; if (!p || p.toLowerCase() !== 'n') continue;
+      if (botIsWhite(p) !== white) continue;
+      if (r !== (white ? 7 : 0)) devN++;
+    }
+    if (devN < 2) bonus -= 25;
     if (moveCount <= 4) bonus -= 30;
     if ((to[0] === 3 || to[0] === 4) && (to[1] === 3 || to[1] === 4) && moveCount <= 8) bonus -= 40;
   }
@@ -557,7 +524,7 @@ function openingHeuristic(state, from, to, moveCount) {
 }
 
 // ============================================================
-// SEARCH
+// SEARCH: move ordering, killers, history
 // ============================================================
 function moveScore(state, from, to) {
   const target = state.board[to[0]][to[1]];
@@ -570,7 +537,6 @@ function moveScore(state, from, to) {
 
 const KILLER = new Map();
 const HISTORY = new Map();
-
 function historyKey(from, to) { return from[0] + '' + from[1] + to[0] + '' + to[1]; }
 
 function orderMoves(state, moves, depth, ply, ttMove) {
@@ -578,7 +544,12 @@ function orderMoves(state, moves, depth, ply, ttMove) {
     let s = 0;
     if (ttMove && ttMove[0][0] === from[0] && ttMove[0][1] === from[1] && ttMove[1][0] === to[0] && ttMove[1][1] === to[1]) s += 100000;
     const cap = state.board[to[0]][to[1]];
-    if (cap) s += 10000 + (PIECE_VALUES[cap.toLowerCase()] || 0) * 10 - (PIECE_VALUES[state.board[from[0]][from[1]].toLowerCase()] || 0);
+    if (cap) {
+      // MVV-LVA + SEE-фильтр
+      const se = see(state, from, to);
+      if (se >= 0) s += 20000 + (PIECE_VALUES[cap.toLowerCase()] || 0) * 10 - (PIECE_VALUES[state.board[from[0]][from[1]].toLowerCase()] || 0);
+      else s += 5000 + (PIECE_VALUES[cap.toLowerCase()] || 0); // плохое взятие — в конец
+    }
     const hk = depth + '|' + historyKey(from, to);
     s += (HISTORY.get(hk) || 0);
     const killers = KILLER.get(depth) || [];
@@ -591,10 +562,13 @@ function orderMoves(state, moves, depth, ply, ttMove) {
   return scored.map(x => [x.from, x.to]);
 }
 
-function botQuiescence(state, alpha, beta, depthLeft, qdepth) {
-  const stand = botEval(state);
-  if (depthLeft <= 0 || qdepth >= 4) return stand;
+// ============================================================
+// QUIESCENCE (with checks и SEE-фильтром)
+// ============================================================
+function botQuiescence(state, alpha, beta, qdepth) {
   const white = state.turn === 'w';
+  const stand = botEval(state);
+  if (qdepth >= 6) return stand;
   if (white) {
     if (stand >= beta) return beta;
     if (stand > alpha) alpha = stand;
@@ -602,124 +576,131 @@ function botQuiescence(state, alpha, beta, depthLeft, qdepth) {
     if (stand <= alpha) return alpha;
     if (stand < beta) beta = stand;
   }
-
   const moves = botAllLegalMoves(state, white);
-  const captures = moves.filter(([f, t]) => {
+  const tactical = moves.filter(([f, t]) => {
     const target = state.board[t[0]][t[1]];
     const piece = state.board[f[0]][f[1]];
-    if (target) return true;
-    if (piece && piece.toLowerCase() === 'p' && f[1] !== t[1]) return true;
-    return false;
+    const isCapture = !!target || (piece && piece.toLowerCase() === 'p' && f[1] !== t[1]);
+    const isPromo = piece && piece.toLowerCase() === 'p' && (t[0] === 0 || t[0] === 7);
+    const givesCheck = botInCheck(botApplyMove(state, f, t), !white);
+    return isCapture || isPromo || (givesCheck && qdepth < 2);
   });
-  captures.sort((a, b) => moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]));
+  const safe = tactical.filter(([f, t]) => {
+    const target = state.board[t[0]][t[1]];
+    if (!target) return true;
+    return see(state, f, t) >= 0 || qdepth < 1;
+  });
+  safe.sort((a, b) => moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]));
 
   if (white) {
-    for (const [from, to] of captures) {
+    for (const [from, to] of safe) {
       const next = botApplyMove(state, from, to);
-      const score = botQuiescence(next, alpha, beta, depthLeft - 1, qdepth + 1);
-      if (score >= beta) return beta;
-      if (score > alpha) alpha = score;
+      const sc = botQuiescence(next, alpha, beta, qdepth + 1);
+      if (sc >= beta) return beta;
+      if (sc > alpha) alpha = sc;
     }
     return alpha;
   } else {
-    for (const [from, to] of captures) {
+    for (const [from, to] of safe) {
       const next = botApplyMove(state, from, to);
-      const score = botQuiescence(next, alpha, beta, depthLeft - 1, qdepth + 1);
-      if (score <= alpha) return alpha;
-      if (score < beta) beta = score;
+      const sc = botQuiescence(next, alpha, beta, qdepth + 1);
+      if (sc <= alpha) return alpha;
+      if (sc < beta) beta = sc;
     }
     return beta;
   }
 }
 
+// ============================================================
+// MAIN SEARCH: PVS + LMR + extensions + TT
+// ============================================================
 let SEARCH_DEADLINE = 0;
 let SEARCH_ABORTED = false;
+let REPETITION_HASHES = null; // Set хешей для детекта повторения
 
 function botMinimax(state, depth, alpha, beta, ply, ttMove, moveCount) {
   if (Date.now() > SEARCH_DEADLINE) { SEARCH_ABORTED = true; return botEval(state); }
 
+  // Повторения
+  if (ply > 0 && REPETITION_HASHES && REPETITION_HASHES.has(ttKey(state))) return 0;
+
   const key = ttKey(state);
   const cached = ttGet(key);
   const alphaOrig = alpha, betaOrig = beta;
-  if (cached && cached.depth >= depth) {
+  let localTtMove = ttMove;
+  if (cached && cached.depth >= depth && ply > 0) {
     if (cached.flag === 'EXACT') return cached.score;
     if (cached.flag === 'LOWER' && cached.score > alpha) alpha = cached.score;
     if (cached.flag === 'UPPER' && cached.score < beta) beta = cached.score;
     if (alpha >= beta) return cached.score;
   }
+  // TT-move
+  const cachedMove = TT_CACHE.get(key + '|m');
+  if (!localTtMove && cachedMove && cachedMove.depth >= depth) localTtMove = cachedMove.score;
 
-  if (depth <= 0) return botQuiescence(state, alpha, beta, 3, 0);
+  if (depth <= 0) return botQuiescence(state, alpha, beta, 0);
 
   const white = state.turn === 'w';
   let moves = botAllLegalMoves(state, white);
   if (!moves.length) {
-    if (botInCheck(state, white)) return white ? -100000 + ply : 100000 - ply;
-    return 0;
+    return botInCheck(state, white) ? (white ? -100000 + ply : 100000 - ply) : 0;
   }
-  moves = orderMoves(state, moves, depth, ply, ttMove);
+  moves = orderMoves(state, moves, depth, ply, localTtMove);
 
-  let best;
-  if (white) {
-    best = -Infinity;
-    for (let i = 0; i < moves.length; i++) {
-      const [from, to] = moves[i];
-      const next = botApplyMove(state, from, to);
-      const isCapture = !!state.board[to[0]][to[1]];
-      const givesCheck = botInCheck(next, false);
-      const isPromo = state.board[from[0]][from[1]] && state.board[from[0]][from[1]].toLowerCase() === 'p' && (to[0] === 0 || to[0] === 7);
+  let best = white ? -Infinity : Infinity;
+  let bestMove = null;
 
-      let extension = 0;
-      if (givesCheck && depth >= 3) extension = 1;
-      else if (isPromo) extension = 1;
+  for (let i = 0; i < moves.length; i++) {
+    const [from, to] = moves[i];
+    const next = botApplyMove(state, from, to);
+    const isCapture = !!state.board[to[0]][to[1]];
+    const givesCheck = botInCheck(next, !white);
+    const piece = state.board[from[0]][from[1]];
+    const isPromo = piece && piece.toLowerCase() === 'p' && (to[0] === 0 || to[0] === 7);
 
-      let reduction = 0;
-      if (!isCapture && !givesCheck && i >= 6 && depth >= 3) reduction = 1;
+    let ext = 0;
+    if (givesCheck && depth >= 2) ext = 1;
+    else if (isPromo) ext = 1;
 
-      const score = botMinimax(next, depth - 1 + extension - reduction, alpha, beta, ply + 1, null, moveCount + 1);
-      if (SEARCH_ABORTED) return best;
-      if (score > best) best = score;
-      if (best > alpha) alpha = best;
-      if (beta <= alpha) {
-        if (!isCapture) {
-          const k = KILLER.get(depth) || [];
-          k.unshift([from, to]); if (k.length > 2) k.pop();
-          KILLER.set(depth, k);
-          const hk = depth + '|' + historyKey(from, to);
-          HISTORY.set(hk, (HISTORY.get(hk) || 0) + depth * depth);
+    let red = 0;
+    if (!isCapture && !givesCheck && !isPromo && i >= 4 && depth >= 3) red = 1;
+    if (red && depth >= 5 && i >= 8) red = 2;
+
+    let score;
+    if (i === 0) {
+      score = botMinimax(next, depth - 1 + ext - red, alpha, beta, ply + 1, null, moveCount + 1);
+    } else {
+      // PVS: нулевое окно
+      if (white) {
+        score = botMinimax(next, depth - 1 + ext - red, alpha, alpha + 1, ply + 1, null, moveCount + 1);
+        if (score > alpha && score < beta) {
+          score = botMinimax(next, depth - 1 + ext - red, alpha, beta, ply + 1, null, moveCount + 1);
         }
-        break;
+      } else {
+        score = botMinimax(next, depth - 1 + ext - red, beta - 1, beta, ply + 1, null, moveCount + 1);
+        if (score < beta && score > alpha) {
+          score = botMinimax(next, depth - 1 + ext - red, alpha, beta, ply + 1, null, moveCount + 1);
+        }
       }
     }
-  } else {
-    best = Infinity;
-    for (let i = 0; i < moves.length; i++) {
-      const [from, to] = moves[i];
-      const next = botApplyMove(state, from, to);
-      const isCapture = !!state.board[to[0]][to[1]];
-      const givesCheck = botInCheck(next, true);
-      const isPromo = state.board[from[0]][from[1]] && state.board[from[0]][from[1]].toLowerCase() === 'p' && (to[0] === 0 || to[0] === 7);
+    if (SEARCH_ABORTED) return best;
 
-      let extension = 0;
-      if (givesCheck && depth >= 3) extension = 1;
-      else if (isPromo) extension = 1;
-
-      let reduction = 0;
-      if (!isCapture && !givesCheck && i >= 6 && depth >= 3) reduction = 1;
-
-      const score = botMinimax(next, depth - 1 + extension - reduction, alpha, beta, ply + 1, null, moveCount + 1);
-      if (SEARCH_ABORTED) return best;
-      if (score < best) best = score;
+    if (white) {
+      if (score > best) { best = score; bestMove = [from, to]; }
+      if (best > alpha) alpha = best;
+    } else {
+      if (score < best) { best = score; bestMove = [from, to]; }
       if (best < beta) beta = best;
-      if (beta <= alpha) {
-        if (!isCapture) {
-          const k = KILLER.get(depth) || [];
-          k.unshift([from, to]); if (k.length > 2) k.pop();
-          KILLER.set(depth, k);
-          const hk = depth + '|' + historyKey(from, to);
-          HISTORY.set(hk, (HISTORY.get(hk) || 0) + depth * depth);
-        }
-        break;
+    }
+    if (beta <= alpha) {
+      if (!isCapture) {
+        const k = KILLER.get(depth) || [];
+        k.unshift([from, to]); if (k.length > 2) k.pop();
+        KILLER.set(depth, k);
+        const hk = depth + '|' + historyKey(from, to);
+        HISTORY.set(hk, (HISTORY.get(hk) || 0) + depth * depth);
       }
+      break;
     }
   }
 
@@ -727,9 +708,13 @@ function botMinimax(state, depth, alpha, beta, ply, ttMove, moveCount) {
   if (best <= alphaOrig) flag = 'UPPER';
   else if (best >= betaOrig) flag = 'LOWER';
   ttSet(key, depth, best, flag);
+  if (bestMove) ttSet(key + '|m', depth, bestMove, 'MOVE');
   return best;
 }
 
+// ============================================================
+// MATE FINDERS
+// ============================================================
 function findMateInOne(state, white) {
   const moves = botAllLegalMoves(state, white);
   for (const [from, to] of moves) {
@@ -741,25 +726,48 @@ function findMateInOne(state, white) {
   return null;
 }
 
+function isMateInOne(state, white) {
+  const moves = botAllLegalMoves(state, white);
+  for (const [from, to] of moves) {
+    const next = botApplyMove(state, from, to);
+    const oppWhite = next.turn === 'w';
+    if (botAllLegalMoves(next, oppWhite).length === 0 && botInCheck(next, oppWhite)) return true;
+  }
+  return false;
+}
+
 function findMateInTwo(state, white) {
   const moves = botAllLegalMoves(state, white);
   for (const [from, to] of moves) {
     const next = botApplyMove(state, from, to);
     const oppWhite = next.turn === 'w';
-    if (botInCheck(next, oppWhite) && botAllLegalMoves(next, oppWhite).length === 0) continue;
     const oppMoves = botAllLegalMoves(next, oppWhite);
     if (oppMoves.length === 0) continue;
     let allLeadToMate = true;
     for (const [of, ot] of oppMoves) {
       const after = botApplyMove(next, of, ot);
-      const myMoves = botAllLegalMoves(after, white);
-      let foundMate = false;
-      for (const [mf, mt] of myMoves) {
-        const mateState = botApplyMove(after, mf, mt);
-        const opp2 = mateState.turn === 'w';
-        if (botInCheck(mateState, opp2) && botAllLegalMoves(mateState, opp2).length === 0) { foundMate = true; break; }
-      }
-      if (!foundMate) { allLeadToMate = false; break; }
+      if (!isMateInOne(after, white)) { allLeadToMate = false; break; }
+      if (Date.now() > SEARCH_DEADLINE) return null;
+    }
+    if (allLeadToMate) return [from, to];
+  }
+  return null;
+}
+
+function findMateInThree(state, white) {
+  const moves = botAllLegalMoves(state, white);
+  for (const [from, to] of moves) {
+    if (Date.now() > SEARCH_DEADLINE) return null;
+    const next = botApplyMove(state, from, to);
+    const oppWhite = next.turn === 'w';
+    const oppMoves = botAllLegalMoves(next, oppWhite);
+    if (oppMoves.length === 0) continue; // мат в 1
+    let allLeadToMate = true;
+    for (const [of, ot] of oppMoves) {
+      const after = botApplyMove(next, of, ot);
+      const m2 = findMateInTwo(after, white);
+      if (!m2) { allLeadToMate = false; break; }
+      if (Date.now() > SEARCH_DEADLINE) return null;
     }
     if (allLeadToMate) return [from, to];
   }
@@ -772,21 +780,21 @@ function findMateInTwo(state, white) {
 function getBotParams(rating, baseTimeMin, timeLeftSec = baseTimeMin * 60, incrementSec = 0) {
   let depth, noise;
   if (rating < 1100)      { depth = 1; noise = 80; }
-  else if (rating < 1250) { depth = 2; noise = 35; }
-  else if (rating < 1400) { depth = 2; noise = 18; }
-  else if (rating < 1550) { depth = 3; noise = 8; }
-  else if (rating < 1750) { depth = 3; noise = 2; }
-  else if (rating < 1900) { depth = 4; noise = 0; }
-  else if (rating < 2100) { depth = 5; noise = 0; }
-  else if (rating < 2300) { depth = 6; noise = 0; }
-  else                    { depth = 7; noise = 0; }
+  else if (rating < 1250) { depth = 2; noise = 30; }
+  else if (rating < 1400) { depth = 3; noise = 15; }   // medium
+  else if (rating < 1550) { depth = 4; noise = 8; }
+  else if (rating < 1750) { depth = 5; noise = 2; }    // hard
+  else if (rating < 1900) { depth = 6; noise = 0; }
+  else if (rating < 2100) { depth = 7; noise = 0; }    // master
+  else if (rating < 2300) { depth = 8; noise = 0; }
+  else                    { depth = 10; noise = 0; }
 
   if (baseTimeMin <= 1) depth = Math.min(depth, 2);
   else if (baseTimeMin <= 2) depth = Math.min(depth, 3);
   else if (baseTimeMin <= 3) depth = Math.min(depth, 4);
-  else if (baseTimeMin <= 5) depth = Math.min(depth, 4);
-  else if (baseTimeMin <= 10) depth = Math.min(depth, 5);
-  else if (baseTimeMin <= 15) depth = Math.min(depth, 6);
+  else if (baseTimeMin <= 5) depth = Math.min(depth, 5);
+  else if (baseTimeMin <= 10) depth = Math.min(depth, 6);
+  else if (baseTimeMin <= 15) depth = Math.min(depth, 7);
 
   const left = Math.max(0, Number(timeLeftSec) || 0);
   const inc = Math.max(0, Number(incrementSec) || 0);
@@ -797,17 +805,18 @@ function getBotParams(rating, baseTimeMin, timeLeftSec = baseTimeMin * 60, incre
   else if (left <= 15) timeBudgetMs = Math.max(100, left * 1000 * 0.12);
   else if (left <= 60) timeBudgetMs = Math.max(150, left * 1000 * 0.14);
   else if (left <= 180) timeBudgetMs = Math.max(250, left * 1000 * 0.15);
-  else timeBudgetMs = Math.max(300, Math.min(3500, left * 1000 * 0.10 + inc * 800));
+  else timeBudgetMs = Math.max(300, Math.min(5000, left * 1000 * 0.10 + inc * 800));
   if (inc > 0) timeBudgetMs += Math.min(inc * 1000 * 0.5, 800);
-  timeBudgetMs = Math.min(timeBudgetMs, 4000);
+
+  // мастер получает больше времени
+  if (rating >= 2000) timeBudgetMs = Math.max(timeBudgetMs, Math.min(4500, left * 1000 * 0.10));
+  timeBudgetMs = Math.min(timeBudgetMs, 5000);
 
   if (left <= 3) depth = Math.min(depth, 2);
   else if (left <= 8) depth = Math.min(depth, 3);
   else if (left <= 18) depth = Math.min(depth, 4);
   else if (left <= 35 && inc < 2) depth = Math.min(depth, 5);
-  else if (left <= 60 && inc === 0) depth = Math.min(depth, 5);
-
-  // Respect the actual clock budget; no rating-based minimum think time.
+  else if (left <= 60 && inc === 0) depth = Math.min(depth, 6);
 
   if (left <= 8 && rating >= 1400) noise = Math.max(noise, 3);
   return { depth, noise, timeBudgetMs };
@@ -816,7 +825,7 @@ function getBotParams(rating, baseTimeMin, timeLeftSec = baseTimeMin * 60, incre
 // ============================================================
 // MAIN MOVE PICKER
 // ============================================================
-function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec, historyLine) {
+function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec, historyLine, recentFens) {
   const state = botParseFen(fen);
   const white = state.turn === 'w';
   const moves = botAllLegalMoves(state, white);
@@ -824,28 +833,41 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
   if (moves.length === 1) return moves[0];
 
   const moveCount = state.full;
-
-  // Opening book disabled: every move is selected by search/evaluation.
-
   const params = getBotParams(rating, baseTimeMin, timeLeftSec, incrementSec);
 
-  if (rating >= 1800) {
-    const mate = findMateInOne(state, white);
-    if (mate) return mate;
+  // Повторения: собираем хеши из recentFens
+  REPETITION_HASHES = null;
+  if (Array.isArray(recentFens) && recentFens.length) {
+    REPETITION_HASHES = new Set();
+    for (const f of recentFens) {
+      try { REPETITION_HASHES.add(ttKey(botParseFen(f))); } catch (_) {}
+    }
   }
-  // Mate-in-two is left to the timed search to avoid long pauses.
+
+  SEARCH_ABORTED = false;
+  SEARCH_DEADLINE = Date.now() + Math.max(60, params.timeBudgetMs);
+
+  // Поиск матов
+  if (rating >= 1800) {
+    const m1 = findMateInOne(state, white); if (m1) return m1;
+  }
+  if (rating >= 1900) {
+    const m2 = findMateInTwo(state, white); if (m2) return m2;
+  }
+  if (rating >= 2100) {
+    const m3 = findMateInThree(state, white); if (m3) return m3;
+  }
 
   const openingPhase = moveCount <= 12;
   const openingBonus = openingPhase
     ? new Map(moves.map(([from, to]) => [uciFromTo(from, to), openingHeuristic(state, from, to, moveCount)]))
     : null;
 
-  SEARCH_ABORTED = false;
-  SEARCH_DEADLINE = Date.now() + Math.max(40, params.timeBudgetMs);
-
   let bestMove = moves[0];
   let ordered = orderMoves(state, moves, params.depth, 0, null);
 
+  // Итеративное углубление с TT-move из корня
+  let ttRootMove = null;
   for (let d = 1; d <= params.depth; d++) {
     let curBest = null;
     let curScore = white ? -Infinity : Infinity;
@@ -853,7 +875,7 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
     for (let i = 0; i < ordered.length; i++) {
       const [from, to] = ordered[i];
       const next = botApplyMove(state, from, to);
-      let score = botMinimax(next, d - 1, -Infinity, Infinity, 1, null, moveCount + 1);
+      let score = botMinimax(next, d - 1, -Infinity, Infinity, 1, ttRootMove, moveCount + 1);
       if (SEARCH_ABORTED) break;
       if (params.noise > 0) score += (Math.random() * 2 - 1) * params.noise;
       if (openingBonus) {
@@ -866,15 +888,17 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
         curBest = [from, to];
       }
     }
-    if (SEARCH_ABORTED) break;
+    if (SEARCH_ABORTED && !curBest) break;
     if (curBest) {
       bestMove = curBest;
+      ttRootMove = curBest;
       scored.sort((a, b) => white ? b.score - a.score : a.score - b.score);
       ordered = scored.map(x => [x.from, x.to]);
     }
     if (Date.now() > SEARCH_DEADLINE) break;
   }
 
+  // Случайный «тупняк» для слабых
   if (rating < 1100 && Math.random() < 0.45) {
     const all = orderMoves(state, moves, 1, 0, null);
     return all[Math.floor(Math.random() * Math.min(4, all.length))];
@@ -899,14 +923,14 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
 // WORKER MESSAGE HANDLER
 // ============================================================
 parentPort.on('message', (msg) => {
-  const { id, fen, rating, timeMin, timeLeftSec, incrementSec, historyLine } = msg;
+  const { id, fen, rating, timeMin, timeLeftSec, incrementSec, historyLine, recentFens } = msg;
   try {
     const safeRating = Math.max(400, Math.min(2800, Number(rating) || 1000));
     const safeTimeMin = Math.max(0, Number(timeMin) || 5);
     const safeLeft = Math.max(0, Number(timeLeftSec) || safeTimeMin * 60);
     const safeInc = Math.max(0, Number(incrementSec) || 0);
 
-    const move = pickBotMoveByRating(fen, safeRating, safeTimeMin, safeLeft, safeInc, historyLine);
+    const move = pickBotMoveByRating(fen, safeRating, safeTimeMin, safeLeft, safeInc, historyLine, recentFens);
     parentPort.postMessage({ id, ok: true, move });
   } catch (err) {
     parentPort.postMessage({ id, ok: false, error: err.message || String(err) });
