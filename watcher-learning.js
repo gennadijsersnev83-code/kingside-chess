@@ -442,7 +442,7 @@ function canAttack(state, r, c, tr, tc) {
 }
 
 // ============================================================
-// EVALUATION
+// EVALUATION (УЛУЧШЕННЫЙ ЭНДШПИЛЬ)
 // ============================================================
 const KING_ENDGAME_PST = [
   [-50,-40,-30,-20,-20,-30,-40,-50],
@@ -610,6 +610,13 @@ function evaluate(state, forWhite) {
       const edgeB = Math.min(blackKing[0], 7-blackKing[0], blackKing[1], 7-blackKing[1]);
       score -= edgeB * 30;
     }
+    // --- УЛУЧШЕНИЕ ЭНДШПИЛЯ: ладья на 7-й линии ---
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = state.board[r][c]; if (!p || p.toLowerCase() !== 'r') continue;
+      const isW = isWhite(p);
+      if (isW && r === 1) score += 50; // белая ладья на 7-й горизонтали
+      if (!isW && r === 6) score -= 50; // чёрная ладья на 2-й горизонтали
+    }
   }
 
   let wm = 0, bm = 0;
@@ -637,7 +644,7 @@ function evaluate(state, forWhite) {
 }
 
 // ============================================================
-// TACTICAL SAFETY (абсолютный запрет зевков)
+// TACTICAL SAFETY
 // ============================================================
 function isHangingAfterMove(state, from, to, moverWhite) {
   const next = applyMove(state, from, to);
@@ -646,7 +653,7 @@ function isHangingAfterMove(state, from, to, moverWhite) {
     const p = next.board[r][c];
     if (!p || isWhite(p) !== moverWhite) continue;
     const v = PIECE_VALUES[p.toLowerCase()] || 0;
-    if (v < 300) continue; // только ладьи, ферзи, слоны, кони
+    if (v < 300) continue;
     if (isAttacked(next, r, c, !moverWhite) && !isAttacked(next, r, c, moverWhite)) {
       hang += v;
     }
@@ -690,7 +697,7 @@ let SEARCH_DEADLINE = 0;
 let SEARCH_ABORTED = false;
 
 // ============================================================
-// QUIESCENCE (с проверкой шаха и SEE-фильтром)
+// QUIESCENCE
 // ============================================================
 function quiescence(state, alpha, beta, color, qdepth) {
   if (Date.now() >= SEARCH_DEADLINE) { SEARCH_ABORTED = true; return evaluate(state, color === 1); }
@@ -786,7 +793,7 @@ function orderMoves(state, moves, ply, ttMove) {
 }
 
 // ============================================================
-// NEGAMAX + PVS + LMR + TT
+// NEGAMAX
 // ============================================================
 function negamax(state, depth, alpha, beta, color, ply) {
   if (Date.now() >= SEARCH_DEADLINE) { SEARCH_ABORTED = true; return evaluate(state, color === 1); }
@@ -873,7 +880,7 @@ function negamax(state, depth, alpha, beta, color, ply) {
 }
 
 // ============================================================
-// MATE SEARCH
+// MATE SEARCH (быстрая проверка мата в 1-2 хода)
 // ============================================================
 function isMateAfterMove(state, from, to, moverWhite) {
   const next = applyMove(state, from, to);
@@ -978,8 +985,7 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
   else if (myTime < 8) maxDepth = 8;
 
   SEARCH_ABORTED = false;
-  // Жесткий минимум: 1.5 секунды. Бот не должен ходить за 60 мс.
-  SEARCH_DEADLINE = Date.now() + Math.max(1500, timeMs);
+  SEARCH_DEADLINE = Date.now() + Math.max(1000, timeMs);
 
   let bestMove = legal[0];
   let ordered = orderMoves(state, legal, 0, null);
@@ -1004,11 +1010,9 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
       if (Date.now() >= SEARCH_DEADLINE) { SEARCH_ABORTED = true; break; }
       const next = applyMove(state, from, to);
       
-      // Проверка на зевок: если после хода висит фигура и это не шах/мат, запрещаем
       const nextIsMate = inCheck(next, !isWhiteTurn) && allLegalMoves(next, !isWhiteTurn).length === 0;
       const hangAfter = isHangingAfterMove(state, from, to, isWhiteTurn);
       
-      // Если мы отдаём фигуру и не ставим мат — наказываем жестоко
       let hangPenalty = 0;
       if (!nextIsMate && hangAfter > 0) {
         hangPenalty = hangAfter * 10; 
@@ -1136,24 +1140,29 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line, positionC
 
     const safeMyTime = Number.isFinite(myTime) && myTime > 0 ? myTime : 10;
     const safeInc = Number.isFinite(inc) && inc > 0 ? inc : 0;
-    const safeTotal = Number.isFinite(total) && total > 0 ? total : 600; // по умолчанию 10 минут
+    const safeTotal = Number.isFinite(total) && total > 0 ? total : 600; 
 
+    // --- КОНТРОЛЬ ВРЕМЕНИ ---
     let thinkMs;
     if (safeTotal <= 1) thinkMs = 500;
     else if (safeTotal <= 3) thinkMs = 1000;
     else if (safeTotal <= 5) thinkMs = 1500;
     else if (safeTotal <= 10) thinkMs = 2000;
     else if (safeTotal <= 30) thinkMs = 2500;
-    else thinkMs = 3000; // для 10+ минут даём 3 секунды на ход
+    else thinkMs = 3000; 
 
-    // Не тратим больше 10% времени
-    const allowedByClock = (safeMyTime + safeInc) * 0.10 * 1000;
+    // Защита от цейтнота: если времени мало, уменьшаем время на ход
+    if (safeMyTime <= 5) thinkMs = Math.min(thinkMs, 400);
+    else if (safeMyTime <= 15) thinkMs = Math.min(thinkMs, 800);
+    else if (safeMyTime <= 30) thinkMs = Math.min(thinkMs, 1500);
+    else if (safeMyTime <= 60) thinkMs = Math.min(thinkMs, 2500);
+
+    const allowedByClock = (safeMyTime + safeInc) * 0.05 * 1000;
     if (allowedByClock > 0) {
       thinkMs = Math.min(thinkMs, allowedByClock);
     }
 
-    // Жесткий минимум 1.5 секунды, чтобы не зевать
-    thinkMs = Math.max(1500, thinkMs);
+    thinkMs = Math.max(200, thinkMs);
 
     const historyLine = line || null;
     const posCounts = positionCounts instanceof Map ? positionCounts : null;
