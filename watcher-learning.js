@@ -442,7 +442,7 @@ function canAttack(state, r, c, tr, tc) {
 }
 
 // ============================================================
-// EVALUATION (с дебютной коррекцией и висящим материалом)
+// EVALUATION
 // ============================================================
 const KING_ENDGAME_PST = [
   [-50,-40,-30,-20,-20,-30,-40,-50],
@@ -637,29 +637,21 @@ function evaluate(state, forWhite) {
 }
 
 // ============================================================
-// TACTICAL SAFETY
+// TACTICAL SAFETY (абсолютный запрет зевков)
 // ============================================================
-function tacticalSafetyPenalty(state, from, to, moverWhite) {
-  const piece = state.board[from[0]][from[1]];
-  if (!piece) return 0;
+function isHangingAfterMove(state, from, to, moverWhite) {
   const next = applyMove(state, from, to);
-  const moved = next.board[to[0]][to[1]];
-  if (!moved) return 0;
-  const value = PIECE_VALUES[moved.toLowerCase()] || 0;
-  if (value < 300) return 0;
-  if (!isAttacked(next, to[0], to[1], !moverWhite)) return 0;
-  let cheapestAttacker = Infinity;
+  let hang = 0;
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
     const p = next.board[r][c];
-    if (!p || isWhite(p) !== !moverWhite) continue;
-    if (canAttack(next, r, c, to[0], to[1])) {
-      cheapestAttacker = Math.min(cheapestAttacker, PIECE_VALUES[p.toLowerCase()] || 0);
+    if (!p || isWhite(p) !== moverWhite) continue;
+    const v = PIECE_VALUES[p.toLowerCase()] || 0;
+    if (v < 300) continue; // только ладьи, ферзи, слоны, кони
+    if (isAttacked(next, r, c, !moverWhite) && !isAttacked(next, r, c, moverWhite)) {
+      hang += v;
     }
   }
-  if (cheapestAttacker >= value) return 0;
-  const defended = isAttacked(next, to[0], to[1], moverWhite);
-  if (!defended) return value - cheapestAttacker;
-  return Math.round((value - cheapestAttacker) * 0.5);
+  return hang;
 }
 
 function learnedMistakePenalty(state, from, to) {
@@ -732,7 +724,6 @@ function quiescence(state, alpha, beta, color, qdepth) {
         candidates.push([from, to]);
       }
     }
-    // SEE-фильтр: только неотрицательные взятия
     candidates = candidates.filter(([f, t]) => see(state, f, t) >= 0);
   }
 
@@ -980,14 +971,15 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
   if (mateIn1) return mateIn1;
 
   let maxDepth = 10;
-  if (myTime < 0.25) maxDepth = 2;
-  else if (myTime < 0.6) maxDepth = 3;
-  else if (myTime < 1.2) maxDepth = 5;
+  if (myTime < 0.25) maxDepth = 3;
+  else if (myTime < 0.6) maxDepth = 4;
+  else if (myTime < 1.2) maxDepth = 6;
   else if (myTime < 3) maxDepth = 7;
   else if (myTime < 8) maxDepth = 8;
 
   SEARCH_ABORTED = false;
-  SEARCH_DEADLINE = Date.now() + Math.max(40, timeMs);
+  // Жесткий минимум: 1.5 секунды. Бот не должен ходить за 60 мс.
+  SEARCH_DEADLINE = Date.now() + Math.max(1500, timeMs);
 
   let bestMove = legal[0];
   let ordered = orderMoves(state, legal, 0, null);
@@ -1011,18 +1003,24 @@ function pickMoveSearch(state, isWhiteTurn, timeMs, historyLine, positionCounts)
     for (const [from, to] of ordered) {
       if (Date.now() >= SEARCH_DEADLINE) { SEARCH_ABORTED = true; break; }
       const next = applyMove(state, from, to);
+      
+      // Проверка на зевок: если после хода висит фигура и это не шах/мат, запрещаем
+      const nextIsMate = inCheck(next, !isWhiteTurn) && allLegalMoves(next, !isWhiteTurn).length === 0;
+      const hangAfter = isHangingAfterMove(state, from, to, isWhiteTurn);
+      
+      // Если мы отдаём фигуру и не ставим мат — наказываем жестоко
+      let hangPenalty = 0;
+      if (!nextIsMate && hangAfter > 0) {
+        hangPenalty = hangAfter * 10; 
+      }
+      
       const score = -negamax(next, depth - 1, -beta, -alpha, -color, 1);
       if (SEARCH_ABORTED) break;
 
-      const nextIsMate = inCheck(next, !isWhiteTurn) && allLegalMoves(next, !isWhiteTurn).length === 0;
-
       let adjusted = score;
       if (!nextIsMate) {
-        const hangBefore = hangingMaterial(state, isWhiteTurn);
-        const hangAfter = hangingMaterial(next, isWhiteTurn);
-        const hangLoss = hangAfter - hangBefore;
-        if (hangLoss > 0) adjusted -= Math.min(hangLoss, 400);
-
+        adjusted -= hangPenalty;
+        
         const mem = learnedMistakePenalty(state, from, to);
         if (mem > 0) adjusted -= mem;
 
@@ -1136,21 +1134,26 @@ function pickMoveForServer(fen, color, timeInfo, availableMoves, line, positionC
     const inc = Number(timeInfo && timeInfo.inc);
     const total = Number(timeInfo && timeInfo.total);
 
-    const safeMyTime = Number.isFinite(myTime) ? myTime : 5;
-    const safeInc = Number.isFinite(inc) ? inc : 0;
-    const safeTotal = Number.isFinite(total) ? total : safeMyTime;
+    const safeMyTime = Number.isFinite(myTime) && myTime > 0 ? myTime : 10;
+    const safeInc = Number.isFinite(inc) && inc > 0 ? inc : 0;
+    const safeTotal = Number.isFinite(total) && total > 0 ? total : 600; // по умолчанию 10 минут
 
     let thinkMs;
-    if (safeTotal <= 1) thinkMs = 80;
-    else if (safeTotal <= 3) thinkMs = 250;
-    else if (safeTotal <= 5) thinkMs = 500;
-    else if (safeTotal <= 10) thinkMs = 900;
-    else if (safeTotal <= 30) thinkMs = 1500;
-    else thinkMs = 2500;
+    if (safeTotal <= 1) thinkMs = 500;
+    else if (safeTotal <= 3) thinkMs = 1000;
+    else if (safeTotal <= 5) thinkMs = 1500;
+    else if (safeTotal <= 10) thinkMs = 2000;
+    else if (safeTotal <= 30) thinkMs = 2500;
+    else thinkMs = 3000; // для 10+ минут даём 3 секунды на ход
 
+    // Не тратим больше 10% времени
     const allowedByClock = (safeMyTime + safeInc) * 0.10 * 1000;
-    thinkMs = Math.min(thinkMs, allowedByClock);
-    thinkMs = Math.max(60, thinkMs);
+    if (allowedByClock > 0) {
+      thinkMs = Math.min(thinkMs, allowedByClock);
+    }
+
+    // Жесткий минимум 1.5 секунды, чтобы не зевать
+    thinkMs = Math.max(1500, thinkMs);
 
     const historyLine = line || null;
     const posCounts = positionCounts instanceof Map ? positionCounts : null;
