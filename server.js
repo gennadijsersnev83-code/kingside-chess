@@ -1154,6 +1154,7 @@ function botBehaviorTick() {
           if (!p.paused) p.waitingSince = Date.now();
           io.emit('arenaUpdate', { arenaId: beh.activityId });
         }
+        // Бот может выйти только если арена ещё не началась
         if (state.phase !== 'live' && Math.random() < 0.04) {
           botLeaveArena(bot.name, beh.activityId);
           beh.state = 'idle'; beh.activityId = null; beh.lastChange = now;
@@ -1194,48 +1195,18 @@ function watcherTick() {
   const now = Date.now();
   const beh = botInitBehavior(WATCHER_NAME);
 
-  if (beh.state === 'playing' || watcherHasActiveLobby()) return;
-  if (watcherInAnyArena()) return;
-  for (const l of lobbies.values()) {
-    if (!l.finished && !l.isSelfPlay && (l.host === WATCHER_NAME || l.guest === WATCHER_NAME)) return;
+  // Если Watcher уже в игре или в активной арене — ничего не делаем
+  if (beh.state === 'playing' || watcherHasActiveLobby() || watcherInAnyArena()) return;
+
+  // Если Watcher застрял в завершённой арене — выводим его оттуда
+  if (beh.state === 'in_arena') {
+    const state = arenas.get(beh.activityId);
+    if (!state || state.finished || state.phase === 'finished') {
+      beh.state = 'idle'; beh.activityId = null; beh.lastChange = now;
+    }
   }
 
-  if (Math.random() < 0.4 || !beh.watchingLobbyId) {
-    const liveGames = [];
-    for (const [id, l] of lobbies.entries()) {
-      if (l.finished || !l.started) continue;
-      if (l.isSelfPlay) continue;
-      if (l.host === WATCHER_NAME || l.guest === WATCHER_NAME) continue;
-      liveGames.push(id);
-    }
-    beh.watchingLobbyId = liveGames.length > 0 ? liveGames[Math.floor(Math.random() * liveGames.length)] : null;
-  }
-  if (beh.state !== 'in_arena' && Math.random() < 0.4) {
-    const candidates = [...arenas.values()].filter(s => !s.finished && s.botFriendly && (s.phase === 'live' || s.phase === 'waiting') && !s.participants.has(WATCHER_NAME));
-    if (candidates.length) {
-      candidates.sort((a, b) => {
-        const aLive = a.phase === 'live' ? 0 : 1, bLive = b.phase === 'live' ? 0 : 1;
-        if (aLive !== bLive) return aLive - bLive;
-        return a.startsAt - b.startsAt;
-      });
-      const chosen = candidates[0];
-      const wu = db.users[WATCHER_NAME];
-      chosen.participants.set(WATCHER_NAME, {
-        username: WATCHER_NAME, rating: wu ? wu.rating : 1500,
-        score: 0, wins: 0, draws: 0, losses: 0, winStreak: 0, drawStreak: 0,
-        socketId: 'BOT:' + WATCHER_NAME, lobbyId: null, isPlaying: false, paused: false,
-        waitingSince: Date.now(), isBot: true,
-        inArenaRoom: true, cooldownUntil: 0, awaitingNextPair: false,
-        history: []
-      });
-      beh.state = 'in_arena'; beh.activityId = chosen.id; beh.lastChange = now;
-      const sysMsg = { id: 'sys' + Date.now(), system: true, text: `${WATCHER_NAME} присоединился к арене`, ts: Date.now(), arenaId: chosen.id };
-      chosen.chat.push(sysMsg); if (chosen.chat.length > 300) chosen.chat.shift();
-      io.to('arena:' + chosen.id).emit('arenaChatMessage', sysMsg);
-      io.emit('arenaUpdate', { arenaId: chosen.id });
-      return;
-    }
-  }
+  // Если Watcher не занят, он может создать лобби в зале ожидания (с шансом 35%)
   if (beh.state === 'idle' && Math.random() < 0.35) {
     let hasOwnLobby = false;
     for (const [id, l] of lobbies.entries()) if (!l.finished && !l.started && !l.isSelfPlay && l.host === WATCHER_NAME) { hasOwnLobby = true; break; }
@@ -1302,7 +1273,6 @@ function tryPair(state) {
     for (const g of (state.finishedGames || [])) {
       playedPairs.add([g.white, g.black].sort().join(':'));
     }
-    // Учитываем и активные партии
     for (const l of lobbies.values()) {
       if (l.finished || l.arenaId !== state.id) continue;
       const w = l.hostColor === 'w' ? l.host : l.guest;
@@ -1341,11 +1311,11 @@ function tryPair(state) {
           if (humanGamesInArena(state.id) >= MAX_HUMAN_GAMES_PER_ARENA) continue;
         }
         
-        // ПРОВЕРКА ЧЕСТНОСТИ: если уже играли — жёсткий штраф
+        // ПРОВЕРКА ЧЕСТНОСТИ: если уже играли — штраф
         const pairKey = [a.username, b.username].sort().join(':');
         let score = Math.abs((a.score || 0) - (b.score || 0));
         if (playedPairs.has(pairKey)) {
-           score += 1000; // огромный штраф, чтобы не выбрать
+           score += 1000; // огромный штраф, чтобы не выбрать, если есть альтернатива
         }
         
         if (score < bestScore) { bestScore = score; bestCandidates = [b]; }
@@ -1503,7 +1473,6 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   if (blackP.isBot && blackName !== WATCHER_NAME) { const bh = botInitBehavior(blackName); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = now; }
   else if (blackName === WATCHER_NAME) { const bh = botInitBehavior(WATCHER_NAME); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = now; }
   
-  // Сбрасываем waitingSince, чтобы они не получили друг друга сразу же
   whiteP.waitingSince = now;
   blackP.waitingSince = now;
 
@@ -1547,10 +1516,11 @@ function finishArena(state) {
   io.emit('arenaFinished', { arenaId: state.id, arenaName: state.name, top3: state.top3 });
   io.emit('arenaUpdate', { arenaId: state.id });
   
+  // Ссылки на арену остаются навсегда (24 часа), не удаляем
   state.cleanupTimer = setTimeout(() => {
     if (state.chatViewers.size === 0) arenas.delete(state.id);
-    else setTimeout(() => arenas.delete(state.id), 30 * 60 * 1000);
-  }, 2 * 60 * 60 * 1000);
+    else setTimeout(() => arenas.delete(state.id), 24 * 60 * 60 * 1000); // 24 часа
+  }, 24 * 60 * 60 * 1000);
 }
 
 // Собираем список последних завершённых арен для панели "Лучшие игроки"
@@ -2871,7 +2841,6 @@ io.on('connection', (socket) => {
     cb({ ok: true });
   });
 
-  // ИСПРАВЛЕНО: Запрет выхода с арены, если она уже началась
   socket.on('leaveArena', ({ arenaId }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     const state = arenas.get(arenaId);
