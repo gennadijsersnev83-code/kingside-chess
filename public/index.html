@@ -247,25 +247,33 @@ body.login-active #mainContent { display: none !important; }
   </section>
 
   <section id="arenasScreen" class="screen">
-    <div style="max-width:1100px; margin:0 auto;">
-      <div class="arenasHeader">
-        <div class="ahLeft"><h1>Турниры</h1><span class="ahNow"><span class="ahLabel">Сейчас:</span><span id="arenasNowClock">--:--</span> МСК</span></div>
-        <button class="primary" onclick="Arena.refresh(true)">↻ Обновить</button>
+    <!-- ИСПРАВЛЕНО: Слева панель лидеров как в Lichess, справа сетка -->
+    <div style="max-width:1200px; margin:0 auto; display:flex; gap:20px; align-items:flex-start;">
+      
+      <!-- Левая панель (как в Lichess) -->
+      <div style="width:240px; flex-shrink:0;">
+        <!-- Меню (как в Lichess) -->
+        <div class="sideTitle" style="margin-top:0; margin-bottom:8px;">Мои турниры</div>
+        <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:24px; font-size:13px; color:var(--text-bright);">
+          <div style="cursor:pointer; padding:2px 0;">Турнирный календарь</div>
+          <div style="cursor:pointer; padding:2px 0;">История «Арены»</div>
+          <div style="cursor:pointer; padding:2px 0;">Вопросы и ответы про Арену</div>
+          <div style="cursor:pointer; padding:2px 0;">Лиги & Битвы стримеров</div>
+        </div>
+
+        <div class="sideTitle" style="margin-bottom:8px;">Лучшие игроки</div>
+        <div id="bestPlayersList" style="display:flex; flex-direction:column; gap:6px;">
+          <div class="arenaEmpty" style="padding:10px; font-size:12px;">Загрузка...</div>
+        </div>
       </div>
-      <!-- ИСПРАВЛЕНО: Сузили окно арен и добавили панель лучших игроков слева -->
-      <div style="display: flex; gap: 20px; align-items: flex-start;">
-        <div style="flex: 1; min-width: 0;">
-          <div class="arenasGridWrap" id="arenasGridWrap"><div class="arenasEmpty">Загрузка расписания...</div></div>
+
+      <!-- Сетка турниров -->
+      <div style="flex:1; min-width:0;">
+        <div class="arenasHeader">
+          <div class="ahLeft"><h1>Турниры</h1></div>
+          <button class="primary" onclick="Arena.refresh(true)">↻ Обновить</button>
         </div>
-        <div style="width: 280px; flex-shrink: 0; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden;">
-          <div style="padding: 12px 14px; background: var(--panel-2); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--text-bright); text-transform: uppercase; letter-spacing: .5px; font-weight: 700; display: flex; justify-content: space-between; align-items: center;">
-            <span>🏆 Лучшие игроки</span>
-            <span style="font-size: 10px; color: var(--muted); text-transform: none;">Рапид & Блиц</span>
-          </div>
-          <div id="bestPlayersList" style="padding: 4px 0;">
-            <div class="arenaEmpty" style="padding: 10px; font-size: 12px;">Загрузка...</div>
-          </div>
-        </div>
+        <div class="arenasGridWrap" id="arenasGridWrap"><div class="arenasEmpty">Загрузка расписания...</div></div>
       </div>
     </div>
   </section>
