@@ -920,9 +920,10 @@ const Arena = {
 
   enterList() {
     this.refresh(true);
-    // Загружаем последних победителей
     App.socket.emit('getTopArenaWinners', (list) => this.renderTopWinners(list));
   },
+
+  // ИСПРАВЛЕНО: Рендерим список как на Lichess
   renderTopWinners(list) {
     const el = document.getElementById('bestPlayersList');
     if (!el) return;
@@ -930,17 +931,18 @@ const Arena = {
       el.innerHTML = '<div class="arenaEmpty" style="padding:10px; font-size:12px;">Пока нет завершённых арен</div>';
       return;
     }
-    const medals = ['🏆', '🥈', '🥉'];
     el.innerHTML = list.map((p, i) => `
-      <div style="display:flex; align-items:center; gap:8px; padding:6px 8px; border-bottom:1px solid var(--border);">
-        <span style="font-size:18px;">${medals[p.place - 1]}</span>
-        <div style="flex:1; min-width:0;">
-          <div style="color:var(--text-bright); font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis;">${Utils.nickHtml(p.username)}</div>
-          <div style="color:var(--muted); font-size:11px;">${p.arenaName}</div>
+      <div style="display:flex; align-items:center; gap:8px; padding:4px 0;">
+        <div style="width: 24px; height: 24px; border-radius: 50%; background: var(--panel-2); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <span style="font-size: 14px;">${p.username === 'PeshkaSasha' ? '👑' : '♟'}</span>
         </div>
-        <div style="text-align:right;">
-          <div style="color:var(--accent); font-weight:700; font-size:13px;">${p.score}</div>
-          <div style="color:var(--muted); font-size:10px;">${p.rating}</div>
+        <div style="flex:1; min-width:0;">
+          <div style="color:var(--text-bright); font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+            ${Utils.nickHtml(p.username, p.username === 'PeshkaSasha')}
+          </div>
+          <div style="color:var(--muted); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+            ${p.arenaName}
+          </div>
         </div>
       </div>
     `).join('');
@@ -1009,10 +1011,10 @@ const Arena = {
     const localNow = Date.now();
     const toClient = (ts) => ts - this.serverOffsetMs;
     const isMobile = window.matchMedia('(max-width: 700px)').matches;
-    // Сузили окно арен (уменьшили количество слотов и ширину)
+    // Сузили окно арен
     const SLOT_PX = isMobile ? 60 : 70; 
     const SLOT_MS = 10 * 60 * 1000; 
-    const COLS = isMobile ? 32 : 48; // Было 48/72, теперь 32/48
+    const COLS = isMobile ? 32 : 48;
     const startMs = Math.floor(localNow / SLOT_MS) * SLOT_MS; const endMs = startMs + COLS * SLOT_MS;
     window.__arenaStartMs = startMs; window.__arenaSlotPx = SLOT_PX;
     const toPx = (ts) => ((ts - startMs) / SLOT_MS) * SLOT_PX;
@@ -1944,7 +1946,6 @@ const Game = {
   },
   updateBackToGameBtn() { const opponent = document.getElementById('activeGameOpponent'); if (opponent) opponent.textContent = App.opponentName || 'соперником'; },
   
-  // ИСПРАВЛЕНО: Подгружаем историю ходов с сервера и предотвращаем дублирование
   applyGameStateFromServer(s, lobbyId) {
     if (s && s.isSelfPlay) { console.warn('Попытка применить self-play state'); return; }
     App.lobbyId = lobbyId; App.myColor = s.myColor; App.opponentName = s.opponent;
@@ -1959,11 +1960,6 @@ const Game = {
     
     // Восстанавливаем историю ходов, если она пришла с сервера
     if (Array.isArray(s.history) && s.history.length > 0) {
-      // Если история пришла в виде объектов { from, to, san }, нам нужно прогнать её через наш движок
-      // чтобы получить правильные SAN и FEN. Но так как сервер отдаёт только FEN текущей позиции, 
-      // мы не можем восстановить все промежуточные FEN без начальной позиции. 
-      // Поэтому мы просто восстанавливаем ходы из массива san (если он был сохранён).
-      // В данном случае сервер присылает history в виде объектов, где есть поле san.
       const tempHistory = [];
       const tempFens = [];
       const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
@@ -1978,11 +1974,6 @@ const Game = {
         currentState = Chess.applyMove(currentState, h.from, h.to);
         currentFenStr = Chess.toFen(currentState);
         tempFens.push(currentFenStr);
-      }
-      
-      // Проверяем, совпадает ли последний FEN с текущим. Если нет — добавляем недостающий ход.
-      if (currentFenStr !== s.fen && s.history.length > 0) {
-         // fallback, если что-то не сошлось
       }
       
       this.moveHistory = tempHistory;
@@ -2294,7 +2285,6 @@ const Game = {
   },
   onOpponentLeft() { if (!App.gameActive) return; alert('Соперник отключился'); this.updateBackToGameBtn(); },
   
-  // ИСПРАВЛЕНО: Предотвращаем дублирование ходов, если мы только что сделали локальный ход
   onGameStart(payload) {
     if (payload.lobbyId && payload.lobbyId.startsWith('sp_')) { console.warn('[Game] Получен gameStart для self-play, игнорируем'); return; }
     if (payload.isSelfPlay) { console.warn('[Game] Получен gameStart с isSelfPlay, игнорируем'); return; }
@@ -2333,17 +2323,15 @@ const Game = {
     if (!lobbyId || lobbyId !== App.lobbyId) return;
     if (!App.gameActive || App.gameEnded) return;
     
-    // Если сервер прислал тот же самый FEN, который у нас уже есть, игнорируем
     if (App.currentFen === fen) return;
 
     const prevFen = App.currentFen; App.currentFen = fen;
     this.selected = null; this.legalMoves = []; this.viewIndex = -1;
     if (from && to) { this.lastMove = { from, to }; if (!san) { try { const prevState = Chess.parseFen(prevFen); san = Chess.toSAN(prevState, from, to); } catch (e) {} } }
     
-    // Проверяем дубликат в истории
     const lastHistIdx = this.moveHistory.length - 1;
     if (this.moveHistory[lastHistIdx] === san && this.moveFens[lastHistIdx] === fen) {
-      // Дубликат, ничего не добавляем
+      // Дубликат
     } else {
       if (san) { this.moveHistory.push(san); this.moveFens.push(fen); }
     }
