@@ -30,7 +30,7 @@ const KING_ENDGAME_PST = [
 // TRANSPOSITION TABLE
 // ============================================================
 const TT_CACHE = new Map();
-const TT_MAX = 400000; // FIX: уменьшил, чтобы не раздувать память на слабых машинах
+const TT_MAX = 400000;
 function ttKey(state) {
   const boardStr = state.board.map(row => row.map(c => c || '.').join('')).join('/');
   return boardStr + '|' + state.turn + '|' + state.castling + '|' + state.ep;
@@ -55,10 +55,6 @@ function botParseFen(fen) {
   const board = Array.from({length:8}, () => Array(8).fill(null));
   parts[0].split('/').forEach((row, r) => { let f = 0; for (const ch of row) { if (/\d/.test(ch)) f += +ch; else board[r][f++] = ch; } });
   return { board, turn: parts[1] || 'w', castling: parts[2] || '-', ep: parts[3] || '-', half: +parts[4] || 0, full: +parts[5] || 1 };
-}
-function botToFen(state) {
-  const rows = state.board.map(r => { let s = '', e = 0; for (const c of r) { if (c) { if (e) { s += e; e = 0; } s += c; } else e++; } if (e) s += e; return s; }).join('/');
-  return [rows, state.turn, state.castling, state.ep, state.half, state.full].join(' ');
 }
 const botIsWhite = p => !!p && p === p.toUpperCase();
 const botInBoard = (r,c) => r >= 0 && r < 8 && c >= 0 && c < 8;
@@ -145,7 +141,7 @@ function botApplyMove(state, from, to) {
   const copy = { board: state.board.map(row => row.slice()), turn: state.turn, castling: state.castling, ep: state.ep, half: state.half, full: state.full };
   const [fr, fc] = from, [tr, tc] = to;
   const p = copy.board[fr][fc];
-  if (!p) return copy; // FIX: защита от пустых ходов
+  if (!p) return copy;
   const white = botIsWhite(p); const type = p.toLowerCase();
   if (type === 'p' && copy.ep) { const target = String.fromCharCode(97 + tc) + (8 - tr); if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null; }
   copy.board[tr][tc] = p; copy.board[fr][fc] = null;
@@ -189,8 +185,7 @@ function botAllLegalMoves(state, white) {
 }
 
 // ============================================================
-// SEE (Static Exchange Evaluation) — FIX: ограничена по глубине,
-// защищена от бесконечной рекурсии и от NaN.
+// SEE (Static Exchange Evaluation)
 // ============================================================
 function seeValue(p) { return p ? (PIECE_VALUES[p.toLowerCase()] || 0) : 0; }
 
@@ -229,20 +224,18 @@ function seeAttackers(state, tr, tc, byWhite) {
 
 function see(state, from, to, depth) {
   depth = depth || 0;
-  if (depth > 6) return 0; // FIX: было 12 → защита от глубокой рекурсии
+  if (depth > 6) return 0;
   const target = state.board[to[0]][to[1]];
   const piece = state.board[from[0]][from[1]];
   if (!piece) return 0;
   const gain = seeValue(target);
   const next = botApplyMove(state, from, to);
-  // FIX: если король пропал — не считаем
   if (!botFindKing(next, true) || !botFindKing(next, false)) return gain;
   const oppWhite = !botIsWhite(piece);
   const attackers = seeAttackers(next, to[0], to[1], oppWhite);
   if (attackers.length === 0) return gain;
   attackers.sort((a, b) => seeValue(next.board[a[0]][a[1]]) - seeValue(next.board[b[0]][b[1]]));
   const [af, at] = attackers[0];
-  // FIX: не даём уйти в минус
   return Math.max(0, gain - see(next, af, at, depth + 1));
 }
 
@@ -398,34 +391,62 @@ function botEval(state) {
   if (botInCheck(state, true)) score -= 200;
   if (botInCheck(state, false)) score += 200;
 
-  // --- АНТИ-ГУЛЯНИЕ В ДЕБЮТЕ ---
+  // --- FIX: РЕАЛЬНАЯ ДЕБЮТНАЯ ОЦЕНКА ---
   if (state.full <= 15) {
-    for (let r = 0; r < 8; r++) {
-      for (const c of [0, 7]) {
-        const p = state.board[r][c];
-        if (p && p.toLowerCase() === 'n') score += botIsWhite(p) ? -12 : 12;
-      }
-    }
+    // 1. Пешки в центре — большой плюс
+    const centerFiles = [3, 4]; // d, e
+    const centerRanks = [3, 4]; // 4, 5 (0-indexed)
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
       const p = state.board[r][c];
-      if (!p || p.toLowerCase() !== 'r') continue;
+      if (!p || p.toLowerCase() !== 'p') continue;
+      const white = botIsWhite(p);
+      if (centerFiles.includes(c) && centerRanks.includes(r)) {
+        score += white ? 35 : -35; // e4/d4/e5/d5 — сильный центр
+      } else if (c === 3 || c === 4) {
+        score += white ? 15 : -15; // полуцентр
+      }
+    }
+    // 2. Штраф за ранние ходы конями (кроме развивающих)
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = state.board[r][c];
+      if (!p || p.toLowerCase() !== 'n') continue;
       const white = botIsWhite(p);
       const homeRow = white ? 7 : 0;
-      const onHome = r === homeRow && (c === 0 || c === 7);
-      let fileOpen = true;
-      for (let rr = 0; rr < 8; rr++) {
-        if (rr === r) continue;
-        const q = state.board[rr][c];
-        if (q && q.toLowerCase() === 'p' && botIsWhite(q) === white) { fileOpen = false; break; }
+      if (r !== homeRow) {
+        // Конь вышел. Если это f3/c3 (для белых) или f6/c6 (для чёрных) — ок
+        const goodFiles = white ? [2, 5] : [2, 5];
+        if (!goodFiles.includes(c)) score += white ? -20 : 20;
+        else score += white ? -5 : 5; // лёгкий штраф за ранний выход
       }
-      if (!onHome && !fileOpen) score += white ? -8 : 8;
+      // Конь на краю доски
+      if (c === 0 || c === 7) score += white ? -25 : 25;
     }
+    // 3. Штраф за раннюю активность ферзя
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
       const p = state.board[r][c];
       if (!p || p.toLowerCase() !== 'q') continue;
       const white = botIsWhite(p);
       const homeRow = white ? 7 : 0;
-      if (r !== homeRow && state.full <= 6) score += white ? -15 : 15;
+      if (r !== homeRow && state.full <= 8) score += white ? -30 : 30;
+    }
+    // 4. Ладья не должна гулять в дебюте
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const p = state.board[r][c];
+      if (!p || p.toLowerCase() !== 'r') continue;
+      const white = botIsWhite(p);
+      const homeRow = white ? 7 : 0;
+      if (r !== homeRow) score += white ? -15 : 15;
+    }
+    // 5. Бонус за рокировку
+    if (state.castling !== '-' && state.full > 5) {
+      const whiteCastled = !state.castling.includes('K') && !state.castling.includes('Q');
+      const blackCastled = !state.castling.includes('k') && !state.castling.includes('q');
+      if (whiteCastled && wK) {
+        if (wK[1] > 3) score += 30; else score -= 20; // короткая рокировка лучше
+      }
+      if (blackCastled && bK) {
+        if (bK[1] > 3) score -= 30; else score += 20;
+      }
     }
   }
 
@@ -434,7 +455,7 @@ function botEval(state) {
 }
 
 // ============================================================
-// OPENING BOOK (не используется, но оставлен для совместимости)
+// OPENING BOOK
 // ============================================================
 const OPENING_BOOK = [
   { line: 'e2e4', weight: 40 },
@@ -453,35 +474,8 @@ const OPENING_BOOK = [
   { line: 'g1f3', weight: 8 }
 ];
 
-const OPENING_INDEX = new Map();
-(function buildOpeningIndex() {
-  for (const entry of OPENING_BOOK) {
-    const moves = entry.line.split(' ').filter(Boolean);
-    for (let i = 1; i <= moves.length; i++) {
-      const prefix = moves.slice(0, i).join(' ');
-      if (!OPENING_INDEX.has(prefix)) OPENING_INDEX.set(prefix, []);
-      OPENING_INDEX.get(prefix).push({ move: moves[i - 1], weight: entry.weight });
-    }
-  }
-})();
-
-function uciFromTo(from, to) {
-  const f = String.fromCharCode(97 + from[1]) + (8 - from[0]);
-  const t = String.fromCharCode(97 + to[1]) + (8 - to[0]);
-  return f + t;
-}
-function uciToMove(uci) {
-  if (!uci || uci.length < 4) return null;
-  const fc = uci.charCodeAt(0) - 97;
-  const fr = 8 - parseInt(uci[1], 10);
-  const tc = uci.charCodeAt(2) - 97;
-  const tr = 8 - parseInt(uci[3], 10);
-  if (!botInBoard(fr, fc) || !botInBoard(tr, tc)) return null;
-  return [[fr, fc], [tr, tc]];
-}
-
 // ============================================================
-// OPENING HEURISTIC (fallback)
+// OPENING HEURISTIC
 // ============================================================
 function openingHeuristic(state, from, to, moveCount) {
   if (moveCount > 12) return 0;
@@ -493,48 +487,68 @@ function openingHeuristic(state, from, to, moveCount) {
   const target = state.board[to[0]][to[1]];
   if (target) return 0;
 
+  // FIX: приоритет центральных пешек
+  if (type === 'p') {
+    // e4/d4/e5/d5 — максимальный приоритет
+    if ((to[1] === 3 || to[1] === 4) && (to[0] === 3 || to[0] === 4)) bonus += 60;
+    // e3/d3 — средний приоритет
+    else if (to[1] === 3 || to[1] === 4) bonus += 25;
+    // остальные пешки — низкий
+    else bonus += 5;
+    // Штраф за крайние пешки
+    if (to[1] === 0 || to[1] === 7) bonus -= 10;
+  }
+
+  // FIX: жёсткий штраф за ранние коня/слона
   if (type === 'n' || type === 'b') {
     const homeRow = white ? 7 : 0;
-    if (from[0] === homeRow) bonus += 18;
-    else bonus -= 6;
-    if (type === 'n' && ((to[0] === 3 || to[0] === 4) && (to[1] === 2 || to[1] === 5))) bonus += 8;
-    if (type === 'n' && (to[1] === 0 || to[1] === 7)) bonus -= 25;
+    if (from[0] === homeRow) {
+      // Развитие с домашней линии — хорошо, но только если пешки уже двинуты
+      bonus += 10;
+    } else {
+      bonus -= 10; // второй ход той же фигурой — плохо
+    }
+    // Конь на край — очень плохо
+    if (type === 'n' && (to[1] === 0 || to[1] === 7)) bonus -= 30;
+    // Конь в центр (c3/f3/c6/f6) — норм
+    if (type === 'n' && (to[1] === 2 || to[1] === 5)) bonus += 5;
   }
+
+  // FIX: ферзь в дебюте — сильный штраф
   if (type === 'q') {
     const homeRow = white ? 7 : 0;
-    if (from[0] === homeRow) bonus -= 40;
+    if (from[0] === homeRow) bonus -= 50;
     let devN = 0;
     for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
       const p = state.board[r][c]; if (!p || p.toLowerCase() !== 'n') continue;
       if (botIsWhite(p) !== white) continue;
       if (r !== (white ? 7 : 0)) devN++;
     }
-    if (devN < 2) bonus -= 25;
-    if (moveCount <= 4) bonus -= 30;
-    if ((to[0] === 3 || to[0] === 4) && (to[1] === 3 || to[1] === 4) && moveCount <= 8) bonus -= 40;
+    if (devN < 2) bonus -= 40;
+    if (moveCount <= 4) bonus -= 50;
+    if ((to[0] === 3 || to[0] === 4) && (to[1] === 3 || to[1] === 4) && moveCount <= 8) bonus -= 60;
   }
+
+  // Ладья в дебюте — штраф
   if (type === 'r' && moveCount <= 8) {
     const castlingDone = white ? !state.castling.includes('K') && !state.castling.includes('Q') : !state.castling.includes('k') && !state.castling.includes('q');
-    if (!castlingDone) bonus -= 15;
+    if (!castlingDone) bonus -= 25;
   }
-  if (type === 'k' && Math.abs(to[1] - from[1]) === 2) bonus += 50;
-  if (type === 'k' && Math.abs(to[1] - from[1]) !== 2 && moveCount <= 10) bonus -= 30;
-  if (type === 'p') {
-    if ((to[1] === 3 || to[1] === 4) && (to[0] === 3 || to[0] === 4)) bonus += 12;
-    const homeRow = white ? 6 : 1;
-    const twoStep = Math.abs(to[0] - from[0]) === 2;
-    if (from[0] === homeRow && !twoStep) bonus -= 4;
-  }
+
+  // Рокировка — хорошо
+  if (type === 'k' && Math.abs(to[1] - from[1]) === 2) bonus += 60;
+  if (type === 'k' && Math.abs(to[1] - from[1]) !== 2 && moveCount <= 10) bonus -= 40;
+
   return bonus;
 }
 
 // ============================================================
-// SEARCH: move ordering, killers, history
+// SEARCH
 // ============================================================
 function moveScore(state, from, to) {
   const target = state.board[to[0]][to[1]];
   const piece = state.board[from[0]][from[1]];
-  if (!target || !piece) return 0; // FIX: защита от пустых
+  if (!target || !piece) return 0;
   const victimVal = PIECE_VALUES[target.toLowerCase()] || 0;
   const attackerVal = PIECE_VALUES[piece.toLowerCase()] || 0;
   return victimVal * 10 - attackerVal;
@@ -548,11 +562,10 @@ function orderMoves(state, moves, depth, ply, ttMove) {
   const scored = moves.map(([from, to]) => {
     let s = 0;
     const piece = state.board[from[0]][from[1]];
-    if (!piece) return { from, to, s: -1e9 }; // FIX: пустой ход — в конец
+    if (!piece) return { from, to, s: -1e9 };
     if (ttMove && ttMove[0] && ttMove[1] && ttMove[0][0] === from[0] && ttMove[0][1] === from[1] && ttMove[1][0] === to[0] && ttMove[1][1] === to[1]) s += 100000;
     const cap = state.board[to[0]][to[1]];
     if (cap) {
-      // FIX: SEE вызываем только если есть цель; без NaN
       let se = 0;
       try { se = see(state, from, to); } catch (_) { se = 0; }
       if (se >= 0) s += 20000 + (PIECE_VALUES[cap.toLowerCase()] || 0) * 10 - (PIECE_VALUES[piece.toLowerCase()] || 0);
@@ -624,7 +637,7 @@ function botQuiescence(state, alpha, beta, qdepth) {
 }
 
 // ============================================================
-// MAIN SEARCH: PVS + LMR + extensions + TT
+// MAIN SEARCH
 // ============================================================
 let SEARCH_DEADLINE = 0;
 let SEARCH_ABORTED = false;
@@ -681,7 +694,6 @@ function botMinimax(state, depth, alpha, beta, ply, ttMove, moveCount) {
     if (i === 0) {
       score = botMinimax(next, depth - 1 + ext - red, alpha, beta, ply + 1, null, moveCount + 1);
     } else {
-      // FIX: PVS-окно корректно для белых/чёрных
       if (white) {
         score = botMinimax(next, depth - 1 + ext - red, alpha, alpha + 1, ply + 1, null, moveCount + 1);
         if (score > alpha && score < beta) {
@@ -715,7 +727,6 @@ function botMinimax(state, depth, alpha, beta, ply, ttMove, moveCount) {
     }
   }
 
-  // FIX: если best остался ±Infinity (аборт), не пишем в TT
   if (best !== Infinity && best !== -Infinity) {
     let flag = 'EXACT';
     if (best <= alphaOrig) flag = 'UPPER';
@@ -727,7 +738,7 @@ function botMinimax(state, depth, alpha, beta, ply, ttMove, moveCount) {
 }
 
 // ============================================================
-// MATE FINDERS — FIX: с жёстким таймаутом и защитой от null
+// MATE FINDERS
 // ============================================================
 function findMateInOne(state, white) {
   const moves = botAllLegalMoves(state, white);
@@ -739,7 +750,6 @@ function findMateInOne(state, white) {
   }
   return null;
 }
-
 function isMateInOne(state, white) {
   const moves = botAllLegalMoves(state, white);
   for (const [from, to] of moves) {
@@ -749,7 +759,6 @@ function isMateInOne(state, white) {
   }
   return false;
 }
-
 function findMateInTwo(state, white) {
   const moves = botAllLegalMoves(state, white);
   for (const [from, to] of moves) {
@@ -768,7 +777,6 @@ function findMateInTwo(state, white) {
   }
   return null;
 }
-
 function findMateInThree(state, white) {
   const moves = botAllLegalMoves(state, white);
   for (const [from, to] of moves) {
@@ -790,7 +798,7 @@ function findMateInThree(state, white) {
 }
 
 // ============================================================
-// BOT PARAMS (RATING-BASED)
+// BOT PARAMS
 // ============================================================
 function getBotParams(rating, baseTimeMin, timeLeftSec = baseTimeMin * 60, incrementSec = 0) {
   let depth, noise;
@@ -860,13 +868,10 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
   SEARCH_ABORTED = false;
   SEARCH_DEADLINE = Date.now() + Math.max(60, params.timeBudgetMs);
 
-  // FIX: мат-поиск вызываем только если он реально окупается по времени,
-  // и каждый мат-поиск получает ограниченное окно.
   if (rating >= 1800) {
     const m1 = findMateInOne(state, white); if (m1) return m1;
   }
   if (rating >= 1900) {
-    // ограничиваем m2 отдельным дедлайном
     const oldDeadline = SEARCH_DEADLINE;
     SEARCH_DEADLINE = Math.min(SEARCH_DEADLINE, Date.now() + Math.max(80, params.timeBudgetMs * 0.25));
     const m2 = findMateInTwo(state, white);
@@ -886,7 +891,6 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
     ? new Map(moves.map(([from, to]) => [uciFromTo(from, to), openingHeuristic(state, from, to, moveCount)]))
     : null;
 
-  // FIX: гарантированный fallback-ход
   let bestMove = moves[0];
   let ordered = orderMoves(state, moves, params.depth, 0, null);
   if (!ordered.length) ordered = moves.slice();
@@ -901,7 +905,6 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
       const next = botApplyMove(state, from, to);
       let score = botMinimax(next, d - 1, -Infinity, Infinity, 1, ttRootMove, moveCount + 1);
       if (SEARCH_ABORTED) break;
-      // FIX: не допускаем NaN в score
       if (!Number.isFinite(score)) score = white ? -1e6 : 1e6;
       if (params.noise > 0) score += (Math.random() * 2 - 1) * params.noise;
       if (openingBonus) {
@@ -924,23 +927,22 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
     if (Date.now() > SEARCH_DEADLINE) break;
   }
 
-  // FIX: гарантируем, что bestMove валиден
   if (!bestMove || !bestMove[0] || !bestMove[1]) bestMove = moves[0];
 
-  // Случайный «тупняк» для слабых — FIX: используем Math.floor + проверку
-  if (rating < 1100 && Math.random() < 0.45) {
-    const all = orderMoves(state, moves, 1, 0, null);
-    if (all.length) return all[Math.floor(Math.random() * Math.min(4, all.length))];
-  }
-  if (rating < 1250 && Math.random() < 0.30) {
+  // Ограничение случайности для слабых, чтобы не портили дебют
+  if (rating < 1100 && moveCount > 6 && Math.random() < 0.35) {
     const all = orderMoves(state, moves, 1, 0, null);
     if (all.length) return all[Math.floor(Math.random() * Math.min(3, all.length))];
   }
-  if (rating < 1400 && Math.random() < 0.15) {
+  if (rating < 1250 && moveCount > 6 && Math.random() < 0.25) {
     const all = orderMoves(state, moves, 1, 0, null);
     if (all.length) return all[Math.floor(Math.random() * Math.min(2, all.length))];
   }
-  if (rating < 1550 && Math.random() < 0.07) {
+  if (rating < 1400 && moveCount > 8 && Math.random() < 0.12) {
+    const all = orderMoves(state, moves, 1, 0, null);
+    if (all.length) return all[Math.floor(Math.random() * Math.min(2, all.length))];
+  }
+  if (rating < 1550 && moveCount > 8 && Math.random() < 0.05) {
     const all = orderMoves(state, moves, 1, 0, null);
     if (all.length) return all[Math.floor(Math.random() * Math.min(2, all.length))];
   }
@@ -960,7 +962,6 @@ parentPort.on('message', (msg) => {
     const safeInc = Math.max(0, Number(incrementSec) || 0);
 
     const move = pickBotMoveByRating(fen, safeRating, safeTimeMin, safeLeft, safeInc, historyLine, recentFens);
-    // FIX: всегда возвращаем либо валидный ход, либо null (но НЕ undefined)
     parentPort.postMessage({ id, ok: true, move: move || null });
   } catch (err) {
     parentPort.postMessage({ id, ok: false, error: err.message || String(err) });
