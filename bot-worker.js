@@ -54,17 +54,30 @@ function botParseFen(fen) {
   const parts = String(fen).split(' ');
   const board = Array.from({length:8}, () => Array(8).fill(null));
   if (parts[0]) {
-    parts[0].split('/').forEach((row, r) => { let f = 0; for (const ch of row) { if (/\d/.test(ch)) f += +ch; else board[r][f++] = ch; } });
+    parts[0].split('/').forEach((row, r) => {
+      let f = 0;
+      for (const ch of row) {
+        if (/\d/.test(ch)) f += +ch;
+        else board[r][f++] = ch;
+      }
+    });
   }
   return { board, turn: parts[1] || 'w', castling: parts[2] || '-', ep: parts[3] || '-', half: +parts[4] || 0, full: +parts[5] || 1 };
 }
-// ВОССТАНОВЛЕНО: botToFen (было удалено)
 function botToFen(state) {
-  const rows = state.board.map(r => { let s = '', e = 0; for (const c of r) { if (c) { if (e) { s += e; e = 0; } s += c; } else e++; } if (e) s += e; return s; }).join('/');
+  const rows = state.board.map(r => {
+    let s = '', e = 0;
+    for (const c of r) {
+      if (c) { if (e) { s += e; e = 0; } s += c; }
+      else e++;
+    }
+    if (e) s += e;
+    return s;
+  }).join('/');
   return [rows, state.turn, state.castling, state.ep, state.half, state.full].join(' ');
 }
 const botIsWhite = p => !!p && p === p.toUpperCase();
-const botInBoard = (r,c) => r >= 0 && r < 8 && c >= 0 && c < 8;
+const botInBoard = (r, c) => r >= 0 && r < 8 && c >= 0 && c < 8;
 
 // ============================================================
 // MOVE GENERATION
@@ -73,7 +86,13 @@ function botPseudoMoves(state, r, c) {
   const p = state.board[r][c]; if (!p) return [];
   const moves = []; const white = botIsWhite(p); const type = p.toLowerCase();
   const dir = white ? -1 : 1;
-  const add = (rr, cc) => { if (!botInBoard(rr, cc)) return false; const t = state.board[rr][cc]; if (t && botIsWhite(t) === white) return false; moves.push([rr, cc]); return !t; };
+  const add = (rr, cc) => {
+    if (!botInBoard(rr, cc)) return false;
+    const t = state.board[rr][cc];
+    if (t && botIsWhite(t) === white) return false;
+    moves.push([rr, cc]);
+    return !t;
+  };
   if (type === 'p') {
     const startRow = white ? 6 : 1, oneR = r + dir;
     if (botInBoard(oneR, c) && !state.board[oneR][c]) {
@@ -105,7 +124,10 @@ function botPseudoMoves(state, r, c) {
     const dirs = [];
     if (type === 'r' || type === 'q') dirs.push([-1,0],[1,0],[0,-1],[0,1]);
     if (type === 'b' || type === 'q') dirs.push([-1,-1],[-1,1],[1,-1],[1,1]);
-    for (const [dr, dc] of dirs) { let rr = r + dr, cc = c + dc; while (add(rr, cc)) { rr += dr; cc += dc; } }
+    for (const [dr, dc] of dirs) {
+      let rr = r + dr, cc = c + dc;
+      while (add(rr, cc)) { rr += dr; cc += dc; }
+    }
   }
   return moves;
 }
@@ -139,7 +161,11 @@ function botIsAttacked(state, r, c, byWhite) {
   return false;
 }
 
-function botInCheck(state, white) { const k = botFindKing(state, white); if (!k) return false; return botIsAttacked(state, k[0], k[1], !white); }
+function botInCheck(state, white) {
+  const k = botFindKing(state, white);
+  if (!k) return false;
+  return botIsAttacked(state, k[0], k[1], !white);
+}
 
 // ============================================================
 // MOVE APPLICATION
@@ -150,7 +176,10 @@ function botApplyMove(state, from, to) {
   const p = copy.board[fr][fc];
   if (!p) return copy;
   const white = botIsWhite(p); const type = p.toLowerCase();
-  if (type === 'p' && copy.ep) { const target = String.fromCharCode(97 + tc) + (8 - tr); if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null; }
+  if (type === 'p' && copy.ep) {
+    const target = String.fromCharCode(97 + tc) + (8 - tr);
+    if (copy.ep === target && !copy.board[tr][tc]) copy.board[fr][tc] = null;
+  }
   copy.board[tr][tc] = p; copy.board[fr][fc] = null;
   if (type === 'p' && (tr === 0 || tr === 7)) copy.board[tr][tc] = white ? 'Q' : 'q';
   if (type === 'k' && Math.abs(tc - fc) === 2) {
@@ -192,58 +221,50 @@ function botAllLegalMoves(state, white) {
 }
 
 // ============================================================
-// SEE
+// SEE (безопасная, без бесконечной рекурсии)
 // ============================================================
 function seeValue(p) { return p ? (PIECE_VALUES[p.toLowerCase()] || 0) : 0; }
 
-function canAttack(state, r, c, tr, tc) {
-  const p = state.board[r][c]; if (!p) return false;
-  const t = p.toLowerCase();
-  const dr = tr - r, dc = tc - c;
-  const adr = Math.abs(dr), adc = Math.abs(dc);
-  if (t === 'p') { const dir = botIsWhite(p) ? -1 : 1; return dr === dir && adc === 1; }
-  if (t === 'n') return (adr === 2 && adc === 1) || (adr === 1 && adc === 2);
-  if (t === 'k') return Math.max(adr, adc) === 1;
-  if (t === 'r' || t === 'q') {
-    if (r === tr) { for (let x = Math.min(c, tc) + 1; x < Math.max(c, tc); x++) if (state.board[r][x]) return false; return true; }
-    if (c === tc) { for (let y = Math.min(r, tr) + 1; y < Math.max(r, tr); y++) if (state.board[y][c]) return false; return true; }
-  }
-  if (t === 'b' || t === 'q') {
-    if (adr === adc) {
-      const sr = dr > 0 ? 1 : -1, sc = dc > 0 ? 1 : -1;
-      let y = r + sr, x = c + sc;
-      while (y !== tr && x !== tc) { if (state.board[y][x]) return false; y += sr; x += sc; }
-      return true;
-    }
-  }
-  return false;
-}
-
-function seeAttackers(state, tr, tc, byWhite) {
-  const res = [];
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = state.board[r][c];
-    if (!p || botIsWhite(p) !== byWhite) continue;
-    if (canAttack(state, r, c, tr, tc)) res.push([r, c]);
-  }
-  return res;
-}
-
 function see(state, from, to, depth) {
   depth = depth || 0;
-  if (depth > 6) return 0;
+  if (depth > 4) return 0;
   const target = state.board[to[0]][to[1]];
   const piece = state.board[from[0]][from[1]];
   if (!piece) return 0;
   const gain = seeValue(target);
   const next = botApplyMove(state, from, to);
   if (!botFindKing(next, true) || !botFindKing(next, false)) return gain;
+
   const oppWhite = !botIsWhite(piece);
-  const attackers = seeAttackers(next, to[0], to[1], oppWhite);
-  if (attackers.length === 0) return gain;
-  attackers.sort((a, b) => seeValue(next.board[a[0]][a[1]]) - seeValue(next.board[b[0]][b[1]]));
-  const [af, at] = attackers[0];
-  return Math.max(0, gain - see(next, af, at, depth + 1));
+  // Ищем наименьшего атакующего на клетку to
+  let bestAttacker = null, bestVal = Infinity;
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = next.board[r][c];
+    if (!p || botIsWhite(p) !== oppWhite) continue;
+    const t = p.toLowerCase();
+    const dr = to[0] - r, dc = to[1] - c;
+    const adr = Math.abs(dr), adc = Math.abs(dc);
+    let canHit = false;
+    if (t === 'p') { const d = botIsWhite(p) ? -1 : 1; canHit = dr === d && adc === 1; }
+    else if (t === 'n') canHit = (adr === 2 && adc === 1) || (adr === 1 && adc === 2);
+    else if (t === 'k') canHit = Math.max(adr, adc) === 1;
+    else if (t === 'r' || t === 'q') {
+      if (r === to[0]) { canHit = true; for (let x = Math.min(c, to[1]) + 1; x < Math.max(c, to[1]); x++) if (next.board[r][x]) { canHit = false; break; } }
+      else if (c === to[1]) { canHit = true; for (let y = Math.min(r, to[0]) + 1; y < Math.max(r, to[0]); y++) if (next.board[y][c]) { canHit = false; break; } }
+    }
+    if (!canHit && (t === 'b' || t === 'q') && adr === adc) {
+      canHit = true;
+      const sr = dr > 0 ? 1 : -1, sc = dc > 0 ? 1 : -1;
+      let y = r + sr, x = c + sc;
+      while (y !== to[0] && x !== to[1]) { if (next.board[y][x]) { canHit = false; break; } y += sr; x += sc; }
+    }
+    if (canHit) {
+      const v = seeValue(p);
+      if (v < bestVal) { bestVal = v; bestAttacker = [r, c]; }
+    }
+  }
+  if (!bestAttacker) return gain;
+  return Math.max(0, gain - see(next, bestAttacker, to, depth + 1));
 }
 
 // ============================================================
@@ -259,6 +280,47 @@ function materialOf(state) {
     if (botIsWhite(p)) w += v; else b += v;
   }
   return { w, b };
+}
+
+function debutScore(state) {
+  let s = 0;
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = state.board[r][c]; if (!p) continue;
+    const white = botIsWhite(p);
+    const t = p.toLowerCase();
+    const homeRow = white ? 7 : 0;
+    const sign = white ? 1 : -1;
+
+    if (t === 'p') {
+      if (c === 3 || c === 4) {
+        if (r === 3 || r === 4) s += 35 * sign;
+        else s += 15 * sign;
+      }
+      if (c === 0 || c === 7) s -= 8 * sign;
+    }
+    if (t === 'n') {
+      if (r !== homeRow) {
+        if (c === 2 || c === 5) s -= 3 * sign;
+        else s -= 18 * sign;
+      }
+      if (c === 0 || c === 7) s -= 25 * sign;
+    }
+    if (t === 'q' && r !== homeRow && state.full <= 8) s -= 30 * sign;
+    if (t === 'r' && r !== homeRow) s -= 15 * sign;
+  }
+  if (state.full > 5) {
+    const whiteCastled = !state.castling.includes('K') && !state.castling.includes('Q');
+    const blackCastled = !state.castling.includes('k') && !state.castling.includes('q');
+    if (whiteCastled) {
+      const k = botFindKing(state, true);
+      if (k) s += k[1] > 3 ? 30 : -20;
+    }
+    if (blackCastled) {
+      const k = botFindKing(state, false);
+      if (k) s -= k[1] > 3 ? 30 : -20;
+    }
+  }
+  return s;
 }
 
 function botEval(state) {
@@ -321,22 +383,14 @@ function botEval(state) {
     for (const [br, bc] of blackPawnRanks) {
       if ((bc === c || bc === c - 1 || bc === c + 1) && br < r) { passed = false; break; }
     }
-    if (passed) {
-      const rank = 7 - r;
-      const bonus = [0, 10, 20, 35, 60, 100, 160, 0][rank];
-      score += bonus;
-    }
+    if (passed) score += [0, 10, 20, 35, 60, 100, 160, 0][7 - r];
   }
   for (const [r, c] of blackPawnRanks) {
     let passed = true;
     for (const [wr, wc] of whitePawnRanks) {
       if ((wc === c || wc === c - 1 || wc === c + 1) && wr > r) { passed = false; break; }
     }
-    if (passed) {
-      const rank = r;
-      const bonus = [0, 10, 20, 35, 60, 100, 160, 0][rank];
-      score -= bonus;
-    }
+    if (passed) score -= [0, 10, 20, 35, 60, 100, 160, 0][r];
   }
 
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
@@ -347,23 +401,6 @@ function botEval(state) {
     const oppPawns = white ? blackPawnsByFile : whitePawnsByFile;
     if (ownPawns[c] === 0 && oppPawns[c] === 0) score += white ? 25 : -25;
     else if (ownPawns[c] === 0) score += white ? 12 : -12;
-  }
-
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = state.board[r][c]; if (!p) continue;
-    if (p.toLowerCase() !== 'b') continue;
-    const white = botIsWhite(p);
-    let blocked = 0;
-    const dirs = [[-1,-1],[-1,1],[1,-1],[1,1]];
-    for (const [dr, dc] of dirs) {
-      let rr = r + dr, cc = c + dc;
-      while (botInBoard(rr, cc)) {
-        const q = state.board[rr][cc];
-        if (q) { if (q.toLowerCase() === 'p' && botIsWhite(q) === white) blocked++; break; }
-        rr += dr; cc += dc;
-      }
-    }
-    if (blocked >= 2) score += white ? -10 : 10;
   }
 
   for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
@@ -398,82 +435,10 @@ function botEval(state) {
   if (botInCheck(state, true)) score -= 200;
   if (botInCheck(state, false)) score += 200;
 
-  // ================= ДЕБЮТНАЯ ОЦЕНКА (безопасная) =================
-  if (state.full <= 15) {
-    score += debutScore(state, endgame);
-  }
+  if (state.full <= 15) score += debutScore(state);
 
   if (state.half >= 100) score = 0;
   return score;
-}
-
-// Отдельная функция — без вложенных for внутри for
-function debutScore(state, endgame) {
-  let s = 0;
-  const whitePawnFiles = [0,0,0,0,0,0,0,0];
-  const blackPawnFiles = [0,0,0,0,0,0,0,0];
-
-  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-    const p = state.board[r][c]; if (!p) continue;
-    const white = botIsWhite(p);
-    const t = p.toLowerCase();
-
-    if (t === 'p') {
-      if (white) whitePawnFiles[c]++; else blackPawnFiles[c]++;
-      // Центральные пешки
-      if (c === 3 || c === 4) {
-        if (r === 3 || r === 4) s += white ? 35 : -35;
-        else s += white ? 15 : -15;
-      }
-      // Крайние пешки — плохо
-      if (c === 0 || c === 7) s += white ? -8 : 8;
-    }
-
-    if (t === 'n') {
-      const homeRow = white ? 7 : 0;
-      if (r !== homeRow) {
-        // Развитие на c3/f3 (для белых) или c6/f6 (для чёрных)
-        if (c === 2 || c === 5) s += white ? -3 : 3;
-        else s += white ? -18 : 18;
-      }
-      // Конь на краю доски
-      if (c === 0 || c === 7) s += white ? -25 : 25;
-    }
-
-    if (t === 'q') {
-      const homeRow = white ? 7 : 0;
-      if (r !== homeRow && state.full <= 8) s += white ? -30 : 30;
-    }
-
-    if (t === 'r') {
-      const homeRow = white ? 7 : 0;
-      if (r !== homeRow) s += white ? -15 : 15;
-    }
-
-    if (t === 'b') {
-      const homeRow = white ? 7 : 0;
-      if (r === homeRow && (c === 2 || c === 5)) {
-        // Слон ещё дома — норм, небольшой плюс за развитие
-        s += white ? 2 : -2;
-      }
-    }
-  }
-
-  // Рокировка
-  if (state.full > 5) {
-    const whiteCastled = !state.castling.includes('K') && !state.castling.includes('Q');
-    const blackCastled = !state.castling.includes('k') && !state.castling.includes('q');
-    if (whiteCastled) {
-      const k = botFindKing(state, true);
-      if (k && k[1] > 3) s += 30; else if (k) s -= 20;
-    }
-    if (blackCastled) {
-      const k = botFindKing(state, false);
-      if (k && k[1] > 3) s -= 30; else if (k) s += 20;
-    }
-  }
-
-  return s;
 }
 
 // ============================================================
@@ -496,7 +461,6 @@ function openingHeuristic(state, from, to, moveCount) {
     else bonus += 5;
     if (to[1] === 0 || to[1] === 7) bonus -= 10;
   }
-
   if (type === 'n' || type === 'b') {
     const homeRow = white ? 7 : 0;
     if (from[0] === homeRow) bonus += 10;
@@ -504,7 +468,6 @@ function openingHeuristic(state, from, to, moveCount) {
     if (type === 'n' && (to[1] === 0 || to[1] === 7)) bonus -= 30;
     if (type === 'n' && (to[1] === 2 || to[1] === 5)) bonus += 5;
   }
-
   if (type === 'q') {
     const homeRow = white ? 7 : 0;
     if (from[0] === homeRow) bonus -= 50;
@@ -518,15 +481,12 @@ function openingHeuristic(state, from, to, moveCount) {
     if (moveCount <= 4) bonus -= 50;
     if ((to[0] === 3 || to[0] === 4) && (to[1] === 3 || to[1] === 4) && moveCount <= 8) bonus -= 60;
   }
-
   if (type === 'r' && moveCount <= 8) {
     const castlingDone = white ? !state.castling.includes('K') && !state.castling.includes('Q') : !state.castling.includes('k') && !state.castling.includes('q');
     if (!castlingDone) bonus -= 25;
   }
-
   if (type === 'k' && Math.abs(to[1] - from[1]) === 2) bonus += 60;
   if (type === 'k' && Math.abs(to[1] - from[1]) !== 2 && moveCount <= 10) bonus -= 40;
-
   return bonus;
 }
 
@@ -579,7 +539,7 @@ function orderMoves(state, moves, depth, ply, ttMove) {
 function botQuiescence(state, alpha, beta, qdepth) {
   const white = state.turn === 'w';
   const stand = botEval(state);
-  if (qdepth >= 6) return stand;
+  if (qdepth >= 4) return stand;
   if (white) {
     if (stand >= beta) return beta;
     if (stand > alpha) alpha = stand;
@@ -588,23 +548,27 @@ function botQuiescence(state, alpha, beta, qdepth) {
     if (stand < beta) beta = stand;
   }
   const moves = botAllLegalMoves(state, white);
-  const tactical = moves.filter(([f, t]) => {
+  const tactical = [];
+  for (const [f, t] of moves) {
     const target = state.board[t[0]][t[1]];
     const piece = state.board[f[0]][f[1]];
-    if (!piece) return false;
+    if (!piece) continue;
     const isCapture = !!target || (piece.toLowerCase() === 'p' && f[1] !== t[1]);
     const isPromo = piece.toLowerCase() === 'p' && (t[0] === 0 || t[0] === 7);
     let givesCheck = false;
-    if (qdepth < 2) {
-      try { givesCheck = botInCheck(botApplyMove(state, f, t), !white); } catch (_) { givesCheck = false; }
+    if (qdepth < 1) {
+      try { givesCheck = botInCheck(botApplyMove(state, f, t), !white); } catch (_) {}
     }
-    return isCapture || isPromo || givesCheck;
-  });
-  const safe = tactical.filter(([f, t]) => {
+    if (isCapture || isPromo || givesCheck) tactical.push([f, t]);
+  }
+  const safe = [];
+  for (const [f, t] of tactical) {
     const target = state.board[t[0]][t[1]];
-    if (!target) return true;
-    try { return see(state, f, t) >= 0 || qdepth < 1; } catch (_) { return true; }
-  });
+    if (!target) { safe.push([f, t]); continue; }
+    let se = 0;
+    try { se = see(state, f, t); } catch (_) { se = 0; }
+    if (se >= 0 || qdepth < 1) safe.push([f, t]);
+  }
   safe.sort((a, b) => moveScore(state, b[0], b[1]) - moveScore(state, a[0], a[1]));
 
   if (white) {
@@ -635,7 +599,6 @@ let REPETITION_HASHES = null;
 
 function botMinimax(state, depth, alpha, beta, ply, ttMove, moveCount) {
   if (Date.now() > SEARCH_DEADLINE) { SEARCH_ABORTED = true; return botEval(state); }
-
   if (ply > 0 && REPETITION_HASHES && REPETITION_HASHES.has(ttKey(state))) return 0;
 
   const key = ttKey(state);
@@ -675,7 +638,6 @@ function botMinimax(state, depth, alpha, beta, ply, ttMove, moveCount) {
     let ext = 0;
     if (givesCheck && depth >= 2) ext = 1;
     else if (isPromo) ext = 1;
-
     let red = 0;
     if (!isCapture && !givesCheck && !isPromo && i >= 4 && depth >= 3) red = 1;
     if (red && depth >= 5 && i >= 8) red = 2;
@@ -686,14 +648,10 @@ function botMinimax(state, depth, alpha, beta, ply, ttMove, moveCount) {
     } else {
       if (white) {
         score = botMinimax(next, depth - 1 + ext - red, alpha, alpha + 1, ply + 1, null, moveCount + 1);
-        if (score > alpha && score < beta) {
-          score = botMinimax(next, depth - 1 + ext - red, alpha, beta, ply + 1, null, moveCount + 1);
-        }
+        if (score > alpha && score < beta) score = botMinimax(next, depth - 1 + ext - red, alpha, beta, ply + 1, null, moveCount + 1);
       } else {
         score = botMinimax(next, depth - 1 + ext - red, beta - 1, beta, ply + 1, null, moveCount + 1);
-        if (score < beta && score > alpha) {
-          score = botMinimax(next, depth - 1 + ext - red, alpha, beta, ply + 1, null, moveCount + 1);
-        }
+        if (score < beta && score > alpha) score = botMinimax(next, depth - 1 + ext - red, alpha, beta, ply + 1, null, moveCount + 1);
       }
     }
     if (SEARCH_ABORTED) return best;
@@ -728,7 +686,7 @@ function botMinimax(state, depth, alpha, beta, ply, ttMove, moveCount) {
 }
 
 // ============================================================
-// MATE FINDERS
+// MATE FINDERS (только в 1, безопасные)
 // ============================================================
 function findMateInOne(state, white) {
   const moves = botAllLegalMoves(state, white);
@@ -737,52 +695,6 @@ function findMateInOne(state, white) {
     const oppWhite = next.turn === 'w';
     const oppMoves = botAllLegalMoves(next, oppWhite);
     if (oppMoves.length === 0 && botInCheck(next, oppWhite)) return [from, to];
-  }
-  return null;
-}
-function isMateInOne(state, white) {
-  const moves = botAllLegalMoves(state, white);
-  for (const [from, to] of moves) {
-    const next = botApplyMove(state, from, to);
-    const oppWhite = next.turn === 'w';
-    if (botAllLegalMoves(next, oppWhite).length === 0 && botInCheck(next, oppWhite)) return true;
-  }
-  return false;
-}
-function findMateInTwo(state, white) {
-  const moves = botAllLegalMoves(state, white);
-  for (const [from, to] of moves) {
-    if (Date.now() > SEARCH_DEADLINE) return null;
-    const next = botApplyMove(state, from, to);
-    const oppWhite = next.turn === 'w';
-    const oppMoves = botAllLegalMoves(next, oppWhite);
-    if (oppMoves.length === 0) continue;
-    let allLeadToMate = true;
-    for (const [of, ot] of oppMoves) {
-      const after = botApplyMove(next, of, ot);
-      if (!isMateInOne(after, white)) { allLeadToMate = false; break; }
-      if (Date.now() > SEARCH_DEADLINE) return null;
-    }
-    if (allLeadToMate) return [from, to];
-  }
-  return null;
-}
-function findMateInThree(state, white) {
-  const moves = botAllLegalMoves(state, white);
-  for (const [from, to] of moves) {
-    if (Date.now() > SEARCH_DEADLINE) return null;
-    const next = botApplyMove(state, from, to);
-    const oppWhite = next.turn === 'w';
-    const oppMoves = botAllLegalMoves(next, oppWhite);
-    if (oppMoves.length === 0) continue;
-    let allLeadToMate = true;
-    for (const [of, ot] of oppMoves) {
-      const after = botApplyMove(next, of, ot);
-      const m2 = findMateInTwo(after, white);
-      if (!m2) { allLeadToMate = false; break; }
-      if (Date.now() > SEARCH_DEADLINE) return null;
-    }
-    if (allLeadToMate) return [from, to];
   }
   return null;
 }
@@ -859,21 +771,10 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
   SEARCH_DEADLINE = Date.now() + Math.max(60, params.timeBudgetMs);
 
   if (rating >= 1800) {
-    const m1 = findMateInOne(state, white); if (m1) return m1;
-  }
-  if (rating >= 1900) {
-    const oldDeadline = SEARCH_DEADLINE;
-    SEARCH_DEADLINE = Math.min(SEARCH_DEADLINE, Date.now() + Math.max(80, params.timeBudgetMs * 0.25));
-    const m2 = findMateInTwo(state, white);
-    SEARCH_DEADLINE = oldDeadline;
-    if (m2) return m2;
-  }
-  if (rating >= 2100) {
-    const oldDeadline = SEARCH_DEADLINE;
-    SEARCH_DEADLINE = Math.min(SEARCH_DEADLINE, Date.now() + Math.max(100, params.timeBudgetMs * 0.25));
-    const m3 = findMateInThree(state, white);
-    SEARCH_DEADLINE = oldDeadline;
-    if (m3) return m3;
+    try {
+      const m1 = findMateInOne(state, white);
+      if (m1) return m1;
+    } catch (_) {}
   }
 
   const openingPhase = moveCount <= 12;
@@ -938,6 +839,15 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
   }
 
   return bestMove;
+}
+
+// ============================================================
+// UCI HELPERS
+// ============================================================
+function uciFromTo(from, to) {
+  const f = String.fromCharCode(97 + from[1]) + (8 - from[0]);
+  const t = String.fromCharCode(97 + to[1]) + (8 - to[0]);
+  return f + t;
 }
 
 // ============================================================
