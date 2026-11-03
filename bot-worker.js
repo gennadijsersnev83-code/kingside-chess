@@ -30,7 +30,7 @@ const KING_ENDGAME_PST = [
 // TRANSPOSITION TABLE
 // ============================================================
 const TT_CACHE = new Map();
-const TT_MAX = 400000;
+const TT_MAX = 300000;
 function ttKey(state) {
   const boardStr = state.board.map(row => row.map(c => c || '.').join('')).join('/');
   return boardStr + '|' + state.turn + '|' + state.castling + '|' + state.ep;
@@ -51,10 +51,17 @@ function ttSet(k, d, s, flag) {
 // FEN / BOARD UTILITIES
 // ============================================================
 function botParseFen(fen) {
-  const parts = fen.split(' ');
+  const parts = String(fen).split(' ');
   const board = Array.from({length:8}, () => Array(8).fill(null));
-  parts[0].split('/').forEach((row, r) => { let f = 0; for (const ch of row) { if (/\d/.test(ch)) f += +ch; else board[r][f++] = ch; } });
+  if (parts[0]) {
+    parts[0].split('/').forEach((row, r) => { let f = 0; for (const ch of row) { if (/\d/.test(ch)) f += +ch; else board[r][f++] = ch; } });
+  }
   return { board, turn: parts[1] || 'w', castling: parts[2] || '-', ep: parts[3] || '-', half: +parts[4] || 0, full: +parts[5] || 1 };
+}
+// ВОССТАНОВЛЕНО: botToFen (было удалено)
+function botToFen(state) {
+  const rows = state.board.map(r => { let s = '', e = 0; for (const c of r) { if (c) { if (e) { s += e; e = 0; } s += c; } else e++; } if (e) s += e; return s; }).join('/');
+  return [rows, state.turn, state.castling, state.ep, state.half, state.full].join(' ');
 }
 const botIsWhite = p => !!p && p === p.toUpperCase();
 const botInBoard = (r,c) => r >= 0 && r < 8 && c >= 0 && c < 8;
@@ -185,7 +192,7 @@ function botAllLegalMoves(state, white) {
 }
 
 // ============================================================
-// SEE (Static Exchange Evaluation)
+// SEE
 // ============================================================
 function seeValue(p) { return p ? (PIECE_VALUES[p.toLowerCase()] || 0) : 0; }
 
@@ -391,93 +398,89 @@ function botEval(state) {
   if (botInCheck(state, true)) score -= 200;
   if (botInCheck(state, false)) score += 200;
 
-  // --- FIX: РЕАЛЬНАЯ ДЕБЮТНАЯ ОЦЕНКА ---
+  // ================= ДЕБЮТНАЯ ОЦЕНКА (безопасная) =================
   if (state.full <= 15) {
-    // 1. Пешки в центре — большой плюс
-    const centerFiles = [3, 4]; // d, e
-    const centerRanks = [3, 4]; // 4, 5 (0-indexed)
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-      const p = state.board[r][c];
-      if (!p || p.toLowerCase() !== 'p') continue;
-      const white = botIsWhite(p);
-      if (centerFiles.includes(c) && centerRanks.includes(r)) {
-        score += white ? 35 : -35; // e4/d4/e5/d5 — сильный центр
-      } else if (c === 3 || c === 4) {
-        score += white ? 15 : -15; // полуцентр
-      }
-    }
-    // 2. Штраф за ранние ходы конями (кроме развивающих)
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-      const p = state.board[r][c];
-      if (!p || p.toLowerCase() !== 'n') continue;
-      const white = botIsWhite(p);
-      const homeRow = white ? 7 : 0;
-      if (r !== homeRow) {
-        // Конь вышел. Если это f3/c3 (для белых) или f6/c6 (для чёрных) — ок
-        const goodFiles = white ? [2, 5] : [2, 5];
-        if (!goodFiles.includes(c)) score += white ? -20 : 20;
-        else score += white ? -5 : 5; // лёгкий штраф за ранний выход
-      }
-      // Конь на краю доски
-      if (c === 0 || c === 7) score += white ? -25 : 25;
-    }
-    // 3. Штраф за раннюю активность ферзя
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-      const p = state.board[r][c];
-      if (!p || p.toLowerCase() !== 'q') continue;
-      const white = botIsWhite(p);
-      const homeRow = white ? 7 : 0;
-      if (r !== homeRow && state.full <= 8) score += white ? -30 : 30;
-    }
-    // 4. Ладья не должна гулять в дебюте
-    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
-      const p = state.board[r][c];
-      if (!p || p.toLowerCase() !== 'r') continue;
-      const white = botIsWhite(p);
-      const homeRow = white ? 7 : 0;
-      if (r !== homeRow) score += white ? -15 : 15;
-    }
-    // 5. Бонус за рокировку
-    if (state.castling !== '-' && state.full > 5) {
-      const whiteCastled = !state.castling.includes('K') && !state.castling.includes('Q');
-      const blackCastled = !state.castling.includes('k') && !state.castling.includes('q');
-      if (whiteCastled && wK) {
-        if (wK[1] > 3) score += 30; else score -= 20; // короткая рокировка лучше
-      }
-      if (blackCastled && bK) {
-        if (bK[1] > 3) score -= 30; else score += 20;
-      }
-    }
+    score += debutScore(state, endgame);
   }
 
   if (state.half >= 100) score = 0;
   return score;
 }
 
-// ============================================================
-// OPENING BOOK
-// ============================================================
-const OPENING_BOOK = [
-  { line: 'e2e4', weight: 40 },
-  { line: 'e2e4 e7e5 g1f3', weight: 30 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 f1b5', weight: 20 },
-  { line: 'e2e4 e7e5 g1f3 b8c6 f1c4', weight: 15 },
-  { line: 'e2e4 c7c5', weight: 25 },
-  { line: 'e2e4 c7c5 g1f3 d7d6 d2d4 c5d4 f3d4', weight: 12 },
-  { line: 'e2e4 e7e6 d2d4 d7d5', weight: 10 },
-  { line: 'e2e4 c7c6 d2d4 d7d5', weight: 10 },
-  { line: 'd2d4', weight: 30 },
-  { line: 'd2d4 d7d5 c2c4', weight: 18 },
-  { line: 'd2d4 g8f6 c2c4', weight: 12 },
-  { line: 'd2d4 g8f6 c2c4 g7g6', weight: 8 },
-  { line: 'c2c4', weight: 12 },
-  { line: 'g1f3', weight: 8 }
-];
+// Отдельная функция — без вложенных for внутри for
+function debutScore(state, endgame) {
+  let s = 0;
+  const whitePawnFiles = [0,0,0,0,0,0,0,0];
+  const blackPawnFiles = [0,0,0,0,0,0,0,0];
+
+  for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+    const p = state.board[r][c]; if (!p) continue;
+    const white = botIsWhite(p);
+    const t = p.toLowerCase();
+
+    if (t === 'p') {
+      if (white) whitePawnFiles[c]++; else blackPawnFiles[c]++;
+      // Центральные пешки
+      if (c === 3 || c === 4) {
+        if (r === 3 || r === 4) s += white ? 35 : -35;
+        else s += white ? 15 : -15;
+      }
+      // Крайние пешки — плохо
+      if (c === 0 || c === 7) s += white ? -8 : 8;
+    }
+
+    if (t === 'n') {
+      const homeRow = white ? 7 : 0;
+      if (r !== homeRow) {
+        // Развитие на c3/f3 (для белых) или c6/f6 (для чёрных)
+        if (c === 2 || c === 5) s += white ? -3 : 3;
+        else s += white ? -18 : 18;
+      }
+      // Конь на краю доски
+      if (c === 0 || c === 7) s += white ? -25 : 25;
+    }
+
+    if (t === 'q') {
+      const homeRow = white ? 7 : 0;
+      if (r !== homeRow && state.full <= 8) s += white ? -30 : 30;
+    }
+
+    if (t === 'r') {
+      const homeRow = white ? 7 : 0;
+      if (r !== homeRow) s += white ? -15 : 15;
+    }
+
+    if (t === 'b') {
+      const homeRow = white ? 7 : 0;
+      if (r === homeRow && (c === 2 || c === 5)) {
+        // Слон ещё дома — норм, небольшой плюс за развитие
+        s += white ? 2 : -2;
+      }
+    }
+  }
+
+  // Рокировка
+  if (state.full > 5) {
+    const whiteCastled = !state.castling.includes('K') && !state.castling.includes('Q');
+    const blackCastled = !state.castling.includes('k') && !state.castling.includes('q');
+    if (whiteCastled) {
+      const k = botFindKing(state, true);
+      if (k && k[1] > 3) s += 30; else if (k) s -= 20;
+    }
+    if (blackCastled) {
+      const k = botFindKing(state, false);
+      if (k && k[1] > 3) s -= 30; else if (k) s += 20;
+    }
+  }
+
+  return s;
+}
 
 // ============================================================
 // OPENING HEURISTIC
 // ============================================================
 function openingHeuristic(state, from, to, moveCount) {
+  if (!from || !to || !botInBoard(from[0], from[1]) || !botInBoard(to[0], to[1])) return 0;
   if (moveCount > 12) return 0;
   const piece = state.board[from[0]][from[1]];
   if (!piece) return 0;
@@ -487,34 +490,21 @@ function openingHeuristic(state, from, to, moveCount) {
   const target = state.board[to[0]][to[1]];
   if (target) return 0;
 
-  // FIX: приоритет центральных пешек
   if (type === 'p') {
-    // e4/d4/e5/d5 — максимальный приоритет
     if ((to[1] === 3 || to[1] === 4) && (to[0] === 3 || to[0] === 4)) bonus += 60;
-    // e3/d3 — средний приоритет
     else if (to[1] === 3 || to[1] === 4) bonus += 25;
-    // остальные пешки — низкий
     else bonus += 5;
-    // Штраф за крайние пешки
     if (to[1] === 0 || to[1] === 7) bonus -= 10;
   }
 
-  // FIX: жёсткий штраф за ранние коня/слона
   if (type === 'n' || type === 'b') {
     const homeRow = white ? 7 : 0;
-    if (from[0] === homeRow) {
-      // Развитие с домашней линии — хорошо, но только если пешки уже двинуты
-      bonus += 10;
-    } else {
-      bonus -= 10; // второй ход той же фигурой — плохо
-    }
-    // Конь на край — очень плохо
+    if (from[0] === homeRow) bonus += 10;
+    else bonus -= 10;
     if (type === 'n' && (to[1] === 0 || to[1] === 7)) bonus -= 30;
-    // Конь в центр (c3/f3/c6/f6) — норм
     if (type === 'n' && (to[1] === 2 || to[1] === 5)) bonus += 5;
   }
 
-  // FIX: ферзь в дебюте — сильный штраф
   if (type === 'q') {
     const homeRow = white ? 7 : 0;
     if (from[0] === homeRow) bonus -= 50;
@@ -529,13 +519,11 @@ function openingHeuristic(state, from, to, moveCount) {
     if ((to[0] === 3 || to[0] === 4) && (to[1] === 3 || to[1] === 4) && moveCount <= 8) bonus -= 60;
   }
 
-  // Ладья в дебюте — штраф
   if (type === 'r' && moveCount <= 8) {
     const castlingDone = white ? !state.castling.includes('K') && !state.castling.includes('Q') : !state.castling.includes('k') && !state.castling.includes('q');
     if (!castlingDone) bonus -= 25;
   }
 
-  // Рокировка — хорошо
   if (type === 'k' && Math.abs(to[1] - from[1]) === 2) bonus += 60;
   if (type === 'k' && Math.abs(to[1] - from[1]) !== 2 && moveCount <= 10) bonus -= 40;
 
@@ -559,8 +547,10 @@ const HISTORY = new Map();
 function historyKey(from, to) { return from[0] + '' + from[1] + to[0] + '' + to[1]; }
 
 function orderMoves(state, moves, depth, ply, ttMove) {
+  if (!moves || !moves.length) return [];
   const scored = moves.map(([from, to]) => {
     let s = 0;
+    if (!from || !to) return { from, to, s: -1e9 };
     const piece = state.board[from[0]][from[1]];
     if (!piece) return { from, to, s: -1e9 };
     if (ttMove && ttMove[0] && ttMove[1] && ttMove[0][0] === from[0] && ttMove[0][1] === from[1] && ttMove[1][0] === to[0] && ttMove[1][1] === to[1]) s += 100000;
@@ -929,7 +919,7 @@ function pickBotMoveByRating(fen, rating, baseTimeMin, timeLeftSec, incrementSec
 
   if (!bestMove || !bestMove[0] || !bestMove[1]) bestMove = moves[0];
 
-  // Ограничение случайности для слабых, чтобы не портили дебют
+  // Случайность для слабых — только после дебюта
   if (rating < 1100 && moveCount > 6 && Math.random() < 0.35) {
     const all = orderMoves(state, moves, 1, 0, null);
     if (all.length) return all[Math.floor(Math.random() * Math.min(3, all.length))];
