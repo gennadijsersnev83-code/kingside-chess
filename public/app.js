@@ -567,22 +567,39 @@ const Ping = {
 // ============================================================
 const Router = {
   current: { name: 'lobby', param: null },
-  init() { window.addEventListener('hashchange', () => this.handle()); this.handle(); },
-  go(name, param) { const path = param ? `#/${name}/${encodeURIComponent(param)}` : `#/${name}`; if (location.hash === path) this.handle(); else location.hash = path; },
+  init() { 
+    window.addEventListener('hashchange', () => this.handle()); 
+    this.handle(); 
+  },
+  go(name, param) { 
+    const path = param ? `#/${name}/${encodeURIComponent(param)}` : `#/${name}`; 
+    if (location.hash === path) this.handle(); 
+    else location.hash = path; 
+  },
   handle() {
     const hash = location.hash.replace(/^#\/?/, '');
     const routeAndQuery = hash.split('?');
     const parts = routeAndQuery[0].split('/').filter(Boolean);
+    
     let name = parts[0] || (App.me ? 'lobby' : 'landing');
     let param = parts[1] ? decodeURIComponent(parts[1]) : null;
+    
     if (!param && routeAndQuery[1]) {
       try { param = new URLSearchParams(routeAndQuery[1]).get('token') || new URLSearchParams(routeAndQuery[1]).get('resetToken'); } catch (e) {}
     }
+    
     if (!param) {
-      try { const query = new URLSearchParams(location.search); param = query.get('token') || query.get('resetToken'); if (param && (!parts[0] || parts[0] === 'reset-password' || parts[0] === 'reset')) name = 'reset'; } catch (e) {}
+      try { 
+        const query = new URLSearchParams(location.search); 
+        param = query.get('token') || query.get('resetToken'); 
+        if (param && (!parts[0] || parts[0] === 'reset-password' || parts[0] === 'reset')) name = 'reset'; 
+      } catch (e) {}
     }
+    
     if (parts[0] === 'reset-password' || /\/(reset-password|reset)\/?$/.test(location.pathname)) name = 'reset';
-    this.current = { name, param }; this.apply();
+    
+    this.current = { name, param }; 
+    this.apply();
   },
   apply() {
     const { name, param } = this.current;
@@ -592,41 +609,51 @@ const Router = {
     if (name === 'reset') {
       document.body.classList.add('login-active');
       const hashToken = param || (location.hash.includes('?') ? new URLSearchParams(location.hash.split('?')[1]).get('token') : null);
-      Auth.showResetToken(hashToken); Router.show('resetScreen'); return;
+      Auth.showResetToken(hashToken); 
+      this.show('resetScreen'); 
+      return;
     }
     
     // 2. Экран верификации
     if (name === 'verify') { Router.go('autorize'); return; }
 
-    // 3. Если пользователь не авторизован
+    // 3. Если пользователь НЕ АВТОРИЗОВАН
     if (!App.me) {
+      // Скрываем всё лишнее
+      document.getElementById('mainHeader').style.display = 'none';
+      document.getElementById('mainContent').style.display = 'none';
+      document.getElementById('adminPage').style.display = 'none';
+      
       if (name === 'autorize') {
         document.body.classList.add('login-active');
-        Router.show('autorizeScreen');
+        this.show('autorizeScreen');
         return;
       }
-      // Если не авторизован и не на форме входа — показываем ЛЕНДИНГ
+      
+      // Если не на форме входа — показываем ЛЕНДИНГ
       document.body.classList.remove('login-active');
-      const header = document.getElementById('mainHeader'); if (header) header.style.display = 'none';
-      const main = document.getElementById('mainContent'); if (main) main.style.display = 'none';
-      Router.show('landingScreen');
+      this.show('landingScreen');
       return;
     }
 
-    // 4. Если пользователь авторизован, но пришел на лендинг или форму входа — редирект в лобби
-    if (App.me && (name === 'landing' || name === 'autorize' || name === 'login')) {
+    // 4. Если пользователь АВТОРИЗОВАН
+    // Скрываем лендинг и показываем приложение
+    const landing = document.getElementById('landingScreen');
+    if (landing) landing.classList.remove('active');
+    
+    document.body.classList.remove('login-active');
+    document.getElementById('mainHeader').style.display = '';
+    document.getElementById('mainContent').style.display = '';
+
+    // Если пришел на лендинг или форму входа, но уже авторизован — редирект в лобби
+    if (name === 'landing' || name === 'autorize' || name === 'login') {
       Router.go('lobby');
       return;
     }
 
-    // 5. Остальная логика для авторизованных (как было)
-    document.body.classList.remove('login-active');
-    const header = document.getElementById('mainHeader'); if (header) header.style.display = '';
-    const main = document.getElementById('mainContent'); if (main) main.style.display = '';
-
     if (name === 'admin_panel') {
       if (!AdminPanel.isRoot()) { Router.go('lobby'); return; }
-      const mainEl = document.getElementById('mainContent'); if (mainEl) mainEl.style.display = 'none';
+      document.getElementById('mainContent').style.display = 'none';
       AdminPanel.openPage();
       document.querySelectorAll('#mainNav a').forEach(a => a.classList.remove('active'));
       return;
@@ -634,20 +661,44 @@ const Router = {
     if (AdminPanel && name !== 'admin_panel') AdminPanel.hidePage();
 
     if (App.me && App.gameActive && !App.gameEnded && App.lobbyId && name === 'lobby') {
-      const opponent = document.getElementById('activeGameOpponent'); if (opponent) opponent.textContent = App.opponentName || 'соперником';
+      const opponent = document.getElementById('activeGameOpponent'); 
+      if (opponent) opponent.textContent = App.opponentName || 'соперником';
       this.show('lobbyScreen');
       document.querySelectorAll('#mainNav a').forEach(a => a.classList.toggle('active', a.dataset.nav === 'lobby'));
-      Lobby.render(); return;
+      Lobby.render(); 
+      return;
     }
     
-    const activeNotice = document.getElementById('activeGameNoticeScreen'); if (activeNotice) activeNotice.classList.remove('active');
-    if (name !== 'watch' && Watch.autoRefreshHandle) { clearInterval(Watch.autoRefreshHandle); Watch.autoRefreshHandle = null; }
+    const activeNotice = document.getElementById('activeGameNoticeScreen'); 
+    if (activeNotice) activeNotice.classList.remove('active');
+    
+    if (name !== 'watch' && Watch.autoRefreshHandle) { 
+      clearInterval(Watch.autoRefreshHandle); 
+      Watch.autoRefreshHandle = null; 
+    }
     if (name !== 'arenaPage' && Arena.currentArenaId) Arena.leaveRoom();
     
-    const map = { landing: 'landingScreen', login: 'autorizeScreen', lobby: 'lobbyScreen', watch: 'watchScreen', arenas: 'arenasScreen', arenaPage: 'arenaPageScreen', profile: 'profileScreen', community: 'communityScreen', game: 'gameScreen', inbox: 'inboxScreen' };
-    const screenId = map[name]; if (!screenId) { this.show('lobbyScreen'); return; }
+    const map = { 
+      landing: 'landingScreen', 
+      login: 'autorizeScreen', 
+      lobby: 'lobbyScreen', 
+      watch: 'watchScreen', 
+      arenas: 'arenasScreen', 
+      arenaPage: 'arenaPageScreen', 
+      profile: 'profileScreen', 
+      community: 'communityScreen', 
+      game: 'gameScreen', 
+      inbox: 'inboxScreen' 
+    };
+    
+    const screenId = map[name]; 
+    if (!screenId) { this.show('lobbyScreen'); return; }
+    
     this.show(screenId);
-    document.querySelectorAll('#mainNav a').forEach(a => { const nav = a.dataset.nav; a.classList.toggle('active', nav === name || (name === 'arenaPage' && nav === 'arenas')); });
+    document.querySelectorAll('#mainNav a').forEach(a => { 
+      const nav = a.dataset.nav; 
+      a.classList.toggle('active', nav === name || (name === 'arenaPage' && nav === 'arenas')); 
+    });
     
     switch (name) {
       case 'lobby': Lobby.enter(); break;
@@ -660,7 +711,11 @@ const Router = {
       case 'inbox': Inbox.enter(param); break;
     }
   },
-  show(screenId) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); const el = document.getElementById(screenId); if (el) el.classList.add('active'); }
+  show(screenId) { 
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); 
+    const el = document.getElementById(screenId); 
+    if (el) el.classList.add('active'); 
+  }
 };
 // ============================================================
 // TOP ARENAS
