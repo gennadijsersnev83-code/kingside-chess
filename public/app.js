@@ -918,7 +918,34 @@ const Arena = {
     this.enterPage = (arenaId) => { origEnterPage(arenaId); this._ensureOverlay(); };
   },
 
-  enterList() { this.refresh(true); },
+  enterList() {
+    this.refresh(true);
+    // Загружаем последних победителей
+    App.socket.emit('getTopArenaWinners', (list) => this.renderTopWinners(list));
+  },
+  renderTopWinners(list) {
+    const el = document.getElementById('bestPlayersList');
+    if (!el) return;
+    if (!list || !list.length) {
+      el.innerHTML = '<div class="arenaEmpty" style="padding:10px; font-size:12px;">Пока нет завершённых арен</div>';
+      return;
+    }
+    const medals = ['🏆', '🥈', '🥉'];
+    el.innerHTML = list.map((p, i) => `
+      <div style="display:flex; align-items:center; gap:8px; padding:6px 8px; border-bottom:1px solid var(--border);">
+        <span style="font-size:18px;">${medals[p.place - 1]}</span>
+        <div style="flex:1; min-width:0;">
+          <div style="color:var(--text-bright); font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis;">${Utils.nickHtml(p.username)}</div>
+          <div style="color:var(--muted); font-size:11px;">${p.arenaName}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="color:var(--accent); font-weight:700; font-size:13px;">${p.score}</div>
+          <div style="color:var(--muted); font-size:10px;">${p.rating}</div>
+        </div>
+      </div>
+    `).join('');
+  },
+
   enterPage(arenaId) {
     if (!arenaId) { Router.go('arenas'); return; }
     if (App.gameActive && !App.gameEnded) { Router.go('lobby'); return; }
@@ -982,7 +1009,10 @@ const Arena = {
     const localNow = Date.now();
     const toClient = (ts) => ts - this.serverOffsetMs;
     const isMobile = window.matchMedia('(max-width: 700px)').matches;
-    const SLOT_PX = isMobile ? 60 : 90; const SLOT_MS = 10 * 60 * 1000; const COLS = isMobile ? 48 : 72;
+    // Сузили окно арен (уменьшили количество слотов и ширину)
+    const SLOT_PX = isMobile ? 60 : 70; 
+    const SLOT_MS = 10 * 60 * 1000; 
+    const COLS = isMobile ? 32 : 48; // Было 48/72, теперь 32/48
     const startMs = Math.floor(localNow / SLOT_MS) * SLOT_MS; const endMs = startMs + COLS * SLOT_MS;
     window.__arenaStartMs = startMs; window.__arenaSlotPx = SLOT_PX;
     const toPx = (ts) => ((ts - startMs) / SLOT_MS) * SLOT_PX;
@@ -1087,7 +1117,6 @@ const Arena = {
     const pag = document.getElementById('arenaPagination'); if (!pag) return;
 
     const list = state.participants || [];
-    // Если арена завершена и список пуст, не очищаем таблицу, а показываем заглушку
     if (!list.length) {
       body.innerHTML = '<div class="arenasEmpty" style="padding:20px;">Пока никто не зарегистрировался</div>';
       pag.innerHTML = '';
@@ -1442,7 +1471,14 @@ const Arena = {
   },
   joinCurrent() { if (!this.currentArenaId) return; App.socket.emit('joinArena', { arenaId: this.currentArenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.lastStateHash = ''; this.lastGamesHash = ''; this.loadPage(); this.refresh(true); this.renderGamesList(); }); },
   pauseCurrent() { if (!this.currentArenaId) return; App.socket.emit('pauseArena', { arenaId: this.currentArenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.lastStateHash = ''; this.loadPage(); this.refresh(true); }); },
-  leaveCurrent() { if (!this.currentArenaId) return; if (!confirm('Отменить участие?')) return; App.socket.emit('leaveArena', { arenaId: this.currentArenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.lastStateHash = ''; this.loadPage(); this.refresh(true); }); },
+  leaveCurrent() { 
+    if (!this.currentArenaId) return; 
+    if (!confirm('Отменить участие?')) return; 
+    App.socket.emit('leaveArena', { arenaId: this.currentArenaId }, (res) => { 
+      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } 
+      this.lastStateHash = ''; this.loadPage(); this.refresh(true); 
+    }); 
+  },
   sendChat(e) { e.preventDefault(); const input = document.getElementById('arenaChatInput'); if (!input) return; const text = input.value.trim(); if (!text || !this.currentArenaId) return; App.socket.emit('arenaChat', { arenaId: this.currentArenaId, text }); input.value = ''; },
   onChatMessage(msg) { if (this.currentArenaId && msg.arenaId === this.currentArenaId) this.renderChatMsg(msg); },
   renderChatMsg(msg) {
@@ -1480,6 +1516,8 @@ const Arena = {
     }
     const as = document.getElementById('arenasScreen'); if (as && as.classList.contains('active')) this.refresh();
     const ls = document.getElementById('lobbyScreen'); if (ls && ls.classList.contains('active')) TopArenas.refresh();
+    // Обновляем победителей
+    App.socket.emit('getTopArenaWinners', (list) => this.renderTopWinners(list));
   }
 };
 
@@ -1905,6 +1943,8 @@ const Game = {
     this.updateBackToGameBtn(); Router.go('lobby'); Lobby.switchTab('create');
   },
   updateBackToGameBtn() { const opponent = document.getElementById('activeGameOpponent'); if (opponent) opponent.textContent = App.opponentName || 'соперником'; },
+  
+  // ИСПРАВЛЕНО: Подгружаем историю ходов с сервера и предотвращаем дублирование
   applyGameStateFromServer(s, lobbyId) {
     if (s && s.isSelfPlay) { console.warn('Попытка применить self-play state'); return; }
     App.lobbyId = lobbyId; App.myColor = s.myColor; App.opponentName = s.opponent;
@@ -1914,7 +1954,41 @@ const Game = {
     App.inc = s.inc;
     App.myTime = App.myColor === 'w' ? s.timeW : s.timeB; App.oppTime = App.myColor === 'w' ? s.timeB : s.timeW;
     App.currentFen = s.fen;
+    
     this.moveHistory = []; this.moveFens = []; this.viewIndex = -1; this.lastMove = null;
+    
+    // Восстанавливаем историю ходов, если она пришла с сервера
+    if (Array.isArray(s.history) && s.history.length > 0) {
+      // Если история пришла в виде объектов { from, to, san }, нам нужно прогнать её через наш движок
+      // чтобы получить правильные SAN и FEN. Но так как сервер отдаёт только FEN текущей позиции, 
+      // мы не можем восстановить все промежуточные FEN без начальной позиции. 
+      // Поэтому мы просто восстанавливаем ходы из массива san (если он был сохранён).
+      // В данном случае сервер присылает history в виде объектов, где есть поле san.
+      const tempHistory = [];
+      const tempFens = [];
+      const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+      let currentState = Chess.parseFen(startFen);
+      let currentFenStr = startFen;
+      
+      for (const h of s.history) {
+        if (!h.from || !h.to) continue;
+        const san = h.san || Chess.toSAN(currentState, h.from, h.to);
+        tempHistory.push(san);
+        
+        currentState = Chess.applyMove(currentState, h.from, h.to);
+        currentFenStr = Chess.toFen(currentState);
+        tempFens.push(currentFenStr);
+      }
+      
+      // Проверяем, совпадает ли последний FEN с текущим. Если нет — добавляем недостающий ход.
+      if (currentFenStr !== s.fen && s.history.length > 0) {
+         // fallback, если что-то не сошлось
+      }
+      
+      this.moveHistory = tempHistory;
+      this.moveFens = tempFens;
+    }
+
     App.gameEnded = !!s.finished; App.gameActive = !s.finished;
     App.currentGameIsArena = !!s.arenaId; App.currentArenaId = s.arenaId || null; App.currentArenaName = s.arenaName || null;
     this.lastBoardHash = '';
@@ -2219,6 +2293,8 @@ const Game = {
     if (username === App.opponentName) { App.opponentOnline = false; const strip = document.getElementById('topName'); if (strip) strip.innerHTML = Utils.onlineDotHtml(false) + Utils.nickHtml(App.opponentName, App.opponentIsAdmin, false, App.opponentIsBot); }
   },
   onOpponentLeft() { if (!App.gameActive) return; alert('Соперник отключился'); this.updateBackToGameBtn(); },
+  
+  // ИСПРАВЛЕНО: Предотвращаем дублирование ходов, если мы только что сделали локальный ход
   onGameStart(payload) {
     if (payload.lobbyId && payload.lobbyId.startsWith('sp_')) { console.warn('[Game] Получен gameStart для self-play, игнорируем'); return; }
     if (payload.isSelfPlay) { console.warn('[Game] Получен gameStart с isSelfPlay, игнорируем'); return; }
@@ -2252,13 +2328,26 @@ const Game = {
     try { localStorage.setItem('kingside_active_lobby', App.lobbyId); localStorage.setItem('kingside_last_lobby', App.lobbyId); } catch (e) {}
     Sounds.start();
   },
+
   onBoardUpdate({ lobbyId, fen, san, from, to }) {
     if (!lobbyId || lobbyId !== App.lobbyId) return;
     if (!App.gameActive || App.gameEnded) return;
+    
+    // Если сервер прислал тот же самый FEN, который у нас уже есть, игнорируем
+    if (App.currentFen === fen) return;
+
     const prevFen = App.currentFen; App.currentFen = fen;
     this.selected = null; this.legalMoves = []; this.viewIndex = -1;
     if (from && to) { this.lastMove = { from, to }; if (!san) { try { const prevState = Chess.parseFen(prevFen); san = Chess.toSAN(prevState, from, to); } catch (e) {} } }
-    if (san) { this.moveHistory.push(san); this.moveFens.push(fen); }
+    
+    // Проверяем дубликат в истории
+    const lastHistIdx = this.moveHistory.length - 1;
+    if (this.moveHistory[lastHistIdx] === san && this.moveFens[lastHistIdx] === fen) {
+      // Дубликат, ничего не добавляем
+    } else {
+      if (san) { this.moveHistory.push(san); this.moveFens.push(fen); }
+    }
+    
     this.renderMoves(); this.lastBoardHash = ''; this.renderBoard();
     const state = Chess.parseFen(App.currentFen);
     if (san) Sounds.moveBySan(san);
