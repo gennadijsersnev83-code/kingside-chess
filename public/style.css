@@ -1020,3 +1020,247 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
 #arenaTopGame { flex: 0 0 auto; }
 
 @media (max-width: 600px) { .arenaTableRow { grid-template-columns: 22px minmax(0,1fr) minmax(48px,auto) minmax(28px,auto); gap: 4px; padding-left: 6px; padding-right: 6px; height: 34px; } .arenaTableRow .pname { gap: 4px; } .historyBlock { gap: 3px; } .arena-results { gap: 3px; } .res-num { font-size: 12px; } .scoreVal { font-size: 14px; } }
+
+/* ============================================================
+   СТИЛИ ДЛЯ ЛЕНДИНГА (Главная страница KingSide)
+   ============================================================ */
+
+#landingScreen {
+  background: var(--bg, #161512);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.landing-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.landing-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--border, #3a3833);
+}
+
+.landing-logo {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text-bright, #e8e6e3);
+  letter-spacing: -.5px;
+}
+.landing-logo span { color: var(--accent, #bf811d); }
+
+.landing-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* Кнопки лендинга */
+.btn {
+  border: none;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: .18s;
+}
+.btn-ghost { background: transparent; color: var(--text, #bfbdb6); }
+.btn-ghost:hover { color: var(--text-bright, #e8e6e3); background: rgba(255,255,255,.05); }
+.btn-primary { background: var(--accent, #bf811d); color: #161512; }
+.btn-primary:hover { background: var(--accent-2, #d99c33); }
+.btn-lg { padding: 14px 28px; font-size: 16px; border-radius: 8px; }
+
+/* Hero секция */
+.landing-main {
+  flex: 1;
+}
+
+.landing-hero {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 56px;
+  align-items: center;
+  padding: 60px 0;
+}
+
+.hero-text h1 {
+  font-size: clamp(2.2rem, 4.5vw, 3.4rem);
+  line-height: 1.1;
+  letter-spacing: -1.5px;
+  font-weight: 800;
+  margin-bottom: 20px;
+  color: var(--text-bright, #e8e6e3);
+}
+.hero-text h1 em {
+  font-style: normal;
+  color: var(--accent, #bf811d);
+}
+.hero-text p {
+  color: var(--text, #bfbdb6);
+  font-size: 1.08rem;
+  max-width: 480px;
+  margin-bottom: 32px;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 40px;
+}
+
+.hero-stats {
+  display: flex;
+  gap: 40px;
+}
+.stat b {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--text-bright, #e8e6e3);
+  font-variant-numeric: tabular-nums;
+}
+.stat span { font-size: 0.85rem; color: var(--text, #bfbdb6); }
+
+/* Демо-доска */
+.board-wrap {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  max-width: 460px;
+  width: 100%;
+  justify-self: center;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 30px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.06);
+}
+.board {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-rows: repeat(8, minmax(0, 1fr));
+}
+.board .sq {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
+  min-width: 0;
+  min-height: 0;
+}
+.board .sq.light { background: var(--light-sq, #e8d9b8); }
+.board .sq.dark  { background: var(--dark-sq, #8b6f47); }
+.board .sq .piece {
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+  object-fit: contain;
+}
+
+/* Секции лендинга */
+.landing-block {
+  padding: 40px 0;
+  border-top: 1px solid var(--border, #3a3833);
+}
+.block-head { margin-bottom: 24px; }
+.block-head h2 { font-size: 1.7rem; font-weight: 700; color: var(--text-bright, #e8e6e3); }
+.block-head p { color: var(--text, #bfbdb6); font-size: 0.95rem; }
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 18px;
+}
+.card {
+  background: var(--panel, #262522);
+  border: 1px solid var(--border, #3a3833);
+  border-radius: 8px;
+  padding: 22px;
+  transition: .2s;
+}
+.card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent, #bf811d);
+  box-shadow: 0 10px 30px rgba(0,0,0,.3);
+}
+.card .icon {
+  width: 44px; height: 44px;
+  display: grid; place-items: center;
+  font-size: 1.4rem;
+  background: rgba(191,129,29,.12);
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+.card h3 { font-size: 1.05rem; margin-bottom: 6px; color: var(--text-bright, #e8e6e3); }
+.card p { font-size: 0.88rem; color: var(--text, #bfbdb6); }
+
+/* Топ игроков */
+.players {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+.player {
+  display: flex; align-items: center; gap: 14px;
+  background: var(--panel, #262522);
+  border: 1px solid var(--border, #3a3833);
+  border-radius: 8px;
+  padding: 14px 16px;
+  transition: .2s;
+}
+.player:hover { border-color: var(--accent, #bf811d); }
+.avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--accent, #bf811d);
+  display: grid; place-items: center;
+  font-weight: 800; color: #161512;
+  flex-shrink: 0;
+}
+.player .info b { display: block; font-size: 0.95rem; color: var(--text-bright, #e8e6e3); }
+.player .info span { font-size: 0.8rem; color: var(--text, #bfbdb6); }
+.player .rating {
+  margin-left: auto;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--accent, #bf811d);
+}
+.players-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text, #bfbdb6);
+  background: var(--panel, #262522);
+  border: 1px dashed var(--border, #3a3833);
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+/* CTA */
+.landing-cta {
+  padding: 40px 0 80px;
+}
+.cta-inner {
+  background: linear-gradient(135deg, rgba(191,129,29,.15), rgba(191,129,29,.05));
+  border: 1px solid rgba(191,129,29,.3);
+  border-radius: 12px;
+  padding: 48px 40px;
+  text-align: center;
+}
+.cta-inner h2 { font-size: 1.9rem; font-weight: 800; color: var(--text-bright, #e8e6e3); margin-bottom: 12px; }
+.cta-inner p { color: var(--text, #bfbdb6); margin-bottom: 26px; }
+
+@media (max-width: 860px) {
+  .landing-hero { grid-template-columns: 1fr; gap: 40px; padding: 40px 0; }
+  .landing-header { flex-direction: column; gap: 16px; }
+}
