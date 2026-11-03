@@ -573,7 +573,7 @@ const Router = {
     const hash = location.hash.replace(/^#\/?/, '');
     const routeAndQuery = hash.split('?');
     const parts = routeAndQuery[0].split('/').filter(Boolean);
-    let name = parts[0] || (App.me ? 'lobby' : 'autorize');
+    let name = parts[0] || (App.me ? 'lobby' : 'landing');
     let param = parts[1] ? decodeURIComponent(parts[1]) : null;
     if (!param && routeAndQuery[1]) {
       try { param = new URLSearchParams(routeAndQuery[1]).get('token') || new URLSearchParams(routeAndQuery[1]).get('resetToken'); } catch (e) {}
@@ -587,36 +587,68 @@ const Router = {
   apply() {
     const { name, param } = this.current;
     if (App.restoring) return;
-    if (App.me && App.gameActive && !App.gameEnded && (name === 'arenas' || name === 'arenaPage')) { Router.go('lobby'); return; }
-    if (name === 'reset') { document.body.classList.add('login-active'); const hashToken = param || (location.hash.includes('?') ? new URLSearchParams(location.hash.split('?')[1]).get('token') : null); Auth.showResetToken(hashToken); Router.show('resetScreen'); return; }
-    if (name === 'verify') { Router.go('autorize'); return; }
-    if (name === 'login' || name === 'autorize' || !App.me) { document.body.classList.add('login-active'); Router.show('autorizeScreen'); return; }
-    if (App.me && name !== 'reset' && name !== 'verify' && name !== 'login' && name !== 'autorize') {
-      document.body.classList.remove('login-active');
-      const header = document.getElementById('mainHeader'); const main = document.getElementById('mainContent');
-      if (header) header.style.display = ''; if (main) main.style.display = '';
+    
+    // 1. Экран сброса пароля
+    if (name === 'reset') {
+      document.body.classList.add('login-active');
+      const hashToken = param || (location.hash.includes('?') ? new URLSearchParams(location.hash.split('?')[1]).get('token') : null);
+      Auth.showResetToken(hashToken); Router.show('resetScreen'); return;
     }
+    
+    // 2. Экран верификации
+    if (name === 'verify') { Router.go('autorize'); return; }
+
+    // 3. Если пользователь не авторизован
+    if (!App.me) {
+      if (name === 'autorize') {
+        document.body.classList.add('login-active');
+        Router.show('autorizeScreen');
+        return;
+      }
+      // Если не авторизован и не на форме входа — показываем ЛЕНДИНГ
+      document.body.classList.remove('login-active');
+      const header = document.getElementById('mainHeader'); if (header) header.style.display = 'none';
+      const main = document.getElementById('mainContent'); if (main) main.style.display = 'none';
+      Router.show('landingScreen');
+      return;
+    }
+
+    // 4. Если пользователь авторизован, но пришел на лендинг или форму входа — редирект в лобби
+    if (App.me && (name === 'landing' || name === 'autorize' || name === 'login')) {
+      Router.go('lobby');
+      return;
+    }
+
+    // 5. Остальная логика для авторизованных (как было)
+    document.body.classList.remove('login-active');
+    const header = document.getElementById('mainHeader'); if (header) header.style.display = '';
+    const main = document.getElementById('mainContent'); if (main) main.style.display = '';
+
     if (name === 'admin_panel') {
       if (!AdminPanel.isRoot()) { Router.go('lobby'); return; }
-      const main = document.getElementById('mainContent'); if (main) main.style.display = 'none';
+      const mainEl = document.getElementById('mainContent'); if (mainEl) mainEl.style.display = 'none';
       AdminPanel.openPage();
       document.querySelectorAll('#mainNav a').forEach(a => a.classList.remove('active'));
       return;
     }
     if (AdminPanel && name !== 'admin_panel') AdminPanel.hidePage();
+
     if (App.me && App.gameActive && !App.gameEnded && App.lobbyId && name === 'lobby') {
       const opponent = document.getElementById('activeGameOpponent'); if (opponent) opponent.textContent = App.opponentName || 'соперником';
       this.show('lobbyScreen');
       document.querySelectorAll('#mainNav a').forEach(a => a.classList.toggle('active', a.dataset.nav === 'lobby'));
       Lobby.render(); return;
     }
+    
     const activeNotice = document.getElementById('activeGameNoticeScreen'); if (activeNotice) activeNotice.classList.remove('active');
     if (name !== 'watch' && Watch.autoRefreshHandle) { clearInterval(Watch.autoRefreshHandle); Watch.autoRefreshHandle = null; }
     if (name !== 'arenaPage' && Arena.currentArenaId) Arena.leaveRoom();
-    const map = { login: 'autorizeScreen', lobby: 'lobbyScreen', watch: 'watchScreen', arenas: 'arenasScreen', arenaPage: 'arenaPageScreen', profile: 'profileScreen', community: 'communityScreen', game: 'gameScreen', inbox: 'inboxScreen' };
+    
+    const map = { landing: 'landingScreen', login: 'autorizeScreen', lobby: 'lobbyScreen', watch: 'watchScreen', arenas: 'arenasScreen', arenaPage: 'arenaPageScreen', profile: 'profileScreen', community: 'communityScreen', game: 'gameScreen', inbox: 'inboxScreen' };
     const screenId = map[name]; if (!screenId) { this.show('lobbyScreen'); return; }
     this.show(screenId);
     document.querySelectorAll('#mainNav a').forEach(a => { const nav = a.dataset.nav; a.classList.toggle('active', nav === name || (name === 'arenaPage' && nav === 'arenas')); });
+    
     switch (name) {
       case 'lobby': Lobby.enter(); break;
       case 'watch': Watch.enter(param); break;
@@ -630,7 +662,6 @@ const Router = {
   },
   show(screenId) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); const el = document.getElementById(screenId); if (el) el.classList.add('active'); }
 };
-
 // ============================================================
 // TOP ARENAS
 // ============================================================
