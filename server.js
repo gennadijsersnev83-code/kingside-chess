@@ -20,7 +20,6 @@ const io = new Server(server, {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
-// Accept common password-reset URLs produced by existing mailer configurations.
 app.get(['/reset-password', '/reset'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -74,7 +73,6 @@ function glicko2Unscale(mu) { return mu * GLICKO2.SCALE + 1500; }
 function glicko2G(phi) { return 1 / Math.sqrt(1 + (3 * phi * phi) / (Math.PI * Math.PI)); }
 function glicko2E(mu, muJ, phiJ) { return 1 / (1 + Math.exp(-glicko2G(phiJ) * (mu - muJ))); }
 function updateGlicko2(rating, rd, vol, results, elapsedDays = 0) {
-  // Lichess-style fractional rating periods: uncertainty grows with inactivity.
   const periods = Math.max(0, Number(elapsedDays) || 0) * GLICKO2.PERIODS_PER_DAY;
   const phi = Math.sqrt(Math.pow(rd / GLICKO2.SCALE, 2) + periods * vol * vol);
   if (!results || results.length === 0) {
@@ -1091,6 +1089,7 @@ function botCloseOwnWaitingLobby(botName) {
 }
 function botLeaveArena(botName, arenaId) {
   const state = arenas.get(arenaId); if (!state) return;
+  if (state.phase === 'live') return; // Нельзя выйти с арены во время её хода
   const p = state.participants.get(botName);
   if (p && !p.isPlaying) {
     state.participants.delete(botName);
@@ -1155,7 +1154,7 @@ function botBehaviorTick() {
           if (!p.paused) p.waitingSince = Date.now();
           io.emit('arenaUpdate', { arenaId: beh.activityId });
         }
-        if (Math.random() < 0.04) {
+        if (state.phase !== 'live' && Math.random() < 0.04) {
           botLeaveArena(bot.name, beh.activityId);
           beh.state = 'idle'; beh.activityId = null; beh.lastChange = now;
         }
@@ -1268,6 +1267,7 @@ function watcherTick() {
 setInterval(watcherTick, 15000);
 setTimeout(watcherTick, 5000);
 
+// --- ЧЕСТНАЯ ЖЕРЕБЬЁВКА ---
 function tryPair(state) {
   if (state.finished || state.phase !== 'live') return;
   if (state.tryPairRunning) return;
@@ -1287,6 +1287,8 @@ function tryPair(state) {
       state.pairingNow = available.length === 1 ? available[0].username : null;
       return;
     }
+    
+    // Сортируем по времени ожидания
     available.sort((a, b) => a.waitingSince - b.waitingSince);
 
     const used = new Set();
@@ -1295,16 +1297,31 @@ function tryPair(state) {
     const MAX_PAIRS_PER_TICK = hasWatcher ? 2 : 4;
     let watcherPairsThisTick = 0;
 
+    // Строим карту сыгранных пар в этой арене
+    const playedPairs = new Set();
+    for (const g of (state.finishedGames || [])) {
+      playedPairs.add([g.white, g.black].sort().join(':'));
+    }
+    // Учитываем и активные партии
+    for (const l of lobbies.values()) {
+      if (l.finished || l.arenaId !== state.id) continue;
+      const w = l.hostColor === 'w' ? l.host : l.guest;
+      const b = l.hostColor === 'b' ? l.host : l.guest;
+      if (w && b) playedPairs.add([w, b].sort().join(':'));
+    }
+
     for (let i = 0; i < available.length && pairsCreated < MAX_PAIRS_PER_TICK; i++) {
       const a = available[i];
       if (used.has(a.username) || a.isPlaying || a.lobbyId) continue;
-      let best = null, bestDiff = Infinity, bestCandidates = [];
+      
+      let best = null, bestScore = Infinity;
+      let bestCandidates = [];
+
       for (let j = 0; j < available.length; j++) {
         if (i === j) continue;
         const b = available[j];
         if (used.has(b.username) || b.isPlaying || b.lobbyId) continue;
         if (a.username === b.username) continue;
-
         if (a.username === WATCHER_NAME && b.username === WATCHER_NAME) continue;
 
         const aWatcher = a.username === WATCHER_NAME;
@@ -1323,13 +1340,24 @@ function tryPair(state) {
         if (!aIsBot && !bIsBot) {
           if (humanGamesInArena(state.id) >= MAX_HUMAN_GAMES_PER_ARENA) continue;
         }
-        const diff = Math.abs((a.score || 0) - (b.score || 0));
-        if (diff < bestDiff) { bestDiff = diff; bestCandidates = [b]; }
-        else if (diff === bestDiff) bestCandidates.push(b);
+        
+        // ПРОВЕРКА ЧЕСТНОСТИ: если уже играли — жёсткий штраф
+        const pairKey = [a.username, b.username].sort().join(':');
+        let score = Math.abs((a.score || 0) - (b.score || 0));
+        if (playedPairs.has(pairKey)) {
+           score += 1000; // огромный штраф, чтобы не выбрать
+        }
+        
+        if (score < bestScore) { bestScore = score; bestCandidates = [b]; }
+        else if (score === bestScore) bestCandidates.push(b);
       }
-      // При одинаковой разнице очков выбираем случайно, чтобы не закреплять
-      // один и тот же порядок обхода Map и не создавать повторяющиеся пары.
-      if (bestCandidates.length) best = bestCandidates[Math.floor(Math.random() * bestCandidates.length)];
+      if (bestCandidates.length) {
+        // Если есть кандидаты без повтора, выбираем среди них случайно
+        const filtered = bestCandidates.filter(c => !playedPairs.has([a.username, c.username].sort().join(':')));
+        if (filtered.length > 0) best = filtered[Math.floor(Math.random() * filtered.length)];
+        else best = bestCandidates[Math.floor(Math.random() * bestCandidates.length)];
+      }
+      
       if (!best) continue;
 
       if (a.isPlaying || a.lobbyId || best.isPlaying || best.lobbyId) continue;
@@ -1474,6 +1502,11 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   else if (whiteName === WATCHER_NAME) { const bh = botInitBehavior(WATCHER_NAME); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = now; }
   if (blackP.isBot && blackName !== WATCHER_NAME) { const bh = botInitBehavior(blackName); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = now; }
   else if (blackName === WATCHER_NAME) { const bh = botInitBehavior(WATCHER_NAME); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = now; }
+  
+  // Сбрасываем waitingSince, чтобы они не получили друг друга сразу же
+  whiteP.waitingSince = now;
+  blackP.waitingSince = now;
+
   setTimeout(() => tryPair(state), 300);
   io.to('arena:' + arenaId).emit('arenaUpdate', { arenaId });
   broadcastLiveGames();
@@ -1484,7 +1517,6 @@ function finishArena(state) {
   if (state.pairingInterval) { clearInterval(state.pairingInterval); state.pairingInterval = null; }
   for (const p of state.participants.values()) { p.isPlaying = false; p.lobbyId = null; }
   
-  // Сортируем и вычисляем статистику для топ-3
   const all = [...state.participants.values()].sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
     if (b.wins !== a.wins) return b.wins - a.wins;
@@ -1495,8 +1527,6 @@ function finishArena(state) {
     const games = (p.wins || 0) + (p.draws || 0) + (p.losses || 0);
     let perf = '—';
     if (games > 0) {
-      // Перформанс = средний рейтинг + бонус (упрощенно)
-      // В реальности нужно усреднять рейтинги соперников, но для простоты используем рейтинг игрока
       perf = Math.round(p.rating + (p.wins - p.losses) * 10); 
     }
     const winPct = games > 0 ? Math.round((p.wins / games) * 100) : 0;
@@ -1517,12 +1547,39 @@ function finishArena(state) {
   io.emit('arenaFinished', { arenaId: state.id, arenaName: state.name, top3: state.top3 });
   io.emit('arenaUpdate', { arenaId: state.id });
   
-  // НЕ удаляем ботов сразу! Оставляем их в списке участников для отображения результатов.
-  // Удаление произойдет только через cleanupTimer
   state.cleanupTimer = setTimeout(() => {
     if (state.chatViewers.size === 0) arenas.delete(state.id);
     else setTimeout(() => arenas.delete(state.id), 30 * 60 * 1000);
   }, 2 * 60 * 60 * 1000);
+}
+
+// Собираем список последних завершённых арен для панели "Лучшие игроки"
+function getRecentArenaWinners() {
+  const relevant = [];
+  for (const state of arenas.values()) {
+    if (!state.finished) continue;
+    if (!state.top3 || !state.top3.length) continue;
+    const tpl = ARENA_TEMPLATES.find(t => t.id === state.templateId);
+    if (!tpl) continue;
+    if (tpl.timeControl === 10 && tpl.increment === 0 && tpl.name.includes('Рапид')) relevant.push(state);
+    else if (tpl.timeControl === 3 && tpl.increment === 2 && tpl.name.includes('Блиц')) relevant.push(state);
+  }
+  relevant.sort((a, b) => b.endsAt - a.endsAt);
+  const top3List = [];
+  for (const arena of relevant) {
+    for (let i = 0; i < Math.min(3, arena.top3.length); i++) {
+      top3List.push({
+        place: i + 1,
+        username: arena.top3[i].username,
+        rating: arena.top3[i].rating,
+        score: arena.top3[i].score,
+        arenaName: arena.name,
+        arenaId: arena.id
+      });
+    }
+    if (top3List.length >= 9) break;
+  }
+  return top3List;
 }
 
 function getArenaSchedule(hoursAhead) {
@@ -2143,6 +2200,9 @@ io.on('connection', (socket) => {
   });
   socket.on('getTopArenas', (cb) => { if (typeof cb === 'function') cb(getTopLiveArenas()); });
   socket.on('getLiveGames', (cb) => { if (typeof cb === 'function') cb(buildGamesList()); });
+  
+  // НОВЫЙ ОБРАБОТЧИК: Топ-3 победителей последних арен
+  socket.on('getTopArenaWinners', (cb) => { if (typeof cb === 'function') cb(getRecentArenaWinners()); });
 
   socket.on('getBots', (cb) => {
     if (typeof cb !== 'function') return;
@@ -2171,6 +2231,7 @@ io.on('connection', (socket) => {
       time: l.time, inc: l.inc, timeW: l.timeW, timeB: l.timeB, turn: l.turn,
       fen: l.fen, chat: l.chat, arenaId: l.arenaId, arenaName: l.arenaName,
       finished: l.finished, isSelfPlay: !!l.isSelfPlay, isBot: !!l.isBot && !l.isSelfPlay && l.host !== WATCHER_NAME && l.guest !== WATCHER_NAME,
+      history: l.history || [], // ИСПРАВЛЕНО: отдаём историю ходов!
       watchersCount: watchersCountOf(l)
     }});
   });
@@ -2397,8 +2458,8 @@ io.on('connection', (socket) => {
         }
       }
       if (!l.history) l.history = [];
-      l.history.push({ from: fromSq, to: toSq, captured, byColor: myColor, ts: Date.now() });
-      if (l.history.length > 40) l.history.shift();
+      l.history.push({ from: fromSq, to: toSq, captured, byColor: myColor, ts: Date.now(), san: san || null });
+      if (l.history.length > 400) l.history.shift(); // Увеличили лимит, чтобы вся партия влезала
     } catch (e) {}
     const prevFenForWatcher = l.fen;
     const now = Date.now();
@@ -2810,11 +2871,14 @@ io.on('connection', (socket) => {
     cb({ ok: true });
   });
 
+  // ИСПРАВЛЕНО: Запрет выхода с арены, если она уже началась
   socket.on('leaveArena', ({ arenaId }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     const state = arenas.get(arenaId);
     if (!state) return cb({ ok: false, msg: 'Арена не найдена' });
-    if (state.phase !== 'waiting') return cb({ ok: false, msg: 'Нельзя сняться после старта арены — используйте паузу' });
+    if (state.phase !== 'waiting' || state.finished) {
+      return cb({ ok: false, msg: 'Нельзя покинуть арену после её старта. Используйте паузу.' });
+    }
     const p = state.participants.get(socket.username);
     if (p && !p.isPlaying) {
       state.participants.delete(socket.username);
@@ -3165,12 +3229,10 @@ io.on('connection', (socket) => {
     }
     const bannedUntil = Date.now() + Math.floor(requestedHours) * 3600 * 1000;
     try {
-      // Persist the ban directly, then update memory. This avoids relying on a full user upsert.
       const saved = await pool.query('UPDATE users SET is_banned = TRUE, banned_until = $1 WHERE username = $2', [bannedUntil, username]);
       if (!saved.rowCount) return cb({ ok: false, msg: 'Аккаунт не найден в базе данных' });
       u.isBanned = true;
       u.bannedUntil = bannedUntil;
-      // Disconnect every session for this account, not only sessions present in the online index.
       for (const [sid, targetSocket] of io.sockets.sockets.entries()) {
         if (targetSocket.username === username || online.get(sid) === username) targetSocket.disconnect(true);
       }
