@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Kingside — Шахматы онлайн</title>
+<title>KingSide — Шахматы онлайн</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23161512'/%3E%3Ctext x='50%25' y='56%25' font-size='46' text-anchor='middle' dominant-baseline='middle' fill='%23bf811d' font-family='serif'%3E%E2%99%94%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="/style.css">
 <style>
@@ -13,6 +13,87 @@ body.login-active #mainContent { display: none !important; }
 </style>
 </head>
 <body>
+
+<!-- ===================================================================== -->
+<!-- ЛЕНДИНГ (Главная для гостей) -->
+<!-- ===================================================================== -->
+<section id="landingScreen" class="screen active">
+  <div class="landing-page">
+    <!-- Шапка лендинга -->
+    <header class="landing-header">
+      <div class="landing-logo">♞ King<span>Side</span></div>
+      <div class="landing-actions">
+        <button class="btn btn-ghost" onclick="Router.go('autorize'); Auth.switchTab('login')">Войти</button>
+        <button class="btn btn-primary" onclick="Router.go('autorize'); Auth.switchTab('register')">Регистрация</button>
+      </div>
+    </header>
+
+    <!-- Hero секция -->
+    <main class="landing-main">
+      <div class="landing-hero">
+        <div class="hero-text">
+          <h1>Играй в шахматы<br><em>с кем угодно</em><br>в любое время</h1>
+          <p>Онлайн-платформа с рейтинговыми партиями, задачами и турнирами. Учись, играй и расти вместе с сообществом.</p>
+          <div class="hero-actions">
+            <button class="btn btn-primary btn-lg" onclick="Router.go('autorize'); Auth.switchTab('register')">Играть сейчас</button>
+            <button class="btn btn-ghost btn-lg" onclick="document.getElementById('landingModes').scrollIntoView({behavior:'smooth'})">Смотреть партии</button>
+          </div>
+          <div class="hero-stats">
+            <div class="stat"><b id="landingStatOnline">0</b><span>игроков онлайн</span></div>
+            <div class="stat"><b id="landingStatGames">0</b><span>партий сегодня</span></div>
+            <div class="stat"><b id="landingStatTotal">0</b><span>зарегистрировано</span></div>
+          </div>
+        </div>
+        <div class="board-wrap">
+          <div class="board" id="demoBoard"></div>
+        </div>
+      </div>
+
+      <!-- Режимы -->
+      <section class="landing-block" id="landingModes">
+        <div class="block-head">
+          <div>
+            <h2>Выбери режим</h2>
+            <p>От блица до классики — играй так, как удобно</p>
+          </div>
+        </div>
+        <div class="cards">
+          <div class="card"><div class="icon">⚡</div><h3>Блиц 3+0</h3><p>Быстрые партии для разогрева и тренировки тактики.</p></div>
+          <div class="card"><div class="icon">⏱️</div><h3>Рапид 10+5</h3><p>Баланс скорости и вдумчивой игры. Самый популярный режим.</p></div>
+          <div class="card"><div class="icon">🧠</div><h3>Классика</h3><p>Долгие партии для глубокого анализа и роста рейтинга.</p></div>
+          <div class="card"><div class="icon">🎯</div><h3>Против движка</h3><p>Тренируйся с ботами любого уровня сложности.</p></div>
+        </div>
+      </section>
+
+      <!-- Топ игроков -->
+      <section class="landing-block">
+        <div class="block-head">
+          <div>
+            <h2>Топ игроков</h2>
+            <p>Лучшие из лучших прямо сейчас</p>
+          </div>
+        </div>
+        <div class="players" id="landingTopPlayers">
+          <!-- Заполняется из app.js -->
+          <div class="players-empty">Загрузка рейтинга...</div>
+        </div>
+      </section>
+
+      <!-- CTA -->
+      <section class="landing-cta">
+        <div class="cta-inner">
+          <h2>Готов сыграть первую партию?</h2>
+          <p>Регистрация занимает 30 секунд. Без рекламы, без ограничений.</p>
+          <button class="btn btn-primary btn-lg" onclick="Router.go('autorize'); Auth.switchTab('register')">Создать аккаунт</button>
+        </div>
+      </section>
+    </main>
+  </div>
+</section>
+
+<!-- ===================================================================== -->
+<!-- ВАШИ СУЩЕСТВУЮЩИЕ ЭКРАНЫ (АВТОРИЗАЦИЯ И ПРИЛОЖЕНИЕ) -->
+<!-- ===================================================================== -->
 
 <section id="autorizeScreen" class="screen login-page" style="display: none;">
   <div class="auth-card">
@@ -40,15 +121,15 @@ body.login-active #mainContent { display: none !important; }
     </div>
     <div id="registrationAgreements" style="display:none;margin:10px 0 14px;">
       <details class="auth-terms" style="font-size:12px;line-height:1.5;color:var(--muted);margin:0 0 10px;">
-        <summary style="cursor:pointer;color:var(--text);font-weight:600;padding:5px 0;">Пользовательское соглашение и правила Kingside</summary>
+        <summary style="cursor:pointer;color:var(--text);font-weight:600;padding:5px 0;">Пользовательское соглашение и правила KingSide</summary>
         <div style="padding:8px 10px;border:1px solid var(--border);border-radius:8px;margin-top:6px;max-height:190px;overflow:auto;background:var(--panel, transparent);">
-          <p><strong>1. Назначение платформы.</strong> Kingside предназначена для игры в шахматы, общения и участия в турнирах. Создавая аккаунт, пользователь обязуется соблюдать эти правила и применимое законодательство.</p>
+          <p><strong>1. Назначение платформы.</strong> KingSide предназначена для игры в шахматы, общения и участия в турнирах. Создавая аккаунт, пользователь обязуется соблюдать эти правила и применимое законодательство.</p>
           <p><strong>2. Честная игра.</strong> Запрещено использовать шахматные движки, подсказки, стороннюю помощь, автоматизацию ходов, несколько аккаунтов для получения нечестного преимущества, намеренно сливать партии, договариваться о результатах или манипулировать рейтингом. Анализ партии после её завершения разрешён, если правила конкретного режима не устанавливают иное.</p>
           <p><strong>3. Уважительное общение.</strong> Запрещены оскорбления, угрозы, травля, спам, выдача себя за другого пользователя, публикация чужих личных данных и попытки нарушить работу платформы.</p>
           <p><strong>4. Модерация.</strong> При нарушении правил администрация может удалить сообщения, ограничить чат, временно заблокировать или отключить аккаунт. Срок и мера зависят от тяжести и повторности нарушения. Запрещённые действия не становятся допустимыми из-за отсутствия немедленной санкции.</p>
           <p><strong>5. Аккаунт и безопасность.</strong> Пользователь отвечает за сохранность пароля и действия, совершённые через аккаунт. Нельзя пытаться получить доступ к чужим аккаунтам или обходить ограничения.</p>
           <p><strong>6. Данные и письма.</strong> Email используется для подтверждения аккаунта и восстановления доступа. Пользователь должен указывать доступный ему адрес и хранить ссылку восстановления в тайне. Ссылка восстановления одноразовая и ограничена по времени.</p>
-          <p><strong>7. Доступность сервиса.</strong> Платформа предоставляется по принципу «как есть». Возможны технические перерывы, обновления и исправления ошибок. Не следует использовать Kingside для хранения критически важных данных.</p>
+          <p><strong>7. Доступность сервиса.</strong> Платформа предоставляется по принципу «как есть». Возможны технические перерывы, обновления и исправления ошибок. Не следует использовать KingSide для хранения критически важных данных.</p>
           <p><strong>8. Изменения правил.</strong> Правила могут обновляться. При существенных изменениях платформа может запросить повторное подтверждение. Версия, принятая при регистрации, сохраняется в записи аккаунта.</p>
           <p><strong>9. Обращения.</strong> Если вы считаете, что ограничение применено ошибочно, обратитесь к администрации через доступные на платформе каналы.</p>
           <p>Продолжая регистрацию, вы подтверждаете, что прочитали соглашение, понимаете правила и обязуетесь их соблюдать.</p>
@@ -67,6 +148,7 @@ body.login-active #mainContent { display: none !important; }
     </div>
     <button id="submitBtn" class="primary auth-submit" onclick="App.doLogin()"><span id="btnText">Войти</span></button>
     <div id="loginMsg" class="auth-msg"></div>
+    <div style="text-align:center;margin-top:16px;"><a href="#/lobby" class="forgot-link" style="display:inline-block;font-size:12px;color:#4a9ce8;">← Вернуться на главную</a></div>
   </div>
 </section>
 
@@ -91,7 +173,7 @@ body.login-active #mainContent { display: none !important; }
 </section>
 
 <header class="topbar" id="mainHeader" style="display: none;">
-  <div class="logo" onclick="Router.go('lobby')"><span class="mark">♔</span> Kingside</div>
+  <div class="logo" onclick="Router.go('lobby')"><span class="mark">♔</span> KingSide</div>
   <nav id="mainNav">
     <a data-nav="lobby" onclick="Router.go('lobby')">Игра</a>
     <a data-nav="watch" onclick="Router.go('watch')">Смотреть</a>
@@ -135,10 +217,9 @@ body.login-active #mainContent { display: none !important; }
   </div>
 </div>
 
-
 <main id="adminPage" class="adminPage" style="display:none;">
   <section class="adminPanel" aria-labelledby="adminPanelTitle">
-    <header class="adminPanelHeader"><div><h2 id="adminPanelTitle">🛡️ Админ-панель Kingside</h2><p>Полный доступ только у PeshkaSasha</p></div><button class="adminClose" onclick="AdminPanel.close()" aria-label="Закрыть">×</button></header>
+    <header class="adminPanelHeader"><div><h2 id="adminPanelTitle">🛡️ Админ-панель KingSide</h2><p>Полный доступ только у PeshkaSasha</p></div><button class="adminClose" onclick="AdminPanel.close()" aria-label="Закрыть">×</button></header>
     <div class="adminPanelTabs"><button class="active" data-admin-tab="users" onclick="AdminPanel.setTab('users',this)">Список игроков</button><button data-admin-tab="chat" onclick="AdminPanel.setTab('chat',this)">Модерация чата</button><button data-admin-tab="private" onclick="AdminPanel.setTab('private',this)">Личные сообщения</button><button data-admin-tab="settings" onclick="AdminPanel.setTab('settings',this)">Настройки</button></div>
     <div id="adminUsersTab">
       <div class="adminTools"><input id="adminUserSearch" placeholder="Поиск по нику..." oninput="AdminPanel.renderUsers()"><button onclick="AdminPanel.refresh()">↻ Обновить</button></div>
@@ -158,58 +239,6 @@ body.login-active #mainContent { display: none !important; }
     <div id="adminPanelStatus" class="adminStatus" aria-live="polite"></div>
   </section>
 </main>
-<style>
-/* Standalone admin route: normal document flow, compact and consistent with Kingside dark UI. */
-#adminPage.adminPage{box-sizing:border-box;width:100%;max-width:1120px;min-height:calc(100vh - 64px);margin:0 auto;padding:14px 16px 22px;background:transparent;color:var(--text-bright,#e9edf5);font:13px/1.4 system-ui,-apple-system,Segoe UI,sans-serif}
-#adminPage .adminPanel{box-sizing:border-box;width:100%;margin:0 auto;padding:12px 14px 16px;background:var(--panel,#141820);color:var(--text-bright,#e9edf5);border:1px solid var(--border,#2a303b);border-radius:10px;box-shadow:none;font:inherit}
-#adminPage .adminPanelHeader{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:0 0 10px;margin:0 0 10px;border-bottom:1px solid #2a303b;background:#141820}
-#adminPage .adminPanelHeader h2{font-size:15px;line-height:1.25;margin:0 0 3px;font-weight:700}
-#adminPage .adminPanelHeader p{font-size:11px;color:#9da8ba;margin:0}
-#adminPage .adminClose{font-size:22px;line-height:1;padding:4px 8px;background:transparent;border:0;color:#cbd3e0;cursor:pointer}
-#adminPage .adminPanelTabs{display:flex;flex-wrap:wrap;gap:5px;padding:0 0 9px;margin:0 0 12px;border-bottom:1px solid #2a303b;background:#141820}
-#adminPage .adminPanel button{box-sizing:border-box;min-height:29px;padding:5px 9px;border:1px solid #394253;border-radius:6px;background:#222936;color:#e9edf5;font:inherit;font-size:12px;line-height:1.2;white-space:normal;cursor:pointer}
-#adminPage .adminPanel button:hover{background:#2d3645}
-#adminPage .adminPanel button:disabled{opacity:.45;cursor:not-allowed}
-#adminPage .adminPanelTabs button.active{background:#57411f;border-color:#a77b31}
-#adminPage .adminTools{display:flex;gap:7px;align-items:center;margin:0 0 8px}
-#adminPage .adminTools input{flex:1;min-width:0}
-#adminPage .adminTools input,#adminPage textarea,#adminPage select,#adminPage input[type=number]{box-sizing:border-box;max-width:100%;min-height:30px;padding:6px 8px;border:1px solid #394253;border-radius:6px;background:#0e1117;color:#f2f4f8;font:inherit;font-size:12px}
-#adminPage .adminPanel textarea{display:block;width:min(100%,760px);min-height:76px;resize:vertical}
-#adminPage .adminMuted{font-size:11px;color:#9da8ba;margin:4px 0 8px}
-#adminPage .adminUsersList{display:grid;grid-template-columns:1fr;gap:6px}
-#adminPage .adminUserRow{display:grid;grid-template-columns:minmax(130px,1fr) minmax(105px,120px) minmax(170px,auto) auto;align-items:center;gap:7px;padding:6px 7px;border:1px solid #2b3340;border-radius:7px;background:#191f29;min-width:0}
-#adminPage .adminUserRow>div{min-width:0}
-#adminPage .adminUserName{font-size:12px;font-weight:700;overflow-wrap:anywhere}
-#adminPage .adminUserMeta{font-size:10px;color:#9da8ba;margin-top:2px;overflow-wrap:anywhere}
-#adminPage .adminUserRow select{width:100%;min-width:0}
-#adminPage .adminUserActions{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
-#adminPage .adminUserActions label{display:flex;align-items:center;gap:4px}
-#adminPage .adminUserActions input[type=number]{width:52px;min-width:0}
-#adminPage .adminDanger{background:#762a32!important;border-color:#a9434d!important}
-#adminPage .adminStatus{min-height:16px;margin:9px 0 0;padding-top:7px;border-top:1px solid #2a303b;font-size:11px;color:#8ddca4;overflow-wrap:anywhere}
-#adminPage .adminInline{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0}
-#adminPage .adminInline label{display:flex;align-items:center;gap:6px;font-size:12px}
-#adminPage .adminFieldLabel{display:grid;gap:4px;margin:8px 0;font-size:12px}
-#adminPage .adminFieldLabel select{width:min(100%,500px)}
-#adminPage .adminDmSetting{display:flex;align-items:center;gap:8px;margin:8px 0;font-weight:600;font-size:12px}
-#adminPage .adminDmSetting input{accent-color:#d49a3c}
-#adminPage #adminPrivateSection,#adminPage #adminSettingsSection,#adminPage #adminModerationSection{max-width:760px;margin:0 0 12px}
-#adminPage h3{font-size:14px;margin:10px 0 5px}
-#adminPage hr{border:0;border-top:1px solid #2a303b;margin:12px 0}
-.adminChatInlineTools{display:none;align-items:center;justify-content:flex-end;gap:7px;position:sticky;top:0;z-index:2;box-sizing:border-box;padding:5px 7px;margin:0 0 5px;background:#171c25ed;border:1px solid #394253;border-radius:6px;font:11px system-ui,sans-serif}
-.adminChatInlineTools button{padding:5px 8px!important;font-size:11px!important;background:#762a32!important;border:1px solid #a9434d!important;border-radius:6px;color:#fff;cursor:pointer}
-.adminSelectMsg{accent-color:#d49a3c;margin:0;vertical-align:middle;opacity:0;pointer-events:none;transform:scale(.9);transition:opacity .12s ease}
-.adminSelectHotspot{display:inline-flex;align-items:center;justify-content:center;width:15px;height:18px;margin-right:2px;vertical-align:middle;cursor:pointer;flex:0 0 15px}
-.adminSelectHotspot:hover .adminSelectMsg,.adminSelectHotspot:focus-within .adminSelectMsg,.adminSelectHotspot.is-selected .adminSelectMsg{opacity:1;pointer-events:auto;transform:scale(1)}
-.adminSelectable:hover{outline:1px dashed #a77b31;outline-offset:1px}
-.adminLocalNotice{border-left:3px solid var(--admin-msg-color,#ff4d4f);padding:4px 7px;margin:4px 0;background:#ffffff0a}
-.adminLocalNotice .adminLocalTag{font-size:10px;color:var(--admin-msg-color,#ff4d4f);font-weight:700;margin-right:5px}
-.adminTopMenu{padding:5px;background:#171c25;border:1px solid #394253;border-radius:8px;box-shadow:0 8px 20px #0008}
-.adminTopMenu button{display:block;width:100%;text-align:left;white-space:nowrap;border:0;border-radius:5px;background:transparent;color:#e9edf5;padding:7px 9px;cursor:pointer}
-.adminTopMenu button:hover{background:#2d3645}
-@media(max-width:850px){#adminPage .adminUserRow{grid-template-columns:minmax(0,1fr) minmax(100px,130px)}#adminPage .adminUserRow>.adminUserActions{grid-column:auto}#adminPage .adminUserRow>.adminUserActions:last-child{grid-column:1/-1}}
-@media(max-width:560px){#adminPage.adminPage{min-height:calc(100vh - 52px);padding:8px}#adminPage .adminPanel{padding:9px}#adminPage .adminPanelHeader h2{font-size:15px}#adminPage .adminPanelTabs{gap:4px}#adminPage .adminPanelTabs button{font-size:11px;padding:5px 7px}#adminPage .adminTools{align-items:stretch}#adminPage .adminUserRow{grid-template-columns:1fr;gap:6px}#adminPage .adminUserRow>.adminUserActions:last-child{grid-column:auto}#adminPage .adminUserActions{gap:4px}}
-</style>
 
 <main id="mainContent" style="display: none;">
   <section id="lobbyScreen" class="screen">
@@ -247,12 +276,8 @@ body.login-active #mainContent { display: none !important; }
   </section>
 
   <section id="arenasScreen" class="screen">
-    <!-- ИСПРАВЛЕНО: Слева панель лидеров как в Lichess, справа сетка -->
     <div style="max-width:1200px; margin:0 auto; display:flex; gap:20px; align-items:flex-start;">
-      
-      <!-- Левая панель (как в Lichess) -->
       <div style="width:240px; flex-shrink:0;">
-        <!-- Меню (как в Lichess) -->
         <div class="sideTitle" style="margin-top:0; margin-bottom:8px;">Мои турниры</div>
         <div style="display:flex; flex-direction:column; gap:4px; margin-bottom:24px; font-size:13px; color:var(--text-bright);">
           <div style="cursor:pointer; padding:2px 0;">Турнирный календарь</div>
@@ -267,7 +292,6 @@ body.login-active #mainContent { display: none !important; }
         </div>
       </div>
 
-      <!-- Сетка турниров -->
       <div style="flex:1; min-width:0;">
         <div class="arenasHeader">
           <div class="ahLeft"><h1>Турниры</h1></div>
