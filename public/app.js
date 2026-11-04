@@ -2269,7 +2269,7 @@ const Game = {
     this.lastBoardHash = '';
     this.renderBoard();
     this.applyUserMove(mv.from, mv.to, false);
-  }
+  },
   onMouseDown(ev) {
     if (ev.button !== 0) return;
     const sq = ev.target.closest('.sq'); if (!sq || sq.dataset.r == null) return;
@@ -2458,7 +2458,7 @@ const Game = {
   
     // ВАЖНО: вызываем премьов ПОСЛЕ того, как доска и fen обновились
     this.tryApplyPremove();
-  }
+  },
   onTimeUpdate({ lobbyId, timeW, timeB, serverNow }) {
     if (!lobbyId || lobbyId !== App.lobbyId) return;
     if (!App.gameActive || App.gameEnded) return;
