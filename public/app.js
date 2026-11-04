@@ -412,14 +412,29 @@ const App = {
     const password = document.getElementById('password').value;
     const email = document.getElementById('email').value.trim();
     const msgEl = document.getElementById('loginMsg');
+    
+    // Очистка ошибок
+    document.getElementById('honorError').style.display = 'none';
+    document.getElementById('rulesError').style.display = 'none';
+
     if (!username || !password) { msgEl.textContent = 'Введите логин и пароль'; return; }
     if (Auth.mode === 'register' && !email) { msgEl.textContent = 'Введите email'; return; }
+    
     const honor = document.getElementById('honorCheckbox');
     const rules = document.getElementById('rulesCheckbox');
+    
     if (Auth.mode === 'register') {
       if (password.length < 8) { msgEl.textContent = 'Для нового аккаунта пароль должен содержать минимум 8 символов'; return; }
-      if (!honor || !honor.checked) { msgEl.textContent = 'Подтвердите, что будете играть честно'; return; }
-      if (!rules || !rules.checked) { msgEl.textContent = 'Подтвердите согласие с правилами платформы'; return; }
+      if (!honor || !honor.checked) { 
+        document.getElementById('honorError').style.display = 'block'; 
+        msgEl.textContent = 'Подтвердите обязательные пункты'; 
+        return; 
+      }
+      if (!rules || !rules.checked) { 
+        document.getElementById('rulesError').style.display = 'block'; 
+        msgEl.textContent = 'Подтвердите обязательные пункты'; 
+        return; 
+      }
     }
     msgEl.textContent = 'Загрузка...'; msgEl.style.color = 'var(--text)';
     this.socket.emit('register', {
@@ -434,11 +449,12 @@ const App = {
       }
       this.me = res.user;
       try { localStorage.setItem('kingside_login', JSON.stringify({ username, password })); } catch (e) {}
+      Landing.closeAuth();
       this.showAuthenticatedUI(); this.updateTopbarUser(); Router.go('lobby'); this.tryResumeGame();
     });
   },
 
-  logout() { try { localStorage.removeItem('kingside_login'); localStorage.removeItem('kingside_active_lobby'); localStorage.removeItem('kingside_last_arena'); } catch (e) {} this.me = null; location.hash = '#/autorize'; location.reload(); },
+  logout() { try { localStorage.removeItem('kingside_login'); localStorage.removeItem('kingside_active_lobby'); localStorage.removeItem('kingside_last_arena'); } catch (e) {} this.me = null; location.hash = '#/landing'; location.reload(); },
 
   tryResumeGame() {
     if (this.restoring) return;
@@ -490,9 +506,9 @@ const App = {
     s.on('lobbiesUpdate', () => Lobby.refreshIfActive());
     s.on('connect_error', () => console.warn('Не удалось подключиться'));
     s.on('gameStart', (payload) => Game.onGameStart(payload));
-    s.on('boardUpdate', (payload) => { Game.onBoardUpdate(payload); Watch.onBoardUpdate(payload); });
-    s.on('timeUpdate', (payload) => { Game.onTimeUpdate(payload); Watch.onTimeUpdate(payload); });
-    s.on('gameEnded', (payload) => { Game.onGameEnded(payload); Watch.onGameEnded(payload); });
+    s.on('boardUpdate', (payload) => { Game.onBoardUpdate(payload); Watch.onBoardUpdate(payload); Landing.onBoardUpdate(payload); });
+    s.on('timeUpdate', (payload) => { Game.onTimeUpdate(payload); Watch.onTimeUpdate(payload); Landing.onTimeUpdate(payload); });
+    s.on('gameEnded', (payload) => { Game.onGameEnded(payload); Watch.onGameEnded(payload); Landing.onGameEnded(payload); });
     s.on('chatMessage', (msg) => { Game.onChatMessage(msg); Watch.onChatMessage(msg); });
     s.on('chatMessageDeleted', ({ msgId }) => Game.onChatDeleted(msgId));
     s.on('chatError', ({ msg }) => alert(msg));
@@ -515,7 +531,11 @@ const App = {
         if (aps && aps.classList.contains('active')) Arena.renderGamesList();
       }
     });
-    s.on('liveGamesUpdate', (list) => { const ws = document.getElementById('watchScreen'); if (ws && ws.classList.contains('active')) Watch.refreshFromList(list); });
+    s.on('liveGamesUpdate', (list) => { 
+      const ws = document.getElementById('watchScreen'); 
+      if (ws && ws.classList.contains('active')) Watch.refreshFromList(list); 
+      Landing.onLiveGamesUpdate(list);
+    });
     s.on('msgNew', (msg) => Inbox.onNew(msg));
     s.on('msgUnread', ({ count }) => Inbox.setUnread(count));
     s.on('msgDialogDeleted', ({ with: other }) => Inbox.onDialogDeleted(other));
@@ -624,15 +644,10 @@ const Router = {
       document.getElementById('mainContent').style.display = 'none';
       document.getElementById('adminPage').style.display = 'none';
       
-      if (name === 'autorize') {
-        document.body.classList.add('login-active');
-        this.show('autorizeScreen');
-        return;
-      }
-      
       // Если не на форме входа — показываем ЛЕНДИНГ
       document.body.classList.remove('login-active');
       this.show('landingScreen');
+      if (window.Landing) Landing.init();
       return;
     }
 
@@ -1009,7 +1024,6 @@ const Arena = {
     App.socket.emit('getTopArenaWinners', (list) => this.renderTopWinners(list));
   },
 
-  // ИСПРАВЛЕНО: Рендерим список как на Lichess
   renderTopWinners(list) {
     const el = document.getElementById('bestPlayersList');
     if (!el) return;
@@ -1097,7 +1111,6 @@ const Arena = {
     const localNow = Date.now();
     const toClient = (ts) => ts - this.serverOffsetMs;
     const isMobile = window.matchMedia('(max-width: 700px)').matches;
-    // Сузили окно арен
     const SLOT_PX = isMobile ? 60 : 70; 
     const SLOT_MS = 10 * 60 * 1000; 
     const COLS = isMobile ? 32 : 48;
@@ -1604,7 +1617,6 @@ const Arena = {
     }
     const as = document.getElementById('arenasScreen'); if (as && as.classList.contains('active')) this.refresh();
     const ls = document.getElementById('lobbyScreen'); if (ls && ls.classList.contains('active')) TopArenas.refresh();
-    // Обновляем победителей
     App.socket.emit('getTopArenaWinners', (list) => this.renderTopWinners(list));
   }
 };
@@ -2044,7 +2056,6 @@ const Game = {
     
     this.moveHistory = []; this.moveFens = []; this.viewIndex = -1; this.lastMove = null;
     
-    // Восстанавливаем историю ходов, если она пришла с сервера
     if (Array.isArray(s.history) && s.history.length > 0) {
       const tempHistory = [];
       const tempFens = [];
@@ -2590,24 +2601,34 @@ const AdminPanel = {
       });
     }
   }
-
 };
 
 // ============================================================
 // LANDING PAGE LOGIC
 // ============================================================
 const Landing = {
+  currentGame: null,
+  clockRaf: null,
+  clockSyncedAt: 0,
+  clockW: 0,
+  clockB: 0,
+  clockTurn: 'w',
+
   init() {
     this.renderDemoBoard();
     
     App.socket.emit('getStats', (stats) => {
       if (!stats) return;
       const online = document.getElementById('landingStatOnline');
-      const games = document.getElementById('landingStatGames');
-      const total = document.getElementById('landingStatTotal');
+      const totalGames = document.getElementById('landingStatTotalGames');
+      const activeGames = document.getElementById('landingStatActiveGames');
       if (online) online.textContent = stats.online || 0;
-      if (games) games.textContent = stats.games || 0;
-      if (total) total.textContent = stats.online || 0; 
+      if (totalGames) totalGames.textContent = stats.games || 0;
+      if (activeGames) activeGames.textContent = stats.activeGames || 0;
+    });
+
+    App.socket.emit('getLiveGames', (list) => {
+      this.onLiveGamesUpdate(list);
     });
 
     App.socket.emit('getCommunityOnline', (players) => {
@@ -2633,12 +2654,34 @@ const Landing = {
     });
   },
 
+  onLiveGamesUpdate(list) {
+    if (!this.currentGame) {
+      const realGames = (list || []).filter(g => !g.isBotGame && !g.isSelfPlay && !g.isArena);
+      const game = realGames.length > 0 ? realGames[0] : (list || []).filter(g => !g.isSelfPlay && !g.isArena)[0];
+      if (game) {
+        this.currentGame = game;
+        App.socket.emit('watchGame', { id: game.id }, (res) => {
+          if (res && res.ok) {
+            this.currentGame = res.game;
+            this.renderDemoBoard();
+            this.updatePlayers();
+            this.startClock();
+          }
+        });
+      }
+    }
+  },
+
   renderDemoBoard() {
     const board = document.getElementById('demoBoard');
     if (!board) return;
-    const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-    const state = Chess.parseFen(startFen);
     
+    let fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    if (this.currentGame && this.currentGame.fen) {
+      fen = this.currentGame.fen;
+    }
+    
+    const state = Chess.parseFen(fen);
     let html = '';
     for (let r = 0; r < 8; r++) {
       for (let c = 0; c < 8; c++) {
@@ -2650,40 +2693,126 @@ const Landing = {
       }
     }
     board.innerHTML = html;
+  },
+
+  updatePlayers() {
+    if (!this.currentGame) {
+      document.getElementById('landingTopName').textContent = 'Ожидание партии...';
+      document.getElementById('landingTopRating').textContent = '';
+      document.getElementById('landingTopClock').textContent = '--:--';
+      document.getElementById('landingBottomName').textContent = 'Ожидание партии...';
+      document.getElementById('landingBottomRating').textContent = '';
+      document.getElementById('landingBottomClock').textContent = '--:--';
+      return;
+    }
+    const g = this.currentGame;
+    document.getElementById('landingTopName').innerHTML = Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod);
+    document.getElementById('landingTopRating').textContent = g.blackRating || '';
+    document.getElementById('landingTopClock').textContent = Utils.formatTime(g.timeB);
+    document.getElementById('landingBottomName').innerHTML = Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod);
+    document.getElementById('landingBottomRating').textContent = g.whiteRating || '';
+    document.getElementById('landingBottomClock').textContent = Utils.formatTime(g.timeW);
+    
+    document.getElementById('landingTopClock').classList.toggle('active', g.turn === 'b');
+    document.getElementById('landingBottomClock').classList.toggle('active', g.turn === 'w');
+  },
+
+  startClock() {
+    if (this.clockRaf) cancelAnimationFrame(this.clockRaf);
+    if (!this.currentGame) return;
+    
+    this.clockSyncedAt = performance.now();
+    this.clockW = this.currentGame.timeW;
+    this.clockB = this.currentGame.timeB;
+    this.clockTurn = this.currentGame.turn;
+    
+    const self = this;
+    function tick() {
+      if (!self.currentGame) { self.clockRaf = null; return; }
+      const elapsed = (performance.now() - self.clockSyncedAt) / 1000;
+      let w = self.clockW, b = self.clockB;
+      if (self.clockTurn === 'w') w = Math.max(0, w - elapsed); else b = Math.max(0, b - elapsed);
+      
+      const elW = document.getElementById('landingBottomClock');
+      const elB = document.getElementById('landingTopClock');
+      if (elW) elW.textContent = Utils.formatTime(w);
+      if (elB) elB.textContent = Utils.formatTime(b);
+      
+      self.clockRaf = requestAnimationFrame(tick);
+    }
+    this.clockRaf = requestAnimationFrame(tick);
+  },
+
+  onBoardUpdate({ lobbyId, fen, turn, from, to, timeW, timeB }) {
+    if (!this.currentGame || this.currentGame.id !== lobbyId) return;
+    this.currentGame.fen = fen;
+    if (turn) this.currentGame.turn = turn;
+    if (from && to) this.currentGame.lastMove = { from, to };
+    if (typeof timeW === 'number') this.currentGame.timeW = timeW;
+    if (typeof timeB === 'number') this.currentGame.timeB = timeB;
+    
+    this.renderDemoBoard();
+    this.updatePlayers();
+    
+    if (!this.currentGame.finished) {
+      this.clockSyncedAt = performance.now();
+      this.clockW = timeW || this.currentGame.timeW;
+      this.clockB = timeB || this.currentGame.timeB;
+      this.clockTurn = turn || this.currentGame.turn;
+    }
+  },
+
+  onTimeUpdate({ lobbyId, timeW, timeB }) {
+    if (!this.currentGame || this.currentGame.id !== lobbyId) return;
+    this.currentGame.timeW = timeW;
+    this.currentGame.timeB = timeB;
+    this.clockSyncedAt = performance.now();
+    this.clockW = timeW;
+    this.clockB = timeB;
+  },
+
+  onGameEnded({ lobbyId, result, reason }) {
+    if (!this.currentGame || this.currentGame.id !== lobbyId) return;
+    this.currentGame.finished = true;
+    this.currentGame.result = result;
+    this.currentGame.reason = reason;
+    if (this.clockRaf) { cancelAnimationFrame(this.clockRaf); this.clockRaf = null; }
+  },
+
+  openAuth(mode) {
+    document.getElementById('authModal').classList.add('active');
+    Auth.switchTab(mode);
+  },
+
+  closeAuth() {
+    document.getElementById('authModal').classList.remove('active');
   }
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => {
-    // Если пользователь не авторизован, принудительно скрываем всё лишнее
-    if (!App.me) {
-      document.body.classList.remove('login-active');
-      document.getElementById('mainHeader').style.display = 'none';
-      document.getElementById('mainContent').style.display = 'none';
-      document.getElementById('adminPage').style.display = 'none';
-      
-      // Если хеша нет, ставим лендинг
-      if (!location.hash || location.hash === '#' || location.hash === '#/') {
-        Router.go('landing');
-      } else {
-        Router.handle();
-      }
-      
-      Landing.init();
-    }
-  }, 100);
-});
-
-// ============================================================
-// BOOT
-// ============================================================
 document.addEventListener('DOMContentLoaded', () => {
   window.App = App; window.Router = Router; window.Lobby = Lobby; window.Bot = Bot;
   window.Watch = Watch; window.Arena = Arena; window.Profile = Profile; window.Community = Community;
   window.Game = Game; window.Banners = Banners; window.Mod = Mod; window.Utils = Utils;
   window.UserMenu = UserMenu; window.Inbox = Inbox; window.Ping = Ping; window.Auth = Auth; window.AdminPanel = AdminPanel;
+  window.Landing = Landing;
   document.addEventListener('click', (event) => { const root=document.getElementById('adminTopDropdown'); if(root && !root.contains(event.target)) AdminPanel.closeTopMenu(); });
   App.init();
+  
+  // Принудительно показываем лендинг при загрузке, если нет сохранения
+  setTimeout(() => {
+    if (!App.me) {
+      document.body.classList.remove('login-active');
+      document.getElementById('mainHeader').style.display = 'none';
+      document.getElementById('mainContent').style.display = 'none';
+      document.getElementById('adminPage').style.display = 'none';
+      if (!location.hash || location.hash === '#' || location.hash === '#/') {
+        Router.go('landing');
+      } else {
+        Router.handle();
+      }
+      Landing.init();
+    }
+  }, 100);
 });
 
 (function() {
