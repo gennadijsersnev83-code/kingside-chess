@@ -337,7 +337,15 @@ const App = {
   _autoLoginAttempts: 0, restoring: false,
 
   init() {
-    this.socket = io({ transports: ['websocket', 'polling'], upgrade: true, reconnection: true, reconnectionAttempts: 10, reconnectionDelay: 1000 });
+    this.socket = io({
+        transports: ['websocket'],
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        randomizationFactor: 0.5,
+        timeout: 10000
+    });
     Sounds.initOnFirstClick();
     this.bindSocket();
 
