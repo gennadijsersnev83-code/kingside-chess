@@ -2604,7 +2604,7 @@ const AdminPanel = {
 };
 
 // ============================================================
-// LANDING PAGE LOGIC
+// LANDING PAGE LOGIC (Партия лидеров)
 // ============================================================
 const Landing = {
   currentGame: null,
@@ -2655,20 +2655,30 @@ const Landing = {
   },
 
   onLiveGamesUpdate(list) {
-    if (!this.currentGame) {
-      const realGames = (list || []).filter(g => !g.isBotGame && !g.isSelfPlay && !g.isArena);
-      const game = realGames.length > 0 ? realGames[0] : (list || []).filter(g => !g.isSelfPlay && !g.isArena)[0];
-      if (game) {
-        this.currentGame = game;
-        App.socket.emit('watchGame', { id: game.id }, (res) => {
-          if (res && res.ok) {
-            this.currentGame = res.game;
-            this.renderDemoBoard();
-            this.updatePlayers();
-            this.startClock();
-          }
-        });
-      }
+    // Если партия уже выбрана и она не закончилась, ничего не меняем
+    if (this.currentGame && !this.currentGame.finished) return;
+
+    const realGames = (list || []).filter(g => !g.isArena && !g.isSelfPlay);
+    const game = realGames.length > 0 ? realGames[0] : null;
+
+    if (game) {
+      this.currentGame = game;
+      App.socket.emit('watchGame', { id: game.id }, (res) => {
+        if (res && res.ok) {
+          this.currentGame = res.game;
+          this.renderDemoBoard();
+          this.updatePlayers();
+          this.startClock();
+        }
+      });
+    } else {
+      this.renderDemoBoard();
+      document.getElementById('landingTopName').textContent = 'Ожидание партии...';
+      document.getElementById('landingBottomName').textContent = 'Ожидание партии...';
+      document.getElementById('landingTopClock').textContent = '--:--';
+      document.getElementById('landingBottomClock').textContent = '--:--';
+      document.getElementById('landingTopClock').classList.remove('active');
+      document.getElementById('landingBottomClock').classList.remove('active');
     }
   },
 
@@ -2696,22 +2706,16 @@ const Landing = {
   },
 
   updatePlayers() {
-    if (!this.currentGame) {
-      document.getElementById('landingTopName').textContent = 'Ожидание партии...';
-      document.getElementById('landingTopRating').textContent = '';
-      document.getElementById('landingTopClock').textContent = '--:--';
-      document.getElementById('landingBottomName').textContent = 'Ожидание партии...';
-      document.getElementById('landingBottomRating').textContent = '';
-      document.getElementById('landingBottomClock').textContent = '--:--';
-      return;
-    }
+    if (!this.currentGame) return;
     const g = this.currentGame;
+    
     document.getElementById('landingTopName').innerHTML = Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod);
     document.getElementById('landingTopRating').textContent = g.blackRating || '';
-    document.getElementById('landingTopClock').textContent = Utils.formatTime(g.timeB);
+    document.getElementById('landingTopClock').textContent = Utils.formatTime(g.timeB || 0);
+    
     document.getElementById('landingBottomName').innerHTML = Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod);
     document.getElementById('landingBottomRating').textContent = g.whiteRating || '';
-    document.getElementById('landingBottomClock').textContent = Utils.formatTime(g.timeW);
+    document.getElementById('landingBottomClock').textContent = Utils.formatTime(g.timeW || 0);
     
     document.getElementById('landingTopClock').classList.toggle('active', g.turn === 'b');
     document.getElementById('landingBottomClock').classList.toggle('active', g.turn === 'w');
@@ -2722,16 +2726,19 @@ const Landing = {
     if (!this.currentGame) return;
     
     this.clockSyncedAt = performance.now();
-    this.clockW = this.currentGame.timeW;
-    this.clockB = this.currentGame.timeB;
-    this.clockTurn = this.currentGame.turn;
+    this.clockW = this.currentGame.timeW || 0;
+    this.clockB = this.currentGame.timeB || 0;
+    this.clockTurn = this.currentGame.turn || 'w';
     
     const self = this;
     function tick() {
-      if (!self.currentGame) { self.clockRaf = null; return; }
+      if (!self.currentGame || self.currentGame.finished) { self.clockRaf = null; return; }
+      
       const elapsed = (performance.now() - self.clockSyncedAt) / 1000;
       let w = self.clockW, b = self.clockB;
-      if (self.clockTurn === 'w') w = Math.max(0, w - elapsed); else b = Math.max(0, b - elapsed);
+      
+      if (self.clockTurn === 'w') w = Math.max(0, w - elapsed); 
+      else b = Math.max(0, b - elapsed);
       
       const elW = document.getElementById('landingBottomClock');
       const elB = document.getElementById('landingTopClock');
@@ -2777,6 +2784,10 @@ const Landing = {
     this.currentGame.result = result;
     this.currentGame.reason = reason;
     if (this.clockRaf) { cancelAnimationFrame(this.clockRaf); this.clockRaf = null; }
+    
+    setTimeout(() => {
+      App.socket.emit('getLiveGames', (list) => this.onLiveGamesUpdate(list));
+    }, 5000);
   },
 
   openAuth(mode) {
