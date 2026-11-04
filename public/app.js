@@ -2250,16 +2250,26 @@ const Game = {
   },
   tryApplyPremove() {
     if (!this.premove) return;
+    if (!App.gameActive || App.gameEnded) { this.premove = null; return; }
     const state = Chess.parseFen(App.currentFen);
     if (state.turn !== App.myColor) return;
     const p = state.board[this.premove.from[0]][this.premove.from[1]];
-    if (!p || Chess.isWhite(p) !== (App.myColor === 'w')) { this.premove = null; this.lastBoardHash = ''; this.renderBoard(); return; }
-    const leg = Chess.legalMovesFor(state, this.premove.from[0], this.premove.from[1]);
-    const ok = leg.some(([r, c]) => r === this.premove.to[0] && c === this.premove.to[1]);
-    if (!ok) { this.premove = null; this.lastBoardHash = ''; this.renderBoard(); return; }
-    const mv = this.premove; this.premove = null;
-    setTimeout(() => { this.applyUserMove(mv.from, mv.to, false); }, 30);
-  },
+    if (!p || Chess.isWhite(p) !== (App.myColor === 'w')) {
+      this.premove = null; this.lastBoardHash = ''; this.renderBoard();
+      return;
+    }
+    const legal = Chess.legalMovesFor(state, this.premove.from[0], this.premove.from[1]);
+    const ok = legal.some(([r, c]) => r === this.premove.to[0] && c === this.premove.to[1]);
+    if (!ok) {
+      this.premove = null; this.lastBoardHash = ''; this.renderBoard();
+      return;
+    }
+    const mv = this.premove;
+    this.premove = null;
+    this.lastBoardHash = '';
+    this.renderBoard();
+    this.applyUserMove(mv.from, mv.to, false);
+  }
   onMouseDown(ev) {
     if (ev.button !== 0) return;
     const sq = ev.target.closest('.sq'); if (!sq || sq.dataset.r == null) return;
@@ -2427,25 +2437,28 @@ const Game = {
   onBoardUpdate({ lobbyId, fen, san, from, to }) {
     if (!lobbyId || lobbyId !== App.lobbyId) return;
     if (!App.gameActive || App.gameEnded) return;
-    
     if (App.currentFen === fen) return;
-
-    const prevFen = App.currentFen; App.currentFen = fen;
+  
+    const prevFen = App.currentFen;
+    App.currentFen = fen;
     this.selected = null; this.legalMoves = []; this.viewIndex = -1;
     if (from && to) { this.lastMove = { from, to }; if (!san) { try { const prevState = Chess.parseFen(prevFen); san = Chess.toSAN(prevState, from, to); } catch (e) {} } }
-    
+  
     const lastHistIdx = this.moveHistory.length - 1;
     if (this.moveHistory[lastHistIdx] === san && this.moveFens[lastHistIdx] === fen) {
       // Дубликат
     } else {
       if (san) { this.moveHistory.push(san); this.moveFens.push(fen); }
     }
-    
+  
     this.renderMoves(); this.lastBoardHash = ''; this.renderBoard();
     const state = Chess.parseFen(App.currentFen);
     if (san) Sounds.moveBySan(san);
-    this.checkGameEnd(state); this.tryApplyPremove();
-  },
+    this.checkGameEnd(state);
+  
+    // ВАЖНО: вызываем премьов ПОСЛЕ того, как доска и fen обновились
+    this.tryApplyPremove();
+  }
   onTimeUpdate({ lobbyId, timeW, timeB, serverNow }) {
     if (!lobbyId || lobbyId !== App.lobbyId) return;
     if (!App.gameActive || App.gameEnded) return;
