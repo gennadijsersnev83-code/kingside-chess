@@ -989,7 +989,7 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
 @media (max-width: 600px) { .arenaTableRow { grid-template-columns: 22px minmax(0,1fr) minmax(48px,auto) minmax(28px,auto); gap: 4px; padding-left: 6px; padding-right: 6px; height: 34px; } .arenaTableRow .pname { gap: 4px; } .historyBlock { gap: 3px; } .arena-results { gap: 3px; } .res-num { font-size: 12px; } .scoreVal { font-size: 14px; } }
 
 /* ============================================================
-   СТИЛИ ДЛЯ ЛЕНДИНГА (Исправленные)
+   СТИЛИ ДЛЯ ЛЕНДИНГА
    ============================================================ */
 
 #landingScreen {
@@ -1039,7 +1039,6 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
 .stat b { display: block; font-size: 1.5rem; font-weight: 800; color: var(--text-bright, #e8e6e3); font-variant-numeric: tabular-nums; }
 .stat span { font-size: 0.85rem; color: var(--text, #bfbdb6); }
 
-/* Исправленный блок доски */
 .board-section {
   display: flex;
   flex-direction: column;
@@ -1100,7 +1099,6 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
 .cta-inner h2 { font-size: 1.9rem; font-weight: 800; color: var(--text-bright, #e8e6e3); margin-bottom: 12px; }
 .cta-inner p { color: var(--text, #bfbdb6); margin-bottom: 26px; }
 
-/* Модальное окно авторизации */
 .auth-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
 .auth-modal-overlay.active { display: flex; }
 .auth-modal-overlay .auth-card { width: 100%; max-width: 440px; margin: 0; box-shadow: 0 20px 50px rgba(0,0,0,.6); }
@@ -1109,4 +1107,90 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
   .landing-hero { grid-template-columns: 1fr; gap: 40px; padding: 40px 0; }
   .board-section { justify-self: center; }
   .landing-header { flex-direction: column; gap: 16px; padding: 16px; margin: 0 -20px; }
+}
+
+/* ============================================================
+   МОДЕРАЦИЯ СООБЩЕНИЙ В ЧАТЕ
+   ============================================================ */
+
+#chatMessages .msg { position: relative; }
+#chatMessages .msg .modBtn { color: var(--muted); margin-left: 6px; cursor: pointer; font-size: 11px; opacity: 0; transition: opacity .15s; user-select: none; }
+#chatMessages .msg:hover .modBtn { opacity: 1; }
+#chatMessages .msg .modBtn:hover { color: #ff8080; }
+#chatMessages .msg .modBtn.always { opacity: .7; }
+#chatMessages .msg .modBtn.always:hover { opacity: 1; }
+
+.arenaChatMessages .msg { position: relative; }
+.arenaChatMessages .msg .modBtn { color: var(--muted); margin-left: 6px; cursor: pointer; font-size: 11px; opacity: 0; transition: opacity .15s; user-select: none; }
+.arenaChatMessages .msg:hover .modBtn { opacity: 1; }
+.arenaChatMessages .msg .modBtn:hover { color: #ff8080; }
+.arenaChatMessages .msg .modBtn.always { opacity: .7; }
+.arenaChatMessages .msg .modBtn.always:hover { opacity: 1; }
+
+.modMenu { position: fixed; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 4px 0; z-index: 9999; box-shadow: 0 4px 16px rgba(0,0,0,.5); min-width: 190px; font-size: 13px; }
+.modMenu button { display: block; width: 100%; text-align: left; background: transparent; border: none; border-radius: 0; color: var(--text-bright); padding: 8px 14px; cursor: pointer; font-size: 13px; min-height: 34px; }
+.modMenu button:hover { background: var(--panel-hover); color: #ff8080; }
+.modMenu .sep { height: 1px; background: var(--border); margin: 4px 0; }
+.modMenu .lbl { color: var(--muted); font-size: 11px; padding: 6px 14px 2px; text-transform: uppercase; letter-spacing: .5px; }
+
+/* ============================================================
+   АДМИН-ПАНЕЛЬ (ИСПРАВЛЕННЫЕ СТИЛИ)
+   ============================================================ */
+
+.adminPage { max-width: 1000px; margin: 0 auto; padding: 24px 16px; }
+.adminHeader { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.adminHeader h1 { font-size: 26px; font-weight: 700; color: var(--text-bright); margin: 0; display: flex; align-items: center; gap: 10px; }
+.adminSubtitle { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+
+.adminCloseBtn { background: var(--panel); border: 1px solid var(--border); color: var(--muted); width: 32px; height: 32px; border-radius: 6px; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 16px; padding: 0; transition: .15s; margin-bottom: 16px; }
+.adminCloseBtn:hover { background: var(--panel-hover); color: var(--text-bright); border-color: var(--accent); }
+
+.adminTabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+.adminTabBtn { background: var(--panel); border: 1px solid var(--border); color: var(--text); padding: 8px 16px; font-size: 13px; font-weight: 600; border-radius: 6px; cursor: pointer; transition: .15s; min-height: 36px; }
+.adminTabBtn:hover { background: var(--panel-hover); color: var(--text-bright); }
+.adminTabBtn.active { background: var(--accent); border-color: var(--accent); color: #161512; }
+
+.adminSearchRow { display: flex; gap: 8px; margin-bottom: 16px; }
+.adminSearchRow input { flex: 1; max-width: 300px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text-bright); border-radius: 4px; padding: 8px 12px; font-size: 14px; }
+.adminSearchRow input:focus { border-color: var(--accent); }
+.adminSearchRow button { background: var(--panel); border: 1px solid var(--border); color: var(--text-bright); font-weight: 600; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
+.adminSearchRow button:hover { background: var(--panel-hover); }
+
+.adminStats { font-size: 13px; color: var(--muted); margin-bottom: 16px; }
+.adminStats b { color: var(--text-bright); }
+
+.adminPlayerRow { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px; transition: border-color .15s; }
+.adminPlayerRow:hover { border-color: rgba(191,129,29,.4); }
+
+.adminPlayerInfo { display: flex; flex-direction: column; gap: 4px; }
+.adminPlayerName { font-size: 16px; font-weight: 600; color: var(--text-bright); display: flex; align-items: center; gap: 6px; }
+.adminPlayerName .onlineDot { width: 10px; height: 10px; margin-right: 2px; }
+.adminPlayerSub { font-size: 12px; color: var(--muted); display: flex; gap: 12px; flex-wrap: wrap; }
+.adminPlayerSub span { display: inline-flex; align-items: center; gap: 4px; }
+
+.adminPlayerControls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding-top: 8px; border-top: 1px solid rgba(255,255,255,.05); }
+.adminPlayerControls select { background: var(--panel-2); border: 1px solid var(--border); color: var(--text-bright); padding: 8px 12px; border-radius: 4px; font-size: 13px; min-width: 140px; }
+.adminPlayerControls select:focus { border-color: var(--accent); }
+.adminPlayerControls button { padding: 8px 14px; font-size: 13px; font-weight: 600; border-radius: 4px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text-bright); cursor: pointer; transition: .15s; min-height: 34px; }
+.adminPlayerControls button:hover { background: var(--panel-hover); }
+.adminPlayerControls button.saveRoleBtn { background: var(--accent); color: #161512; border-color: var(--accent); }
+.adminPlayerControls button.saveRoleBtn:hover { background: var(--accent-2); }
+.adminPlayerControls input[type="number"] { width: 70px; padding: 8px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text-bright); border-radius: 4px; text-align: center; font-size: 13px; }
+.adminPlayerControls input[type="number"]:focus { border-color: var(--accent); }
+.adminPlayerControls button.banBtn { color: #ff9c3a; border-color: #ff9c3a; background: rgba(255,156,58,.1); }
+.adminPlayerControls button.banBtn:hover { background: rgba(255,156,58,.2); }
+.adminPlayerControls button.deleteBtn { color: #ff6b6b; border-color: #ff6b6b; background: rgba(255,107,107,.1); }
+.adminPlayerControls button.deleteBtn:hover { background: rgba(255,107,107,.2); }
+
+.adminModMsgList { display: flex; flex-direction: column; gap: 8px; }
+.adminModMsgRow { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 12px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; font-size: 13px; }
+.adminModMsgContent { flex: 1; min-width: 0; color: var(--text-bright); word-break: break-word; }
+.adminModMsgContent .meta { font-size: 11px; color: var(--muted); margin-bottom: 4px; display: flex; gap: 8px; }
+.adminModMsgRow button { background: rgba(229,72,77,.15); border: 1px solid var(--red); color: #ff6b6b; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+.adminModMsgRow button:hover { background: rgba(229,72,77,.3); }
+
+@media (max-width: 600px) {
+  .adminPlayerControls { flex-direction: column; align-items: stretch; }
+  .adminPlayerControls select { width: 100%; }
+  .adminPlayerControls button { width: 100%; }
 }
