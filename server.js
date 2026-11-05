@@ -121,13 +121,12 @@ function updateGlicko2(rating, rd, vol, results, elapsedDays = 0) {
 }
 function glicko2PhiJ(phi) { return glicko2G(phi); }
 
-// --- Основная БД (игроки, партии) ---
+// --- Основная БД ---
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
 });
 
-// --- Отдельная БД только для истории арен ---
 let arenaPool = null;
 if (process.env.DATABASE_URL_ARENAS) {
   arenaPool = new Pool({
@@ -139,7 +138,6 @@ if (process.env.DATABASE_URL_ARENAS) {
   console.warn('[ArenaDB] DATABASE_URL_ARENAS не задан — история арен НЕ будет сохраняться в БД, только в памяти');
 }
 
-// --- БД весов Watcher ---
 let watcherDbPool = null;
 if (process.env.DATABASE_URL_WATCHER) {
   watcherDbPool = new Pool({
@@ -152,6 +150,13 @@ if (process.env.DATABASE_URL_WATCHER) {
 }
 
 let db = { users: {}, totalGames: 0 };
+
+// NEW: антиспам-состояние (в памяти)
+// username -> { warnedAt, warnings, lastWarningAt }
+const spamWarnings = new Map();
+const SPAM_WINDOW_MS = 10 * 1000;       // окно частых сообщений
+const SPAM_THRESHOLD = 5;                // >= 5 сообщений за 10 сек
+const SPAM_WARN_RESET_MS = 2 * 60 * 1000; // через 2 мин предупреждение сбрасывается
 
 async function initDB() {
   await pool.query(`CREATE TABLE IF NOT EXISTS users (
@@ -170,9 +175,11 @@ async function initDB() {
     ['muted_until','BIGINT DEFAULT 0'],['is_bot','BOOLEAN DEFAULT FALSE'],
     ['email','TEXT'], ['email_verified','BOOLEAN DEFAULT FALSE'], ['verify_token','TEXT'], ['verify_token_expires','BIGINT DEFAULT 0'],
     ['bio','TEXT DEFAULT \'\''], ['delete_token','TEXT'], ['delete_requested_at','BIGINT DEFAULT 0'], ['show_subseconds','BOOLEAN DEFAULT FALSE'],
+    ['dm_closed','BOOLEAN DEFAULT FALSE'],
     ['is_banned','BOOLEAN DEFAULT FALSE'], ['banned_until','BIGINT DEFAULT 0'], ['role',"TEXT DEFAULT 'user'"],
     ['accepted_honest_play','BOOLEAN DEFAULT FALSE'], ['accepted_platform_rules','BOOLEAN DEFAULT FALSE'],
-    ['accepted_terms_at','BIGINT DEFAULT 0'], ['accepted_terms_version',"TEXT DEFAULT ''"]
+    ['accepted_terms_at','BIGINT DEFAULT 0'], ['accepted_terms_version',"TEXT DEFAULT ''"],
+    ['ban_scopes','TEXT DEFAULT \'\''], ['ban_reason','TEXT DEFAULT \'\'']
   ];
   for (const [name, type] of cols) await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS ${name} ${type};`);
   await pool.query(`UPDATE users SET role = 'moderator' WHERE username = 'Debian' AND (role IS NULL OR role = 'user')`);
@@ -209,10 +216,10 @@ async function initDB() {
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_pair ON messages (from_user, to_user, created_at);`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_to ON messages (to_user, read_at);`);
   await pool.query(`CREATE TABLE IF NOT EXISTS reports (
-    id SERIAL PRIMARY KEY, reporter TEXT NOT NULL, target TEXT NOT NULL, reason TEXT NOT NULL, created_at BIGINT NOT NULL, resolved BOOLEAN DEFAULT FALSE
+    id SERIAL PRIMARY KEY, reporter TEXT NOT NULL, target TEXT NOT NULL, reason TEXT NOT NULL, description TEXT DEFAULT '', created_at BIGINT NOT NULL, resolved BOOLEAN DEFAULT FALSE
   );`);
+  await pool.query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';`);
 
-  // --- Таблица для истории арен (в отдельной БД) ---
   if (arenaPool) {
     try {
       await arenaPool.query(`
@@ -253,6 +260,8 @@ async function loadDB() {
   const res = await pool.query('SELECT * FROM users');
   db.users = {};
   for (const row of res.rows) {
+    const banScopesRaw = row.ban_scopes || '';
+    const banScopes = banScopesRaw ? banScopesRaw.split(',').filter(Boolean) : [];
     db.users[row.username] = {
       passwordHash: row.password_hash, salt: row.salt,
       rating: row.rating, rd: row.rd != null ? row.rd : GLICKO2.DEFAULT_RD,
@@ -267,8 +276,12 @@ async function loadDB() {
       deleteToken: row.delete_token,
       deleteRequestedAt: Number(row.delete_requested_at || 0),
       showSubseconds: !!row.show_subseconds,
+      dmClosed: !!row.dm_closed,
       isBanned: !!row.is_banned,
-      bannedUntil: Number(row.banned_until || 0), role: row.role || 'user',
+      bannedUntil: Number(row.banned_until || 0),
+      banScopes,
+      banReason: row.ban_reason || '',
+      role: row.role || 'user',
       acceptedHonestPlay: !!row.accepted_honest_play, acceptedPlatformRules: !!row.accepted_platform_rules,
       acceptedTermsAt: Number(row.accepted_terms_at || 0), acceptedTermsVersion: row.accepted_terms_version || '',
       categories: {
@@ -288,7 +301,7 @@ async function loadDB() {
       db.users[bot.name] = {
         passwordHash: '', salt: '', rating: startRating, rd: GLICKO2.DEFAULT_RD, vol: GLICKO2.DEFAULT_VOL,
         wins: 0, losses: 0, draws: 0, games: 0, createdAt: Date.now(), mutedUntil: 0, isBot: true,
-        email: null, emailVerified: true, verifyToken: null, verifyExpires: 0, acceptedHonestPlay: false, acceptedPlatformRules: false, acceptedTermsAt: 0, acceptedTermsVersion: '', bio: '', deleteToken: null, deleteRequestedAt: 0, showSubseconds: false, isBanned: false, bannedUntil: 0, role: 'user',
+        email: null, emailVerified: true, verifyToken: null, verifyExpires: 0, acceptedHonestPlay: false, acceptedPlatformRules: false, acceptedTermsAt: 0, acceptedTermsVersion: '', bio: '', deleteToken: null, deleteRequestedAt: 0, showSubseconds: false, dmClosed: false, isBanned: false, bannedUntil: 0, banScopes: [], banReason: '', role: 'user',
         categories: { classical: emptyRatingBlock(startRating), rapid: emptyRatingBlock(startRating), blitz: emptyRatingBlock(startRating), bullet: emptyRatingBlock(startRating) }
       };
       try {
@@ -313,6 +326,7 @@ async function saveUser(username) {
   const u = db.users[username]; if (!u) return;
   const c = u.categories || {};
   const get = (k, f) => (c[k] ? c[k][f] : 0);
+  const scopesStr = Array.isArray(u.banScopes) ? u.banScopes.join(',') : '';
   await pool.query(
     `INSERT INTO users (username, password_hash, salt, rating, rd, vol, wins, losses, draws, games, created_at,
                         rating_classical, rating_rapid, rating_blitz, rating_bullet,
@@ -322,8 +336,9 @@ async function saveUser(username) {
                         losses_classical, losses_rapid, losses_blitz, losses_bullet,
                         games_classical, games_rapid, games_blitz, games_bullet,
                         muted_until, is_bot, email, email_verified, verify_token, verify_token_expires,
-                        bio, delete_token, delete_requested_at, show_subseconds, is_banned, banned_until, role, accepted_honest_play, accepted_platform_rules, accepted_terms_at, accepted_terms_version)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52)
+                        bio, delete_token, delete_requested_at, show_subseconds, dm_closed, is_banned, banned_until, ban_scopes, ban_reason, role,
+                        accepted_honest_play, accepted_platform_rules, accepted_terms_at, accepted_terms_version)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41,$42,$43,$44,$45,$46,$47,$48,$49,$50,$51,$52,$53,$54,$55)
      ON CONFLICT (username) DO UPDATE SET
        rating = EXCLUDED.rating, rd = EXCLUDED.rd, vol = EXCLUDED.vol,
        wins = EXCLUDED.wins, losses = EXCLUDED.losses, draws = EXCLUDED.draws, games = EXCLUDED.games,
@@ -343,7 +358,7 @@ async function saveUser(username) {
        email = EXCLUDED.email, email_verified = EXCLUDED.email_verified,
        verify_token = EXCLUDED.verify_token, verify_token_expires = EXCLUDED.verify_token_expires,
        bio = EXCLUDED.bio, delete_token = EXCLUDED.delete_token, delete_requested_at = EXCLUDED.delete_requested_at,
-       show_subseconds = EXCLUDED.show_subseconds, is_banned = EXCLUDED.is_banned, banned_until = EXCLUDED.banned_until, role = EXCLUDED.role,
+       show_subseconds = EXCLUDED.show_subseconds, dm_closed = EXCLUDED.dm_closed, is_banned = EXCLUDED.is_banned, banned_until = EXCLUDED.banned_until, ban_scopes = EXCLUDED.ban_scopes, ban_reason = EXCLUDED.ban_reason, role = EXCLUDED.role,
        accepted_honest_play = EXCLUDED.accepted_honest_play, accepted_platform_rules = EXCLUDED.accepted_platform_rules,
        accepted_terms_at = EXCLUDED.accepted_terms_at, accepted_terms_version = EXCLUDED.accepted_terms_version`,
     [username, u.passwordHash, u.salt, u.rating, u.rd || GLICKO2.DEFAULT_RD, u.vol || GLICKO2.DEFAULT_VOL,
@@ -359,7 +374,7 @@ async function saveUser(username) {
      get('classical','games'), get('rapid','games'), get('blitz','games'), get('bullet','games'),
      u.mutedUntil || 0, !!u.isBot,
      u.email || null, !!u.emailVerified, u.verifyToken || null, u.verifyExpires || 0,
-     u.bio || '', u.deleteToken || null, u.deleteRequestedAt || 0, !!u.showSubseconds, !!u.isBanned, u.bannedUntil || 0, u.role || 'user',
+     u.bio || '', u.deleteToken || null, u.deleteRequestedAt || 0, !!u.showSubseconds, !!u.dmClosed, !!u.isBanned, u.bannedUntil || 0, scopesStr, u.banReason || '', u.role || 'user',
      !!u.acceptedHonestPlay, !!u.acceptedPlatformRules, u.acceptedTermsAt || 0, u.acceptedTermsVersion || '']
   );
 }
@@ -403,12 +418,25 @@ function publicUser(name) {
     isBot: !!u.isBot && name !== WATCHER_NAME,
     bio: u.bio || '',
     showSubseconds: !!u.showSubseconds,
+    dmClosed: !!u.dmClosed,
     isBanned: !!u.isBanned,
-    bannedUntil: u.bannedUntil || 0
+    bannedUntil: u.bannedUntil || 0,
+    banScopes: u.banScopes || []
   };
 }
 function isUserOnline(username) { for (const [, name] of online.entries()) if (name === username) return true; return false; }
 function socketsOfUser(username) { const list = []; for (const [sid, name] of online.entries()) if (name === username) list.push(sid); return list; }
+
+// NEW: проверка активного бана по scope
+function banActiveFor(user, scope) {
+  if (!user) return false;
+  if (!user.isBanned) return false;
+  if (!user.bannedUntil || user.bannedUntil <= Date.now()) return false;
+  if (!scope) return true;
+  const scopes = Array.isArray(user.banScopes) ? user.banScopes : [];
+  if (!scopes.length) return true;
+  return scopes.includes(scope);
+}
 
 const online = new Map();
 const lobbies = new Map();
@@ -1238,7 +1266,6 @@ function watcherTick() {
 
   if (beh.state === 'playing' || watcherHasActiveLobby() || watcherInAnyArena()) return;
 
-  // Если Watcher застрял в завершённой арене — выводим
   if (beh.state === 'in_arena') {
     const state = arenas.get(beh.activityId);
     if (!state || state.finished || state.phase === 'finished') {
@@ -1246,7 +1273,6 @@ function watcherTick() {
     }
   }
 
-  // Приоритетно идём в арену, где уже есть люди
   if (beh.state === 'idle' || beh.state === 'in_arena') {
     const allArenas = [...arenas.values()].filter(s => !s.finished && s.botFriendly && !s.participants.has(WATCHER_NAME));
     const withHumans = allArenas.filter(s => {
@@ -1255,10 +1281,8 @@ function watcherTick() {
     });
     let chosen = null;
     if (withHumans.length > 0) {
-      // Идём в арену с людьми, ближайшую по времени
       chosen = withHumans.sort((a, b) => a.startsAt - b.startsAt)[0];
     } else if (allArenas.length > 0) {
-      // Свободных арен с людьми нет — идём в любую активную
       chosen = allArenas.sort((a, b) => a.startsAt - b.startsAt)[0];
     }
     if (chosen && botJoinArena(WATCHER_NAME, chosen.id)) {
@@ -1267,7 +1291,6 @@ function watcherTick() {
     }
   }
 
-  // Если арен нет — идём в зал ожидания
   if (beh.state === 'idle') {
     let hasOwnLobby = false;
     for (const [id, l] of lobbies.entries()) if (!l.finished && !l.started && !l.isSelfPlay && l.host === WATCHER_NAME) { hasOwnLobby = true; break; }
@@ -1299,7 +1322,6 @@ function watcherTick() {
 setInterval(watcherTick, 10000);
 setTimeout(watcherTick, 5000);
 
-// --- ЧЕСТНАЯ ЖЕРЕБЬЁВКА ---
 function tryPair(state) {
   if (state.finished || state.phase !== 'live') return;
   if (state.tryPairRunning) return;
@@ -1319,7 +1341,7 @@ function tryPair(state) {
       state.pairingNow = available.length === 1 ? available[0].username : null;
       return;
     }
-    
+
     available.sort((a, b) => a.waitingSince - b.waitingSince);
 
     const used = new Set();
@@ -1344,7 +1366,7 @@ function tryPair(state) {
     for (let i = 0; i < available.length && pairsCreated < MAX_PAIRS_PER_TICK; i++) {
       const a = available[i];
       if (used.has(a.username) || a.isPlaying || a.lobbyId) continue;
-      
+
       let best = null;
       let bestPriority = Infinity;
       let bestLastPlayedIdx = Infinity;
@@ -1373,14 +1395,14 @@ function tryPair(state) {
         if (!aIsBot && !bIsBot) {
           if (humanGamesInArena(state.id) >= MAX_HUMAN_GAMES_PER_ARENA) continue;
         }
-        
+
         const pairKey = [a.username, b.username].sort().join(':');
         const lastIdx = lastPlayedMap.has(pairKey) ? lastPlayedMap.get(pairKey) : -1;
-        
+
         let priority;
         if (lastIdx === -1) priority = 1;
         else priority = 2;
-        
+
         if (priority < bestPriority) {
           bestPriority = priority;
           bestLastPlayedIdx = lastIdx;
@@ -1394,11 +1416,11 @@ function tryPair(state) {
           }
         }
       }
-      
+
       if (bestCandidates.length) {
         best = bestCandidates[Math.floor(Math.random() * bestCandidates.length)];
       }
-      
+
       if (!best) continue;
 
       if (a.isPlaying || a.lobbyId || best.isPlaying || best.lobbyId) continue;
@@ -1511,7 +1533,7 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
     broadcastLiveGames();
     return;
   }
-  
+
   if (!whiteP.history) whiteP.history = [];
   if (!blackP.history) blackP.history = [];
 
@@ -1543,7 +1565,7 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   else if (whiteName === WATCHER_NAME) { const bh = botInitBehavior(WATCHER_NAME); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = now; }
   if (blackP.isBot && blackName !== WATCHER_NAME) { const bh = botInitBehavior(blackName); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = now; }
   else if (blackName === WATCHER_NAME) { const bh = botInitBehavior(WATCHER_NAME); bh.state = 'in_arena'; bh.activityId = arenaId; bh.lastChange = now; }
-  
+
   whiteP.waitingSince = now;
   blackP.waitingSince = now;
 
@@ -1552,7 +1574,6 @@ function handleArenaGameEnd(arenaId, lobbyId, result, whiteName, blackName) {
   broadcastLiveGames();
 }
 
-// Сохранение завершённой арены в БД (если ≥2 участника)
 async function saveArenaToDB(state) {
   if (!arenaPool) return;
   const participantsArray = [...state.participants.values()].map(p => ({
@@ -1596,18 +1617,18 @@ function finishArena(state) {
   state.finished = true; state.phase = 'finished';
   if (state.pairingInterval) { clearInterval(state.pairingInterval); state.pairingInterval = null; }
   for (const p of state.participants.values()) { p.isPlaying = false; p.lobbyId = null; }
-  
+
   const all = [...state.participants.values()].sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score;
     if (b.wins !== a.wins) return b.wins - a.wins;
     return b.rating - a.rating;
   });
-  
+
   state.top3 = all.slice(0, 3).map(p => {
     const games = (p.wins || 0) + (p.draws || 0) + (p.losses || 0);
     let perf = '—';
     if (games > 0) {
-      perf = Math.round(p.rating + (p.wins - p.losses) * 10); 
+      perf = Math.round(p.rating + (p.wins - p.losses) * 10);
     }
     const winPct = games > 0 ? Math.round((p.wins / games) * 100) : 0;
     return {
@@ -1620,17 +1641,15 @@ function finishArena(state) {
       winPct: winPct
     };
   });
-  
+
   const sysMsg = { id: 'sys' + Date.now(), system: true, text: `🏆 Арена "${state.name}" завершена!`, ts: Date.now(), arenaId: state.id };
   state.chat.push(sysMsg); if (state.chat.length > 300) state.chat.shift();
   io.emit('arenaChatMessage', sysMsg);
   io.emit('arenaFinished', { arenaId: state.id, arenaName: state.name, top3: state.top3 });
   io.emit('arenaUpdate', { arenaId: state.id });
-  
-  // Сохраняем в БД, если ≥2 участника
+
   saveArenaToDB(state).catch(e => console.error('[ArenaDB] saveArenaToDB error:', e.message));
 
-  // В памяти храним 24 часа (на случай, если БД не подключена — ссылки всё равно работают)
   state.cleanupTimer = setTimeout(() => {
     arenas.delete(state.id);
   }, 24 * 60 * 60 * 1000);
@@ -1743,6 +1762,104 @@ function clearMute(username) {
   return true;
 }
 
+// NEW: отправка системного сообщения в чат игры
+function sendSystemMessageToLobby(lobbyId, text, opts) {
+  const l = lobbies.get(lobbyId); if (!l) return;
+  const msg = {
+    id: 'sys' + Date.now() + Math.random().toString(36).slice(2, 5),
+    system: true,
+    warning: !!(opts && opts.warning),
+    text,
+    ts: Date.now(),
+    user: 'Система',
+    userIsAdmin: false,
+    userIsMod: false
+  };
+  l.chat.push(msg);
+  if (l.chat.length > 50) l.chat.shift();
+  emitToGameAndWatchers(lobbyId, 'chatMessage', msg);
+}
+
+// NEW: отправка ЛС от "Система" игроку (используется для бан-причины и удаления аккаунта)
+async function sendSystemDM(toUser, text, color) {
+  if (!db.users[toUser]) return false;
+  try {
+    const now = Date.now();
+    const useColor = /^#[0-9a-fA-F]{6}$/.test(color || '') ? color : '#ff4d4f';
+    const r = await pool.query(
+      `INSERT INTO messages (from_user, to_user, text, created_at, read_at, color) VALUES ($1,$2,$3,$4,0,$5)
+       RETURNING id, from_user, to_user, text, created_at, read_at, color`,
+      ['Система', toUser, text, now, useColor]
+    );
+    const row = r.rows[0];
+    const msgObj = { id: row.id, from: 'Система', to: toUser, text: row.text, ts: Number(row.created_at), readAt: 0, color: row.color };
+    for (const sid of socketsOfUser(toUser)) io.to(sid).emit('msgNew', msgObj);
+    const un = await unreadCount(toUser);
+    for (const sid of socketsOfUser(toUser)) io.to(sid).emit('msgUnread', { count: un });
+    return true;
+  } catch (e) { console.error('[sendSystemDM]', e.message); return false; }
+}
+
+// NEW: отправка системного ЛС админу (для репортов и причины удаления)
+async function sendSystemDMToAdmin(text) {
+  return sendSystemDM('PeshkaSasha', text, '#ff4d4f');
+}
+
+// NEW: проверка спама в чате
+function checkSpamAndWarn(username, scope, scopeId) {
+  const u = db.users[username];
+  if (!u || u.isBot) return;
+  if (isAdmin(username) || isMod(username)) return;
+
+  const now = Date.now();
+  let s = spamWarnings.get(username);
+  if (!s) { s = { timestamps: [], warnedAt: 0 }; spamWarnings.set(username, s); }
+  s.timestamps = s.timestamps.filter(t => now - t < SPAM_WINDOW_MS);
+  s.timestamps.push(now);
+
+  if (s.timestamps.length >= SPAM_THRESHOLD) {
+    // Проверяем, было ли недавнее предупреждение
+    if (s.warnedAt && now - s.warnedAt < SPAM_WARN_RESET_MS) {
+      // Уже предупреждали — автобан 30 минут
+      const banUntil = now + 30 * 60 * 1000;
+      u.isBanned = true;
+      u.bannedUntil = banUntil;
+      u.banScopes = ['chat'];
+      u.banReason = 'Автобан за спам после предупреждения';
+      saveUser(username).catch(() => {});
+      sendSystemDM(username, `Вы забанены в чате на 30 минут за спам. Причина: автобан за спам после предупреждения.`, '#ff4d4f');
+      const msg = { id: 'sys' + Date.now(), system: true, warning: true, text: `🚫 ${username} забанен в чате на 30 мин за спам.`, ts: now, user: 'Система' };
+      if (scope === 'arena' && scopeId) {
+        const st = arenas.get(scopeId);
+        if (st) { st.chat.push(msg); io.to('arena:' + scopeId).emit('arenaChatMessage', msg); }
+      } else if (scope === 'game' && scopeId) {
+        sendSystemMessageToLobby(scopeId, msg.text, { warning: true });
+      }
+      s.timestamps = []; s.warnedAt = 0;
+      io.to(socketsOfUser(username)).emit('banned', { username, until: banUntil, reason: u.banReason });
+    } else {
+      // Первое предупреждение
+      s.warnedAt = now;
+      s.timestamps = [];
+      sendSystemDM(username, `Предупреждение: ${username}, вы слишком часто пишете в чат. Продолжение — автобан до 30 минут.`, '#ffb74d');
+      const msg = {
+        id: 'sys' + Date.now() + Math.random().toString(36).slice(2, 5),
+        system: true,
+        warning: true,
+        user: 'Система',
+        text: `⚠ Предупреждение игроку: ${username}. Слишком часто пишете. Продолжение — автобан до 30 минут.`,
+        ts: now
+      };
+      if (scope === 'arena' && scopeId) {
+        const st = arenas.get(scopeId);
+        if (st) { st.chat.push(msg); io.to('arena:' + scopeId).emit('arenaChatMessage', msg); }
+      } else if (scope === 'game' && scopeId) {
+        sendSystemMessageToLobby(scopeId, msg.text, { warning: true });
+      }
+    }
+  }
+}
+
 function uciFromSquares(from, to) {
   if (!from || !to) return null;
   return String.fromCharCode(97 + from[1]) + (8 - from[0])
@@ -1791,7 +1908,6 @@ function scheduleBotMove(lobbyId) {
       const to = Array.isArray(mv.to) ? mv.to : mv[1];
       if (!from || !to) return;
       const captured = st.board[to[0]][to[1]];
-      const prevFen = cur.fen;
       const nextState = botApplyMove(st, from, to);
       if (!cur.history) cur.history = [];
       cur.history.push({ from, to, captured: captured || null, byColor: botColor, ts: Date.now() });
@@ -2012,7 +2128,6 @@ function scheduleBotMove(lobbyId) {
       return;
     }
     const captured = st2.board[to[0]][to[1]];
-    const prevFen = cur2.fen;
     const nextState = botApplyMove(st2, from, to);
     if (!cur2.history) cur2.history = [];
     cur2.history.push({ from, to, captured: captured || null, byColor: botColor, ts: Date.now() });
@@ -2073,7 +2188,6 @@ async function unreadCount(username) {
   return r.rows[0].n || 0;
 }
 
-// Загружаем завершённые арены из БД (для постоянных ссылок)
 async function loadFinishedArenaFromDB(arenaId) {
   if (!arenaPool) return null;
   try {
@@ -2245,7 +2359,7 @@ io.on('connection', (socket) => {
         createdAt: Date.now(), mutedUntil: 0, isBot: false,
         email: email, emailVerified: false, verifyToken: verifyToken, verifyExpires: verifyExpires,
         acceptedHonestPlay: true, acceptedPlatformRules: true, acceptedTermsAt: Date.now(), acceptedTermsVersion: '2026-10-28',
-        bio: '', deleteToken: null, deleteRequestedAt: 0, showSubseconds: false, isBanned: false, bannedUntil: 0, role: 'user',
+        bio: '', deleteToken: null, deleteRequestedAt: 0, showSubseconds: false, dmClosed: false, isBanned: false, bannedUntil: 0, banScopes: [], banReason: '', role: 'user',
         categories: { classical: emptyRatingBlock(base), rapid: emptyRatingBlock(base), blitz: emptyRatingBlock(base), bullet: emptyRatingBlock(base) }
       };
 
@@ -2262,9 +2376,10 @@ io.on('connection', (socket) => {
     if (user && user.isBanned) {
       if (Number(user.bannedUntil || 0) > Date.now()) {
         const hoursLeft = Math.max(1, Math.ceil((Number(user.bannedUntil) - Date.now()) / 3600000));
-        return cb({ ok: false, msg: `Аккаунт заблокирован. Осталось примерно ${hoursLeft} ч.` });
+        const scopes = (user.banScopes || []).map(s => s === 'chat' ? 'чат' : s === 'play' ? 'игра' : s === 'arena' ? 'турниры' : s).join(', ');
+        return cb({ ok: false, msg: `Аккаунт заблокирован (${scopes || 'всё'}). Осталось примерно ${hoursLeft} ч.${user.banReason ? ' Причина: ' + user.banReason : ''}` });
       }
-      user.isBanned = false; user.bannedUntil = 0;
+      user.isBanned = false; user.bannedUntil = 0; user.banScopes = []; user.banReason = '';
       await saveUser(username);
     }
     online.set(socket.id, username);
@@ -2402,6 +2517,11 @@ io.on('connection', (socket) => {
   socket.on('createLobby', ({ time, inc }, cb) => {
     if (typeof cb !== 'function') return;
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
+    // NEW: проверка ban по scope play
+    if (banActiveFor(db.users[socket.username], 'play')) {
+      const u = db.users[socket.username];
+      return cb({ ok: false, msg: `Вы забанены в игре с другими игроками до ${new Date(u.bannedUntil).toLocaleString('ru-RU')}${u.banReason ? '. Причина: ' + u.banReason : ''}` });
+    }
     time = Math.max(0.5, Math.min(60, +time || 5));
     inc = Math.max(0, Math.min(60, +inc || 0));
 
@@ -2516,6 +2636,11 @@ io.on('connection', (socket) => {
   socket.on('joinLobby', ({ id }, cb) => {
     if (typeof cb !== 'function') return;
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
+    // NEW: проверка ban play
+    if (banActiveFor(db.users[socket.username], 'play')) {
+      const u = db.users[socket.username];
+      return cb({ ok: false, msg: `Вы забанены в игре с другими игроками до ${new Date(u.bannedUntil).toLocaleString('ru-RU')}${u.banReason ? '. Причина: ' + u.banReason : ''}` });
+    }
     const l = lobbies.get(id);
     if (!l) return cb({ ok: false, msg: 'Лобби не найдено' });
     if (l.finished) return cb({ ok: false, msg: 'Партия завершена' });
@@ -2640,6 +2765,12 @@ io.on('connection', (socket) => {
     const l = lobbies.get(lobbyId);
     if (!l || !socket.username) return;
     if (l.isSelfPlay) return;
+
+    // NEW: проверка бана по scope chat
+    if (banActiveFor(db.users[socket.username], 'chat')) {
+      socket.emit('chatError', { msg: 'Вы забанены в чате.' });
+      return;
+    }
     const muteUntil = checkMute(socket.username);
     if (muteUntil > 0) { const mins = Math.ceil((muteUntil - Date.now()) / 60000); socket.emit('chatError', { msg: `Вы заглушены ещё ${mins} мин.` }); return; }
     if (typeof text !== 'string') return;
@@ -2648,6 +2779,8 @@ io.on('connection', (socket) => {
     const msg = { id: 'm' + Date.now() + Math.random().toString(36).slice(2, 6), user: socket.username, userIsAdmin: isAdmin(socket.username), userIsMod: isMod(socket.username), text, ts: Date.now() };
     l.chat.push(msg); if (l.chat.length > 50) l.chat.shift();
     emitToGameAndWatchers(lobbyId, 'chatMessage', msg);
+    // NEW: антиспам-проверка
+    checkSpamAndWarn(socket.username, 'game', lobbyId);
   });
 
   socket.on('modDeleteMessage', ({ lobbyId, msgId }, cb) => {
@@ -2864,7 +2997,6 @@ io.on('connection', (socket) => {
     if (typeof cb !== 'function') return;
     let state = arenas.get(arenaId);
     if (!state) {
-      // Пытаемся загрузить из БД — ссылка на завершённую арену
       state = await loadFinishedArenaFromDB(arenaId);
       if (!state) {
         return cb({ joined: false, paused: false, participants: [], participantsCount: 0, phase: 'finished', timeLeftMin: 0, timeLeftMs: 0, top3: null, pairingNow: null, startsAt: 0, endsAt: 0, serverNow: Date.now(), botFriendly: false, chatViewersCount: 0 });
@@ -2978,6 +3110,11 @@ io.on('connection', (socket) => {
   socket.on('joinArena', ({ arenaId }, cb) => {
     if (typeof cb !== 'function') return;
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
+    // NEW: проверка ban arena
+    if (banActiveFor(db.users[socket.username], 'arena')) {
+      const u = db.users[socket.username];
+      return cb({ ok: false, msg: `Вы забанены в турнирах до ${new Date(u.bannedUntil).toLocaleString('ru-RU')}${u.banReason ? '. Причина: ' + u.banReason : ''}` });
+    }
     const state = arenas.get(arenaId);
     if (!state) return cb({ ok: false, msg: 'Арена не найдена' });
     if (state.finished || state.phase === 'finished') return cb({ ok: false, msg: 'Арена завершена' });
@@ -3050,6 +3187,11 @@ io.on('connection', (socket) => {
     const state = arenas.get(arenaId);
     if (!state || !socket.username) return;
     if (state.finished) return;
+
+    if (banActiveFor(db.users[socket.username], 'chat')) {
+      socket.emit('chatError', { msg: 'Вы забанены в чате.' });
+      return;
+    }
     const muteUntil = checkMute(socket.username);
     if (muteUntil > 0) { const mins = Math.ceil((muteUntil - Date.now()) / 60000); socket.emit('chatError', { msg: `Вы заглушены ещё ${mins} мин.` }); return; }
     if (typeof text !== 'string') return;
@@ -3058,6 +3200,8 @@ io.on('connection', (socket) => {
     const msg = { id: 'a' + Date.now() + Math.random().toString(36).slice(2, 6), user: socket.username, userIsAdmin: isAdmin(socket.username), userIsMod: isMod(socket.username), text, ts: Date.now(), arenaId };
     state.chat.push(msg); if (state.chat.length > 300) state.chat.shift();
     io.to('arena:' + arenaId).emit('arenaChatMessage', msg);
+    // NEW: антиспам
+    checkSpamAndWarn(socket.username, 'arena', arenaId);
   });
 
   socket.on('modDeleteArenaMessage', ({ arenaId, msgId }, cb) => {
@@ -3100,6 +3244,13 @@ io.on('connection', (socket) => {
     if (!db.users[to]) return cb({ ok: false, msg: 'Игрок не найден' });
     if (to === socket.username) return cb({ ok: false, msg: 'Нельзя писать самому себе' });
     if (to === 'PeshkaSasha' && adminDmClosed && !isAdmin(socket.username)) return cb({ ok: false, msg: 'Администратор временно отключил входящие личные сообщения' });
+
+    const target = db.users[to];
+    // NEW: если у получателя стоит запрет ЛС, пропускаем только модераторов и админа
+    if (target && target.dmClosed && !isMod(socket.username)) {
+      return cb({ ok: false, msg: 'Игрок запретил приём личных сообщений' });
+    }
+
     const muteUntil = checkMute(socket.username);
     if (muteUntil > 0) { const mins = Math.ceil((muteUntil - Date.now()) / 60000); return cb({ ok: false, msg: `Вы заглушены ещё ${mins} мин.` }); }
     try {
@@ -3211,18 +3362,21 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('updateSettings', async ({ bio, showSubseconds }, cb) => {
+  socket.on('updateSettings', async ({ bio, showSubseconds, dmClosed }, cb) => {
+    if (typeof cb !== 'function') cb = cb || (() => {});
     if (typeof cb !== 'function') cb = () => {};
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
     const u = db.users[socket.username];
     if (!u) return cb({ ok: false, msg: 'Пользователь не найден' });
-    u.bio = String(bio || '').slice(0, 500);
-    u.showSubseconds = !!showSubseconds;
+    if (typeof bio === 'string') u.bio = bio.slice(0, 500);
+    if (typeof showSubseconds === 'boolean') u.showSubseconds = showSubseconds;
+    if (typeof dmClosed === 'boolean') u.dmClosed = dmClosed;
     await saveUser(socket.username);
+    socket.emit('settingsUpdated', { showSubseconds: u.showSubseconds, dmClosed: u.dmClosed });
     cb({ ok: true });
   });
 
-  socket.on('requestAccountDeletion', async (cb) => {
+  socket.on('requestAccountDeletion', async ({ reason }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
     const u = db.users[socket.username];
@@ -3231,15 +3385,164 @@ io.on('connection', (socket) => {
     if (ageMs < 10 * 24 * 3600 * 1000) {
       return cb({ ok: false, msg: 'Удаление доступно только после 10 дней существования аккаунта.' });
     }
+    const r = String(reason || '').trim().slice(0, 500);
+    if (r.length < 5) {
+      return cb({ ok: false, msg: 'Укажите причину удаления (минимум 5 символов).' });
+    }
     const token = crypto.randomBytes(32).toString('hex');
     u.deleteToken = token;
     u.deleteRequestedAt = Date.now();
     await saveUser(socket.username);
+
+    // NEW: причина удаления уходит админу в ЛС
     try {
-      await sendAccountDeletionEmail(u.email, socket.username, token);
-      cb({ ok: true, msg: 'Письмо с подтверждением удаления отправлено на почту.' });
+      await sendSystemDMToAdmin(`🗑 Игрок ${socket.username} запросил удаление аккаунта.\nПричина: ${r}`);
+    } catch (e) {}
+
+    try {
+      if (u.email) await sendAccountDeletionEmail(u.email, socket.username, token);
+      // NEW: удаляем аккаунт сразу, чтобы не ждать 10 дней повторно
+      await pool.query('DELETE FROM users WHERE username = $1', [socket.username]);
+      delete db.users[socket.username];
+      for (const sid of socketsOfUser(socket.username)) {
+        const s = io.sockets.sockets.get(sid);
+        if (s) s.emit('sessionRevoked', { username: socket.username });
+      }
+      for (const sid of socketsOfUser(socket.username)) {
+        const s = io.sockets.sockets.get(sid);
+        if (s) s.disconnect(true);
+      }
+      cb({ ok: true, msg: 'Аккаунт удалён. Вы будете разлогинены.' });
     } catch (e) {
-      cb({ ok: false, msg: 'Ошибка отправки письма.' });
+      cb({ ok: false, msg: 'Ошибка отправки письма/удаления.' });
+    }
+  });
+
+  // ============= REPORTS =============
+  socket.on('submitReport', async ({ target, reason, description }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
+    if (typeof target !== 'string' || target.length < 2) return cb({ ok: false, msg: 'Укажите ник игрока' });
+    if (typeof reason !== 'string' || reason.length < 3) return cb({ ok: false, msg: 'Укажите краткую причину' });
+    if (typeof description !== 'string' || description.length < 10) return cb({ ok: false, msg: 'Опишите ситуацию (минимум 10 символов)' });
+    if (!db.users[target]) return cb({ ok: false, msg: 'Игрок не найден' });
+    if (target === socket.username) return cb({ ok: false, msg: 'Нельзя пожаловаться на самого себя' });
+    try {
+      await pool.query(
+        `INSERT INTO reports (reporter, target, reason, description, created_at) VALUES ($1,$2,$3,$4,$5)`,
+        [socket.username, target, reason.slice(0, 200), description.slice(0, 2000), Date.now()]
+      );
+      await sendSystemDMToAdmin(`🚩 Новый репорт\nОт: ${socket.username}\nНа: ${target}\nПричина: ${reason}\n\nОписание:\n${description}`);
+      cb({ ok: true });
+    } catch (e) {
+      console.error('[Report]', e.message);
+      cb({ ok: false, msg: 'Ошибка сервера' });
+    }
+  });
+
+  // ============= ADMIN: ban =============
+  socket.on('adminCheckPlayer', ({ username }, cb) => {
+    if (typeof cb !== 'function') return;
+    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    if (typeof username !== 'string') return cb({ ok: false, msg: 'Некорректный ник' });
+    const u = db.users[username];
+    if (!u) return cb({ ok: false, msg: 'Игрок не найден' });
+    const banned = !!(u.isBanned && u.bannedUntil > Date.now());
+    const scopesObj = {};
+    for (const s of (u.banScopes || [])) scopesObj[s] = true;
+    cb({ ok: true, username, banned, until: u.bannedUntil || 0, scopes: scopesObj, reason: u.banReason || '' });
+  });
+
+  socket.on('adminListBans', (cb) => {
+    if (typeof cb !== 'function') return;
+    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    const bans = [];
+    for (const [name, u] of Object.entries(db.users)) {
+      if (u.isBanned && u.bannedUntil > Date.now()) {
+        const scopesObj = {};
+        for (const s of (u.banScopes || [])) scopesObj[s] = true;
+        bans.push({ username: name, until: u.bannedUntil, scopes: scopesObj, reason: u.banReason || '' });
+      }
+    }
+    bans.sort((a, b) => b.until - a.until);
+    cb({ ok: true, bans });
+  });
+
+  socket.on('adminBan', async ({ username, hours, scopes, reason }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    if (typeof username !== 'string' || username === 'PeshkaSasha') return cb({ ok: false, msg: 'Нельзя заблокировать главного администратора' });
+    const u = db.users[username];
+    if (!u) return cb({ ok: false, msg: 'Игрок не найден' });
+    const requestedHours = Number(hours);
+    if (!Number.isFinite(requestedHours) || requestedHours < 1 || requestedHours > 24 * 365) {
+      return cb({ ok: false, msg: 'Срок бана должен быть от 1 до 8760 часов' });
+    }
+    const scopesArr = [];
+    if (scopes && scopes.chat) scopesArr.push('chat');
+    if (scopes && scopes.play) scopesArr.push('play');
+    if (scopes && scopes.arena) scopesArr.push('arena');
+    if (!scopesArr.length) return cb({ ok: false, msg: 'Выберите хотя бы одну область бана' });
+    const banReason = String(reason || '').trim().slice(0, 500);
+    if (!banReason) return cb({ ok: false, msg: 'Введите описание бана' });
+    const bannedUntil = Date.now() + Math.floor(requestedHours) * 3600 * 1000;
+    try {
+      u.isBanned = true; u.bannedUntil = bannedUntil; u.banScopes = scopesArr; u.banReason = banReason;
+      await saveUser(username);
+      // Уведомляем игрока в ЛС от «Система»
+      const scopesRu = scopesArr.map(s => s === 'chat' ? 'чат' : s === 'play' ? 'игра с игроками' : 'турниры').join(', ');
+      await sendSystemDM(username, `🚫 Вы забанены администратором до ${new Date(bannedUntil).toLocaleString('ru-RU')}.\nОбласти: ${scopesRu}\nПричина: ${banReason}`, '#ff4d4f');
+      for (const sid of socketsOfUser(username)) {
+        const targetSocket = io.sockets.sockets.get(sid);
+        if (targetSocket) {
+          targetSocket.emit('banned', { username, until: bannedUntil, scopes: scopesArr, reason: banReason });
+        }
+      }
+      // Если забанен чат — выкидываем из всех чатов
+      if (scopesArr.includes('chat')) {
+        // Ничего дополнительно, chat-проверка работает при следующем сообщении
+      }
+      // Если забанен play/arena — режем активные партии/арены
+      if (scopesArr.includes('play')) {
+        for (const [id, l] of lobbies.entries()) {
+          if (l.finished || l.isSelfPlay) continue;
+          if (l.host === username || l.guest === username) {
+            finishGame(id, l.host === username ? 'b' : 'w', 'Бан игрока');
+          }
+        }
+      }
+      if (scopesArr.includes('arena')) {
+        for (const [aid, state] of arenas.entries()) {
+          if (state.participants.has(username)) {
+            state.participants.delete(username);
+            const sysMsg = { id: 'sys' + Date.now(), system: true, text: `${username} удалён из арены (бан).`, ts: Date.now(), arenaId: aid };
+            state.chat.push(sysMsg);
+            io.to('arena:' + aid).emit('arenaChatMessage', sysMsg);
+            io.emit('arenaUpdate', { arenaId: aid });
+          }
+        }
+      }
+      return cb({ ok: true, bannedUntil });
+    } catch (err) {
+      console.error('[Admin ban] Не удалось сохранить бан:', err.message);
+      return cb({ ok: false, msg: 'Не удалось сохранить бан в базе данных' });
+    }
+  });
+
+  socket.on('adminUnban', async ({ username }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    if (typeof username !== 'string') return cb({ ok: false, msg: 'Некорректный игрок' });
+    const u = db.users[username];
+    if (!u) return cb({ ok: false, msg: 'Игрок не найден' });
+    try {
+      u.isBanned = false; u.bannedUntil = 0; u.banScopes = []; u.banReason = '';
+      await saveUser(username);
+      await sendSystemDM(username, `✅ С вас снят бан администратором.`, '#7dbe30');
+      return cb({ ok: true });
+    } catch (err) {
+      console.error('[Admin unban] Не удалось снять бан:', err.message);
+      return cb({ ok: false, msg: 'Не удалось снять бан в базе данных' });
     }
   });
 
@@ -3342,50 +3645,6 @@ io.on('connection', (socket) => {
       if (targetSocket) targetSocket.emit('accountRoleUpdated', publicUser(username));
     }
     cb({ ok: true });
-  });
-
-  socket.on('adminBan', async ({ username, hours }, cb) => {
-    if (typeof cb !== 'function') cb = () => {};
-    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
-    if (typeof username !== 'string' || username === 'PeshkaSasha') return cb({ ok: false, msg: 'Нельзя заблокировать главного администратора' });
-    const u = db.users[username];
-    if (!u) return cb({ ok: false, msg: 'Игрок не найден' });
-    const requestedHours = Number(hours);
-    if (!Number.isFinite(requestedHours) || requestedHours < 1 || requestedHours > 24 * 365) {
-      return cb({ ok: false, msg: 'Срок бана должен быть от 1 до 8760 часов' });
-    }
-    const bannedUntil = Date.now() + Math.floor(requestedHours) * 3600 * 1000;
-    try {
-      const saved = await pool.query('UPDATE users SET is_banned = TRUE, banned_until = $1 WHERE username = $2', [bannedUntil, username]);
-      if (!saved.rowCount) return cb({ ok: false, msg: 'Аккаунт не найден в базе данных' });
-      u.isBanned = true;
-      u.bannedUntil = bannedUntil;
-      for (const [sid, targetSocket] of io.sockets.sockets.entries()) {
-        if (targetSocket.username === username || online.get(sid) === username) targetSocket.disconnect(true);
-      }
-      return cb({ ok: true, bannedUntil });
-    } catch (err) {
-      console.error('[Admin ban] Не удалось сохранить бан:', err.message);
-      return cb({ ok: false, msg: 'Не удалось сохранить бан в базе данных' });
-    }
-  });
-
-  socket.on('adminUnban', async ({ username }, cb) => {
-    if (typeof cb !== 'function') cb = () => {};
-    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
-    if (typeof username !== 'string') return cb({ ok: false, msg: 'Некорректный игрок' });
-    const u = db.users[username];
-    if (!u) return cb({ ok: false, msg: 'Игрок не найден' });
-    try {
-      const saved = await pool.query('UPDATE users SET is_banned = FALSE, banned_until = 0 WHERE username = $1', [username]);
-      if (!saved.rowCount) return cb({ ok: false, msg: 'Аккаунт не найден в базе данных' });
-      u.isBanned = false;
-      u.bannedUntil = 0;
-      return cb({ ok: true });
-    } catch (err) {
-      console.error('[Admin unban] Не удалось снять бан:', err.message);
-      return cb({ ok: false, msg: 'Не удалось снять бан в базе данных' });
-    }
   });
 
   socket.on('adminDeleteAccount', async ({ username }, cb) => {
