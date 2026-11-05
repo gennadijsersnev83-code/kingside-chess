@@ -352,6 +352,7 @@ const App = {
     TopArenas.init(); Stats.init(); Lobby.init(); Bot.init();
     Watch.init(); Arena.init(); Profile.init(); Community.init();
     Game.init(); Banners.init(); UserMenu.init(); Inbox.init(); Ping.init(); Auth.init();
+    Rating.init();
 
     const saved = this._readSavedLogin();
     if (saved) {
@@ -421,7 +422,6 @@ const App = {
     const email = document.getElementById('email').value.trim();
     const msgEl = document.getElementById('loginMsg');
     
-    // Очистка ошибок
     document.getElementById('honorError').style.display = 'none';
     document.getElementById('rulesError').style.display = 'none';
 
@@ -711,7 +711,12 @@ const Router = {
       profile: 'profileScreen', 
       community: 'communityScreen', 
       game: 'gameScreen', 
-      inbox: 'inboxScreen' 
+      inbox: 'inboxScreen',
+      rating: 'ratingScreen',
+      swiss: 'swissScreen',
+      report: 'reportScreen',
+      learn: 'learnScreen',
+      puzzles: 'puzzlesScreen'
     };
     
     const screenId = map[name]; 
@@ -732,6 +737,7 @@ const Router = {
       case 'community': Community.enter(); break;
       case 'game': Game.enter(param); break;
       case 'inbox': Inbox.enter(param); break;
+      case 'rating': Rating.enter(); break;
     }
   },
   show(screenId) { 
@@ -740,6 +746,90 @@ const Router = {
     if (el) el.classList.add('active'); 
   }
 };
+
+// ============================================================
+// RATING PAGE
+// ============================================================
+const Rating = {
+  page: 0,
+  pageSize: 10,
+  init() {},
+  enter() {
+    this.page = 0;
+    this.load();
+  },
+  load() {
+    App.socket.emit('getCommunityOnline', (players) => {
+      if (!players) players = [];
+      // Сортируем по рейтингу
+      players.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+      this.render(players);
+    });
+  },
+  render(players) {
+    const tbody = document.getElementById('ratingTableBody');
+    const pag = document.getElementById('ratingPagination');
+    const myPlaceEl = document.getElementById('ratingMyPlace');
+    if (!tbody || !pag) return;
+
+    const total = players.length;
+    const totalPages = Math.ceil(total / this.pageSize) || 1;
+    if (this.page >= totalPages) this.page = totalPages - 1;
+    if (this.page < 0) this.page = 0;
+
+    const start = this.page * this.pageSize;
+    const end = Math.min(start + this.pageSize, total);
+    const pageItems = players.slice(start, end);
+
+    // Мое место
+    if (App.me) {
+      const myIndex = players.findIndex(p => p.username === App.me.username);
+      if (myIndex >= 0) {
+        myPlaceEl.textContent = `Ваше место: ${myIndex + 1} из ${total}`;
+      } else {
+        myPlaceEl.textContent = 'Вы не в рейтинге';
+      }
+    } else {
+      myPlaceEl.textContent = '';
+    }
+
+    if (!pageItems.length) {
+      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--muted); padding: 20px;">Нет игроков</td></tr>';
+    } else {
+      tbody.innerHTML = pageItems.map((p, i) => {
+        const globalPlace = start + i + 1;
+        const isMe = App.me && p.username === App.me.username;
+        const botMark = p.isBot ? ' 🤖' : '';
+        const modMark = p.isMod ? '<span class="modMark">!</span>' : '';
+        const adminMark = p.isAdmin ? '<span class="crown">👑</span>' : '';
+        return `<tr class="${isMe ? 'my-row' : ''}">
+          <td class="r-place">${globalPlace}</td>
+          <td class="r-name">${adminMark}${modMark}${Utils.escapeHtml(p.username)}${botMark}</td>
+          <td style="text-align: right;" class="r-rating">${p.rating || 1200}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    // Пагинация
+    let pagHtml = '';
+    pagHtml += `<button ${this.page === 0 ? 'disabled' : ''} onclick="Rating.setPage(${this.page - 1})">←</button>`;
+    for (let i = 0; i < totalPages; i++) {
+      // Показываем только несколько страниц вокруг текущей
+      if (i === 0 || i === totalPages - 1 || Math.abs(i - this.page) <= 2) {
+        pagHtml += `<button class="${i === this.page ? 'active' : ''}" onclick="Rating.setPage(${i})">${i + 1}</button>`;
+      } else if (i === 1 || i === totalPages - 2) {
+        pagHtml += `<span style="color:var(--muted); padding:6px;">...</span>`;
+      }
+    }
+    pagHtml += `<button ${this.page === totalPages - 1 ? 'disabled' : ''} onclick="Rating.setPage(${this.page + 1})">→</button>`;
+    pag.innerHTML = pagHtml;
+  },
+  setPage(p) {
+    this.page = p;
+    this.load();
+  }
+};
+
 // ============================================================
 // TOP ARENAS
 // ============================================================
@@ -2498,7 +2588,6 @@ const AdminPanel = {
   goSection(section) { if(!this.isRoot())return; this.closeTopMenu(); if(location.hash.replace(/^#\/?/,'').split('/')[0] !== 'admin_panel') { this.tab=section; Router.go('admin_panel'); return; } this.setTab(section); },
   status(message, bad=false) { const el=document.getElementById('adminPanelStatus'); if(el){el.textContent=message||'';el.style.color=bad?'#ff8c91':'#8ddca4';} },
   setTab(tab,btn) {
-    if (tab === 'private' || tab === 'settings') tab = tab;
     this.tab=tab;
     const usersTab=document.getElementById('adminUsersTab'), chatTab=document.getElementById('adminChatTab');
     if(usersTab) usersTab.style.display=tab==='users'?'':'none';
@@ -2826,7 +2915,7 @@ document.addEventListener('DOMContentLoaded', () => {
   window.Watch = Watch; window.Arena = Arena; window.Profile = Profile; window.Community = Community;
   window.Game = Game; window.Banners = Banners; window.Mod = Mod; window.Utils = Utils;
   window.UserMenu = UserMenu; window.Inbox = Inbox; window.Ping = Ping; window.Auth = Auth; window.AdminPanel = AdminPanel;
-  window.Landing = Landing;
+  window.Landing = Landing; window.Rating = Rating;
   document.addEventListener('click', (event) => { const root=document.getElementById('adminTopDropdown'); if(root && !root.contains(event.target)) AdminPanel.closeTopMenu(); });
   App.init();
   
