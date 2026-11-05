@@ -6,10 +6,17 @@
 <title>KingSide — Шахматы онлайн</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%23161512'/%3E%3Ctext x='50%25' y='56%25' font-size='46' text-anchor='middle' dominant-baseline='middle' fill='%23bf811d' font-family='serif'%3E%E2%99%94%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="/style.css">
+<style>
+body.login-active #mainHeader,
+body.login-active #userMenu,
+body.login-active #mainContent { display: none !important; }
+</style>
 </head>
 <body>
 
+<!-- ================================================================ -->
 <!-- ЛЕНДИНГ -->
+<!-- ================================================================ -->
 <section id="landingScreen" class="screen">
   <div class="landing-page">
     <header class="landing-header">
@@ -35,8 +42,7 @@
             <div class="stat"><b id="landingStatActiveGames">0</b><span>партий сейчас</span></div>
           </div>
         </div>
-        
-        <!-- Демо-доска с реальной партией -->
+
         <div class="board-section">
           <div class="board-players-top" id="landingTopPlayer">
             <div class="player-info">
@@ -45,9 +51,7 @@
             </div>
             <div class="clock-display" id="landingTopClock">--:--</div>
           </div>
-          <div class="board-wrap">
-            <div class="board" id="demoBoard"></div>
-          </div>
+          <div class="board-wrap"><div class="board" id="demoBoard"></div></div>
           <div class="board-players-bottom" id="landingBottomPlayer">
             <div class="player-info">
               <span class="player-name" id="landingBottomName">Загрузка...</span>
@@ -60,10 +64,7 @@
 
       <section class="landing-block" id="landingModes">
         <div class="block-head">
-          <div>
-            <h2>Выбери режим</h2>
-            <p>От пули до классики — играй так, как удобно</p>
-          </div>
+          <div><h2>Выбери режим</h2><p>От пули до классики — играй так, как удобно</p></div>
         </div>
         <div class="cards">
           <div class="card"><div class="icon">⚡</div><h3>Пуля 1+0</h3><p>Молниеносные партии для самых быстрых.</p></div>
@@ -74,15 +75,8 @@
       </section>
 
       <section class="landing-block">
-        <div class="block-head">
-          <div>
-            <h2>Топ игроков</h2>
-            <p>Лучшие из лучших прямо сейчас</p>
-          </div>
-        </div>
-        <div class="players" id="landingTopPlayers">
-          <div class="players-empty">Загрузка рейтинга...</div>
-        </div>
+        <div class="block-head"><div><h2>Топ игроков</h2><p>Лучшие из лучших прямо сейчас</p></div></div>
+        <div class="players" id="landingTopPlayers"><div class="players-empty">Загрузка рейтинга...</div></div>
       </section>
 
       <section class="landing-cta">
@@ -96,15 +90,15 @@
   </div>
 </section>
 
-<!-- ===================================================================== -->
-<!-- МОДАЛЬНОЕ ОКНО АВТОРИЗАЦИИ -->
-<!-- ===================================================================== -->
+<!-- ================================================================ -->
+<!-- МОДАЛКА АВТОРИЗАЦИИ -->
+<!-- ================================================================ -->
 <div id="authModal" class="auth-modal-overlay">
   <div class="auth-card">
     <div class="auth-tabs">
       <button class="auth-tab active" id="tabLoginBtn" onclick="Auth.switchTab('login')">Войти</button>
       <button class="auth-tab" id="tabRegisterBtn" onclick="Auth.switchTab('register')">Регистрация</button>
-      <button class="auth-close" onclick="Landing.closeAuth()" style="margin-left:auto; background:none; border:none; color:var(--muted); font-size:20px; cursor:pointer;">✕</button>
+      <button class="auth-close" onclick="Landing.closeAuth()" title="Закрыть">✕</button>
     </div>
     <div class="auth-field">
       <label>Логин</label>
@@ -122,36 +116,49 @@
         <input id="password" type="password" placeholder="••••••••••••" autocomplete="current-password">
         <span class="eye-icon" id="eyeIcon" onclick="Auth.togglePassword()">👁</span>
       </div>
-      <a href="#/reset" class="forgot-link" style="display:inline-block;margin-top:8px;font-size:12px;color:#4a9ce8;text-align:right;width:100%;" onclick="Landing.closeAuth()">Забыли пароль?</a>
+      <a href="#/reset" class="forgot-link" onclick="Landing.closeAuth()">Забыли пароль?</a>
     </div>
     <div id="registrationAgreements" style="display:none;margin:10px 0 14px;">
-      <details class="auth-terms" style="font-size:12px;line-height:1.5;color:var(--muted);margin:0 0 10px;">
-        <summary style="cursor:pointer;color:var(--text);font-weight:600;padding:5px 0;" onclick="event.preventDefault(); document.getElementById('rulesModal').classList.add('active');">Пользовательское соглашение и правила KingSide</summary>
-      </details>
-      
       <label class="checkbox-row" style="margin-bottom:8px;align-items:flex-start;">
         <input type="checkbox" id="honorCheckbox" required>
         <span class="checkmark"></span>
         <span>Подтверждаю, что буду играть честно и не использовать стороннюю помощь во время партий.</span>
       </label>
-      <div id="honorError" style="font-size:12px; color:#ff6b6b; margin-left:24px; display:none; margin-bottom:8px;">Это обязательный пункт</div>
+      <div id="honorError" class="checkbox-error">Это обязательный пункт</div>
 
       <label class="checkbox-row" style="margin-bottom:0;align-items:flex-start;">
         <input type="checkbox" id="rulesCheckbox" required>
         <span class="checkmark"></span>
-        <span>Подтверждаю, что прочитал(а) пользовательское соглашение и буду следовать правилам платформы.</span>
+        <span>Подтверждаю, что прочитал(а) <a href="javascript:void(0)" class="rules-link" onclick="Rules.open()">пользовательское соглашение и правила KingSide</a> и буду следовать правилам платформы.</span>
       </label>
-      <div id="rulesError" style="font-size:12px; color:#ff6b6b; margin-left:24px; display:none;">Это обязательный пункт</div>
+      <div id="rulesError" class="checkbox-error">Это обязательный пункт</div>
     </div>
     <button id="submitBtn" class="primary auth-submit" onclick="App.doLogin()"><span id="btnText">Войти</span></button>
     <div id="loginMsg" class="auth-msg"></div>
   </div>
 </div>
 
-<!-- ===================================================================== -->
-<!-- ВАШИ СУЩЕСТВУЮЩИЕ ЭКРАНЫ (Скрыты по умолчанию) -->
-<!-- ===================================================================== -->
+<!-- ================================================================ -->
+<!-- МОДАЛКА ПРАВИЛ (поверх всего) -->
+<!-- ================================================================ -->
+<div id="rulesModal" class="rules-modal">
+  <div class="rules-box">
+    <div class="rules-header">
+      <h2>📜 Пользовательское соглашение и правила KingSide</h2>
+      <button class="rules-close" onclick="Rules.close()" title="Закрыть">✕</button>
+    </div>
+    <div class="rules-body" id="rulesBody">
+      <!-- заполняется в Rules.render() -->
+    </div>
+    <div class="rules-footer">
+      <button class="primary" onclick="Rules.close()">Понятно</button>
+    </div>
+  </div>
+</div>
 
+<!-- ================================================================ -->
+<!-- ЭКРАН СБРОСА ПАРОЛЯ -->
+<!-- ================================================================ -->
 <section id="autorizeScreen" class="screen login-page" style="display: none;"></section>
 
 <section id="resetScreen" class="screen login-page" style="display: none;">
@@ -173,48 +180,51 @@
   </div>
 </section>
 
+<!-- ================================================================ -->
+<!-- ШАПКА -->
+<!-- ================================================================ -->
 <header class="topbar" id="mainHeader" style="display: none;">
   <div class="logo" onclick="Router.go('lobby')"><span class="mark">♔</span> KingSide</div>
   <nav id="mainNav">
-    <div class="nav-dropdown">
-      <a data-nav="play" onclick="Router.go('lobby')">Играть ▾</a>
-      <div class="nav-dropdown-content">
-        <a onclick="Lobby.switchTab('create'); Router.go('lobby')">Создать игру</a>
+    <div class="nav-dropdown" data-nav-dropdown="play">
+      <a data-nav="lobby" onclick="Router.go('lobby')">Играть <span class="nav-caret">▾</span></a>
+      <div class="nav-menu">
+        <a onclick="Router.go('lobby'); Lobby.switchTab('create')">Создать игру</a>
         <a onclick="Bot.openDialog()">Сыграть с компьютером</a>
       </div>
     </div>
     <a data-nav="watch" onclick="Router.go('watch')">Просмотр</a>
-    <div class="nav-dropdown">
-      <a data-nav="arenas" onclick="Router.go('arenas')">Турниры ▾</a>
-      <div class="nav-dropdown-content">
+    <div class="nav-dropdown" data-nav-dropdown="arenas">
+      <a data-nav="arenas" onclick="Router.go('arenas')">Турниры <span class="nav-caret">▾</span></a>
+      <div class="nav-menu">
         <a onclick="Router.go('arenas')">Арена</a>
-        <a onclick="Router.go('swiss')">Швейцарская система</a>
+        <a onclick="Router.go('swiss')">Турниры швейцарской системы</a>
       </div>
     </div>
-    <div class="nav-dropdown">
-      <a data-nav="community" onclick="Router.go('community')">Сообщество ▾</a>
-      <div class="nav-dropdown-content">
-        <a onclick="Router.go('rating')">Рейтинг</a>
+    <div class="nav-dropdown" data-nav-dropdown="community">
+      <a data-nav="community" onclick="Router.go('community')">Сообщество <span class="nav-caret">▾</span></a>
+      <div class="nav-menu">
         <a onclick="Router.go('community')">Игроки</a>
-        <a onclick="Router.go('report')">Репорт</a>
+        <a onclick="Router.go('leaderboard')">Рейтинг</a>
+        <a onclick="Router.go('reports')">Репорт</a>
       </div>
     </div>
-    <div class="nav-dropdown">
-      <a data-nav="learn" onclick="Router.go('learn')">Обучение ▾</a>
-      <div class="nav-dropdown-content">
+    <div class="nav-dropdown" data-nav-dropdown="learn">
+      <a data-nav="learn" onclick="Router.go('learn')">Обучение <span class="nav-caret">▾</span></a>
+      <div class="nav-menu">
         <a onclick="Router.go('learn')">Обучение</a>
         <a onclick="Router.go('puzzles')">Задачи</a>
       </div>
     </div>
   </nav>
   <div class="right">
-    <div class="adminTopDropdown" id="adminTopDropdown" style="display:none;position:relative;">
+    <div class="adminTopDropdown" id="adminTopDropdown" style="display:none;">
       <button class="userBtn" type="button" onclick="AdminPanel.toggleTopMenu(event)" aria-haspopup="true" aria-expanded="false">🛡️ Админ ▾</button>
-      <div id="adminTopMenu" class="adminTopMenu" style="display:none;position:absolute;right:0;top:calc(100% + 8px);min-width:210px;z-index:10010;background:var(--panel);border:1px solid var(--border);border-radius:6px;overflow:hidden;">
-        <button type="button" onclick="AdminPanel.goSection('users')" style="display:block;width:100%;text-align:left;background:transparent;border:none;color:var(--text-bright);padding:10px 14px;cursor:pointer;">👥 Список игроков</button>
-        <button type="button" onclick="AdminPanel.goSection('chat')" style="display:block;width:100%;text-align:left;background:transparent;border:none;color:var(--text-bright);padding:10px 14px;cursor:pointer;">🧹 Модерация чата</button>
-        <button type="button" onclick="AdminPanel.goSection('private')" style="display:block;width:100%;text-align:left;background:transparent;border:none;color:var(--text-bright);padding:10px 14px;cursor:pointer;">✉ Личные сообщения</button>
-        <button type="button" onclick="AdminPanel.goSection('settings')" style="display:block;width:100%;text-align:left;background:transparent;border:none;color:var(--text-bright);padding:10px 14px;cursor:pointer;">⚙ Настройки</button>
+      <div id="adminTopMenu" class="adminTopMenu">
+        <button type="button" onclick="AdminPanel.goSection('users')">👥 Список игроков</button>
+        <button type="button" onclick="AdminPanel.goSection('chat')">🧹 Модерация чата</button>
+        <button type="button" onclick="AdminPanel.goSection('private')">✉ Личные сообщения</button>
+        <button type="button" onclick="AdminPanel.goSection('settings')">⚙ Настройки</button>
       </div>
     </div>
     <button class="iconBtn" id="msgBellBtn" onclick="Router.go('inbox')" title="Сообщения" style="display:none">
@@ -229,6 +239,7 @@
   </div>
 </header>
 
+<!-- Выпадающее меню пользователя -->
 <div id="userMenu" class="userMenu" style="display:none;">
   <div class="umHeader"><div class="umAvatar" id="umAvatar">?</div><div class="umName" id="umName">—</div></div>
   <div class="umDivider"></div>
@@ -244,33 +255,82 @@
   </div>
 </div>
 
+<!-- ================================================================ -->
+<!-- АДМИН-ПАНЕЛЬ -->
+<!-- ================================================================ -->
 <main id="adminPage" class="adminPage" style="display:none;">
   <section class="adminPanel" aria-labelledby="adminPanelTitle">
-    <header class="adminPanelHeader"><div><h2 id="adminPanelTitle">🛡️ Админ-панель KingSide</h2><p>Полный доступ только у PeshkaSasha</p></div><button class="adminClose" onclick="AdminPanel.close()" aria-label="Закрыть">×</button></header>
-    <div class="adminPanelTabs"><button class="active" data-admin-tab="users" onclick="AdminPanel.setTab('users',this)">Список игроков</button><button data-admin-tab="chat" onclick="AdminPanel.setTab('chat',this)">Модерация чата</button><button data-admin-tab="private" onclick="AdminPanel.setTab('private',this)">Личные сообщения</button><button data-admin-tab="settings" onclick="AdminPanel.setTab('settings',this)">Настройки</button></div>
-    <div id="adminUsersTab">
-      <div class="adminTools"><input id="adminUserSearch" placeholder="Поиск по нику..." oninput="AdminPanel.renderUsers()"><button onclick="AdminPanel.refresh()">↻ Обновить</button></div>
-      <div id="adminUserCount" class="adminMuted"></div><div id="adminUsersList" class="adminUsersList">Загрузка списка...</div>
+    <header class="adminPanelHeader">
+      <div><h2 id="adminPanelTitle">🛡️ Админ-панель KingSide</h2><p>Полный доступ только у PeshkaSasha</p></div>
+      <button class="adminClose" onclick="AdminPanel.close()" aria-label="Закрыть">×</button>
+    </header>
+    <div class="adminPanelTabs">
+      <button class="active" data-admin-tab="users" onclick="AdminPanel.setTab('users',this)">Список игроков</button>
+      <button data-admin-tab="chat" onclick="AdminPanel.setTab('chat',this)">Модерация чата</button>
+      <button data-admin-tab="private" onclick="AdminPanel.setTab('private',this)">Личные сообщения</button>
+      <button data-admin-tab="settings" onclick="AdminPanel.setTab('settings',this)">Настройки</button>
     </div>
+
+    <div id="adminUsersTab">
+      <div class="adminTools">
+        <input id="adminUserSearch" placeholder="Поиск по нику..." oninput="AdminPanel.renderUsers()">
+        <button onclick="AdminPanel.refresh()">↻ Обновить</button>
+      </div>
+      <div id="adminUserCount" class="adminMuted"></div>
+      <div id="adminUsersList" class="adminUsersList">Загрузка списка...</div>
+    </div>
+
     <div id="adminChatTab" style="display:none;">
       <section id="adminPrivateSection">
-      <h3>Отправить игроку личное сообщение</h3><p class="adminMuted">Сообщение попадёт в обычные личные сообщения выбранного игрока. Цвет текста задаётся вами.</p>
-      <label class="adminFieldLabel">Получатель<select id="adminPrivateRecipient"><option value="">Выберите игрока…</option></select></label>
-      <textarea id="adminPrivateText" maxlength="2000" placeholder="Текст личного сообщения" style="width:100%;min-height:100px;background:var(--bg);border:1px solid var(--border);color:var(--text-bright);padding:10px;border-radius:4px;margin-bottom:10px;"></textarea>
-      <div class="adminInline"><label>Цвет текста <input type="color" id="adminPrivateColor" value="#ff4d4f"></label><button onclick="AdminPanel.addPrivateMessage()">Отправить ЛС</button></div>
+        <h3>Отправить игроку личное сообщение</h3>
+        <p class="adminMuted">Сообщение попадёт в обычные личные сообщения выбранного игрока. Цвет текста задаётся вами.</p>
+        <label class="adminFieldLabel">Получатель
+          <select id="adminPrivateRecipient"><option value="">Выберите игрока…</option></select>
+        </label>
+        <textarea id="adminPrivateText" maxlength="2000" placeholder="Текст личного сообщения"></textarea>
+        <div class="adminInline">
+          <label>Цвет текста <input type="color" id="adminPrivateColor" value="#ff4d4f"></label>
+          <button onclick="AdminPanel.addPrivateMessage()">Отправить ЛС</button>
+        </div>
       </section>
-      <section id="adminSettingsSection"><h3>Настройки</h3><label class="adminDmSetting"><input type="checkbox" id="adminDmClosed" onchange="AdminPanel.setDmClosed(this.checked)"> Запретить игрокам отправлять мне ЛС</label><div class="adminInline"><label for="adminChatInterval">Интервал сообщений в чате</label><input id="adminChatInterval" type="number" min="0" max="120" step="1" value="0" style="width:72px"><span class="adminMuted">сек. (0 — без ограничения)</span><button type="button" onclick="AdminPanel.saveChatInterval()">Сохранить</button></div><p class="adminMuted">Интервал применяется к обычным игрокам в игровом и аренном чате и проверяется сервером.</p><p class="adminMuted">Настройка ЛС сохраняется на сервере. Даже при отключённых входящих ЛС вы можете писать игрокам сами.</p></section>
-      <section id="adminModerationSection"><hr id="adminChatModerationAnchor"><h3>Удаление сообщений в игровом чате</h3><p class="adminMuted">Наведите курсор на область перед ником сообщения и отметьте его. Кнопка удаления появится только после выбора хотя бы одного сообщения.</p>
-      <div class="adminMuted">Всего выбрано в открытых чатах: <span id="adminSelectedCount">0</span></div></section>
+      <section id="adminSettingsSection">
+        <h3>Настройки</h3>
+        <label class="adminDmSetting">
+          <input type="checkbox" id="adminDmClosed" onchange="AdminPanel.setDmClosed(this.checked)">
+          Запретить игрокам отправлять мне ЛС
+        </label>
+        <div class="adminInline">
+          <label for="adminChatInterval">Интервал сообщений в чате</label>
+          <input id="adminChatInterval" type="number" min="0" max="120" step="1" value="0" style="width:72px">
+          <span class="adminMuted">сек. (0 — без ограничения)</span>
+          <button type="button" onclick="AdminPanel.saveChatInterval()">Сохранить</button>
+        </div>
+        <p class="adminMuted">Интервал применяется к обычным игрокам в игровом и аренном чате и проверяется сервером.</p>
+        <p class="adminMuted">Настройка ЛС сохраняется на сервере. Даже при отключённых входящих ЛС вы можете писать игрокам сами.</p>
+      </section>
+      <section id="adminModerationSection">
+        <hr id="adminChatModerationAnchor">
+        <h3>Удаление сообщений в чате</h3>
+        <p class="adminMuted">Наведите курсор на сообщение слева — появится круглая галочка. Отметьте нужные сообщения, затем нажмите красную кнопку «Удалить выбранные».</p>
+        <div class="adminMuted">Всего выбрано в открытых чатах: <span id="adminSelectedCount">0</span></div>
+      </section>
     </div>
     <div id="adminPanelStatus" class="adminStatus" aria-live="polite"></div>
   </section>
 </main>
 
+<!-- ================================================================ -->
+<!-- ОСНОВНОЙ КОНТЕНТ -->
+<!-- ================================================================ -->
 <main id="mainContent" style="display: none;">
+
+  <!-- ЛОББИ -->
   <section id="lobbyScreen" class="screen">
     <div class="homeWrap">
-      <aside class="homeLeft"><div class="sideTitle">🔥 Идут сейчас</div><div id="topArenasBox"><div class="arenaEmpty" style="padding:20px 0">Загрузка...</div></div></aside>
+      <aside class="homeLeft">
+        <div class="sideTitle">🔥 Идут сейчас</div>
+        <div id="topArenasBox"><div class="arenaEmpty" style="padding:20px 0">Загрузка...</div></div>
+      </aside>
       <div class="lobbyCenter">
         <div class="tabs">
           <button class="active" data-tab="create" onclick="Lobby.switchTab('create')">Быстрый старт</button>
@@ -292,16 +352,21 @@
     </div>
   </section>
 
+  <!-- ПРОСМОТР -->
   <section id="watchScreen" class="screen">
     <div class="watchWrap">
       <div class="watchList">
-        <div class="watchListHeader"><span>👁 Текущие партии</span><button class="secondary" style="padding:4px 10px;font-size:12px;min-width:auto;" onclick="Watch.refresh(true)">↻</button></div>
+        <div class="watchListHeader">
+          <span>👁 Текущие партии</span>
+          <button class="secondary" style="padding:4px 10px;font-size:12px;min-width:auto;" onclick="Watch.refresh(true)">↻</button>
+        </div>
         <div class="watchListBody" id="watchListBody"><div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div></div>
       </div>
       <div class="watchBoard" id="watchBoardBox"><div class="wbEmpty">Выбери партию слева, чтобы посмотреть её в реальном времени</div></div>
     </div>
   </section>
 
+  <!-- АРЕНЫ (список) -->
   <section id="arenasScreen" class="screen">
     <div style="max-width:1200px; margin:0 auto; display:flex; gap:20px; align-items:flex-start;">
       <div style="width:240px; flex-shrink:0;">
@@ -310,15 +375,13 @@
           <div style="cursor:pointer; padding:2px 0;">Турнирный календарь</div>
           <div style="cursor:pointer; padding:2px 0;">История «Арены»</div>
           <div style="cursor:pointer; padding:2px 0;">Вопросы и ответы про Арену</div>
-          <div style="cursor:pointer; padding:2px 0;">Лиги & Битвы стримеров</div>
+          <div style="cursor:pointer; padding:2px 0;">Лиги &amp; Битвы стримеров</div>
         </div>
-
         <div class="sideTitle" style="margin-bottom:8px;">Лучшие игроки</div>
         <div id="bestPlayersList" style="display:flex; flex-direction:column; gap:6px;">
           <div class="arenaEmpty" style="padding:10px; font-size:12px;">Загрузка...</div>
         </div>
       </div>
-
       <div style="flex:1; min-width:0;">
         <div class="arenasHeader">
           <div class="ahLeft"><h1>Турниры</h1></div>
@@ -329,56 +392,7 @@
     </div>
   </section>
 
-  <section id="swissScreen" class="screen">
-    <div class="communityPage">
-      <h2 style="color:var(--text-bright);font-weight:400;margin:0">Швейцарская система</h2>
-      <p style="color:var(--muted);margin:6px 0 0">Раздел находится в разработке.</p>
-    </div>
-  </section>
-
-  <section id="reportScreen" class="screen">
-    <div class="communityPage">
-      <h2 style="color:var(--text-bright);font-weight:400;margin:0">Репорт</h2>
-      <p style="color:var(--muted);margin:6px 0 0">Раздел находится в разработке. Скоро здесь можно будет пожаловаться на нарушителей.</p>
-    </div>
-  </section>
-
-  <section id="learnScreen" class="screen">
-    <div class="communityPage">
-      <h2 style="color:var(--text-bright);font-weight:400;margin:0">Обучение</h2>
-      <p style="color:var(--muted);margin:6px 0 0">Раздел находится в разработке. Уроки, задачи и теория скоро появятся.</p>
-    </div>
-  </section>
-
-  <section id="puzzlesScreen" class="screen">
-    <div class="communityPage">
-      <h2 style="color:var(--text-bright);font-weight:400;margin:0">Задачи</h2>
-      <p style="color:var(--muted);margin:6px 0 0">Раздел находится в разработке. Скоро здесь будут шахматные задачи.</p>
-    </div>
-  </section>
-
-  <section id="ratingScreen" class="screen">
-    <div class="rating-page">
-      <div class="rating-header">
-        <h2>Рейтинг игроков</h2>
-        <div class="adminMuted" id="ratingMyPlace">Загрузка...</div>
-      </div>
-      <table class="rating-table">
-        <thead>
-          <tr>
-            <th style="width: 60px;">#</th>
-            <th>Игрок</th>
-            <th style="width: 100px; text-align: right;">Рейтинг</th>
-          </tr>
-        </thead>
-        <tbody id="ratingTableBody">
-          <tr><td colspan="3" style="text-align:center; color:var(--muted); padding: 20px;">Загрузка...</td></tr>
-        </tbody>
-      </table>
-      <div class="rating-pagination" id="ratingPagination"></div>
-    </div>
-  </section>
-
+  <!-- СТРАНИЦА АРЕНЫ -->
   <section id="arenaPageScreen" class="screen">
     <div class="arenaPage">
       <aside class="arenaLeft">
@@ -392,17 +406,16 @@
             <div class="ascRulesText">Рейтинговые игры в этой категории</div>
           </div>
         </div>
-        
         <div class="arenaChatBox">
-          <div class="arenaChatHeader">
-            <span>💬 Чат</span>
-            <div class="chatToggleSwitch active" onclick="this.classList.toggle('active')"><div class="slider"></div></div>
-          </div>
+          <div class="arenaChatHeader"><span>💬 Чат</span></div>
           <div class="arenaChatMessages" id="arenaChatMessages"></div>
-          <form class="arenaChatForm" onsubmit="Arena.sendChat(event)"><input id="arenaChatInput" placeholder="Будьте вежливы в чате!" maxlength="300" autocomplete="off"><button type="submit">→</button></form>
+          <form class="arenaChatForm" onsubmit="Arena.sendChat(event)">
+            <input id="arenaChatInput" placeholder="Будьте вежливы в чате!" maxlength="300" autocomplete="off">
+            <button type="submit">→</button>
+          </form>
         </div>
       </aside>
-      
+
       <main class="arenaCenter">
         <div class="arenaTopBar">
           <div class="arenaTopLeft">
@@ -417,29 +430,26 @@
             </div>
           </div>
         </div>
-        
         <div class="arenaPairingBox" id="arenaPairingBox" style="display:none;"></div>
-        
         <div class="arenaParticipantsHeader">
           <div class="arenaSearch"><input id="arenaSearchInput" placeholder="🔍 Поиск игрока" oninput="Arena.filterParticipants()"></div>
           <div id="arenaJoinBtnWrap"><button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button></div>
         </div>
-        
         <div class="arenaParticipantsTable">
           <div class="arenaTableBody" id="arenaTableBody"><div class="arenasEmpty">Загрузка участников...</div></div>
           <div class="arenaPagination" id="arenaPagination"></div>
         </div>
-        
-        <div class="arenaWinnerBanner" id="arenaWinnerBanner" style="display:none;"><div class="awbTitle">🏆 Арена завершена!</div><div class="awbPodium" id="awbPodium"></div></div>
+        <div class="arenaWinnerBanner" id="arenaWinnerBanner" style="display:none;">
+          <div class="awbTitle">🏆 Арена завершена!</div>
+          <div class="awbPodium" id="awbPodium"></div>
+        </div>
       </main>
-      
+
       <aside class="arenaRight">
         <div class="arenaRightCol">
           <div class="arenaTopGame" id="arenaTopGame"><div class="arenaTopGameEmpty">Сейчас никто не играет</div></div>
-          
-          <div class="arenaGamesHeader" style="border-top:1px solid var(--border);">🏆 ЛУЧШИЕ ИГРЫ</div>
+          <div class="arenaGamesHeader">🏆 ЛУЧШИЕ ИГРЫ</div>
           <div class="arenaGamesList" id="arenaGamesList"><div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div></div>
-          
           <div class="arenaStatsBox" id="arenaStatsBox">
             <span>👥 Участников: <b id="arenaParticipantsCount">0</b></span>
             <span>👁 Зрителей: <b id="arenaViewersCount">0</b></span>
@@ -449,6 +459,35 @@
     </div>
   </section>
 
+  <!-- ШВЕЙЦАРСКИЕ ТУРНИРЫ (заглушка) -->
+  <section id="swissScreen" class="screen">
+    <div class="stubPage">
+      <div class="stubIcon">🏆</div>
+      <h2>Турниры швейцарской системы</h2>
+      <p>Этот раздел скоро появится. Следите за обновлениями!</p>
+    </div>
+  </section>
+
+  <!-- РЕЙТИНГ -->
+  <section id="leaderboardScreen" class="screen">
+    <div class="leaderboardPage">
+      <h1 class="leaderboardTitle">Рейтинг игроков</h1>
+      <div class="leaderboardMeta" id="leaderboardMeta">Загрузка...</div>
+      <div class="leaderboardList" id="leaderboardList"></div>
+      <div class="leaderboardPagination" id="leaderboardPagination"></div>
+    </div>
+  </section>
+
+  <!-- РЕПОРТ (заглушка) -->
+  <section id="reportsScreen" class="screen">
+    <div class="stubPage">
+      <div class="stubIcon">🚩</div>
+      <h2>Репорты</h2>
+      <p>Этот раздел скоро появится. Пока для жалоб пишите в личные сообщения администрации.</p>
+    </div>
+  </section>
+
+  <!-- ПРОФИЛЬ -->
   <section id="profileScreen" class="screen">
     <div class="profilePage">
       <div class="profileHead">
@@ -482,6 +521,7 @@
     </div>
   </section>
 
+  <!-- СООБЩЕСТВО (список онлайн) -->
   <section id="communityScreen" class="screen">
     <div class="communityPage">
       <h2 style="color:var(--text-bright);font-weight:400;margin:0">Сообщество</h2>
@@ -491,11 +531,33 @@
     </div>
   </section>
 
+  <!-- ОБУЧЕНИЕ (заглушка) -->
+  <section id="learnScreen" class="screen">
+    <div class="stubPage">
+      <div class="stubIcon">📚</div>
+      <h2>Обучение</h2>
+      <p>Раздел в разработке. Скоро здесь появятся уроки, разборы партий и подсказки.</p>
+    </div>
+  </section>
+
+  <!-- ЗАДАЧИ (заглушка) -->
+  <section id="puzzlesScreen" class="screen">
+    <div class="stubPage">
+      <div class="stubIcon">🧩</div>
+      <h2>Задачи</h2>
+      <p>Раздел в разработке. Скоро здесь можно будет решать тактические задачи.</p>
+    </div>
+  </section>
+
+  <!-- ВХОДЯЩИЕ -->
   <section id="inboxScreen" class="screen">
     <div class="inboxWrap">
       <aside class="inboxSidebar">
         <div class="inboxSidebarHead"><span>Сообщения</span><button class="msgNewBtn" onclick="Inbox.newDialog()" title="Написать игроку">＋</button></div>
-        <div class="msgNewRow" id="msgNewRow" style="display:none;"><input id="msgNewInput" placeholder="Логин игрока…" autocomplete="off"><button onclick="Inbox.startWithInput()">→</button></div>
+        <div class="msgNewRow" id="msgNewRow" style="display:none;">
+          <input id="msgNewInput" placeholder="Логин игрока…" autocomplete="off">
+          <button onclick="Inbox.startWithInput()">→</button>
+        </div>
         <div class="msgDialogs" id="msgDialogs"></div>
       </aside>
       <section class="inboxChat">
@@ -507,37 +569,35 @@
           </div>
         </div>
         <div class="inboxChatBody" id="inboxChatBody"><div class="msgEmpty">Выберите диалог слева или начните новый</div></div>
-        <form class="inboxChatForm" id="inboxChatForm" onsubmit="Inbox.send(event)"><input id="inboxChatInput" placeholder="Сообщение…" maxlength="2000" autocomplete="off"><button type="submit">→</button></form>
+        <form class="inboxChatForm" id="inboxChatForm" onsubmit="Inbox.send(event)">
+          <input id="inboxChatInput" placeholder="Сообщение…" maxlength="2000" autocomplete="off">
+          <button type="submit">→</button>
+        </form>
       </section>
     </div>
   </section>
 
-  <section id="activeGameNoticeScreen" class="screen activeGameNoticeScreen">
-    <div class="activeGameNoticeCard">
-      <div class="activeGameWatermark" aria-hidden="true">♞</div>
-      <div class="activeGameNoticeTitle">Подождите!</div>
-      <div class="activeGameNoticeSub">У вас идёт игра с <strong id="activeGameOpponent">соперником</strong>.</div>
-      <button class="activeGameReturnBtn" onclick="App.returnToGame()"><span aria-hidden="true">▶</span> ПРИНЯТЬ ВЫЗОВ</button>
-      <div class="activeGameOr">или</div>
-      <button class="activeGameAbortBtn" onclick="Game.resign(); if (App.gameEnded) Router.go('lobby')"><span aria-hidden="true">✖</span> СДАТЬСЯ</button>
-      <div class="activeGameNoticeFoot">Вы не можете начать новую партию, пока текущая не завершена.</div>
-    </div>
-  </section>
-
+  <!-- ИГРА -->
   <section id="gameScreen" class="screen">
     <div class="gameWrap">
       <div class="col-chat">
         <div id="chatBox">
           <div id="chatTabs"><button class="tabBtn active">Чат</button></div>
           <div id="chatMessages"></div>
-          <form id="chatForm" onsubmit="Game.sendChat(event)"><input id="chatInput" placeholder="Написать сообщение..." maxlength="300" autocomplete="off"><button type="submit">→</button></form>
+          <form id="chatForm" onsubmit="Game.sendChat(event)">
+            <input id="chatInput" placeholder="Написать сообщение..." maxlength="300" autocomplete="off">
+            <button type="submit">→</button>
+          </form>
         </div>
         <div id="statusBar" class="statusGreen">Ожидание соперника...</div>
       </div>
       <div class="col-board"><div id="boardWrap"><div id="board"></div></div></div>
       <div class="col-info">
         <div class="clockBox" id="topClock"><div class="clockTime" id="topTime">--:--</div></div>
-        <div class="playerStrip" id="topStrip"><div class="side"><span class="dot" id="topDot"></span><span class="nm" id="topName" onclick="Game.openOpponentProfile()">—</span></div><span class="rt" id="topRating"></span></div>
+        <div class="playerStrip" id="topStrip">
+          <div class="side"><span class="dot" id="topDot"></span><span class="nm" id="topName" onclick="Game.openOpponentProfile()">—</span></div>
+          <span class="rt" id="topRating"></span>
+        </div>
         <div class="movesPanel" id="movesPanel">
           <div class="movesToolbar">
             <button title="В начало" onclick="Game.gotoMove('first')">⏮</button>
@@ -561,13 +621,24 @@
           </div>
           <button class="grBtn findOpp" id="grFindBtn" onclick="Game.findNewOpponent()">НАЙТИ ДРУГОГО СОПЕРНИКА</button>
         </div>
-        <div class="playerStrip" id="bottomStrip"><div class="side"><span class="dot" id="bottomDot"></span><span class="nm" id="bottomName" onclick="Router.go('profile')">—</span></div><span class="rt" id="bottomRating"></span></div>
+        <div class="playerStrip" id="bottomStrip">
+          <div class="side"><span class="dot" id="bottomDot"></span><span class="nm" id="bottomName" onclick="Router.go('profile')">—</span></div>
+          <span class="rt" id="bottomRating"></span>
+        </div>
         <div class="clockBox" id="bottomClock"><div class="clockTime" id="bottomTime">--:--</div></div>
       </div>
     </div>
   </section>
 </main>
 
+<!-- ================================================================ -->
+<!-- ПЛАВАЮЩАЯ КНОПКА "?" -->
+<!-- ================================================================ -->
+<button id="rulesFab" class="rules-fab" title="Правила платформы" onclick="Rules.open()">?</button>
+
+<!-- ================================================================ -->
+<!-- МОДАЛКА БОТА -->
+<!-- ================================================================ -->
 <div id="botDialog" class="botModal">
   <div class="botModalBox">
     <h3>🤖 Игра с компьютером</h3>
@@ -582,49 +653,17 @@
   </div>
 </div>
 
+<!-- Баннеры реванша и ничьей -->
 <div id="rematchBanner" class="rematchBanner" style="display:none;">
-  <span class="rbText" id="rematchBannerText">⚔ Иван предлагает реванш</span>
+  <span class="rbText" id="rematchBannerText">⚔ Игрок предлагает реванш</span>
   <button class="rbAccept" id="rematchBannerAccept">Принять</button>
   <button class="rbDecline" id="rematchBannerDecline">Отклонить</button>
 </div>
-
 <div id="drawOfferBanner" class="rematchBanner drawOfferBanner" style="display:none;">
   <span class="rbText" id="drawOfferBannerText">½ Соперник предлагает ничью</span>
   <button class="rbAccept" id="drawOfferBannerAccept">Принять</button>
   <button class="rbDecline" id="drawOfferBannerDecline">Отклонить</button>
 </div>
-
-<!-- Модальное окно правил -->
-<div id="rulesModal" class="rules-modal-overlay">
-  <div class="rules-modal-content">
-    <button class="rules-modal-close" onclick="document.getElementById('rulesModal').classList.remove('active')" aria-label="Закрыть">×</button>
-    <h2>Правила платформы KingSide</h2>
-    <p>Добро пожаловать в KingSide! Мы стремимся создать дружелюбное и честное сообщество для всех любителей шахмат. Пожалуйста, ознакомьтесь с основными правилами.</p>
-    
-    <h3>1. Честная игра</h3>
-    <p>Запрещается использовать любые сторонние программы, движки, скрипты или подсказки во время рейтинговых партий. Игра должна быть полностью результатом ваших собственных усилий. Поддавки (намеренный проигрыш) также запрещены.</p>
-    
-    <h3>2. Уважение к другим</h3>
-    <p>Оскорбления, унижения, угрозы, дискриминация по любому признаку и токсичное поведение в чате недопустимы. Критикуйте ходы, а не людей. Помните, что за доской сидит живой человек.</p>
-    
-    <h3>3. Запрет на спам и флуд</h3>
-    <p>Не засоряйте игровой и аренный чат повторяющимися сообщениями, рекламой, ссылками на сторонние ресурсы или бессмысленным текстом. Уважайте внимание других участников.</p>
-    
-    <h3>4. Мультиаккаунтинг</h3>
-    <p>Запрещено создавать несколько аккаунтов для обхода блокировок, накрутки рейтинга или участия в турнирах с целью получения преимущества. Один игрок — один основной аккаунт.</p>
-    
-    <h3>5. Ответственность и модерация</h3>
-    <p>Администраторы и модераторы оставляют за собой право выносить предупреждения, временно заглушать (мутить) игроков и применять баны за нарушения правил. Незнание правил не освобождает от ответственности.</p>
-    
-    <h3>6. Приватность</h3>
-    <p>Уважайте личное пространство других. Не публикуйте личную информацию других игроков (адреса, телефоны, соцсети) без их согласия. Мы сохраняем только те данные, которые необходимы для работы платформы.</p>
-
-    <p style="margin-top: 30px; font-size: 12px; color: var(--muted); text-align: center;">Спасибо, что играете в KingSide! Удачи за доской!</p>
-  </div>
-</div>
-
-<!-- Плавающая кнопка правил -->
-<button id="rulesTrigger" class="rules-trigger" onclick="document.getElementById('rulesModal').classList.add('active')" title="Правила платформы">?</button>
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="/app.js"></script>
