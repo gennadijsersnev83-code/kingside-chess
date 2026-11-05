@@ -46,7 +46,7 @@ button.danger { background:var(--red); border:none; color:#fff; }
 button.secondary { background:var(--panel-2); border:1px solid var(--border); }
 button:disabled { opacity:.5; cursor:not-allowed; }
 
-/* --- Выпадающее меню навигации --- */
+/* --- Навигация с выпадающими меню --- */
 .nav-dropdown { position: relative; display: inline-block; }
 .nav-dropdown > a { display: block; }
 .nav-dropdown-content {
@@ -61,7 +61,33 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 }
 .nav-dropdown-content a:hover { background: var(--panel-hover); color: var(--text-bright); }
 
-/* --- Админ-панель --- */
+/* --- Админ-панель: модерация чата --- */
+.adminChatInlineTools {
+  display: none; /* Скрыто по умолчанию */
+  position: sticky; top: 0; z-index: 10;
+  background: var(--panel-2); padding: 6px 10px; border-bottom: 1px solid var(--border);
+  align-items: center; gap: 10px; margin-bottom: 8px; border-radius: 4px;
+}
+.adminChatInlineTools .adminInlineDeleteSelected {
+  background: #a53030; color: #fff; border: none; padding: 4px 10px; border-radius: 4px;
+  font-size: 12px; font-weight: 600; cursor: pointer; min-height: 28px;
+}
+.adminChatInlineTools .adminInlineDeleteSelected:hover { background: #c43a3a; }
+.adminChatInlineTools .adminInlineSelectedCount { color: var(--text-bright); font-weight: 700; }
+
+.adminSelectable { position: relative; }
+.adminSelectHotspot {
+  display: inline-block; width: 20px; height: 20px; cursor: pointer;
+  margin-right: 6px; vertical-align: middle; opacity: 0; transition: opacity 0.2s;
+  background: rgba(255,255,255,0.05); border-radius: 4px; text-align: center; line-height: 20px;
+  border: 1px solid transparent;
+}
+.adminSelectable:hover .adminSelectHotspot, .adminSelectHotspot.is-selected { opacity: 1; border-color: var(--border); }
+.adminSelectHotspot input[type="checkbox"] { display: none; }
+.adminSelectHotspot::after { content: '☐'; font-size: 16px; color: var(--muted); line-height: 18px; }
+.adminSelectHotspot.is-selected::after { content: '☑'; color: var(--green-2); }
+
+/* --- Админ-панель (страница) --- */
 .adminPage { max-width: 1000px; margin: 0 auto; padding: 24px 16px; }
 .adminPanel { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
 .adminPanelHeader { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 16px; }
@@ -86,32 +112,6 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .adminInline { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
 .adminMuted { color: var(--muted); font-size: 12px; }
 .adminStatus { margin-top: 16px; font-size: 13px; text-align: center; min-height: 20px; }
-
-/* --- Модерация чата в админ-панели --- */
-.adminChatInlineTools {
-  display: none;
-  position: sticky; top: 0; z-index: 10;
-  background: var(--panel-2); padding: 6px 10px; border-bottom: 1px solid var(--border);
-  align-items: center; gap: 10px; margin-bottom: 8px; border-radius: 4px;
-}
-.adminChatInlineTools .adminInlineDeleteSelected {
-  background: #a53030; color: #fff; border: none; padding: 4px 10px; border-radius: 4px;
-  font-size: 12px; font-weight: 600; cursor: pointer; min-height: 28px;
-}
-.adminChatInlineTools .adminInlineDeleteSelected:hover { background: #c43a3a; }
-.adminChatInlineTools .adminInlineSelectedCount { color: var(--text-bright); font-weight: 700; }
-
-.adminSelectable { position: relative; }
-.adminSelectHotspot {
-  display: inline-block; width: 20px; height: 20px; cursor: pointer;
-  margin-right: 6px; vertical-align: middle; opacity: 0; transition: opacity 0.2s;
-  background: rgba(255,255,255,0.05); border-radius: 4px; text-align: center; line-height: 20px;
-  border: 1px solid transparent;
-}
-.adminSelectable:hover .adminSelectHotspot, .adminSelectHotspot.is-selected { opacity: 1; border-color: var(--border); }
-.adminSelectHotspot input[type="checkbox"] { display: none; }
-.adminSelectHotspot::after { content: '☐'; font-size: 16px; color: var(--muted); line-height: 18px; }
-.adminSelectHotspot.is-selected::after { content: '☑'; color: var(--green-2); }
 
 /* --- Страница Рейтинга --- */
 .rating-page { max-width: 800px; margin: 0 auto; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 20px; }
