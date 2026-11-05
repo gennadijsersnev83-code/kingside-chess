@@ -31,6 +31,93 @@ const Utils = {
 };
 
 // ============================================================
+// RULES — модалка правил платформы (NEW)
+// ============================================================
+const Rules = {
+  rendered: false,
+  render() {
+    const body = document.getElementById('rulesBody');
+    if (!body) return;
+    body.innerHTML = `
+      <h3>1. Общие положения</h3>
+      <p>KingSide — шахматная онлайн-платформа для игры, обучения и участия в турнирах. Используя сайт, вы соглашаетесь с настоящими Правилами. Если вы не согласны с каким-либо пунктом, пожалуйста, не регистрируйтесь и не используйте платформу.</p>
+
+      <h3>2. Регистрация и аккаунт</h3>
+      <ul>
+        <li>Для игры необходима регистрация с указанием логина, email и пароля.</li>
+        <li>Один человек может иметь несколько аккаунтов, но рейтинговые партии должны играться с основного аккаунта.</li>
+        <li>Вы обязуетесь указывать корректный email и подтверждать его.</li>
+        <li>Ответственность за сохранность пароля лежит на вас.</li>
+      </ul>
+
+      <h3>3. Честная игра</h3>
+      <p><strong>Запрещено:</strong></p>
+      <ul>
+        <li>Использовать шахматные движки, базы дебютов и подсказки во время партии.</li>
+        <li>Играть за другого человека или договариваться о результате партии.</li>
+        <li>Использовать несколько аккаунтов для искусственного повышения рейтинга.</li>
+        <li>Применять ботов, скрипты и любые средства автоматизации.</li>
+      </ul>
+      <p>За нарушение этих правил аккаунт может быть заблокирован без возврата рейтинга.</p>
+
+      <h3>4. Поведение в чате</h3>
+      <p>В игровом, аренном и личном чате запрещены:</p>
+      <ul>
+        <li>Оскорбления, угрозы, разжигание ненависти, дискриминация.</li>
+        <li>Спам, реклама сторонних ресурсов, флуд.</li>
+        <li>Публикация личных данных других людей.</li>
+        <li>Обсуждение действий модераторов и администрации в чате.</li>
+      </ul>
+      <p>Модераторы вправе удалять сообщения, выдавать мьют и передавать информацию администрации.</p>
+
+      <h3>5. Рейтинг и турниры</h3>
+      <ul>
+        <li>Рейтинг рассчитывается по системе Glicko-2 по каждой категории: пуля, блиц, рапид, классика.</li>
+        <li>Партии против ботов <strong>не влияют</strong> на рейтинг, кроме специально обозначенных арен.</li>
+        <li>Результаты арен и турниров фиксируются на сервере.</li>
+        <li>Администрация вправе корректировать рейтинг при обнаружении нарушений.</li>
+      </ul>
+
+      <h3>6. Личные сообщения</h3>
+      <ul>
+        <li>Не отправляйте спам и не рекламируйте сторонние проекты.</li>
+        <li>Администратор может временно отключить приём ЛС.</li>
+        <li>История диалогов хранится на сервере; вы можете удалить диалог со своей стороны.</li>
+      </ul>
+
+      <h3>7. Контент и авторские права</h3>
+      <p>Все элементы платформы (дизайн, логотип, код, графика) являются собственностью KingSide. Копирование без разрешения запрещено.</p>
+
+      <h3>8. Блокировки и удаление аккаунта</h3>
+      <ul>
+        <li>За нарушение правил аккаунт может быть заблокирован на срок от 1 часа до 1 года.</li>
+        <li>Удаление аккаунта доступно самостоятельно через настройки после 10 дней с момента регистрации.</li>
+        <li>Удаление необратимо: рейтинг, партии и личные сообщения будут утеряны.</li>
+      </ul>
+
+      <h3>9. Ограничение ответственности</h3>
+      <p>Платформа предоставляется «как есть». Администрация не несёт ответственности за возможные сбои, потерю данных или упущенную выгоду в результате использования сервиса.</p>
+
+      <h3>10. Изменения правил</h3>
+      <p>Мы можем обновлять эти Правила. Актуальная версия всегда доступна по кнопке «?» в правом нижнем углу. Продолжая пользоваться платформой после изменений, вы принимаете новую редакцию.</p>
+
+      <h3>11. Обратная связь</h3>
+      <p>По любым вопросам пишите администратору <strong>PeshkaSasha</strong> через личные сообщения или через раздел «Репорт».</p>
+    `;
+    this.rendered = true;
+  },
+  open() {
+    if (!this.rendered) this.render();
+    const m = document.getElementById('rulesModal');
+    if (m) m.classList.add('active');
+  },
+  close() {
+    const m = document.getElementById('rulesModal');
+    if (m) m.classList.remove('active');
+  }
+};
+
+// ============================================================
 // SOUNDS
 // ============================================================
 const Sounds = (function() {
@@ -239,6 +326,10 @@ const Auth = {
     document.getElementById('loginMsg').textContent = '';
     const usernameStatus = document.getElementById('usernameStatus');
     if (usernameStatus && mode === 'login') { usernameStatus.textContent = ''; usernameStatus.className = ''; }
+    const honorError = document.getElementById('honorError');
+    const rulesError = document.getElementById('rulesError');
+    if (honorError) honorError.style.display = 'none';
+    if (rulesError) rulesError.style.display = 'none';
   },
   togglePassword() {
     const pw = document.getElementById('password'); const icon = document.getElementById('eyeIcon');
@@ -352,7 +443,7 @@ const App = {
     TopArenas.init(); Stats.init(); Lobby.init(); Bot.init();
     Watch.init(); Arena.init(); Profile.init(); Community.init();
     Game.init(); Banners.init(); UserMenu.init(); Inbox.init(); Ping.init(); Auth.init();
-    Rating.init();
+    Leaderboard.init(); // NEW
 
     const saved = this._readSavedLogin();
     if (saved) {
@@ -421,27 +512,30 @@ const App = {
     const password = document.getElementById('password').value;
     const email = document.getElementById('email').value.trim();
     const msgEl = document.getElementById('loginMsg');
-    
-    document.getElementById('honorError').style.display = 'none';
-    document.getElementById('rulesError').style.display = 'none';
+
+    // CHANGED: очистка ошибок обязательных чекбоксов
+    const honorError = document.getElementById('honorError');
+    const rulesError = document.getElementById('rulesError');
+    if (honorError) honorError.style.display = 'none';
+    if (rulesError) rulesError.style.display = 'none';
 
     if (!username || !password) { msgEl.textContent = 'Введите логин и пароль'; return; }
     if (Auth.mode === 'register' && !email) { msgEl.textContent = 'Введите email'; return; }
-    
+
     const honor = document.getElementById('honorCheckbox');
     const rules = document.getElementById('rulesCheckbox');
-    
+
     if (Auth.mode === 'register') {
       if (password.length < 8) { msgEl.textContent = 'Для нового аккаунта пароль должен содержать минимум 8 символов'; return; }
-      if (!honor || !honor.checked) { 
-        document.getElementById('honorError').style.display = 'block'; 
-        msgEl.textContent = 'Подтвердите обязательные пункты'; 
-        return; 
+      if (!honor || !honor.checked) {
+        if (honorError) honorError.style.display = 'block';
+        msgEl.textContent = 'Подтвердите обязательные пункты';
+        return;
       }
-      if (!rules || !rules.checked) { 
-        document.getElementById('rulesError').style.display = 'block'; 
-        msgEl.textContent = 'Подтвердите обязательные пункты'; 
-        return; 
+      if (!rules || !rules.checked) {
+        if (rulesError) rulesError.style.display = 'block';
+        msgEl.textContent = 'Подтвердите обязательные пункты';
+        return;
       }
     }
     msgEl.textContent = 'Загрузка...'; msgEl.style.color = 'var(--text)';
@@ -539,9 +633,9 @@ const App = {
         if (aps && aps.classList.contains('active')) Arena.renderGamesList();
       }
     });
-    s.on('liveGamesUpdate', (list) => { 
-      const ws = document.getElementById('watchScreen'); 
-      if (ws && ws.classList.contains('active')) Watch.refreshFromList(list); 
+    s.on('liveGamesUpdate', (list) => {
+      const ws = document.getElementById('watchScreen');
+      if (ws && ws.classList.contains('active')) Watch.refreshFromList(list);
       Landing.onLiveGamesUpdate(list);
     });
     s.on('msgNew', (msg) => Inbox.onNew(msg));
@@ -591,84 +685,76 @@ const Ping = {
 };
 
 // ============================================================
-// ROUTER
+// ROUTER — обновлён (NEW роуты: swiss, leaderboard, reports, learn, puzzles)
 // ============================================================
 const Router = {
   current: { name: 'lobby', param: null },
-  init() { 
-    window.addEventListener('hashchange', () => this.handle()); 
-    this.handle(); 
+  init() {
+    window.addEventListener('hashchange', () => this.handle());
+    this.handle();
   },
-  go(name, param) { 
-    const path = param ? `#/${name}/${encodeURIComponent(param)}` : `#/${name}`; 
-    if (location.hash === path) this.handle(); 
-    else location.hash = path; 
+  go(name, param) {
+    const path = param ? `#/${name}/${encodeURIComponent(param)}` : `#/${name}`;
+    if (location.hash === path) this.handle();
+    else location.hash = path;
   },
   handle() {
     const hash = location.hash.replace(/^#\/?/, '');
     const routeAndQuery = hash.split('?');
     const parts = routeAndQuery[0].split('/').filter(Boolean);
-    
+
     let name = parts[0] || (App.me ? 'lobby' : 'landing');
     let param = parts[1] ? decodeURIComponent(parts[1]) : null;
-    
+
     if (!param && routeAndQuery[1]) {
       try { param = new URLSearchParams(routeAndQuery[1]).get('token') || new URLSearchParams(routeAndQuery[1]).get('resetToken'); } catch (e) {}
     }
-    
+
     if (!param) {
-      try { 
-        const query = new URLSearchParams(location.search); 
-        param = query.get('token') || query.get('resetToken'); 
-        if (param && (!parts[0] || parts[0] === 'reset-password' || parts[0] === 'reset')) name = 'reset'; 
+      try {
+        const query = new URLSearchParams(location.search);
+        param = query.get('token') || query.get('resetToken');
+        if (param && (!parts[0] || parts[0] === 'reset-password' || parts[0] === 'reset')) name = 'reset';
       } catch (e) {}
     }
-    
+
     if (parts[0] === 'reset-password' || /\/(reset-password|reset)\/?$/.test(location.pathname)) name = 'reset';
-    
-    this.current = { name, param }; 
+
+    this.current = { name, param };
     this.apply();
   },
   apply() {
     const { name, param } = this.current;
     if (App.restoring) return;
-    
-    // 1. Экран сброса пароля
+
     if (name === 'reset') {
       document.body.classList.add('login-active');
       const hashToken = param || (location.hash.includes('?') ? new URLSearchParams(location.hash.split('?')[1]).get('token') : null);
-      Auth.showResetToken(hashToken); 
-      this.show('resetScreen'); 
+      Auth.showResetToken(hashToken);
+      this.show('resetScreen');
       return;
     }
-    
-    // 2. Экран верификации
+
     if (name === 'verify') { Router.go('autorize'); return; }
 
-    // 3. Если пользователь НЕ АВТОРИЗОВАН
     if (!App.me) {
-      // Скрываем всё лишнее
       document.getElementById('mainHeader').style.display = 'none';
       document.getElementById('mainContent').style.display = 'none';
       document.getElementById('adminPage').style.display = 'none';
-      
-      // Если не на форме входа — показываем ЛЕНДИНГ
+
       document.body.classList.remove('login-active');
       this.show('landingScreen');
       if (window.Landing) Landing.init();
       return;
     }
 
-    // 4. Если пользователь АВТОРИЗОВАН
-    // Скрываем лендинг и показываем приложение
     const landing = document.getElementById('landingScreen');
     if (landing) landing.classList.remove('active');
-    
+
     document.body.classList.remove('login-active');
     document.getElementById('mainHeader').style.display = '';
     document.getElementById('mainContent').style.display = '';
 
-    // Если пришел на лендинг или форму входа, но уже авторизован — редирект в лобби
     if (name === 'landing' || name === 'autorize' || name === 'login') {
       Router.go('lobby');
       return;
@@ -684,50 +770,59 @@ const Router = {
     if (AdminPanel && name !== 'admin_panel') AdminPanel.hidePage();
 
     if (App.me && App.gameActive && !App.gameEnded && App.lobbyId && name === 'lobby') {
-      const opponent = document.getElementById('activeGameOpponent'); 
+      const opponent = document.getElementById('activeGameOpponent');
       if (opponent) opponent.textContent = App.opponentName || 'соперником';
       this.show('lobbyScreen');
       document.querySelectorAll('#mainNav a').forEach(a => a.classList.toggle('active', a.dataset.nav === 'lobby'));
-      Lobby.render(); 
+      Lobby.render();
       return;
     }
-    
-    const activeNotice = document.getElementById('activeGameNoticeScreen'); 
+
+    const activeNotice = document.getElementById('activeGameNoticeScreen');
     if (activeNotice) activeNotice.classList.remove('active');
-    
-    if (name !== 'watch' && Watch.autoRefreshHandle) { 
-      clearInterval(Watch.autoRefreshHandle); 
-      Watch.autoRefreshHandle = null; 
+
+    if (name !== 'watch' && Watch.autoRefreshHandle) {
+      clearInterval(Watch.autoRefreshHandle);
+      Watch.autoRefreshHandle = null;
     }
     if (name !== 'arenaPage' && Arena.currentArenaId) Arena.leaveRoom();
-    
-    const map = { 
-      landing: 'landingScreen', 
-      login: 'autorizeScreen', 
-      lobby: 'lobbyScreen', 
-      watch: 'watchScreen', 
-      arenas: 'arenasScreen', 
-      arenaPage: 'arenaPageScreen', 
-      profile: 'profileScreen', 
-      community: 'communityScreen', 
-      game: 'gameScreen', 
+
+    const map = {
+      landing: 'landingScreen',
+      login: 'autorizeScreen',
+      lobby: 'lobbyScreen',
+      watch: 'watchScreen',
+      arenas: 'arenasScreen',
+      arenaPage: 'arenaPageScreen',
+      profile: 'profileScreen',
+      community: 'communityScreen',
+      game: 'gameScreen',
       inbox: 'inboxScreen',
-      rating: 'ratingScreen',
-      swiss: 'swissScreen',
-      report: 'reportScreen',
-      learn: 'learnScreen',
-      puzzles: 'puzzlesScreen'
+      swiss: 'swissScreen',          // NEW
+      leaderboard: 'leaderboardScreen', // NEW
+      reports: 'reportsScreen',      // NEW
+      learn: 'learnScreen',          // NEW
+      puzzles: 'puzzlesScreen'       // NEW
     };
-    
-    const screenId = map[name]; 
+
+    const screenId = map[name];
     if (!screenId) { this.show('lobbyScreen'); return; }
-    
+
     this.show(screenId);
-    document.querySelectorAll('#mainNav a').forEach(a => { 
-      const nav = a.dataset.nav; 
-      a.classList.toggle('active', nav === name || (name === 'arenaPage' && nav === 'arenas')); 
+
+    // Подсветка активной вкладки в навигации
+    document.querySelectorAll('#mainNav a').forEach(a => {
+      const nav = a.dataset.nav;
+      const isActive =
+        nav === name ||
+        (name === 'arenaPage' && nav === 'arenas') ||
+        (name === 'swiss' && nav === 'arenas') ||
+        (name === 'leaderboard' && nav === 'community') ||
+        (name === 'reports' && nav === 'community') ||
+        (name === 'puzzles' && nav === 'learn');
+      a.classList.toggle('active', isActive);
     });
-    
+
     switch (name) {
       case 'lobby': Lobby.enter(); break;
       case 'watch': Watch.enter(param); break;
@@ -737,96 +832,106 @@ const Router = {
       case 'community': Community.enter(); break;
       case 'game': Game.enter(param); break;
       case 'inbox': Inbox.enter(param); break;
-      case 'rating': Rating.enter(); break;
+      case 'leaderboard': Leaderboard.enter(param); break; // NEW
+      // swiss, reports, learn, puzzles — заглушки, ничего не делаем
     }
   },
-  show(screenId) { 
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); 
-    const el = document.getElementById(screenId); 
-    if (el) el.classList.add('active'); 
+  show(screenId) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    const el = document.getElementById(screenId);
+    if (el) el.classList.add('active');
   }
 };
 
 // ============================================================
-// RATING PAGE
+// LEADERBOARD — рейтинг с пагинацией (NEW)
 // ============================================================
-const Rating = {
+const Leaderboard = {
   page: 0,
   pageSize: 10,
-  init() {},
-  enter() {
+  allPlayers: [],
+  myPlace: 0,
+  ready: false,
+
+  init() { /* инициализация при первом входе */ },
+
+  enter(param) {
     this.page = 0;
-    this.load();
+    this.fetch();
   },
-  load() {
+
+  fetch() {
+    const meta = document.getElementById('leaderboardMeta');
+    const list = document.getElementById('leaderboardList');
+    if (meta) meta.textContent = 'Загрузка...';
+    if (list) list.innerHTML = '';
     App.socket.emit('getCommunityOnline', (players) => {
-      if (!players) players = [];
-      // Сортируем по рейтингу
-      players.sort((a, b) => (b.rating || 0) - (a.rating || 0));
-      this.render(players);
+      // Используем общий список (онлайн + боты), сортируем по рейтингу.
+      // Для полноценного оффлайн-лидерборда нужен серверный эндпоинт,
+      // но у нас уже есть communityOnline — его и берём.
+      const arr = Array.isArray(players) ? players.slice() : [];
+      arr.sort((a, b) => (b.rating || 0) - (a.rating || 0) || a.username.localeCompare(b.username));
+      this.allPlayers = arr;
+      if (App.me) {
+        const idx = arr.findIndex(p => p.username === App.me.username);
+        this.myPlace = idx >= 0 ? idx + 1 : 0;
+      }
+      this.ready = true;
+      this.render();
     });
   },
-  render(players) {
-    const tbody = document.getElementById('ratingTableBody');
-    const pag = document.getElementById('ratingPagination');
-    const myPlaceEl = document.getElementById('ratingMyPlace');
-    if (!tbody || !pag) return;
 
-    const total = players.length;
-    const totalPages = Math.ceil(total / this.pageSize) || 1;
+  render() {
+    const meta = document.getElementById('leaderboardMeta');
+    const list = document.getElementById('leaderboardList');
+    const pag = document.getElementById('leaderboardPagination');
+    if (!list) return;
+
+    const total = this.allPlayers.length;
+    const totalPages = Math.max(1, Math.ceil(total / this.pageSize));
     if (this.page >= totalPages) this.page = totalPages - 1;
     if (this.page < 0) this.page = 0;
 
-    const start = this.page * this.pageSize;
-    const end = Math.min(start + this.pageSize, total);
-    const pageItems = players.slice(start, end);
-
-    // Мое место
-    if (App.me) {
-      const myIndex = players.findIndex(p => p.username === App.me.username);
-      if (myIndex >= 0) {
-        myPlaceEl.textContent = `Ваше место: ${myIndex + 1} из ${total}`;
-      } else {
-        myPlaceEl.textContent = 'Вы не в рейтинге';
-      }
-    } else {
-      myPlaceEl.textContent = '';
+    if (meta) {
+      const myPlace = this.myPlace ? `<b>${this.myPlace}</b>` : '—';
+      meta.innerHTML = `Всего игроков: <b>${total}</b> · Ваше место: ${myPlace} · Страница ${this.page + 1} из ${totalPages}`;
     }
 
-    if (!pageItems.length) {
-      tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:var(--muted); padding: 20px;">Нет игроков</td></tr>';
+    if (!total) {
+      list.innerHTML = '<div class="arenasEmpty">Пока нет игроков в рейтинге</div>';
     } else {
-      tbody.innerHTML = pageItems.map((p, i) => {
-        const globalPlace = start + i + 1;
+      const start = this.page * this.pageSize;
+      const items = this.allPlayers.slice(start, start + this.pageSize);
+      list.innerHTML = items.map((p, i) => {
+        const place = start + i + 1;
+        const cls = place === 1 ? 'top1' : place === 2 ? 'top2' : place === 3 ? 'top3' : '';
         const isMe = App.me && p.username === App.me.username;
-        const botMark = p.isBot ? ' 🤖' : '';
-        const modMark = p.isMod ? '<span class="modMark">!</span>' : '';
-        const adminMark = p.isAdmin ? '<span class="crown">👑</span>' : '';
-        return `<tr class="${isMe ? 'my-row' : ''}">
-          <td class="r-place">${globalPlace}</td>
-          <td class="r-name">${adminMark}${modMark}${Utils.escapeHtml(p.username)}${botMark}</td>
-          <td style="text-align: right;" class="r-rating">${p.rating || 1200}</td>
-        </tr>`;
+        const botTag = p.isBot ? ' 🤖' : '';
+        const onlineDot = Utils.onlineDotHtml(!!p.online);
+        return `<div class="leaderboardRow ${isMe ? 'me' : ''}" onclick="Router.go('profile', '${Utils.escapeHtml(p.username)}')">
+          <span class="lbPlace ${cls}">${place}</span>
+          <span class="lbName">${onlineDot}${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}${botTag}</span>
+          <span class="lbRating">${p.rating || 1200}</span>
+          <span class="lbGames">${p.games || 0} партий</span>
+        </div>`;
       }).join('');
     }
 
-    // Пагинация
-    let pagHtml = '';
-    pagHtml += `<button ${this.page === 0 ? 'disabled' : ''} onclick="Rating.setPage(${this.page - 1})">←</button>`;
-    for (let i = 0; i < totalPages; i++) {
-      // Показываем только несколько страниц вокруг текущей
-      if (i === 0 || i === totalPages - 1 || Math.abs(i - this.page) <= 2) {
-        pagHtml += `<button class="${i === this.page ? 'active' : ''}" onclick="Rating.setPage(${i})">${i + 1}</button>`;
-      } else if (i === 1 || i === totalPages - 2) {
-        pagHtml += `<span style="color:var(--muted); padding:6px;">...</span>`;
-      }
+    if (pag) {
+      pag.innerHTML = `
+        <button class="pageBtn" ${this.page === 0 ? 'disabled' : ''} onclick="Leaderboard.changePage(0)" title="В начало">|◀</button>
+        <button class="pageBtn" ${this.page === 0 ? 'disabled' : ''} onclick="Leaderboard.changePage(${this.page - 1})" title="Назад">◀</button>
+        <span class="pageInfo">${this.page + 1} / ${totalPages}</span>
+        <button class="pageBtn" ${this.page >= totalPages - 1 ? 'disabled' : ''} onclick="Leaderboard.changePage(${this.page + 1})" title="Вперёд">▶</button>
+        <button class="pageBtn" ${this.page >= totalPages - 1 ? 'disabled' : ''} onclick="Leaderboard.changePage(${totalPages - 1})" title="В конец">▶|</button>
+      `;
     }
-    pagHtml += `<button ${this.page === totalPages - 1 ? 'disabled' : ''} onclick="Rating.setPage(${this.page + 1})">→</button>`;
-    pag.innerHTML = pagHtml;
   },
-  setPage(p) {
-    this.page = p;
-    this.load();
+
+  changePage(p) {
+    this.page = Math.max(0, p);
+    this.render();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 };
 
@@ -1209,8 +1314,8 @@ const Arena = {
     const localNow = Date.now();
     const toClient = (ts) => ts - this.serverOffsetMs;
     const isMobile = window.matchMedia('(max-width: 700px)').matches;
-    const SLOT_PX = isMobile ? 60 : 70; 
-    const SLOT_MS = 10 * 60 * 1000; 
+    const SLOT_PX = isMobile ? 60 : 70;
+    const SLOT_MS = 10 * 60 * 1000;
     const COLS = isMobile ? 32 : 48;
     const startMs = Math.floor(localNow / SLOT_MS) * SLOT_MS; const endMs = startMs + COLS * SLOT_MS;
     window.__arenaStartMs = startMs; window.__arenaSlotPx = SLOT_PX;
@@ -1670,13 +1775,13 @@ const Arena = {
   },
   joinCurrent() { if (!this.currentArenaId) return; App.socket.emit('joinArena', { arenaId: this.currentArenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.lastStateHash = ''; this.lastGamesHash = ''; this.loadPage(); this.refresh(true); this.renderGamesList(); }); },
   pauseCurrent() { if (!this.currentArenaId) return; App.socket.emit('pauseArena', { arenaId: this.currentArenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.lastStateHash = ''; this.loadPage(); this.refresh(true); }); },
-  leaveCurrent() { 
-    if (!this.currentArenaId) return; 
-    if (!confirm('Отменить участие?')) return; 
-    App.socket.emit('leaveArena', { arenaId: this.currentArenaId }, (res) => { 
-      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } 
-      this.lastStateHash = ''; this.loadPage(); this.refresh(true); 
-    }); 
+  leaveCurrent() {
+    if (!this.currentArenaId) return;
+    if (!confirm('Отменить участие?')) return;
+    App.socket.emit('leaveArena', { arenaId: this.currentArenaId }, (res) => {
+      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
+      this.lastStateHash = ''; this.loadPage(); this.refresh(true);
+    });
   },
   sendChat(e) { e.preventDefault(); const input = document.getElementById('arenaChatInput'); if (!input) return; const text = input.value.trim(); if (!text || !this.currentArenaId) return; App.socket.emit('arenaChat', { arenaId: this.currentArenaId, text }); input.value = ''; },
   onChatMessage(msg) { if (this.currentArenaId && msg.arenaId === this.currentArenaId) this.renderChatMsg(msg); },
@@ -2141,7 +2246,7 @@ const Game = {
     this.updateBackToGameBtn(); Router.go('lobby'); Lobby.switchTab('create');
   },
   updateBackToGameBtn() { const opponent = document.getElementById('activeGameOpponent'); if (opponent) opponent.textContent = App.opponentName || 'соперником'; },
-  
+
   applyGameStateFromServer(s, lobbyId) {
     if (s && s.isSelfPlay) { console.warn('Попытка применить self-play state'); return; }
     App.lobbyId = lobbyId; App.myColor = s.myColor; App.opponentName = s.opponent;
@@ -2151,26 +2256,24 @@ const Game = {
     App.inc = s.inc;
     App.myTime = App.myColor === 'w' ? s.timeW : s.timeB; App.oppTime = App.myColor === 'w' ? s.timeB : s.timeW;
     App.currentFen = s.fen;
-    
+
     this.moveHistory = []; this.moveFens = []; this.viewIndex = -1; this.lastMove = null;
-    
+
     if (Array.isArray(s.history) && s.history.length > 0) {
       const tempHistory = [];
       const tempFens = [];
       const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
       let currentState = Chess.parseFen(startFen);
-      let currentFenStr = startFen;
-      
+
       for (const h of s.history) {
         if (!h.from || !h.to) continue;
         const san = h.san || Chess.toSAN(currentState, h.from, h.to);
         tempHistory.push(san);
-        
+
         currentState = Chess.applyMove(currentState, h.from, h.to);
-        currentFenStr = Chess.toFen(currentState);
-        tempFens.push(currentFenStr);
+        tempFens.push(Chess.toFen(currentState));
       }
-      
+
       this.moveHistory = tempHistory;
       this.moveFens = tempFens;
     }
@@ -2489,7 +2592,7 @@ const Game = {
     if (username === App.opponentName) { App.opponentOnline = false; const strip = document.getElementById('topName'); if (strip) strip.innerHTML = Utils.onlineDotHtml(false) + Utils.nickHtml(App.opponentName, App.opponentIsAdmin, false, App.opponentIsBot); }
   },
   onOpponentLeft() { if (!App.gameActive) return; alert('Соперник отключился'); this.updateBackToGameBtn(); },
-  
+
   onGameStart(payload) {
     if (payload.lobbyId && payload.lobbyId.startsWith('sp_')) { console.warn('[Game] Получен gameStart для self-play, игнорируем'); return; }
     if (payload.isSelfPlay) { console.warn('[Game] Получен gameStart с isSelfPlay, игнорируем'); return; }
@@ -2528,25 +2631,24 @@ const Game = {
     if (!lobbyId || lobbyId !== App.lobbyId) return;
     if (!App.gameActive || App.gameEnded) return;
     if (App.currentFen === fen) return;
-  
+
     const prevFen = App.currentFen;
     App.currentFen = fen;
     this.selected = null; this.legalMoves = []; this.viewIndex = -1;
     if (from && to) { this.lastMove = { from, to }; if (!san) { try { const prevState = Chess.parseFen(prevFen); san = Chess.toSAN(prevState, from, to); } catch (e) {} } }
-  
+
     const lastHistIdx = this.moveHistory.length - 1;
     if (this.moveHistory[lastHistIdx] === san && this.moveFens[lastHistIdx] === fen) {
       // Дубликат
     } else {
       if (san) { this.moveHistory.push(san); this.moveFens.push(fen); }
     }
-  
+
     this.renderMoves(); this.lastBoardHash = ''; this.renderBoard();
     const state = Chess.parseFen(App.currentFen);
     if (san) Sounds.moveBySan(san);
     this.checkGameEnd(state);
-  
-    // ВАЖНО: вызываем премьов ПОСЛЕ того, как доска и fen обновились
+
     this.tryApplyPremove();
   },
   onTimeUpdate({ lobbyId, timeW, timeB, serverNow }) {
@@ -2568,153 +2670,283 @@ const Game = {
   }
 };
 
-
+// ============================================================
+// ADMIN PANEL — обновлено (NEW: массовое удаление + круглая галочка)
+// ============================================================
 const AdminPanel = {
   users: [], tab: 'users',
   isRoot() { return !!(App.me && App.me.username === 'PeshkaSasha' && App.me.isAdmin); },
   open() { if (!this.isRoot()) { alert('Нет прав'); return; } UserMenu.close(); this.closeTopMenu(); Router.go('admin_panel'); },
   openPage() {
     if (!this.isRoot()) return;
-    const page=document.getElementById('adminPage'); if(page) page.style.display='block';
-    const main=document.getElementById('mainContent'); if(main) main.style.display='none';
-    const color=document.getElementById('adminPrivateColor'); if(color && !color.value) color.value='#ff4d4f';
-    const root=document.getElementById('adminTopDropdown'); if(root) root.style.display='';
+    const page = document.getElementById('adminPage'); if (page) page.style.display = 'block';
+    const main = document.getElementById('mainContent'); if (main) main.style.display = 'none';
+    const color = document.getElementById('adminPrivateColor'); if (color && !color.value) color.value = '#ff4d4f';
+    const root = document.getElementById('adminTopDropdown'); if (root) root.style.display = '';
     this.refresh(); this.setTab(this.tab || 'users');
   },
-  hidePage() { const page=document.getElementById('adminPage'); if(page) page.style.display='none'; this.closeTopMenu(); },
-  close() { if (location.hash.replace(/^#\/?/,'').split('/')[0] === 'admin_panel') Router.go('lobby'); else this.hidePage(); },
-  toggleTopMenu(event) { if(event) event.stopPropagation(); const menu=document.getElementById('adminTopMenu'); if(!menu)return; const open=menu.style.display!=='block'; menu.style.display=open?'block':'none'; const btn=document.querySelector('#adminTopDropdown > button'); if(btn)btn.setAttribute('aria-expanded',String(open)); },
-  closeTopMenu() { const menu=document.getElementById('adminTopMenu'); if(menu)menu.style.display='none'; const btn=document.querySelector('#adminTopDropdown > button'); if(btn)btn.setAttribute('aria-expanded','false'); },
-  goSection(section) { if(!this.isRoot())return; this.closeTopMenu(); if(location.hash.replace(/^#\/?/,'').split('/')[0] !== 'admin_panel') { this.tab=section; Router.go('admin_panel'); return; } this.setTab(section); },
-  status(message, bad=false) { const el=document.getElementById('adminPanelStatus'); if(el){el.textContent=message||'';el.style.color=bad?'#ff8c91':'#8ddca4';} },
-  setTab(tab,btn) {
-    this.tab=tab;
-    const usersTab=document.getElementById('adminUsersTab'), chatTab=document.getElementById('adminChatTab');
-    if(usersTab) usersTab.style.display=tab==='users'?'':'none';
-    if(chatTab) chatTab.style.display=tab==='users'?'none':'';
-    const privateSection=document.getElementById('adminPrivateSection'), settingsSection=document.getElementById('adminSettingsSection'), moderationSection=document.getElementById('adminModerationSection');
-    if(privateSection) privateSection.style.display=tab==='private'?'':'none';
-    if(settingsSection) settingsSection.style.display=tab==='settings'?'':'none';
-    if(moderationSection) moderationSection.style.display=tab==='chat'?'':'none';
-    document.querySelectorAll('.adminPanelTabs button').forEach(b=>b.classList.toggle('active',b.dataset.adminTab===tab));
+  hidePage() { const page = document.getElementById('adminPage'); if (page) page.style.display = 'none'; this.closeTopMenu(); },
+  close() { if (location.hash.replace(/^#\/?/, '').split('/')[0] === 'admin_panel') Router.go('lobby'); else this.hidePage(); },
+  toggleTopMenu(event) {
+    if (event) event.stopPropagation();
+    const menu = document.getElementById('adminTopMenu'); if (!menu) return;
+    const open = menu.style.display !== 'block';
+    menu.style.display = open ? 'block' : 'none';
+    const btn = document.querySelector('#adminTopDropdown > button');
+    if (btn) btn.setAttribute('aria-expanded', String(open));
+  },
+  closeTopMenu() {
+    const menu = document.getElementById('adminTopMenu'); if (menu) menu.style.display = 'none';
+    const btn = document.querySelector('#adminTopDropdown > button');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  },
+  goSection(section) {
+    if (!this.isRoot()) return;
+    this.closeTopMenu();
+    if (location.hash.replace(/^#\/?/, '').split('/')[0] !== 'admin_panel') { this.tab = section; Router.go('admin_panel'); return; }
+    this.setTab(section);
+  },
+  status(message, bad = false) {
+    const el = document.getElementById('adminPanelStatus');
+    if (el) { el.textContent = message || ''; el.style.color = bad ? '#ff8c91' : '#8ddca4'; }
+  },
+  setTab(tab, btn) {
+    this.tab = tab;
+    const usersTab = document.getElementById('adminUsersTab');
+    const chatTab = document.getElementById('adminChatTab');
+    if (usersTab) usersTab.style.display = tab === 'users' ? '' : 'none';
+    if (chatTab) chatTab.style.display = tab === 'users' ? 'none' : '';
+    const privateSection = document.getElementById('adminPrivateSection');
+    const settingsSection = document.getElementById('adminSettingsSection');
+    const moderationSection = document.getElementById('adminModerationSection');
+    if (privateSection) privateSection.style.display = tab === 'private' ? '' : 'none';
+    if (settingsSection) settingsSection.style.display = tab === 'settings' ? '' : 'none';
+    if (moderationSection) moderationSection.style.display = tab === 'chat' ? '' : 'none';
+    document.querySelectorAll('.adminPanelTabs button').forEach(b => b.classList.toggle('active', b.dataset.adminTab === tab));
     this.updateSelectedCount();
-    if(tab==='private') setTimeout(()=>document.getElementById('adminPrivateRecipient')?.focus(),0);
-    if(tab==='settings') setTimeout(()=>document.getElementById('adminDmClosed')?.focus(),0);
-    if(tab==='chat') setTimeout(()=>document.getElementById('adminChatModerationAnchor')?.scrollIntoView({behavior:'smooth',block:'start'}),0);
+    if (tab === 'private') setTimeout(() => document.getElementById('adminPrivateRecipient')?.focus(), 0);
+    if (tab === 'settings') setTimeout(() => document.getElementById('adminDmClosed')?.focus(), 0);
+    if (tab === 'chat') setTimeout(() => document.getElementById('adminChatModerationAnchor')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
   },
   refresh() {
-    if(!this.isRoot() || !App.socket) return;
+    if (!this.isRoot() || !App.socket) return;
     this.status('Загружаю список аккаунтов…');
-    App.socket.emit('adminListUsers',res=>{
-      if(!res||!res.ok){this.status((res&&res.msg)||'Не удалось загрузить игроков',true);return;}
-      this.users=res.users||[];this.renderUsers();this.populateRecipient();this.loadDmSetting();this.status('Список обновлён');
+    App.socket.emit('adminListUsers', res => {
+      if (!res || !res.ok) { this.status((res && res.msg) || 'Не удалось загрузить игроков', true); return; }
+      this.users = res.users || [];
+      this.renderUsers();
+      this.populateRecipient();
+      this.loadDmSetting();
+      this.status('Список обновлён');
     });
   },
   renderUsers() {
-    const box=document.getElementById('adminUsersList');if(!box)return;
-    const q=(document.getElementById('adminUserSearch')?.value||'').trim().toLocaleLowerCase('ru');
-    const list=this.users.filter(u=>u.username.toLocaleLowerCase('ru').includes(q));
-    const count=document.getElementById('adminUserCount');if(count)count.textContent=`Профилей: ${this.users.length} · найдено: ${list.length}`;
-    if(!list.length){box.innerHTML='<div class="adminMuted">Ничего не найдено</div>';return;}
-    box.innerHTML=list.map(u=>{
-      const safe=Utils.escapeHtml(u.username);
-      const state=u.isBanned?`Заблокирован до ${new Date(u.bannedUntil).toLocaleString('ru-RU')}`:'Активен';
-      return `<div class="adminUserRow"><div><div class="adminUserName">${u.online?'🟢':'⚪'} ${safe}</div><div class="adminUserMeta">${u.rating} рейтинга · ${u.games} партий · ${state}</div></div>
-      <select aria-label="Роль ${safe}" id="adminRole-${encodeURIComponent(u.username)}" ${u.username==='PeshkaSasha'?'disabled':''}><option value="user" ${u.role==='user'?'selected':''}>Пользователь</option><option value="moderator" ${u.role==='moderator'?'selected':''}>Модератор</option></select>
-      <div class="adminUserActions"><button onclick="AdminPanel.setRole(decodeURIComponent('${encodeURIComponent(u.username)}'))" ${u.username==='PeshkaSasha'?'disabled':''}>Сохранить роль</button>
-      ${u.isBanned?`<button onclick="AdminPanel.unban('${encodeURIComponent(u.username)}')">Разбан</button>`:`<label style="display:flex;align-items:center;gap:4px"><input id="adminHours-${encodeURIComponent(u.username)}" type="number" min="1" max="8760" value="5" style="width:62px" aria-label="Часы бана"><button class="adminDanger" onclick="AdminPanel.ban('${encodeURIComponent(u.username)}')">Бан</button></label>`}</div>
-      <div class="adminUserActions"><button class="adminDanger" onclick="AdminPanel.deleteAccount('${encodeURIComponent(u.username)}')" ${u.username==='PeshkaSasha'?'disabled':''}>Удалить аккаунт</button></div></div>`;
+    const box = document.getElementById('adminUsersList'); if (!box) return;
+    const q = (document.getElementById('adminUserSearch')?.value || '').trim().toLocaleLowerCase('ru');
+    const list = this.users.filter(u => u.username.toLocaleLowerCase('ru').includes(q));
+    const count = document.getElementById('adminUserCount');
+    if (count) count.textContent = `Профилей: ${this.users.length} · найдено: ${list.length}`;
+    if (!list.length) { box.innerHTML = '<div class="adminMuted">Ничего не найдено</div>'; return; }
+    box.innerHTML = list.map(u => {
+      const safe = Utils.escapeHtml(u.username);
+      const state = u.isBanned ? `Заблокирован до ${new Date(u.bannedUntil).toLocaleString('ru-RU')}` : 'Активен';
+      return `<div class="adminUserRow">
+        <div>
+          <div class="adminUserName">${u.online ? '🟢' : '⚪'} ${safe}</div>
+          <div class="adminUserMeta">${u.rating} рейтинга · ${u.games} партий · ${state}</div>
+        </div>
+        <select aria-label="Роль ${safe}" id="adminRole-${encodeURIComponent(u.username)}" ${u.username === 'PeshkaSasha' ? 'disabled' : ''}>
+          <option value="user" ${u.role === 'user' ? 'selected' : ''}>Пользователь</option>
+          <option value="moderator" ${u.role === 'moderator' ? 'selected' : ''}>Модератор</option>
+        </select>
+        <div class="adminUserActions">
+          <button onclick="AdminPanel.setRole(decodeURIComponent('${encodeURIComponent(u.username)}'))" ${u.username === 'PeshkaSasha' ? 'disabled' : ''}>Сохранить роль</button>
+          ${u.isBanned
+            ? `<button onclick="AdminPanel.unban('${encodeURIComponent(u.username)}')">Разбан</button>`
+            : `<label><input id="adminHours-${encodeURIComponent(u.username)}" type="number" min="1" max="8760" value="5" style="width:62px" aria-label="Часы бана"><button class="adminDanger" onclick="AdminPanel.ban('${encodeURIComponent(u.username)}')">Бан</button></label>`
+          }
+        </div>
+        <div class="adminUserActions">
+          <button class="adminDanger" onclick="AdminPanel.deleteAccount('${encodeURIComponent(u.username)}')" ${u.username === 'PeshkaSasha' ? 'disabled' : ''}>Удалить аккаунт</button>
+        </div>
+      </div>`;
     }).join('');
   },
   setRole(encoded) {
-    const username=decodeURIComponent(encoded), role=document.getElementById('adminRole-'+encodeURIComponent(username))?.value;
-    App.socket.emit('adminSetRole',{username,role},res=>{if(!res||!res.ok){this.status((res&&res.msg)||'Ошибка назначения роли',true);return;}this.status('Роль обновлена: '+username);this.refresh();});
+    const username = decodeURIComponent(encoded);
+    const role = document.getElementById('adminRole-' + encodeURIComponent(username))?.value;
+    App.socket.emit('adminSetRole', { username, role }, res => {
+      if (!res || !res.ok) { this.status((res && res.msg) || 'Ошибка назначения роли', true); return; }
+      this.status('Роль обновлена: ' + username);
+      this.refresh();
+    });
   },
   ban(encoded) {
-    const username=decodeURIComponent(encoded), hours=Number(document.getElementById('adminHours-'+encodeURIComponent(username))?.value||5);
-    if(!Number.isFinite(hours)||hours<1||hours>8760){this.status('Укажите срок бана от 1 до 8760 часов',true);return;}
-    if(!confirm(`Заблокировать ${username} на ${hours} ч.?`))return;
-    App.socket.emit('adminBan',{username,hours},res=>{if(!res||!res.ok){this.status((res&&res.msg)||'Ошибка бана',true);return;}this.status(`${username} заблокирован на ${hours} ч.`);this.refresh();});
+    const username = decodeURIComponent(encoded);
+    const hours = Number(document.getElementById('adminHours-' + encodeURIComponent(username))?.value || 5);
+    if (!Number.isFinite(hours) || hours < 1 || hours > 8760) { this.status('Укажите срок бана от 1 до 8760 часов', true); return; }
+    if (!confirm(`Заблокировать ${username} на ${hours} ч.?`)) return;
+    App.socket.emit('adminBan', { username, hours }, res => {
+      if (!res || !res.ok) { this.status((res && res.msg) || 'Ошибка бана', true); return; }
+      this.status(`${username} заблокирован на ${hours} ч.`);
+      this.refresh();
+    });
   },
-  unban(encoded) {const username=decodeURIComponent(encoded);App.socket.emit('adminUnban',{username},res=>{if(!res||!res.ok){this.status((res&&res.msg)||'Ошибка разбана',true);return;}this.status('Блокировка снята: '+username);this.refresh();});},
-  deleteAccount(encoded) {const username=decodeURIComponent(encoded);if(!confirm(`Безвозвратно удалить аккаунт ${username}?`))return;App.socket.emit('adminDeleteAccount',{username},res=>{if(!res||!res.ok){this.status((res&&res.msg)||'Ошибка удаления',true);return;}this.status('Аккаунт удалён: '+username);this.refresh();});},
+  unban(encoded) {
+    const username = decodeURIComponent(encoded);
+    App.socket.emit('adminUnban', { username }, res => {
+      if (!res || !res.ok) { this.status((res && res.msg) || 'Ошибка разбана', true); return; }
+      this.status('Блокировка снята: ' + username);
+      this.refresh();
+    });
+  },
+  deleteAccount(encoded) {
+    const username = decodeURIComponent(encoded);
+    if (!confirm(`Безвозвратно удалить аккаунт ${username}?`)) return;
+    App.socket.emit('adminDeleteAccount', { username }, res => {
+      if (!res || !res.ok) { this.status((res && res.msg) || 'Ошибка удаления', true); return; }
+      this.status('Аккаунт удалён: ' + username);
+      this.refresh();
+    });
+  },
   populateRecipient() {
-    const sel=document.getElementById('adminPrivateRecipient'); if(!sel)return;
-    const old=sel.value;
-    sel.innerHTML='<option value="">Выберите игрока…</option>'+this.users.filter(u=>u.username!=='PeshkaSasha').map(u=>`<option value="${Utils.escapeHtml(u.username)}">${Utils.escapeHtml(u.username)}</option>`).join('');
-    if(this.users.some(u=>u.username===old))sel.value=old;
+    const sel = document.getElementById('adminPrivateRecipient'); if (!sel) return;
+    const old = sel.value;
+    sel.innerHTML = '<option value="">Выберите игрока…</option>' + this.users.filter(u => u.username !== 'PeshkaSasha').map(u => `<option value="${Utils.escapeHtml(u.username)}">${Utils.escapeHtml(u.username)}</option>`).join('');
+    if (this.users.some(u => u.username === old)) sel.value = old;
   },
   loadDmSetting() {
-    if(!this.isRoot()||!App.socket)return;
-    App.socket.emit('adminGetDmSetting',res=>{const c=document.getElementById('adminDmClosed');if(res&&res.ok&&c)c.checked=!!res.closed;});
-    App.socket.emit('adminGetChatInterval',res=>{const input=document.getElementById('adminChatInterval');if(res&&res.ok&&input)input.value=Number(res.seconds)||0;});
+    if (!this.isRoot() || !App.socket) return;
+    App.socket.emit('adminGetDmSetting', res => {
+      const c = document.getElementById('adminDmClosed');
+      if (res && res.ok && c) c.checked = !!res.closed;
+    });
+    App.socket.emit('adminGetChatInterval', res => {
+      const input = document.getElementById('adminChatInterval');
+      if (res && res.ok && input) input.value = Number(res.seconds) || 0;
+    });
   },
   saveChatInterval() {
-    if(!this.isRoot()||!App.socket)return;
-    const input=document.getElementById('adminChatInterval');const seconds=Number(input?.value);
-    if(!Number.isInteger(seconds)||seconds<0||seconds>120){this.status('Интервал должен быть от 0 до 120 секунд',true);return;}
-    App.socket.emit('adminSetChatInterval',{seconds},res=>{if(!res||!res.ok){this.status((res&&res.msg)||'Не удалось сохранить интервал',true);return;}if(input)input.value=res.seconds;this.status(seconds===0?'Ограничение частоты сообщений отключено':`Интервал чата: ${seconds} сек.`);});
+    if (!this.isRoot() || !App.socket) return;
+    const input = document.getElementById('adminChatInterval');
+    const seconds = Number(input?.value);
+    if (!Number.isInteger(seconds) || seconds < 0 || seconds > 120) { this.status('Интервал должен быть от 0 до 120 секунд', true); return; }
+    App.socket.emit('adminSetChatInterval', { seconds }, res => {
+      if (!res || !res.ok) { this.status((res && res.msg) || 'Не удалось сохранить интервал', true); return; }
+      if (input) input.value = res.seconds;
+      this.status(seconds === 0 ? 'Ограничение частоты сообщений отключено' : `Интервал чата: ${seconds} сек.`);
+    });
   },
   setDmClosed(closed) {
-    App.socket.emit('adminSetDmSetting',{closed:!!closed},res=>{if(!res||!res.ok){this.status((res&&res.msg)||'Не удалось изменить настройку ЛС',true);this.loadDmSetting();return;}this.status(closed?'Входящие ЛС для вас отключены':'Входящие ЛС для вас включены');});
+    App.socket.emit('adminSetDmSetting', { closed: !!closed }, res => {
+      if (!res || !res.ok) { this.status((res && res.msg) || 'Не удалось изменить настройку ЛС', true); this.loadDmSetting(); return; }
+      this.status(closed ? 'Входящие ЛС для вас отключены' : 'Входящие ЛС для вас включены');
+    });
   },
   addPrivateMessage() {
-    if(!this.isRoot())return;
-    const text=(document.getElementById('adminPrivateText')?.value||'').trim();
-    const color=document.getElementById('adminPrivateColor')?.value||'#ff4d4f';
-    const to=document.getElementById('adminPrivateRecipient')?.value||'';
-    if(!to){this.status('Выберите игрока, которому отправить сообщение',true);return;}
-    if(!text){this.status('Введите текст личного сообщения',true);return;}
-    App.socket.emit('adminSendPrivateMessage',{to,text,color},res=>{
-      if(!res||!res.ok){this.status((res&&res.msg)||'Не удалось отправить личное сообщение',true);return;}
-      const inp=document.getElementById('adminPrivateText');if(inp)inp.value='';
+    if (!this.isRoot()) return;
+    const text = (document.getElementById('adminPrivateText')?.value || '').trim();
+    const color = document.getElementById('adminPrivateColor')?.value || '#ff4d4f';
+    const to = document.getElementById('adminPrivateRecipient')?.value || '';
+    if (!to) { this.status('Выберите игрока, которому отправить сообщение', true); return; }
+    if (!text) { this.status('Введите текст личного сообщения', true); return; }
+    App.socket.emit('adminSendPrivateMessage', { to, text, color }, res => {
+      if (!res || !res.ok) { this.status((res && res.msg) || 'Не удалось отправить личное сообщение', true); return; }
+      const inp = document.getElementById('adminPrivateText'); if (inp) inp.value = '';
       this.status(`Личное сообщение отправлено игроку ${to}`);
     });
   },
-  ensureChatTools(box,scope) {
-    if(!box||!this.isRoot()||box.querySelector(':scope > .adminChatInlineTools'))return;
-    const tools=document.createElement('div');tools.className='adminChatInlineTools';tools.dataset.scope=scope;
-    const label=document.createElement('span');label.textContent='Выбрано: ';
-    const count=document.createElement('b');count.className='adminInlineSelectedCount';count.textContent='0';label.appendChild(count);
-    const btn=document.createElement('button');btn.type='button';btn.className='adminInlineDeleteSelected';btn.textContent='🗑 Удалить выбранные';btn.addEventListener('click',()=>this.deleteSelected(scope));
-    tools.append(label,btn);box.prepend(tools);
+
+  // CHANGED: плавающая панель инструментов + круговая галочка при ховере
+  ensureChatTools(box, scope) {
+    if (!box || !this.isRoot() || box.querySelector(':scope > .adminChatInlineTools')) return;
+    const tools = document.createElement('div');
+    tools.className = 'adminChatInlineTools';
+    tools.dataset.scope = scope;
+    const label = document.createElement('span');
+    label.textContent = 'Выбрано: ';
+    const count = document.createElement('b');
+    count.className = 'adminInlineSelectedCount';
+    count.textContent = '0';
+    label.appendChild(count);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'adminInlineDeleteSelected';
+    btn.textContent = '🗑 Удалить выбранные';
+    btn.addEventListener('click', () => this.deleteSelected(scope));
+    tools.append(label, btn);
+    box.prepend(tools);
   },
-  decorateChatMessage(div,msg,scope) {
-    if(!this.isRoot()||!msg||msg.system||!msg.id)return;
-    const box=document.getElementById(scope==='arena'?'arenaChatMessages':'chatMessages');this.ensureChatTools(box,scope);
+  decorateChatMessage(div, msg, scope) {
+    if (!this.isRoot() || !msg || msg.system || !msg.id) return;
+    const box = document.getElementById(scope === 'arena' ? 'arenaChatMessages' : 'chatMessages');
+    this.ensureChatTools(box, scope);
     div.classList.add('adminSelectable');
-    const hotspot=document.createElement('label');hotspot.className='adminSelectHotspot';hotspot.title='Выбрать сообщение для удаления';hotspot.setAttribute('aria-label','Выбрать сообщение для удаления');
-    const cb=document.createElement('input');cb.type='checkbox';cb.className='adminSelectMsg';cb.title='Выбрать сообщение для удаления';cb.dataset.msgId=String(msg.id);cb.dataset.scope=scope;
-    cb.addEventListener('change',()=>{hotspot.classList.toggle('is-selected',cb.checked);this.updateSelectedCount();});
+    const hotspot = document.createElement('label');
+    hotspot.className = 'adminSelectHotspot';
+    hotspot.title = 'Выбрать сообщение для удаления';
+    hotspot.setAttribute('aria-label', 'Выбрать сообщение для удаления');
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'adminSelectMsg';
+    cb.title = 'Выбрать сообщение для удаления';
+    cb.dataset.msgId = String(msg.id);
+    cb.dataset.scope = scope;
+    cb.addEventListener('change', () => {
+      hotspot.classList.toggle('is-selected', cb.checked);
+      this.updateSelectedCount();
+    });
     hotspot.appendChild(cb);
-    const first=div.firstChild;if(first)div.insertBefore(hotspot,first);else div.appendChild(hotspot);
+    const first = div.firstChild;
+    if (first) div.insertBefore(hotspot, first);
+    else div.appendChild(hotspot);
   },
   updateSelectedCount() {
-    const selected=[...document.querySelectorAll('.adminSelectMsg:checked')];
-    document.querySelectorAll('.adminInlineSelectedCount').forEach(el=>{const tools=el.closest('.adminChatInlineTools');const scope=tools?.dataset.scope;const n=selected.filter(c=>c.dataset.scope===scope).length;el.textContent=String(n);if(tools)tools.style.display=n>0?'flex':'none';});
-    document.querySelectorAll('.adminSelectMsg').forEach(cb=>{const hot=cb.closest('.adminSelectHotspot');if(hot)hot.classList.toggle('is-selected',cb.checked);});
-    const el=document.getElementById('adminSelectedCount');if(el)el.textContent=String(selected.length);
+    const selected = [...document.querySelectorAll('.adminSelectMsg:checked')];
+    document.querySelectorAll('.adminInlineSelectedCount').forEach(el => {
+      const tools = el.closest('.adminChatInlineTools');
+      const scope = tools?.dataset.scope;
+      const n = selected.filter(c => c.dataset.scope === scope).length;
+      el.textContent = String(n);
+      if (tools) tools.style.display = n > 0 ? 'flex' : 'none';
+    });
+    document.querySelectorAll('.adminSelectMsg').forEach(cb => {
+      const hot = cb.closest('.adminSelectHotspot');
+      if (hot) hot.classList.toggle('is-selected', cb.checked);
+    });
+    const el = document.getElementById('adminSelectedCount');
+    if (el) el.textContent = String(selected.length);
   },
   deleteSelected(scope) {
-    const selected=[...document.querySelectorAll('.adminSelectMsg:checked')].filter(c=>!scope||c.dataset.scope===scope);
-    if(!selected.length){this.status('Сначала отметьте сообщения галочками в чате',true);return;}
-    if(!confirm(`Удалить выбранные сообщения (${selected.length}) у всех участников?`))return;
-    const groups=new Map();
-    for(const c of selected){const key=c.dataset.scope==='arena'?'arena':'game';if(!groups.has(key))groups.set(key,[]);groups.get(key).push(c.dataset.msgId);}
-    let pending=groups.size, failed=false;
-    for(const [kind,msgIds] of groups){
-      const payload=kind==='arena'?{scope:'arena',arenaId:Arena.currentArenaId,msgIds}:{scope:'game',lobbyId:App.lobbyId,msgIds};
-      App.socket.emit('adminBulkDeleteChat',payload,res=>{
-        if(!res||!res.ok){failed=true;this.status((res&&res.msg)||'Ошибка удаления',true);}
-        else selected.filter(c=>c.dataset.scope===(kind==='arena'?'arena':'game')&&msgIds.includes(c.dataset.msgId)).forEach(c=>c.closest('.msg')?.remove());
-        pending--;if(!pending){if(!failed)this.status('Удалено сообщений: '+selected.length);this.updateSelectedCount();}
+    const selected = [...document.querySelectorAll('.adminSelectMsg:checked')].filter(c => !scope || c.dataset.scope === scope);
+    if (!selected.length) { this.status('Сначала отметьте сообщения галочками в чате', true); return; }
+    if (!confirm(`Удалить выбранные сообщения (${selected.length}) у всех участников?`)) return;
+    const groups = new Map();
+    for (const c of selected) {
+      const key = c.dataset.scope === 'arena' ? 'arena' : 'game';
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(c.dataset.msgId);
+    }
+    let pending = groups.size, failed = false;
+    for (const [kind, msgIds] of groups) {
+      const payload = kind === 'arena'
+        ? { scope: 'arena', arenaId: Arena.currentArenaId, msgIds }
+        : { scope: 'game', lobbyId: App.lobbyId, msgIds };
+      App.socket.emit('adminBulkDeleteChat', payload, res => {
+        if (!res || !res.ok) { failed = true; this.status((res && res.msg) || 'Ошибка удаления', true); }
+        else selected.filter(c => c.dataset.scope === (kind === 'arena' ? 'arena' : 'game') && msgIds.includes(c.dataset.msgId)).forEach(c => c.closest('.msg')?.remove());
+        pending--;
+        if (!pending) {
+          if (!failed) this.status('Удалено сообщений: ' + selected.length);
+          this.updateSelectedCount();
+        }
       });
     }
   }
 };
 
 // ============================================================
-// LANDING PAGE LOGIC (Партия лидеров)
+// LANDING PAGE LOGIC
 // ============================================================
 const Landing = {
   currentGame: null,
@@ -2726,7 +2958,7 @@ const Landing = {
 
   init() {
     this.renderDemoBoard();
-    
+
     App.socket.emit('getStats', (stats) => {
       if (!stats) return;
       const online = document.getElementById('landingStatOnline');
@@ -2765,7 +2997,6 @@ const Landing = {
   },
 
   onLiveGamesUpdate(list) {
-    // Если партия уже выбрана и она не закончилась, ничего не меняем
     if (this.currentGame && !this.currentGame.finished) return;
 
     const realGames = (list || []).filter(g => !g.isArena && !g.isSelfPlay);
@@ -2795,12 +3026,12 @@ const Landing = {
   renderDemoBoard() {
     const board = document.getElementById('demoBoard');
     if (!board) return;
-    
+
     let fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
     if (this.currentGame && this.currentGame.fen) {
       fen = this.currentGame.fen;
     }
-    
+
     const state = Chess.parseFen(fen);
     let html = '';
     for (let r = 0; r < 8; r++) {
@@ -2818,15 +3049,15 @@ const Landing = {
   updatePlayers() {
     if (!this.currentGame) return;
     const g = this.currentGame;
-    
+
     document.getElementById('landingTopName').innerHTML = Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod);
     document.getElementById('landingTopRating').textContent = g.blackRating || '';
     document.getElementById('landingTopClock').textContent = Utils.formatTime(g.timeB || 0);
-    
+
     document.getElementById('landingBottomName').innerHTML = Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod);
     document.getElementById('landingBottomRating').textContent = g.whiteRating || '';
     document.getElementById('landingBottomClock').textContent = Utils.formatTime(g.timeW || 0);
-    
+
     document.getElementById('landingTopClock').classList.toggle('active', g.turn === 'b');
     document.getElementById('landingBottomClock').classList.toggle('active', g.turn === 'w');
   },
@@ -2834,27 +3065,27 @@ const Landing = {
   startClock() {
     if (this.clockRaf) cancelAnimationFrame(this.clockRaf);
     if (!this.currentGame) return;
-    
+
     this.clockSyncedAt = performance.now();
     this.clockW = this.currentGame.timeW || 0;
     this.clockB = this.currentGame.timeB || 0;
     this.clockTurn = this.currentGame.turn || 'w';
-    
+
     const self = this;
     function tick() {
       if (!self.currentGame || self.currentGame.finished) { self.clockRaf = null; return; }
-      
+
       const elapsed = (performance.now() - self.clockSyncedAt) / 1000;
       let w = self.clockW, b = self.clockB;
-      
-      if (self.clockTurn === 'w') w = Math.max(0, w - elapsed); 
+
+      if (self.clockTurn === 'w') w = Math.max(0, w - elapsed);
       else b = Math.max(0, b - elapsed);
-      
+
       const elW = document.getElementById('landingBottomClock');
       const elB = document.getElementById('landingTopClock');
       if (elW) elW.textContent = Utils.formatTime(w);
       if (elB) elB.textContent = Utils.formatTime(b);
-      
+
       self.clockRaf = requestAnimationFrame(tick);
     }
     this.clockRaf = requestAnimationFrame(tick);
@@ -2867,10 +3098,10 @@ const Landing = {
     if (from && to) this.currentGame.lastMove = { from, to };
     if (typeof timeW === 'number') this.currentGame.timeW = timeW;
     if (typeof timeB === 'number') this.currentGame.timeB = timeB;
-    
+
     this.renderDemoBoard();
     this.updatePlayers();
-    
+
     if (!this.currentGame.finished) {
       this.clockSyncedAt = performance.now();
       this.clockW = timeW || this.currentGame.timeW;
@@ -2894,7 +3125,7 @@ const Landing = {
     this.currentGame.result = result;
     this.currentGame.reason = reason;
     if (this.clockRaf) { cancelAnimationFrame(this.clockRaf); this.clockRaf = null; }
-    
+
     setTimeout(() => {
       App.socket.emit('getLiveGames', (list) => this.onLiveGamesUpdate(list));
     }, 5000);
@@ -2910,15 +3141,29 @@ const Landing = {
   }
 };
 
+// ============================================================
+// BOOTSTRAP
+// ============================================================
 document.addEventListener('DOMContentLoaded', () => {
   window.App = App; window.Router = Router; window.Lobby = Lobby; window.Bot = Bot;
   window.Watch = Watch; window.Arena = Arena; window.Profile = Profile; window.Community = Community;
   window.Game = Game; window.Banners = Banners; window.Mod = Mod; window.Utils = Utils;
   window.UserMenu = UserMenu; window.Inbox = Inbox; window.Ping = Ping; window.Auth = Auth; window.AdminPanel = AdminPanel;
-  window.Landing = Landing; window.Rating = Rating;
-  document.addEventListener('click', (event) => { const root=document.getElementById('adminTopDropdown'); if(root && !root.contains(event.target)) AdminPanel.closeTopMenu(); });
+  window.Landing = Landing;
+  window.Rules = Rules;            // NEW
+  window.Leaderboard = Leaderboard; // NEW
+  document.addEventListener('click', (event) => { const root = document.getElementById('adminTopDropdown'); if (root && !root.contains(event.target)) AdminPanel.closeTopMenu(); });
+
   App.init();
-  
+
+  // Закрытие правил по клику на overlay
+  const rulesModal = document.getElementById('rulesModal');
+  if (rulesModal) {
+    rulesModal.addEventListener('click', (e) => {
+      if (e.target === rulesModal) Rules.close();
+    });
+  }
+
   // Принудительно показываем лендинг при загрузке, если нет сохранения
   setTimeout(() => {
     if (!App.me) {
@@ -2936,6 +3181,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }, 100);
 });
 
+// ============================================================
+// HOVER CARD
+// ============================================================
 (function() {
   let hoverTimer = null, hoverName = '';
   function ensureCard() { let card = document.getElementById('playerHoverCard'); if (!card) { card = document.createElement('div'); card.id = 'playerHoverCard'; document.body.appendChild(card); } return card; }
@@ -2951,9 +3199,9 @@ document.addEventListener('DOMContentLoaded', () => {
       App.socket.emit('getPlayerCard', { username }, (res) => {
         if (hoverName !== username || !res || !res.ok) return;
         const u = res.user;
-        card.innerHTML = `<div class="phName">${u.online ? '🟢' : '⚪'} ${Utils.nickHtml(u.username,u.isAdmin,u.isMod,u.isBot)}</div>
-          <div class="phMeta"><span>♟ ${Number(u.rating)||1200}</span><span>🏆 ${Number(u.games)||0} партий</span><span>${u.online ? '● В сети' : '○ Не в сети'}</span></div>
-          <div class="phStats"><div class="phStat">♔ ${Number(u.wins)||0} побед</div><div class="phStat">½ ${Number(u.draws)||0} ничьих</div><div class="phStat">♚ ${Number(u.losses)||0} пораж.</div><div class="phStat">${u.games ? Math.round((u.wins/u.games)*100) : 0}% побед</div></div>`;
+        card.innerHTML = `<div class="phName">${u.online ? '🟢' : '⚪'} ${Utils.nickHtml(u.username, u.isAdmin, u.isMod, u.isBot)}</div>
+          <div class="phMeta"><span>♟ ${Number(u.rating) || 1200}</span><span>🏆 ${Number(u.games) || 0} партий</span><span>${u.online ? '● В сети' : '○ Не в сети'}</span></div>
+          <div class="phStats"><div class="phStat">♔ ${Number(u.wins) || 0} побед</div><div class="phStat">½ ${Number(u.draws) || 0} ничьих</div><div class="phStat">♚ ${Number(u.losses) || 0} пораж.</div><div class="phStat">${u.games ? Math.round((u.wins / u.games) * 100) : 0}% побед</div></div>`;
       });
     }, 250);
   }
