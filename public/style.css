@@ -208,7 +208,7 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaBlock:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.4); filter:brightness(1.08); z-index:4; }
 .arenaBlock.disabled { opacity:.4; filter:grayscale(.7); }
 .arenaBlock.disabled:hover { transform:none; box-shadow:none; filter:grayscale(.7); }
-.arenaBlock .tname { font-size:12px; font-weight:700; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.arenaBlock .tname { font-size:11px; font-weight:700; line-height:1.15; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .arenaBlock .tinfo { font-size:10px; opacity:.9; line-height:1.1; display:flex; justify-content:space-between; gap:6px; white-space:nowrap; overflow:hidden; }
 .arenaBlock.past { opacity:.35; cursor:pointer; filter:saturate(.5); }
 .arenaBlock.past:hover { transform:translateY(-1px); box-shadow:0 4px 12px rgba(0,0,0,.4); filter:saturate(.5) brightness(1.08); }
@@ -406,6 +406,20 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 
 #arenaPlayerOverlay { position:absolute; inset:0; background:var(--panel, #1e1d1a); z-index:20; overflow-y:auto; overflow-x:hidden; padding:10px 12px 16px; border-radius:6px; box-sizing:border-box; }
 
+.leadersGrid { display:grid; grid-template-columns:1fr; gap:12px; }
+.leaderGroupTitle { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); font-weight:700; margin-bottom:6px; }
+.leaderCategoryBlock { padding:8px 0; border-top:1px solid rgba(58,56,51,.35); }
+.leaderCategoryBlock:first-child { border-top:none; padding-top:0; }
+.leaderCategoryTitle { font-size:12px; font-weight:700; color:var(--text-bright); margin-bottom:6px; display:flex; align-items:center; gap:6px; }
+.leaderCategoryTitle .ci { font-size:14px; }
+.leaderCardRow { display:flex; flex-direction:column; gap:4px; }
+.leaderCardRow a { display:flex; align-items:center; gap:8px; padding:6px 8px; background:rgba(255,213,79,.05); border:1px solid rgba(255,213,79,.15); border-radius:6px; text-decoration:none; color:var(--text-bright); font-size:12px; transition:.15s; cursor:pointer; }
+.leaderCardRow a:hover { background:rgba(255,213,79,.12); border-color:rgba(255,213,79,.4); }
+.leaderCardRow a .li { flex-shrink:0; font-size:16px; }
+.leaderCardRow a .ln { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.leaderCardRow a .ls { color:var(--accent); font-weight:700; font-variant-numeric:tabular-nums; }
+.leaderCardRow .empty { color:var(--muted); font-size:11px; padding:4px 8px; }
+
 .swissPage { display:flex; justify-content:center; align-items:stretch; gap:20px; width:100%; max-width:1600px; margin:0 auto; padding:0 16px; }
 .swissLeft { width:300px; flex-shrink:0; display:flex; flex-direction:column; gap:16px; }
 .swissCenter { flex:1; min-width:0; display:flex; flex-direction:column; gap:12px; align-self:flex-start; }
@@ -469,6 +483,29 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .swissPairCard .pairPlayers { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-bright); }
 .swissPairCard .pairPlayers .vs { color:var(--muted); margin:0 6px; }
 .swissPairCard .pairStatus { color:var(--muted); font-size:11px; flex-shrink:0; }
+
+.swissListSection { margin-bottom:24px; }
+.swissListSection h3 { font-size:14px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; margin:0 0 10px; padding-bottom:6px; border-bottom:1px solid var(--border); color:var(--text-bright); }
+.swissListSection h3 .cnt { color:var(--muted); font-weight:500; font-size:12px; margin-left:6px; }
+.swissListSection.upcoming h3 { color:#4a9ce8; }
+.swissListSection.live h3 { color:#7dbe30; }
+.swissListSection.finished h3 { color:#7d7a72; }
+.swissListCard { display:flex; flex-direction:column; gap:6px; padding:12px 14px; background:var(--panel); border:1px solid var(--border); border-radius:8px; margin-bottom:8px; cursor:pointer; transition:.15s; }
+.swissListCard:hover { border-color:var(--accent); background:var(--panel-hover); }
+.swissListCard .slcTitle { color:var(--text-bright); font-weight:600; font-size:14px; display:flex; align-items:center; gap:8px; }
+.swissListCard .slcBadge { font-size:10px; padding:1px 8px; border-radius:10px; text-transform:uppercase; font-weight:700; letter-spacing:.5px; border:1px solid currentColor; }
+.swissListCard .slcBadge.upcoming { color:#4a9ce8; }
+.swissListCard .slcBadge.live { color:#7dbe30; animation:pulse 1.5s infinite; }
+.swissListCard .slcBadge.finished { color:#7d7a72; }
+.swissListCard .slcMeta { display:flex; flex-wrap:wrap; gap:12px; font-size:12px; color:var(--muted); }
+.swissListCard .slcMeta b { color:var(--text-bright); }
+.swissCreateBox { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px; margin-bottom:20px; }
+.swissCreateBox h3 { margin:0 0 12px; font-size:15px; color:var(--text-bright); }
+.swissCreateGrid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
+@media (max-width:600px) { .swissCreateGrid { grid-template-columns:1fr; } }
+.swissCreateGrid label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted); }
+.swissCreateGrid input, .swissCreateGrid select { padding:8px 10px; font-size:13px; }
+.swissCreateActions { display:flex; gap:10px; justify-content:flex-end; margin-top:8px; }
 
 .lbTabs { display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap; }
 .lbTab {
