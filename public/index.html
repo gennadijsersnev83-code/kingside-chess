@@ -302,6 +302,7 @@ body.login-active #mainContent { display: none !important; }
       <button data-admin-tab="chat" onclick="AdminPanel.setTab('chat',this)">🧹 Чат</button>
       <button data-admin-tab="private" onclick="AdminPanel.setTab('private',this)">✉ ЛС</button>
       <button data-admin-tab="settings" onclick="AdminPanel.setTab('settings',this)">⚙ Настройки</button>
+      <button data-admin-tab="swiss" onclick="AdminPanel.setTab('swiss',this)">🏆 Швейцарка</button>
     </div>
 
     <div id="adminUsersTab">
@@ -400,6 +401,48 @@ body.login-active #mainContent { display: none !important; }
         <div class="adminMuted">Всего выбрано в открытых чатах: <span id="adminSelectedCount">0</span></div>
       </section>
     </div>
+
+    <div id="adminSwissTab" style="display:none;">
+      <section>
+        <h3>Создать швейцарский турнир</h3>
+        <p class="adminMuted">Турнир будет создан сразу. Игроки смогут регистрироваться до старта.</p>
+        <div class="swissCreateBox" style="padding:12px;background:var(--panel-2);">
+          <div class="swissCreateGrid">
+            <label>Название
+              <input id="swissCreateName" placeholder="Например: Швейцарка Blitz" maxlength="80">
+            </label>
+            <label>Категория
+              <select id="swissCreateCategory">
+                <option value="bullet">Пуля</option>
+                <option value="blitz" selected>Блиц</option>
+                <option value="rapid">Рапид</option>
+                <option value="classical">Классика</option>
+              </select>
+            </label>
+            <label>Контроль (минут)
+              <input id="swissCreateTime" type="number" min="1" max="60" value="3">
+            </label>
+            <label>Инкремент (сек)
+              <input id="swissCreateInc" type="number" min="0" max="60" value="2">
+            </label>
+            <label>Туров (1-30)
+              <input id="swissCreateRounds" type="number" min="1" max="30" value="20">
+            </label>
+            <label>Старт (дата и время)
+              <input id="swissCreateStart" type="datetime-local">
+            </label>
+            <label>Перерыв между турами (сек)
+              <input id="swissCreateBreak" type="number" min="5" max="300" value="20">
+            </label>
+          </div>
+          <div class="swissCreateActions">
+            <button class="primary" onclick="AdminPanel.createSwissTournament()">Создать турнир</button>
+          </div>
+          <div id="swissCreateMsg" class="adminMuted" style="margin-top:8px;"></div>
+        </div>
+      </section>
+    </div>
+
     <div id="adminPanelStatus" class="adminStatus" aria-live="polite"></div>
   </section>
 </main>
@@ -456,8 +499,8 @@ body.login-active #mainContent { display: none !important; }
           <div style="cursor:pointer; padding:2px 0;">Вопросы и ответы про Арену</div>
           <div style="cursor:pointer; padding:2px 0;">Лиги &amp; Битвы стримеров</div>
         </div>
-        <div class="sideTitle" style="margin-bottom:8px;">Лучшие игроки</div>
-        <div id="bestPlayersList" style="display:flex; flex-direction:column; gap:6px;">
+        <div class="sideTitle" style="margin-bottom:8px;">🏆 Лучшие игроки арен</div>
+        <div id="bestPlayersList" class="leadersGrid">
           <div class="arenaEmpty" style="padding:10px; font-size:12px;">Загрузка...</div>
         </div>
       </div>
