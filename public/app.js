@@ -42,6 +42,10 @@ const Utils = {
   formatDateRu(ts) {
     const d = new Date(ts);
     return d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' });
+  },
+  fmtDateTimeRu(ts) {
+    const d = new Date(ts);
+    return d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' }) + ' · ' + this.fmtTimeHM(ts);
   }
 };
 
@@ -81,7 +85,7 @@ const Rules = {
       <h3>5. Рейтинг и турниры</h3>
       <ul>
         <li>Рейтинг рассчитывается по системе Glicko-2 по каждой категории: пуля, блиц, рапид, классика.</li>
-        <li>Партии против ботов <strong>не влияют</strong> на рейтинг, кроме специально обозначенных арен.</li>
+        <li>Партии против ботов <strong>влияют</strong> на рейтинг так же, как и партии между людьми.</li>
         <li>Результаты арен и турниров фиксируются на сервере.</li>
       </ul>
 
@@ -93,7 +97,8 @@ const Rules = {
 
       <h3>7. Блокировки и удаление аккаунта</h3>
       <ul>
-        <li>За нарушение правил аккаунт может быть заблокирован на срок от 1 часа до 1 года.</li>
+        <li>За нарушение правил аккаунт может быть ограничен: чат, игра с людьми, турниры — отдельно или вместе.</li>
+        <li>При ограничении доступ к сайту сохраняется; вы не можете только использовать заблокированные функции.</li>
         <li>Удаление аккаунта доступно самостоятельно через настройки после 10 дней с момента регистрации.</li>
       </ul>
 
@@ -413,6 +418,7 @@ const App = {
   botTimes: [{ t:1,i:0,label:'1+0' },{ t:3,i:0,label:'3+0' },{ t:5,i:0,label:'5+0' },{ t:10,i:0,label:'10+0' },{ t:15,i:10,label:'15+10' },{ t:30,i:0,label:'30+0' }],
   _autoLoginAttempts: 0, restoring: false,
   settings: { showSubseconds: false, dmClosed: false },
+  banInfo: null,
 
   init() {
     this.socket = io({
@@ -458,6 +464,9 @@ const App = {
       if (res.user) {
         this.settings.showSubseconds = !!res.user.showSubseconds;
         this.settings.dmClosed = !!res.user.dmClosed;
+        this.banInfo = (res.user.isBanned && res.user.bannedUntil > Date.now()) ? {
+          isBanned: true, bannedUntil: res.user.bannedUntil, banScopes: res.user.banScopes || []
+        } : null;
       }
       let activeLobby = null; try { activeLobby = localStorage.getItem('kingside_active_lobby'); } catch (e) {}
       if (activeLobby && !activeLobby.startsWith('sp_')) {
@@ -532,7 +541,13 @@ const App = {
         return;
       }
       this.me = res.user;
-      if (res.user) { this.settings.showSubseconds = !!res.user.showSubseconds; this.settings.dmClosed = !!res.user.dmClosed; }
+      if (res.user) {
+        this.settings.showSubseconds = !!res.user.showSubseconds;
+        this.settings.dmClosed = !!res.user.dmClosed;
+        this.banInfo = (res.user.isBanned && res.user.bannedUntil > Date.now()) ? {
+          isBanned: true, bannedUntil: res.user.bannedUntil, banScopes: res.user.banScopes || []
+        } : null;
+      }
       try { localStorage.setItem('kingside_login', JSON.stringify({ username, password })); } catch (e) {}
       Landing.closeAuth();
       this.showAuthenticatedUI(); this.updateTopbarUser(); Router.go('lobby'); this.tryResumeGame();
@@ -612,11 +627,16 @@ const App = {
     s.on('arenaUpdate', ({ arenaId }) => Arena.onUpdate(arenaId));
     s.on('arenaStarted', ({ arenaId }) => Arena.onUpdate(arenaId));
     s.on('arenaFinished', ({ arenaId, top3 }) => Arena.onFinished(arenaId, top3));
+    s.on('arenaLeaders', (payload) => Arena.renderLeaders(payload));
     s.on('arenaTopUpdate', ({ arenaId }) => {
       if (Arena.currentArenaId === arenaId) {
         const aps = document.getElementById('arenaPageScreen');
         if (aps && aps.classList.contains('active')) Arena.renderGamesList();
       }
+    });
+    s.on('ratingsUpdated', () => {
+      const ps = document.getElementById('profileScreen');
+      if (ps && ps.classList.contains('active') && App.profileViewing) Profile.enter(App.profileViewing);
     });
     s.on('swissChatMessage', (msg) => Swiss.onChatMessage(msg));
     s.on('swissUpdate', ({ swissId }) => Swiss.onUpdate(swissId));
@@ -641,14 +661,24 @@ const App = {
   onBanned(info) {
     if (!info || !this.me) return;
     if (info.username === this.me.username) {
+      this.banInfo = { isBanned: true, bannedUntil: info.until, banScopes: info.scopes || [] };
+      if (this.me) { this.me.isBanned = true; this.me.bannedUntil = info.until; this.me.banScopes = info.scopes || []; }
+      const scopesRu = (info.scopes || []).map(s => s === 'chat' ? 'чат' : s === 'play' ? 'игра с игроками' : s === 'arena' ? 'турниры' : s).join(', ') || 'всё';
       let text = info.reason ? `\nПричина: ${info.reason}` : '';
-      alert(`Вы забанены до ${new Date(info.until).toLocaleString('ru-RU')}.${text}`);
-      setTimeout(() => { this.logout(); }, 500);
+      alert(`🚫 На ваш аккаунт наложены ограничения до ${new Date(info.until).toLocaleString('ru-RU')}.\nОбласти: ${scopesRu}.${text}`);
     }
   },
 
   onSessionRevoked(info) {
     if (info && info.username === this.me?.username) { alert('Сессия завершена.'); this.logout(); }
+  },
+
+  isBannedIn(scope) {
+    if (!this.me || !this.me.isBanned) return false;
+    if (!this.me.bannedUntil || this.me.bannedUntil <= Date.now()) return false;
+    const scopes = Array.isArray(this.me.banScopes) ? this.me.banScopes : [];
+    if (!scopes.length) return true;
+    return scopes.includes(scope);
   }
 };
 
@@ -1110,6 +1140,7 @@ const Lobby = {
   },
   onRowClick(l, isMine) { if (isMine) { App.socket.emit('cancelLobby', { id: l.id }, () => this.render()); return; } App.socket.emit('joinLobby', { id: l.id }, (r) => { if (!r || !r.ok) { alert((r && r.msg) || 'Ошибка'); return; } App.lobbyId = r.id || l.id; }); },
   quickStart(time, inc) {
+    if (App.isBannedIn('play')) { alert('🚫 Вы забанены в игре с другими игроками до ' + new Date(App.me.bannedUntil).toLocaleString('ru-RU')); return; }
     App.socket.emit('createLobby', { time, inc }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
       if (res.matched) { App.lobbyId = res.id; return; }
@@ -1130,12 +1161,16 @@ const Lobby = {
 
 const Bot = {
   init() { const dlg = document.getElementById('botDialog'); if (dlg) dlg.addEventListener('click', (e) => { if (e.target === dlg) this.closeDialog(); }); },
-  openDialog() { const dlg = document.getElementById('botDialog'); if (!dlg) return; App.socket.emit('getBots', (list) => { if (Array.isArray(list)) App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.rating, games: b.games || 0, isMaster: b.level === 4 })); this.render(); dlg.classList.add('show'); }); },
+  openDialog() {
+    if (App.isBannedIn('play')) { alert('🚫 Вы забанены в игре с другими игроками до ' + new Date(App.me.bannedUntil).toLocaleString('ru-RU')); return; }
+    const dlg = document.getElementById('botDialog'); if (!dlg) return;
+    App.socket.emit('getBots', (list) => { if (Array.isArray(list)) App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.initialRating, games: b.games || 0, isMaster: b.level === 4 })); this.render(); dlg.classList.add('show'); });
+  },
   closeDialog() { const dlg = document.getElementById('botDialog'); if (dlg) dlg.classList.remove('show'); },
   render() {
     const levelsEl = document.getElementById('botLevels'); const timesEl = document.getElementById('botTimes');
     if (!levelsEl || !timesEl) return;
-    if (!App.botLevels.length) { App.socket.emit('getBots', (list) => { if (Array.isArray(list)) { App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.rating, games: b.games || 0, isMaster: b.level === 4 })); this.render(); } }); return; }
+    if (!App.botLevels.length) { App.socket.emit('getBots', (list) => { if (Array.isArray(list)) { App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.initialRating, games: b.games || 0, isMaster: b.level === 4 })); this.render(); } }); return; }
     const st = App.botDialogState;
     levelsEl.innerHTML = App.botLevels.map(l => { const active = st.level === l.level; const cls = active ? 'active' : ''; const extra = l.isMaster ? 'masterBtn' : ''; return `<button data-level="${l.level}" class="${cls} ${extra}"><div class="btitle">${l.title}</div><div class="brating">${l.rating}</div></button>`; }).join('');
     timesEl.innerHTML = App.botTimes.map(t => { const active = st.time === t.t && st.inc === t.i; return `<button data-t="${t.t}" data-i="${t.i}" class="${active ? 'active' : ''}">${t.label}</button>`; }).join('');
@@ -1280,6 +1315,7 @@ const Arena = {
   lastLiveGames: [], lastDoneGames: [],
   currentPage: 0,
   _topGame: null, _topClockRaf: null, _topClockSyncedAt: 0, _topClockW: 0, _topClockB: 0, _topClockTurn: 'w',
+  _leadersCache: null,
 
   init() {
     document.addEventListener('DOMContentLoaded', () => this._ensureOverlay());
@@ -1289,31 +1325,56 @@ const Arena = {
 
   enterList() {
     this.refresh(true);
-    App.socket.emit('getTopArenaWinners', (list) => this.renderTopWinners(list));
+    this.loadLeaders();
   },
 
-  renderTopWinners(list) {
+  loadLeaders() {
+    App.socket.emit('getArenaLeaders', (payload) => this.renderLeaders(payload));
+  },
+
+  renderLeaders(payload) {
     const el = document.getElementById('bestPlayersList');
     if (!el) return;
-    if (!list || !list.length) {
+    this._leadersCache = payload;
+    const categories = [
+      { key: 'bullet', label: 'Пуля', icon: '🔫' },
+      { key: 'blitz', label: 'Блиц', icon: '⚡' },
+      { key: 'rapid', label: 'Рапид', icon: '⏱' },
+      { key: 'classical', label: 'Классика', icon: '🐢' }
+    ];
+    if (!payload || typeof payload !== 'object') {
       el.innerHTML = '<div class="arenaEmpty" style="padding:10px; font-size:12px;">Пока нет завершённых арен</div>';
       return;
     }
-    el.innerHTML = list.map((p) => `
-      <div style="display:flex; align-items:center; gap:8px; padding:4px 0; cursor:pointer;" onclick="Router.go('arenaPage', '${Utils.escapeHtml(p.arenaId)}')" title="Перейти к арене">
-        <div style="width: 24px; height: 24px; border-radius: 50%; background: rgba(255,213,79,.15); border:1px solid rgba(255,213,79,.5); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-          <span style="font-size: 14px;">🏆</span>
-        </div>
-        <div style="flex:1; min-width:0;">
-          <div style="color:var(--text-bright); font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-            ${Utils.nickHtml(p.username, p.username === 'PeshkaSasha')}
-          </div>
-          <div style="color:var(--muted); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-            ${Utils.escapeHtml(p.arenaName)} · ${p.score ?? 0} очков
-          </div>
-        </div>
-      </div>
-    `).join('');
+    let html = '';
+    for (const cat of categories) {
+      const catData = payload[cat.key] || {};
+      const hourly = (catData.hourly || [])[0];
+      const champ = (catData.championship || [])[0];
+      html += `<div class="leaderCategoryBlock">`;
+      html += `<div class="leaderCategoryTitle"><span class="ci">${cat.icon}</span>${cat.label}</div>`;
+      html += `<div class="leaderCardRow">`;
+      if (hourly) {
+        html += `<a onclick="Router.go('arenaPage','${Utils.escapeHtml(hourly.arenaId)}')" title="${Utils.escapeHtml(hourly.arenaName)}">
+          <span class="li">🥇</span>
+          <span class="ln">${Utils.nickHtml(hourly.username, hourly.username === 'PeshkaSasha')} <span style="color:var(--muted);font-size:11px;">· ${Utils.escapeHtml(hourly.arenaName)}</span></span>
+          <span class="ls">${hourly.score ?? 0}</span>
+        </a>`;
+      } else {
+        html += `<div class="empty">Ежечасная арена: нет данных</div>`;
+      }
+      if (champ) {
+        html += `<a onclick="Router.go('arenaPage','${Utils.escapeHtml(champ.arenaId)}')" title="${Utils.escapeHtml(champ.arenaName)}">
+          <span class="li">🏆</span>
+          <span class="ln">${Utils.nickHtml(champ.username, champ.username === 'PeshkaSasha')} <span style="color:var(--muted);font-size:11px;">· ${Utils.escapeHtml(champ.arenaName)}</span></span>
+          <span class="ls">${champ.score ?? 0}</span>
+        </a>`;
+      } else {
+        html += `<div class="empty">Чемпионат: нет данных</div>`;
+      }
+      html += `</div></div>`;
+    }
+    el.innerHTML = html;
   },
 
   enterPage(arenaId) {
@@ -1498,6 +1559,7 @@ const Arena = {
     const isPlaying = App.gameActive && !App.gameEnded;
     if (isPlaying) { wrap.innerHTML = `<button class="secondary arenaJoinBtn" disabled style="width:180px; opacity:0.5; cursor:not-allowed;">ЗАНЯТЫ ИГРОЙ</button>`; return; }
     if (state.phase === 'finished') { wrap.innerHTML = `<button class="secondary" disabled style="width:180px;">ЗАВЕРШЕНА</button>`; return; }
+    if (App.isBannedIn('arena')) { wrap.innerHTML = `<button class="joinLockedBtn" disabled title="Вы забанены в турнирах">🔒 БАН</button>`; return; }
 
     const meJoined = state.joined;
     const myGames = state.myCategoryGames || 0;
@@ -1506,7 +1568,7 @@ const Arena = {
 
     if (state.phase === 'waiting') {
       if (meJoined) wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.leaveCurrent()">ОТМЕНИТЬ</button>`;
-      else if (locked) wrap.innerHTML = `<button class="joinLockedBtn" disabled title="Нужно ≥${minNeeded} рейтинговых партий в этой категории">🔒 НУЖНО ≥${minNeeded} ПАРТИЙ</button>`;
+      else if (locked) wrap.innerHTML = `<button class="joinLockedBtn" disabled title="Нужно ≥${minNeeded} рейтинговых партий в этой категории">🔒 НУЖНО ≥${minNeeded}</button>`;
       else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button>`;
       return;
     }
@@ -1514,7 +1576,7 @@ const Arena = {
       if (state.paused) wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.pauseCurrent()">▶ ПРОДОЛЖИТЬ</button>`;
       else wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.pauseCurrent()">⏸ ПАУЗА</button>`;
     } else if (locked) {
-      wrap.innerHTML = `<button class="joinLockedBtn" disabled title="Нужно ≥${minNeeded} рейтинговых партий в этой категории">🔒 НУЖНО ≥${minNeeded} ПАРТИЙ</button>`;
+      wrap.innerHTML = `<button class="joinLockedBtn" disabled title="Нужно ≥${minNeeded} рейтинговых партий в этой категории">🔒 НУЖНО ≥${minNeeded}</button>`;
     } else {
       wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button>`;
     }
@@ -1804,7 +1866,11 @@ const Arena = {
     document.body.appendChild(layer);
     setTimeout(() => layer.remove(), 6000);
   },
-  joinCurrent() { if (!this.currentArenaId) return; App.socket.emit('joinArena', { arenaId: this.currentArenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.lastStateHash = ''; this.lastGamesHash = ''; this.loadPage(); this.refresh(true); this.renderGamesList(); }); },
+  joinCurrent() {
+    if (!this.currentArenaId) return;
+    if (App.isBannedIn('arena')) { alert('🚫 Вы забанены в турнирах до ' + new Date(App.me.bannedUntil).toLocaleString('ru-RU')); return; }
+    App.socket.emit('joinArena', { arenaId: this.currentArenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.lastStateHash = ''; this.lastGamesHash = ''; this.loadPage(); this.refresh(true); this.renderGamesList(); });
+  },
   pauseCurrent() { if (!this.currentArenaId) return; App.socket.emit('pauseArena', { arenaId: this.currentArenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.lastStateHash = ''; this.loadPage(); this.refresh(true); }); },
   leaveCurrent() {
     if (!this.currentArenaId) return;
@@ -1848,7 +1914,7 @@ const Arena = {
     }
     const as = document.getElementById('arenasScreen'); if (as && as.classList.contains('active')) this.refresh();
     const ls = document.getElementById('lobbyScreen'); if (ls && ls.classList.contains('active')) TopArenas.refresh();
-    App.socket.emit('getTopArenaWinners', (list) => this.renderTopWinners(list));
+    this.loadLeaders();
   }
 };
 
@@ -1864,6 +1930,11 @@ const Swiss = {
 
   enterList() {
     this.refreshList();
+    if (this.listRefreshHandle) clearInterval(this.listRefreshHandle);
+    this.listRefreshHandle = setInterval(() => {
+      const ss = document.getElementById('swissScreen');
+      if (ss && ss.classList.contains('active')) this.refreshList();
+    }, 15000);
   },
 
   refreshList() {
@@ -1873,16 +1944,31 @@ const Swiss = {
       if (res && res.serverNow) this.serverOffsetMs = res.serverNow - Date.now();
       if (!list.length) { wrap.innerHTML = '<div class="arenasEmpty">Нет доступных турниров</div>'; return; }
       const now = Date.now() + this.serverOffsetMs;
-      wrap.innerHTML = list.map(t => {
-        const startsAt = t.startsAt;
-        const timeStr = Utils.fmtMskHM(startsAt) + ' МСК';
-        const isLive = startsAt <= now;
-        const colorCls = t.color || 'blitz';
-        return `<div class="topArenaCard${isLive ? ' live' : ''}" onclick="Router.go('swissPage', '${Utils.escapeHtml(t.id)}')">
-          <div class="taName">🏆 ${Utils.escapeHtml(t.name)}</div>
-          <div class="taInfo"><span>${t.timeControl}+${t.increment}</span><span>${timeStr} · ${isLive ? 'уже идёт' : 'ждёт старта'}</span></div>
-        </div>`;
-      }).join('');
+      const upcoming = list.filter(t => t.status === 'upcoming');
+      const live = list.filter(t => t.status === 'live');
+      const finished = list.filter(t => t.status === 'finished');
+      const renderGroup = (title, cls, items) => {
+        if (!items.length) return '';
+        const cards = items.map(t => {
+          const timeStr = t.status === 'upcoming' ? Utils.fmtDateTimeRu(t.startsAt) + ' МСК' : (t.status === 'live' ? `Раунд ${t.currentRound}/${t.rounds}` : `Завершён · ${Utils.fmtDateTimeRu(t.startsAt)}`);
+          return `<div class="swissListCard" onclick="Router.go('swissPage', '${Utils.escapeHtml(t.id)}')">
+            <div class="slcTitle">${Utils.escapeHtml(t.name)} <span class="slcBadge ${cls}">${cls === 'upcoming' ? 'скоро' : cls === 'live' ? 'идёт' : 'завершён'}</span></div>
+            <div class="slcMeta">
+              <span><b>${t.timeControl}+${t.increment}</b></span>
+              <span>Категория: <b>${t.category}</b></span>
+              <span>Туров: <b>${t.rounds}</b></span>
+              <span>Участников: <b>${t.participantsCount || 0}</b></span>
+              <span>${timeStr}</span>
+            </div>
+          </div>`;
+        }).join('');
+        return `<div class="swissListSection ${cls}"><h3>${title} <span class="cnt">${items.length}</span></h3>${cards}</div>`;
+      };
+      wrap.innerHTML = [
+        renderGroup('Начнутся скоро', 'upcoming', upcoming),
+        renderGroup('Идут', 'live', live),
+        renderGroup('Завершённые (10 мин)', 'finished', finished)
+      ].join('') || '<div class="arenasEmpty">Нет доступных турниров</div>';
     });
   },
 
@@ -1918,7 +2004,7 @@ const Swiss = {
   loadPage() {
     if (!this.currentSwissId) return;
     App.socket.emit('getSwissState', { swissId: this.currentSwissId }, (state) => {
-      if (!state || !state.ok) return;
+      if (!state || !state.ok) { alert((state && state.msg) || 'Турнир не найден'); return; }
       this.currentState = state;
       if (state.serverNow) this.serverOffsetMs = state.serverNow - Date.now();
       this.renderPage(state);
@@ -1927,10 +2013,10 @@ const Swiss = {
 
   renderPage(state) {
     const n = document.getElementById('swPageName'); if (n) n.textContent = state.name;
-    const sub = document.getElementById('swPageSub'); if (sub) sub.textContent = `${state.timeControl}+${state.increment} · 20 туров`;
+    const sub = document.getElementById('swPageSub'); if (sub) sub.textContent = `${state.timeControl}+${state.increment} · ${state.rounds} туров`;
 
     const it = document.getElementById('swTitle'); if (it) it.textContent = state.name;
-    const im = document.getElementById('swTime'); if (im) im.textContent = Utils.fmtMskHM(state.startsAt) + ' МСК';
+    const im = document.getElementById('swTime'); if (im) im.textContent = Utils.fmtDateTimeRu(state.startsAt) + ' МСК';
     const idesc = document.getElementById('swDesc'); if (idesc) idesc.textContent = `Швейцарская система · ${state.rounds} туров`;
     const creator = document.getElementById('swCreator'); if (creator) creator.innerHTML = `Создатель: <b>${Utils.escapeHtml(state.creator || 'PeshkaSasha')}</b>`;
 
@@ -2001,7 +2087,7 @@ const Swiss = {
       const place = globalIdx + 1;
       const placeCls = place === 1 ? 'top1' : place === 2 ? 'top2' : place === 3 ? 'top3' : '';
       const isMe = myName && p.username === myName;
-      const greenDot = p.isBot ? '<span class="pgreen" style="color:#a56ce8">🤖</span>' : (p.isOnline ? '<span class="pgreen">●</span>' : '');
+      const greenDot = p.isBot ? '<span class="pgreen" style="color:#a56ce8">🤖</span>' : (p.isPlaying ? '<span class="pgreen">●</span>' : '');
       const wdl = `${p.wins || 0}/${p.draws || 0}/${p.losses || 0}`;
       const byeTag = p.byes > 0 ? `<span class="swBye">${p.byes}</span>` : `<span class="swBye">·</span>`;
       return `<div class="swissTableRow ${isMe ? 'me' : ''}" onclick="Router.go('profile', '${Utils.escapeHtml(p.username)}')">
@@ -2041,11 +2127,8 @@ const Swiss = {
     if (isPlaying) { wrap.innerHTML = `<button class="secondary arenaJoinBtn" disabled style="width:180px; opacity:.5; cursor:not-allowed;">ЗАНЯТЫ ИГРОЙ</button>`; return; }
     if (state.finished || state.phase === 'finished') { wrap.innerHTML = `<button class="secondary" disabled style="width:180px;">ЗАВЕРШЁН</button>`; return; }
     if (state.joined) { wrap.innerHTML = `<button class="secondary arenaJoinBtn" disabled style="width:180px;">ВЫ УЧАСТВУЕТЕ</button>`; return; }
-    const liveGames = (state.pairs || []).some(p => p.type !== 'bye');
-    if (liveGames && state.phase === 'live') {
-      wrap.innerHTML = `<button class="secondary arenaJoinBtn" disabled style="width:180px; opacity:.7;">ИГРАЮТСЯ ПАРТИИ</button>`;
-      return;
-    }
+    if (state.currentRound > 0) { wrap.innerHTML = `<button class="secondary arenaJoinBtn" disabled style="width:180px;">ТУРНИР НАЧАЛСЯ</button>`; return; }
+    if (App.isBannedIn('arena')) { wrap.innerHTML = `<button class="joinLockedBtn" disabled title="Вы забанены в турнирах">🔒 БАН</button>`; return; }
     wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Swiss.joinCurrent()">УЧАСТВОВАТЬ</button>`;
   },
 
@@ -2054,15 +2137,9 @@ const Swiss = {
     const val = document.getElementById('swBreakTimerValue');
     if (!wrap || !val) return;
     if (state.phase !== 'live' || state.finished) { wrap.style.display = 'none'; return; }
-    const stateJson = JSON.stringify(state.pairs || []);
-    if (this._lastPairs !== stateJson) {
-      this._lastPairs = stateJson;
-      const anyLive = (state.pairs || []).some(p => p.type !== 'bye');
-      if (anyLive) this.breakUntil = 0;
-    }
-    const hasLive = (state.pairs || []).some(p => p.type !== 'bye');
-    if (hasLive) { wrap.style.display = 'none'; return; }
-    if (!this.breakUntil) this.breakUntil = Date.now() + (state.breakMs || 30000);
+    const anyLive = (state.pairs || []).some(p => p.type !== 'bye');
+    if (anyLive) { wrap.style.display = 'none'; return; }
+    if (!this.breakUntil) this.breakUntil = Date.now() + (state.breakMs || 20000);
     wrap.style.display = 'block';
     this.tickBreak();
   },
@@ -2078,6 +2155,7 @@ const Swiss = {
 
   joinCurrent() {
     if (!this.currentSwissId) return;
+    if (App.isBannedIn('arena')) { alert('🚫 Вы забанены в турнирах до ' + new Date(App.me.bannedUntil).toLocaleString('ru-RU')); return; }
     App.socket.emit('joinSwiss', { swissId: this.currentSwissId }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
       this.loadPage();
@@ -2897,6 +2975,7 @@ const Game = {
     e.preventDefault();
     const input = document.getElementById('chatInput'); if (!input) return;
     const text = input.value.trim(); if (!text || !App.lobbyId) return;
+    if (App.isBannedIn('chat')) { alert('🚫 Вы забанены в чате до ' + new Date(App.me.bannedUntil).toLocaleString('ru-RU')); return; }
     App.socket.emit('chatMessage', { lobbyId: App.lobbyId, text });
     input.value = '';
   },
@@ -3018,6 +3097,13 @@ const AdminPanel = {
     const color = document.getElementById('adminPrivateColor'); if (color && !color.value) color.value = '#ff4d4f';
     const root = document.getElementById('adminTopDropdown'); if (root) root.style.display = '';
     this.refresh(); this.setTab(this.tab || 'users'); this.loadCurrentBans();
+    const startEl = document.getElementById('swissCreateStart');
+    if (startEl && !startEl.value) {
+      const d = new Date(Date.now() + 60 * 60 * 1000);
+      d.setSeconds(0, 0);
+      const tzOffset = d.getTimezoneOffset() * 60000;
+      startEl.value = new Date(d - tzOffset).toISOString().slice(0, 16);
+    }
   },
   hidePage() { const page = document.getElementById('adminPage'); if (page) page.style.display = 'none'; this.closeTopMenu(); },
   close() { if (location.hash.replace(/^#\/?/, '').split('/')[0] === 'admin_panel') Router.go('lobby'); else this.hidePage(); },
@@ -3046,13 +3132,15 @@ const AdminPanel = {
     const usersTab = document.getElementById('adminUsersTab'); const banTab = document.getElementById('adminBanTab'); const chatTab = document.getElementById('adminChatTab');
     if (usersTab) usersTab.style.display = tab === 'users' ? '' : 'none';
     if (banTab) banTab.style.display = tab === 'ban' ? '' : 'none';
-    if (chatTab) chatTab.style.display = tab === 'users' || tab === 'ban' ? 'none' : '';
+    if (chatTab) chatTab.style.display = tab === 'users' || tab === 'ban' || tab === 'swiss' ? 'none' : '';
     const privateSection = document.getElementById('adminPrivateSection');
     const settingsSection = document.getElementById('adminSettingsSection');
     const moderationSection = document.getElementById('adminModerationSection');
     if (privateSection) privateSection.style.display = tab === 'private' ? '' : 'none';
     if (settingsSection) settingsSection.style.display = tab === 'settings' ? '' : 'none';
     if (moderationSection) moderationSection.style.display = tab === 'chat' ? '' : 'none';
+    const swissTab = document.getElementById('adminSwissTab');
+    if (swissTab) swissTab.style.display = tab === 'swiss' ? '' : 'none';
     document.querySelectorAll('.adminPanelTabs button').forEach(b => b.classList.toggle('active', b.dataset.adminTab === tab));
     this.updateSelectedCount();
     if (tab === 'private') setTimeout(() => document.getElementById('adminPrivateRecipient')?.focus(), 0);
@@ -3228,6 +3316,31 @@ const AdminPanel = {
       if (!res || !res.ok) { this.status((res && res.msg) || 'Ошибка отправки', true); return; }
       const inp = document.getElementById('adminPrivateText'); if (inp) inp.value = '';
       this.status(`ЛС отправлено игроку ${to}`);
+    });
+  },
+  createSwissTournament() {
+    if (!this.isRoot()) return;
+    const msg = document.getElementById('swissCreateMsg');
+    const name = (document.getElementById('swissCreateName')?.value || '').trim();
+    const category = document.getElementById('swissCreateCategory')?.value || 'blitz';
+    const timeControl = Number(document.getElementById('swissCreateTime')?.value || 3);
+    const increment = Number(document.getElementById('swissCreateInc')?.value || 0);
+    const rounds = Number(document.getElementById('swissCreateRounds')?.value || 20);
+    const startVal = document.getElementById('swissCreateStart')?.value || '';
+    const breakSec = Number(document.getElementById('swissCreateBreak')?.value || 20);
+    if (!name || name.length < 2) { if (msg) { msg.textContent = 'Название минимум 2 символа'; msg.style.color = '#ff6b6b'; } return; }
+    if (!startVal) { if (msg) { msg.textContent = 'Укажите дату старта'; msg.style.color = '#ff6b6b'; } return; }
+    const startsAtMs = new Date(startVal).getTime();
+    if (!Number.isFinite(startsAtMs)) { if (msg) { msg.textContent = 'Некорректная дата'; msg.style.color = '#ff6b6b'; } return; }
+    if (msg) { msg.textContent = 'Создаю…'; msg.style.color = 'var(--muted)'; }
+    App.socket.emit('adminCreateSwiss', {
+      name, category, timeControl, increment, rounds,
+      startsAtMs, breakMs: breakSec * 1000
+    }, (res) => {
+      if (!res || !res.ok) { if (msg) { msg.textContent = (res && res.msg) || 'Ошибка создания'; msg.style.color = '#ff6b6b'; } return; }
+      if (msg) { msg.textContent = 'Турнир создан!'; msg.style.color = '#7dbe30'; }
+      const nameEl = document.getElementById('swissCreateName'); if (nameEl) nameEl.value = '';
+      this.status('Создан турнир: ' + name);
     });
   },
   ensureChatTools(box, scope) {
