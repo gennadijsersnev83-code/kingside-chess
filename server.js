@@ -270,8 +270,10 @@ async function initDB() {
           rounds INTEGER NOT NULL DEFAULT 20, category TEXT,
           starts_at BIGINT NOT NULL, ends_at BIGINT,
           phase TEXT NOT NULL, standings JSONB, participants JSONB, games JSONB, rounds_data JSONB,
-          created_at BIGINT NOT NULL DEFAULT 0);
+          created_at BIGINT NOT NULL DEFAULT 0,
+          creator TEXT DEFAULT 'PeshkaSasha');
       `);
+      await arenaPool.query(`ALTER TABLE swiss_history ADD COLUMN IF NOT EXISTS creator TEXT DEFAULT 'PeshkaSasha';`);
       await arenaPool.query(`CREATE INDEX IF NOT EXISTS idx_swiss_history_starts_at ON swiss_history (starts_at DESC);`);
       console.log('[ArenaDB] Таблица swiss_history готова');
     } catch (e) {
@@ -346,6 +348,7 @@ async function loadDB() {
                               vol_classical, vol_rapid, vol_blitz, vol_bullet,
                               wins_classical, wins_rapid, wins_blitz, wins_bullet,
                               losses_classical, losses_rapid, losses_blitz, losses_bullet,
+                              draws_classical, draws_rapid, draws_blitz, draws_bullet,
                               games_classical, games_rapid, games_blitz, games_bullet,
                               muted_until, is_bot, email_verified)
            VALUES ($1,$2,$3,$4,$5,$6,0,0,0,0,$7,$4,$4,$4,$4,$5,$5,$5,$5,$6,$6,$6,$6,0,0,0,0,0,0,0,0,0,0,0,0,0,TRUE,TRUE)`,
@@ -835,12 +838,12 @@ function checkAutoDraw(lobbyId) {
 }
 
 async function saveChampionAward(username, arenaId, arenaName, category) {
-  if (!username || username === WATCHER_NAME || ALL_BOT_NAMES.has(username)) return;
+  if (!username || username === WATCHER_NAME) return;
   try {
     await pool.query(
       `INSERT INTO user_awards (username, award_type, arena_id, arena_name, category, place, granted_at)
-       VALUES ($1, 'champion', $2, $3, $4, 1, $3X)
-       ON CONFLICT (username, arena_id, award_type) DO NOTHING`.replace('$3X', '$5'),
+       VALUES ($1, 'champion', $2, $3, $4, 1, $5)
+       ON CONFLICT (username, arena_id, award_type) DO NOTHING`,
       [username, arenaId, arenaName, category, Date.now()]
     );
   } catch (e) { console.error('[Award]', e.message); }
@@ -964,17 +967,22 @@ async function finishGame(lobbyId, result, reason) {
     setTimeout(() => finishedLobbyIds.delete(lobbyId), 10000);
   }, 2000);
   broadcastOnline(); broadcastLiveGames();
+  io.emit('ratingsUpdated');
 }
 
 const ARENA_TEMPLATES = [
-  { id: 'hourly_bullet',      name: 'Ежечасная Bullet Арена',      description: '1+0 · люди и боты',   timeControl: 1,  increment: 0, durationMin: 27,  color: 'bullet',    botFriendly: true, category: 'bullet',    mode: 'hourly',      periodMs: 60 * 60 * 1000,        lane: 0, creator: 'PeshkaSasha', minRatedGames: 0 },
-  { id: 'hourly_blitz',       name: 'Ежечасная Blitz Арена',       description: '3+2 · люди и боты',   timeControl: 3,  increment: 2, durationMin: 57,  color: 'blitz',     botFriendly: true, category: 'blitz',     mode: 'hourly',      periodMs: 60 * 60 * 1000,        lane: 1, creator: 'PeshkaSasha', minRatedGames: 0 },
-  { id: 'hourly_rapid',       name: 'Ежечасная Rapid Арена',       description: '10+0 · люди и боты',  timeControl: 10, increment: 0, durationMin: 117, color: 'rapid',     botFriendly: true, category: 'rapid',     mode: 'hourly',      periodMs: 2 * 60 * 60 * 1000,    lane: 2, creator: 'PeshkaSasha', minRatedGames: 0 },
-  { id: 'hourly_classical',   name: 'Ежечасная Classical Арена',   description: '30+0 · люди и боты',  timeControl: 30, increment: 0, durationMin: 237, color: 'classical', botFriendly: true, category: 'classical', mode: 'hourly',      periodMs: 4 * 60 * 60 * 1000,    lane: 3, creator: 'PeshkaSasha', minRatedGames: 0 },
-  { id: 'champ_bullet',       name: 'Чемпионат по Bullet',         description: '1+0 · только люди · ≥20 рейтинговых партий в пуле',  timeControl: 1,  increment: 0, durationMin: 237, color: 'bullet',    botFriendly: false, category: 'bullet',    mode: 'championship', dayOfMonth: 10, lane: 4, creator: 'PeshkaSasha', minRatedGames: 20 },
-  { id: 'champ_blitz',        name: 'Чемпионат по Blitz',          description: '3+2 · только люди · ≥20 рейтинговых партий в блице', timeControl: 3,  increment: 2, durationMin: 237, color: 'blitz',     botFriendly: false, category: 'blitz',     mode: 'championship', dayOfMonth: 11, lane: 4, creator: 'PeshkaSasha', minRatedGames: 20 },
-  { id: 'champ_rapid',        name: 'Чемпионат по Rapid',          description: '10+0 · только люди · ≥20 рейтинговых партий в рапиде', timeControl: 10, increment: 0, durationMin: 357, color: 'rapid',     botFriendly: false, category: 'rapid',     mode: 'championship', dayOfMonth: 12, lane: 4, creator: 'PeshkaSasha', minRatedGames: 20 },
-  { id: 'champ_classical',    name: 'Чемпионат по Classical',      description: '30+0 · только люди · ≥20 рейтинговых партий в классике', timeControl: 30, increment: 0, durationMin: 357, color: 'classical', botFriendly: false, category: 'classical', mode: 'championship', dayOfMonth: 13, lane: 4, creator: 'PeshkaSasha', minRatedGames: 20 }
+  { id: 'hourly_bullet_human',    name: 'Bullet Арена',    description: '1+0 · только люди',   timeControl: 1,  increment: 0, durationMin: 27,  color: 'bullet',    botFriendly: false, category: 'bullet',    mode: 'hourly',      periodMs: 60 * 60 * 1000,        lane: 0, creator: 'PeshkaSasha', minRatedGames: 0 },
+  { id: 'hourly_bullet_bots',     name: 'Bullet Арена · Боты',    description: '1+0 · люди и боты',   timeControl: 1,  increment: 0, durationMin: 27,  color: 'bullet',    botFriendly: true, category: 'bullet',    mode: 'hourly',      periodMs: 60 * 60 * 1000,        lane: 5, creator: 'PeshkaSasha', minRatedGames: 0 },
+  { id: 'hourly_blitz_human',     name: 'Blitz Арена',     description: '3+2 · только люди',   timeControl: 3,  increment: 2, durationMin: 57,  color: 'blitz',     botFriendly: false, category: 'blitz',     mode: 'hourly',      periodMs: 60 * 60 * 1000,        lane: 1, creator: 'PeshkaSasha', minRatedGames: 0 },
+  { id: 'hourly_blitz_bots',      name: 'Blitz Арена · Боты',     description: '3+2 · люди и боты',   timeControl: 3,  increment: 2, durationMin: 57,  color: 'blitz',     botFriendly: true, category: 'blitz',     mode: 'hourly',      periodMs: 60 * 60 * 1000,        lane: 6, creator: 'PeshkaSasha', minRatedGames: 0 },
+  { id: 'hourly_rapid_human',     name: 'Rapid Арена',     description: '10+0 · только люди',  timeControl: 10, increment: 0, durationMin: 117, color: 'rapid',     botFriendly: false, category: 'rapid',     mode: 'hourly',      periodMs: 2 * 60 * 60 * 1000,    lane: 2, creator: 'PeshkaSasha', minRatedGames: 0 },
+  { id: 'hourly_rapid_bots',      name: 'Rapid Арена · Боты',     description: '10+0 · люди и боты',  timeControl: 10, increment: 0, durationMin: 117, color: 'rapid',     botFriendly: true, category: 'rapid',     mode: 'hourly',      periodMs: 2 * 60 * 60 * 1000,    lane: 7, creator: 'PeshkaSasha', minRatedGames: 0 },
+  { id: 'hourly_classical_human', name: 'Classical Арена', description: '30+0 · только люди',  timeControl: 30, increment: 0, durationMin: 237, color: 'classical', botFriendly: false, category: 'classical', mode: 'hourly',      periodMs: 4 * 60 * 60 * 1000,    lane: 3, creator: 'PeshkaSasha', minRatedGames: 0 },
+  { id: 'hourly_classical_bots',  name: 'Classical Арена · Боты', description: '30+0 · люди и боты',  timeControl: 30, increment: 0, durationMin: 237, color: 'classical', botFriendly: true, category: 'classical', mode: 'hourly',      periodMs: 4 * 60 * 60 * 1000,    lane: 8, creator: 'PeshkaSasha', minRatedGames: 0 },
+  { id: 'champ_bullet',           name: 'Чемпионат · Bullet',   description: '1+0 · только люди · ≥20 партий в пуле',  timeControl: 1,  increment: 0, durationMin: 237, color: 'bullet',    botFriendly: false, category: 'bullet',    mode: 'championship', dayOfMonth: 10, lane: 4, creator: 'PeshkaSasha', minRatedGames: 20 },
+  { id: 'champ_blitz',            name: 'Чемпионат · Blitz',    description: '3+2 · только люди · ≥20 партий в блице', timeControl: 3,  increment: 2, durationMin: 237, color: 'blitz',     botFriendly: false, category: 'blitz',     mode: 'championship', dayOfMonth: 11, lane: 4, creator: 'PeshkaSasha', minRatedGames: 20 },
+  { id: 'champ_rapid',            name: 'Чемпионат · Rapid',    description: '10+0 · только люди · ≥20 партий в рапиде', timeControl: 10, increment: 0, durationMin: 357, color: 'rapid',     botFriendly: false, category: 'rapid',     mode: 'championship', dayOfMonth: 12, lane: 4, creator: 'PeshkaSasha', minRatedGames: 20 },
+  { id: 'champ_classical',        name: 'Чемпионат · Classical', description: '30+0 · только люди · ≥20 партий в классике', timeControl: 30, increment: 0, durationMin: 357, color: 'classical', botFriendly: false, category: 'classical', mode: 'championship', dayOfMonth: 13, lane: 4, creator: 'PeshkaSasha', minRatedGames: 20 }
 ];
 
 function nextStartFor(tpl, now) {
@@ -985,11 +993,11 @@ function nextStartFor(tpl, now) {
   if (tpl.mode === 'championship') {
     const p = mskParts(now);
     let y = p.y, mo = p.mo;
-    const startOfMonthCurrent = fromMsk(y, mo, tpl.dayOfMonth, 0, 0, 0);
+    const startOfMonthCurrent = fromMsk(y, mo, tpl.dayOfMonth, 14, 0, 0);
     if (now < startOfMonthCurrent) return startOfMonthCurrent;
     mo += 1;
     if (mo > 11) { mo = 0; y += 1; }
-    return fromMsk(y, mo, tpl.dayOfMonth, 0, 0, 0);
+    return fromMsk(y, mo, tpl.dayOfMonth, 14, 0, 0);
   }
   return roundDownToMinute(now);
 }
@@ -1622,41 +1630,59 @@ async function finishArena(state) {
     await saveChampionAward(state.top3[0].username, state.id, state.name, state.category || '');
   }
 
+  try { await sendArenaLeadersToAll(); } catch (e) {}
+
   state.cleanupTimer = setTimeout(() => {
     arenas.delete(state.id);
   }, 24 * 60 * 60 * 1000);
 }
 
-async function getRecentArenaWinners() {
-  const fromDb = [];
-  if (arenaPool) {
-    try {
-      const r = await arenaPool.query(
-        `SELECT id, name, category, top3, ends_at FROM arena_history
-         WHERE top3 IS NOT NULL AND jsonb_array_length(top3) > 0
-         ORDER BY ends_at DESC LIMIT 50`
-      );
-      for (const row of r.rows) {
-        const top3 = Array.isArray(row.top3) ? row.top3 : [];
-        if (!top3.length) continue;
-        const first = top3[0];
-        if (!first || !first.username) continue;
-        fromDb.push({
-          place: 1,
-          username: first.username,
-          rating: first.rating,
-          score: first.score,
-          arenaName: row.name,
-          arenaId: row.id,
-          category: row.category || '',
-          endsAt: Number(row.ends_at)
-        });
-      }
-    } catch (e) { console.error('[ArenaDB] winners err:', e.message); }
+async function sendArenaLeadersToAll() {
+  const payload = await buildArenaLеadersPayload();
+  io.emit('arenaLeaders', payload);
+}
+
+async function buildArenaLеadersPayload() {
+  const categories = ['bullet', 'blitz', 'rapid', 'classical'];
+  const result = {};
+  for (const cat of categories) {
+    const fromDb = [];
+    if (arenaPool) {
+      try {
+        const r = await arenaPool.query(
+          `SELECT id, name, category, top3, ends_at, mode FROM arena_history
+           WHERE top3 IS NOT NULL AND jsonb_array_length(top3) > 0 AND category = $1
+           ORDER BY ends_at DESC LIMIT 5`,
+          [cat]
+        );
+        for (const row of r.rows) {
+          const top3 = Array.isArray(row.top3) ? row.top3 : [];
+          if (!top3.length) continue;
+          const first = top3[0];
+          if (!first || !first.username) continue;
+          fromDb.push({
+            username: first.username, score: first.score,
+            arenaName: row.name, arenaId: row.id,
+            category: row.category || cat,
+            mode: row.mode || 'hourly',
+            endsAt: Number(row.ends_at)
+          });
+        }
+      } catch (e) {}
+    }
+    const hourly = [];
+    const championship = [];
+    for (const item of fromDb) {
+      if (item.mode === 'championship') championship.push(item);
+      else hourly.push(item);
+    }
+    if (hourly.length) hourly.sort((a, b) => b.endsAt - a.endsAt);
+    if (championship.length) championship.sort((a, b) => b.endsAt - a.endsAt);
+    result[cat] = {
+      hourly: hourly.slice(0, 1),
+      championship: championship.slice(0, 1)
+    };
   }
-  const map = new Map();
-  for (const item of fromDb) map.set(item.username + ':' + item.arenaId, item);
-  const result = [...map.values()].sort((a, b) => b.endsAt - a.endsAt).slice(0, 9);
   return result;
 }
 
@@ -1713,33 +1739,55 @@ function getTopLiveArenas() {
   return list.slice(0, 3);
 }
 
-const SWISS_TEMPLATES = [
-  { id: 'swiss_bullet',    name: 'Швейцарка Bullet',    timeControl: 1,  increment: 0, color: 'bullet',    category: 'bullet',    rounds: 20, breakMs: 10 * 1000, lane: 0 },
-  { id: 'swiss_blitz',     name: 'Швейцарка Blitz',     timeControl: 3,  increment: 2, color: 'blitz',     category: 'blitz',     rounds: 20, breakMs: 20 * 1000, lane: 1 },
-  { id: 'swiss_rapid',     name: 'Швейцарка Rapid',     timeControl: 10, increment: 0, color: 'rapid',     category: 'rapid',     rounds: 20, breakMs: 40 * 1000, lane: 2 },
-  { id: 'swiss_classical', name: 'Швейцарка Classical', timeControl: 30, increment: 0, color: 'classical', category: 'classical', rounds: 20, breakMs: 60 * 1000, lane: 3 }
-];
+const SWISS_BREAK_MS = { bullet: 10 * 1000, blitz: 20 * 1000, rapid: 40 * 1000, classical: 60 * 1000 };
 
-function getSwissSchedule() {
+function createSwissTemplate(input) {
+  const { id, name, timeControl, increment, category, rounds, breakMs, startsAt, creator } = input;
+  return {
+    id, templateId: 'custom_swiss', name,
+    timeControl, increment,
+    color: category,
+    category,
+    rounds: rounds || 20,
+    breakMs: breakMs || SWISS_BREAK_MS[category] || 20000,
+    startsAt,
+    mode: 'swiss',
+    creator: creator || 'PeshkaSasha'
+  };
+}
+
+function swissStatusFor(state, now) {
+  if (state.finished) return 'finished';
+  if (now < state.startsAt) return 'upcoming';
+  return 'live';
+}
+
+function getSwissList() {
   const now = Date.now();
-  return SWISS_TEMPLATES.map(tpl => {
-    const hour = Math.floor(now / (2 * 60 * 60 * 1000)) * (2 * 60 * 60 * 1000);
-    return {
-      id: `swiss_${tpl.id}_${hour}`,
-      templateId: tpl.id,
-      name: tpl.name,
-      timeControl: tpl.timeControl,
-      increment: tpl.increment,
-      color: tpl.color,
-      category: tpl.category,
-      rounds: tpl.rounds,
-      breakMs: tpl.breakMs,
-      startsAt: hour,
-      lane: tpl.lane,
-      mode: 'swiss',
-      creator: 'PeshkaSasha'
-    };
+  const result = [];
+  for (const state of swissTournaments.values()) {
+    const status = swissStatusFor(state, now);
+    if (status === 'finished') {
+      const finishedAt = state.finishedAt || 0;
+      if (now - finishedAt > 10 * 60 * 1000) continue;
+    }
+    result.push({
+      id: state.id, name: state.name, status,
+      timeControl: state.timeControl, increment: state.increment,
+      category: state.category, rounds: state.rounds,
+      startsAt: state.startsAt, currentRound: state.currentRound,
+      participantsCount: state.participants.size,
+      creator: state.creator,
+      breakMs: state.breakMs
+    });
+  }
+  result.sort((a, b) => {
+    const aR = a.status === 'upcoming' ? 0 : a.status === 'live' ? 1 : 2;
+    const bR = b.status === 'upcoming' ? 0 : b.status === 'live' ? 1 : 2;
+    if (aR !== bR) return aR - bR;
+    return a.startsAt - b.startsAt;
   });
+  return result;
 }
 
 function getOrCreateSwissState(instance) {
@@ -1754,10 +1802,12 @@ function getOrCreateSwissState(instance) {
     chat: [], chatViewers: new Set(), finished: false,
     standings: null, finishedGames: [], roundTimer: null,
     creator: instance.creator || 'PeshkaSasha',
-    tryPairRunning: false
+    tryPairRunning: false, finishedAt: 0,
+    roundDeadline: 0
   };
   swissTournaments.set(instance.id, state);
-  setTimeout(() => startSwissRound(state), Math.max(0, instance.startsAt - Date.now()));
+  const startDelay = Math.max(0, instance.startsAt - Date.now());
+  setTimeout(() => startSwissRound(state), startDelay);
   return state;
 }
 
@@ -1767,6 +1817,8 @@ function startSwissRound(state) {
   if (!state.participants.size) { endSwissTournament(state); return; }
   if (state.currentRound >= state.rounds) { endSwissTournament(state); return; }
   state.currentRound++;
+
+  for (const p of state.participants.values()) p.receivedByeThisRound = false;
 
   const players = [...state.participants.values()].filter(p => !p.receivedByeThisRound);
   const playedPairs = new Set();
@@ -1930,6 +1982,7 @@ function endSwissTournament(state) {
   if (state.finished) return;
   state.finished = true;
   state.phase = 'finished';
+  state.finishedAt = Date.now();
   const standings = [...state.participants.values()].map(p => {
     let buchholz = 0;
     for (const opp of (p.opponents || [])) {
@@ -1966,8 +2019,8 @@ async function saveSwissToDB(state) {
   }));
   try {
     await arenaPool.query(
-      `INSERT INTO swiss_history (id, template_id, name, description, time_control, increment, color, rounds, category, starts_at, ends_at, phase, standings, participants, games, rounds_data, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+      `INSERT INTO swiss_history (id, template_id, name, description, time_control, increment, color, rounds, category, starts_at, ends_at, phase, standings, participants, games, rounds_data, created_at, creator)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        ON CONFLICT (id) DO UPDATE SET
          phase = EXCLUDED.phase, standings = EXCLUDED.standings,
          participants = EXCLUDED.participants, games = EXCLUDED.games,
@@ -1978,7 +2031,7 @@ async function saveSwissToDB(state) {
         state.startsAt, Date.now(), state.phase || 'finished',
         JSON.stringify(state.standings || []), JSON.stringify(participantsArray),
         JSON.stringify(state.finishedGames || []), JSON.stringify({ currentRound: state.currentRound }),
-        Date.now()
+        Date.now(), state.creator || 'PeshkaSasha'
       ]
     );
   } catch (e) {
@@ -2083,7 +2136,7 @@ function checkSpamAndWarn(username, scope, scopeId) {
         sendSystemMessageToLobby(scopeId, msg.text, { warning: true });
       }
       s.timestamps = []; s.warnedAt = 0;
-      io.to(socketsOfUser(username)).emit('banned', { username, until: banUntil, reason: u.banReason });
+      io.to(socketsOfUser(username)).emit('banned', { username, until: banUntil, reason: u.banReason, scopes: ['chat'] });
     } else {
       s.warnedAt = now; s.timestamps = [];
       sendSystemDM(username, `Предупреждение: ${username}, вы слишком часто пишете в чат.`, '#ffb74d');
@@ -2412,7 +2465,8 @@ io.on('connection', (socket) => {
     if (user && user.isBanned) {
       if (Number(user.bannedUntil || 0) > Date.now()) {
         const hoursLeft = Math.max(1, Math.ceil((Number(user.bannedUntil) - Date.now()) / 3600000));
-        return cb({ ok: false, msg: `Аккаунт заблокирован. Осталось примерно ${hoursLeft} ч.` });
+        const scopesRu = (user.banScopes || []).map(s => s === 'chat' ? 'чат' : s === 'play' ? 'игра' : s === 'arena' ? 'турниры' : s).join(', ');
+        return cb({ ok: false, msg: `Аккаунт заблокирован (${scopesRu || 'всё'}). Осталось ~${hoursLeft} ч. ${user.banReason ? 'Причина: ' + user.banReason : ''}` });
       }
       user.isBanned = false; user.bannedUntil = 0; user.banScopes = []; user.banReason = '';
       await saveUser(username);
@@ -2472,13 +2526,13 @@ io.on('connection', (socket) => {
   });
   socket.on('getTopArenas', (cb) => { if (typeof cb === 'function') cb(getTopLiveArenas()); });
   socket.on('getLiveGames', (cb) => { if (typeof cb === 'function') cb(buildGamesList()); });
-  socket.on('getTopArenaWinners', async (cb) => { if (typeof cb === 'function') cb(await getRecentArenaWinners()); });
+  socket.on('getTopArenaWinners', async (cb) => { if (typeof cb === 'function') cb(await buildArenaLеadersPayload()); });
 
   socket.on('getBots', (cb) => {
     if (typeof cb !== 'function') return;
     cb(BOTS.filter(b => !b.hidden).map(b => {
       const u = db.users[b.name];
-      return { name: b.name, title: b.title, desc: b.desc, level: b.level, rating: b.rating, initialRating: b.rating, games: u ? u.games : 0, wins: u ? u.wins : 0, losses: u ? u.losses : 0, draws: u ? u.draws : 0, strength: b.strength };
+      return { name: b.name, title: b.title, desc: b.desc, level: b.level, rating: u ? u.rating : b.rating, initialRating: b.rating, games: u ? u.games : 0, wins: u ? u.wins : 0, losses: u ? u.losses : 0, draws: u ? u.draws : 0, strength: b.strength };
     }));
   });
 
@@ -2606,7 +2660,7 @@ io.on('connection', (socket) => {
     const bot = BOTS.find(b => b.name === botName && !b.hidden);
     if (!bot) return cb({ ok: false, msg: 'Бот не найден' });
     if (botIsBusy(bot.name)) return cb({ ok: false, msg: 'Бот занят' });
-    const botRating = bot.rating;
+    const botRating = db.users[bot.name] ? db.users[bot.name].rating : bot.rating;
     const id = genId();
     const newLobby = {
       id, host: socket.username, hostSocket: socket.id, guest: bot.name, guestSocket: null,
@@ -2875,11 +2929,11 @@ io.on('connection', (socket) => {
       const hostSocketId = l ? l.hostSocket : info.hostSocket;
       const time = l ? l.time : info.time; const inc = l ? l.inc : info.inc;
       if (botIsBusy(bot.name)) return cb({ ok: true, started: false, declined: true });
-      const botRating = bot.rating;
+      const botRating = db.users[bot.name] ? db.users[bot.name].rating : bot.rating;
       let agreeChance = 0.9;
-      if (bot.rating >= 1900) agreeChance = 0.35;
-      else if (bot.rating >= 1700) agreeChance = 0.55;
-      else if (bot.rating >= 1400) agreeChance = 0.7;
+      if (botRating >= 1900) agreeChance = 0.35;
+      else if (botRating >= 1700) agreeChance = 0.55;
+      else if (botRating >= 1400) agreeChance = 0.7;
       setTimeout(() => {
         if (Math.random() > agreeChance || botIsBusy(bot.name)) { cb({ ok: true, started: false, declined: true }); return; }
         const newId = genId();
@@ -2962,7 +3016,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('getArenas', (cb) => { if (typeof cb === 'function') cb({ list: getArenaSchedule(48), serverNow: Date.now() }); });
-  socket.on('getSwissList', (cb) => { if (typeof cb === 'function') cb({ list: getSwissSchedule(), serverNow: Date.now() }); });
+  socket.on('getSwissList', (cb) => { if (typeof cb === 'function') cb({ list: getSwissList(), serverNow: Date.now() }); });
+  socket.on('getArenaLeaders', async (cb) => { if (typeof cb === 'function') cb(await buildArenaLеadersPayload()); });
 
   socket.on('getMyArenaStates', (cb) => {
     if (typeof cb !== 'function') return;
@@ -3192,12 +3247,33 @@ io.on('connection', (socket) => {
     cb({ ok: true });
   });
 
+  socket.on('adminCreateSwiss', ({ name, category, timeControl, increment, rounds, startsAtMs, breakMs }, cb) => {
+    if (typeof cb !== 'function') return cb({ ok: false, msg: 'no cb' });
+    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
+    try {
+      const cat = ['bullet', 'blitz', 'rapid', 'classical'].includes(category) ? category : 'blitz';
+      const tc = Number(timeControl);
+      const inc = Number(increment) || 0;
+      const rnds = Math.max(1, Math.min(30, Number(rounds) || 20));
+      const startsAt = Number(startsAtMs) || Date.now();
+      const brk = Math.max(5000, Math.min(5 * 60 * 1000, Number(breakMs) || SWISS_BREAK_MS[cat] || 20000));
+      if (!name || String(name).trim().length < 2) return cb({ ok: false, msg: 'Название слишком короткое' });
+      const instance = createSwissTemplate({
+        id: 'swiss_custom_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        name: String(name).trim().slice(0, 80),
+        timeControl: tc, increment: inc, category: cat,
+        rounds: rnds, breakMs: brk, startsAt,
+        creator: socket.username
+      });
+      getOrCreateSwissState(instance);
+      io.emit('swissUpdate', { swissId: instance.id });
+      cb({ ok: true, id: instance.id });
+    } catch (e) { cb({ ok: false, msg: 'Ошибка создания турнира: ' + e.message }); }
+  });
+
   socket.on('getSwissState', ({ swissId }, cb) => {
     if (typeof cb !== 'function') return;
-    const list = getSwissSchedule();
-    const instance = list.find(x => x.id === swissId);
-    let state = swissTournaments.get(swissId);
-    if (!state && instance) state = getOrCreateSwissState(instance);
+    const state = swissTournaments.get(swissId);
     if (!state) return cb({ ok: false, msg: 'Турнир не найден' });
     const me = socket.username ? state.participants.get(socket.username) : null;
     const participants = [...state.participants.values()].map(p => ({
@@ -3208,6 +3284,13 @@ io.on('connection', (socket) => {
       buchholz: (p.opponents || []).reduce((sum, opp) => sum + ((state.participants.get(opp) || {}).score || 0), 0),
       history: p.history || [], isBot: !!p.isBot
     })).sort((a, b) => (b.score - a.score) || (b.buchholz - a.buchholz));
+    const liveGames = [];
+    for (const l of lobbies.values()) {
+      if (l.swissId !== state.id || l.finished) continue;
+      const w = l.hostColor === 'w' ? l.host : l.guest;
+      const b = l.hostColor === 'b' ? l.host : l.guest;
+      liveGames.push({ lobbyId: l.id, white: w, black: b });
+    }
     cb({
       ok: true, id: state.id, name: state.name,
       timeControl: state.timeControl, increment: state.increment,
@@ -3216,19 +3299,18 @@ io.on('connection', (socket) => {
       joined: !!me, participants, participantsCount: participants.length,
       pairs: state.pairs, finished: state.finished, standings: state.standings,
       breakMs: state.breakMs, creator: state.creator,
-      serverNow: Date.now(), chatViewersCount: state.chatViewers ? state.chatViewers.size : 0
+      serverNow: Date.now(), chatViewersCount: state.chatViewers ? state.chatViewers.size : 0,
+      liveGames
     });
   });
 
   socket.on('joinSwiss', ({ swissId }, cb) => {
     if (typeof cb !== 'function') return;
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
-    const list = getSwissSchedule();
-    const instance = list.find(x => x.id === swissId);
-    if (!instance) return cb({ ok: false, msg: 'Турнир не найден' });
-    let state = swissTournaments.get(swissId);
-    if (!state) state = getOrCreateSwissState(instance);
+    const state = swissTournaments.get(swissId);
+    if (!state) return cb({ ok: false, msg: 'Турнир не найден' });
     if (state.finished || state.phase === 'finished') return cb({ ok: false, msg: 'Турнир завершён' });
+    if (state.currentRound > 0) return cb({ ok: false, msg: 'Турнир уже начался' });
     if (state.participants.has(socket.username)) return cb({ ok: true, msg: 'Уже участвуете' });
     const user = db.users[socket.username];
     if (!user) return cb({ ok: false, msg: 'Пользователь не найден' });
@@ -3695,6 +3777,14 @@ io.on('connection', (socket) => {
 
   getArenaSchedule(48);
   setInterval(() => { try { getArenaSchedule(48); } catch (e) {} }, 10 * 60 * 1000);
+
+  setInterval(() => {
+    const now = Date.now();
+    for (const [id, state] of swissTournaments.entries()) {
+      if (state.finished && state.finishedAt && now - state.finishedAt > 60 * 60 * 1000) {
+      }
+    }
+  }, 5 * 60 * 1000);
 
   const PORT = process.env.PORT || 3000;
   server.listen(PORT, '0.0.0.0', () => {
