@@ -1,9 +1,5 @@
-/* app.js — вся клиентская логика Kingside */
 'use strict';
 
-// ============================================================
-// UTILS
-// ============================================================
 const Utils = {
   MSK_TZ: 'Europe/Moscow',
   fmtMskHM(ts) { return new Intl.DateTimeFormat('ru-RU', { timeZone: this.MSK_TZ, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ts)); },
@@ -26,7 +22,6 @@ const Utils = {
   onlineDotHtml(online) { return online ? '<span class="onlineDot" title="В сети"></span>' : '<span class="offlineDot" title="Не в сети"></span>'; },
   watchersHtml(n) { if (!n || n <= 0) return ''; return `<span class="watchersBadge" title="Зрителей">👁 <b>${n}</b></span>`; },
   formatTime(s) { s = Math.max(0, Math.floor(s)); return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`; },
-  // NEW: субсекунды когда <10 сек
   formatTimeSmart(s, showSub) {
     s = Math.max(0, s);
     if (showSub && s < 10) {
@@ -37,12 +32,19 @@ const Utils = {
     return this.formatTime(s);
   },
   formatMMSS(ms) { const t = Math.max(0, Math.floor(ms/1000)); return String(Math.floor(t/60)).padStart(2,'0') + ':' + String(t%60).padStart(2,'0'); },
-  genId() { return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6); }
+  genId() { return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6); },
+  renderTextWithMentions(text) {
+    const safe = this.escapeHtml(text);
+    return safe.replace(/@([a-zA-Zа-яА-Я0-9_\-]{2,32})/g, (m, nick) => {
+      return `<a class="mention" href="#/profile/${encodeURIComponent(nick)}" onclick="event.stopPropagation();Router.go('profile','${encodeURIComponent(nick)}');return false;">@${nick}</a>`;
+    });
+  },
+  formatDateRu(ts) {
+    const d = new Date(ts);
+    return d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short', year: 'numeric' });
+  }
 };
 
-// ============================================================
-// RULES
-// ============================================================
 const Rules = {
   rendered: false,
   render() {
@@ -50,12 +52,11 @@ const Rules = {
     if (!body) return;
     body.innerHTML = `
       <h3>1. Общие положения</h3>
-      <p>KingSide — шахматная онлайн-платформа для игры, обучения и участия в турнирах. Используя сайт, вы соглашаетесь с настоящими Правилами. Если вы не согласны с каким-либо пунктом, пожалуйста, не регистрируйтесь и не используйте платформу.</p>
+      <p>KingSide — шахматная онлайн-платформа для игры, обучения и участия в турнирах. Используя сайт, вы соглашаетесь с настоящими Правилами.</p>
 
       <h3>2. Регистрация и аккаунт</h3>
       <ul>
         <li>Для игры необходима регистрация с указанием логина, email и пароля.</li>
-        <li>Один человек может иметь несколько аккаунтов, но рейтинговые партии должны играться с основного аккаунта.</li>
         <li>Вы обязуетесь указывать корректный email и подтверждать его.</li>
         <li>Ответственность за сохранность пароля лежит на вас.</li>
       </ul>
@@ -68,7 +69,6 @@ const Rules = {
         <li>Использовать несколько аккаунтов для искусственного повышения рейтинга.</li>
         <li>Применять ботов, скрипты и любые средства автоматизации.</li>
       </ul>
-      <p>За нарушение этих правил аккаунт может быть заблокирован без возврата рейтинга.</p>
 
       <h3>4. Поведение в чате</h3>
       <p>В игровом, аренном и личном чате запрещены:</p>
@@ -76,43 +76,28 @@ const Rules = {
         <li>Оскорбления, угрозы, разжигание ненависти, дискриминация.</li>
         <li>Спам, реклама сторонних ресурсов, флуд.</li>
         <li>Публикация личных данных других людей.</li>
-        <li>Обсуждение действий модераторов и администрации в чате.</li>
       </ul>
-      <p>Модераторы вправе удалять сообщения, выдавать мьют и передавать информацию администрации.</p>
 
       <h3>5. Рейтинг и турниры</h3>
       <ul>
         <li>Рейтинг рассчитывается по системе Glicko-2 по каждой категории: пуля, блиц, рапид, классика.</li>
         <li>Партии против ботов <strong>не влияют</strong> на рейтинг, кроме специально обозначенных арен.</li>
         <li>Результаты арен и турниров фиксируются на сервере.</li>
-        <li>Администрация вправе корректировать рейтинг при обнаружении нарушений.</li>
       </ul>
 
       <h3>6. Личные сообщения</h3>
       <ul>
         <li>Не отправляйте спам и не рекламируйте сторонние проекты.</li>
-        <li>Игрок может запретить приём ЛС от других игроков, но администратор и модераторы всегда могут писать ему.</li>
-        <li>История диалогов хранится на сервере; вы можете удалить диалог со своей стороны.</li>
+        <li>Игрок может запретить приём ЛС от других игроков.</li>
       </ul>
 
-      <h3>7. Контент и авторские права</h3>
-      <p>Все элементы платформы (дизайн, логотип, код, графика) являются собственностью KingSide. Копирование без разрешения запрещено.</p>
-
-      <h3>8. Блокировки и удаление аккаунта</h3>
+      <h3>7. Блокировки и удаление аккаунта</h3>
       <ul>
         <li>За нарушение правил аккаунт может быть заблокирован на срок от 1 часа до 1 года.</li>
-        <li>Бан может распространяться на чат, игру с людьми и турниры — отдельно или вместе.</li>
-        <li>Удаление аккаунта доступно самостоятельно через настройки после 10 дней с момента регистрации с обязательным указанием причины.</li>
-        <li>Удаление необратимо: рейтинг, партии и личные сообщения будут утеряны.</li>
+        <li>Удаление аккаунта доступно самостоятельно через настройки после 10 дней с момента регистрации.</li>
       </ul>
 
-      <h3>9. Ограничение ответственности</h3>
-      <p>Платформа предоставляется «как есть». Администрация не несёт ответственности за возможные сбои, потерю данных или упущенную выгоду в результате использования сервиса.</p>
-
-      <h3>10. Изменения правил</h3>
-      <p>Мы можем обновлять эти Правила. Актуальная версия всегда доступна по кнопке «?» в правом нижнем углу. Продолжая пользоваться платформой после изменений, вы принимаете новую редакцию.</p>
-
-      <h3>11. Обратная связь</h3>
+      <h3>8. Обратная связь</h3>
       <p>По любым вопросам пишите администратору <strong>PeshkaSasha</strong> через личные сообщения или через раздел «Репорт».</p>
     `;
     this.rendered = true;
@@ -128,9 +113,6 @@ const Rules = {
   }
 };
 
-// ============================================================
-// SOUNDS
-// ============================================================
 const Sounds = (function() {
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   let ctx = null;
@@ -174,9 +156,6 @@ const Sounds = (function() {
   };
 })();
 
-// ============================================================
-// CHESS
-// ============================================================
 const Chess = {
   pieceSvg(piece) {
     if (!piece) return '';
@@ -316,9 +295,6 @@ const Chess = {
   }
 };
 
-// ============================================================
-// AUTH
-// ============================================================
 const Auth = {
   mode: 'login',
   switchTab(mode) {
@@ -400,8 +376,8 @@ const Auth = {
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { msg.textContent = 'Введите корректный email'; msg.style.color = '#ff6b6b'; return; }
     msg.textContent = 'Отправляем письмо…'; msg.style.color = 'var(--muted)';
     App.socket.emit('requestPasswordReset', { email }, (res) => {
-      if (!res) { msg.textContent = 'Нет ответа от сервера. Проверьте соединение и попробуйте снова.'; msg.style.color = '#ff6b6b'; return; }
-      msg.textContent = res.msg || (res.ok ? 'Если адрес зарегистрирован, письмо отправлено.' : 'Не удалось запросить сброс пароля.');
+      if (!res) { msg.textContent = 'Нет ответа от сервера.'; msg.style.color = '#ff6b6b'; return; }
+      msg.textContent = res.msg || (res.ok ? 'Если адрес зарегистрирован, письмо отправлено.' : 'Не удалось запросить сброс.');
       msg.style.color = res.ok ? 'var(--text)' : '#ff6b6b';
     });
   },
@@ -409,13 +385,13 @@ const Auth = {
     const msg = document.getElementById('resetMsg2');
     const password = document.getElementById('newPassword').value;
     const confirm = document.getElementById('confirmPassword').value;
-    if (!this.resetToken) { msg.textContent = 'В ссылке отсутствует токен восстановления. Запросите новое письмо.'; msg.style.color = '#ff6b6b'; return; }
-    if (password.length < 8 || password.length > 128) { msg.textContent = 'Пароль должен содержать от 8 до 128 символов.'; msg.style.color = '#ff6b6b'; return; }
+    if (!this.resetToken) { msg.textContent = 'В ссылке отсутствует токен.'; msg.style.color = '#ff6b6b'; return; }
+    if (password.length < 8 || password.length > 128) { msg.textContent = 'Пароль 8-128 символов.'; msg.style.color = '#ff6b6b'; return; }
     if (password !== confirm) { msg.textContent = 'Пароли не совпадают.'; msg.style.color = '#ff6b6b'; return; }
-    msg.textContent = 'Сохраняем новый пароль…'; msg.style.color = 'var(--muted)';
+    msg.textContent = 'Сохраняем…'; msg.style.color = 'var(--muted)';
     App.socket.emit('resetPassword', { token: this.resetToken, newPassword: password }, (res) => {
-      if (!res || !res.ok) { msg.textContent = (res && res.msg) || 'Не удалось изменить пароль. Запросите новую ссылку.'; msg.style.color = '#ff6b6b'; return; }
-      msg.textContent = 'Пароль изменён. Теперь можно войти с новым паролем.'; msg.style.color = '#7dbe30';
+      if (!res || !res.ok) { msg.textContent = (res && res.msg) || 'Ошибка.'; msg.style.color = '#ff6b6b'; return; }
+      msg.textContent = 'Пароль изменён.'; msg.style.color = '#7dbe30';
       this.resetToken = null;
       document.getElementById('newPassword').value = ''; document.getElementById('confirmPassword').value = '';
       setTimeout(() => { location.hash = '#/autorize'; this.switchTab('login'); }, 1200);
@@ -423,9 +399,6 @@ const Auth = {
   }
 };
 
-// ============================================================
-// APP
-// ============================================================
 const App = {
   socket: null, me: null, lobbyId: null, myColor: 'w',
   myTime: 0, oppTime: 0, inc: 0,
@@ -434,6 +407,7 @@ const App = {
   opponentOnline: true, opponentIsBot: false, isBotGame: false,
   currentFen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
   currentGameIsArena: false, currentArenaId: null, currentArenaName: null,
+  currentGameIsSwiss: false, currentSwissId: null, currentSwissName: null,
   profileViewing: null, botLevels: [],
   botDialogState: { level: 2, time: 5, inc: 0 },
   botTimes: [{ t:1,i:0,label:'1+0' },{ t:3,i:0,label:'3+0' },{ t:5,i:0,label:'5+0' },{ t:10,i:0,label:'10+0' },{ t:15,i:10,label:'15+10' },{ t:30,i:0,label:'30+0' }],
@@ -454,7 +428,7 @@ const App = {
     this.bindSocket();
 
     TopArenas.init(); Stats.init(); Lobby.init(); Bot.init();
-    Watch.init(); Arena.init(); Profile.init(); Community.init();
+    Watch.init(); Arena.init(); Swiss.init(); Profile.init(); Community.init();
     Game.init(); Banners.init(); UserMenu.init(); Inbox.init(); Ping.init(); Auth.init();
     Leaderboard.init(); UserSettings.init(); Reports.init();
 
@@ -542,17 +516,9 @@ const App = {
     const rules = document.getElementById('rulesCheckbox');
 
     if (Auth.mode === 'register') {
-      if (password.length < 8) { msgEl.textContent = 'Для нового аккаунта пароль должен содержать минимум 8 символов'; return; }
-      if (!honor || !honor.checked) {
-        if (honorError) honorError.style.display = 'block';
-        msgEl.textContent = 'Подтвердите обязательные пункты';
-        return;
-      }
-      if (!rules || !rules.checked) {
-        if (rulesError) rulesError.style.display = 'block';
-        msgEl.textContent = 'Подтвердите обязательные пункты';
-        return;
-      }
+      if (password.length < 8) { msgEl.textContent = 'Пароль минимум 8 символов'; return; }
+      if (!honor || !honor.checked) { if (honorError) honorError.style.display = 'block'; msgEl.textContent = 'Подтвердите обязательные пункты'; return; }
+      if (!rules || !rules.checked) { if (rulesError) rulesError.style.display = 'block'; msgEl.textContent = 'Подтвердите обязательные пункты'; return; }
     }
     msgEl.textContent = 'Загрузка...'; msgEl.style.color = 'var(--text)';
     this.socket.emit('register', {
@@ -562,14 +528,11 @@ const App = {
     }, (res) => {
       if (!res || !res.ok) {
         msgEl.style.color = '#ff6b6b'; msgEl.textContent = (res && res.msg) || 'Ошибка';
-        if (res && res.pending) { msgEl.style.color = '#7dbe30'; msgEl.innerHTML = `Мы отправили письмо с подтверждением на почту: <b>${Utils.escapeHtml(email)}</b>.<br>Если письмо не приходит, проверьте папку «Спам».`; }
+        if (res && res.pending) { msgEl.style.color = '#7dbe30'; msgEl.innerHTML = `Письмо отправлено на: <b>${Utils.escapeHtml(email)}</b>.`; }
         return;
       }
       this.me = res.user;
-      if (res.user) {
-        this.settings.showSubseconds = !!res.user.showSubseconds;
-        this.settings.dmClosed = !!res.user.dmClosed;
-      }
+      if (res.user) { this.settings.showSubseconds = !!res.user.showSubseconds; this.settings.dmClosed = !!res.user.dmClosed; }
       try { localStorage.setItem('kingside_login', JSON.stringify({ username, password })); } catch (e) {}
       Landing.closeAuth();
       this.showAuthenticatedUI(); this.updateTopbarUser(); Router.go('lobby'); this.tryResumeGame();
@@ -603,7 +566,6 @@ const App = {
   scheduleArenaClock() {
     setInterval(() => {
       const localNow = Date.now();
-      const nowClock = document.getElementById('arenasNowClock'); if (nowClock) nowClock.textContent = Utils.fmtMskHM(localNow);
       const arenasScreen = document.getElementById('arenasScreen'); if (!arenasScreen || !arenasScreen.classList.contains('active')) return;
       const scroller = document.querySelector('#arenasGridWrap .arenasScroller'); if (!scroller) return;
       const nowLine = scroller.querySelector('.nowLine'); if (!nowLine) return;
@@ -656,6 +618,9 @@ const App = {
         if (aps && aps.classList.contains('active')) Arena.renderGamesList();
       }
     });
+    s.on('swissChatMessage', (msg) => Swiss.onChatMessage(msg));
+    s.on('swissUpdate', ({ swissId }) => Swiss.onUpdate(swissId));
+    s.on('swissFinished', ({ swissId, standings }) => Swiss.onFinished(swissId, standings));
     s.on('liveGamesUpdate', (list) => {
       const ws = document.getElementById('watchScreen');
       if (ws && ws.classList.contains('active')) Watch.refreshFromList(list);
@@ -677,22 +642,16 @@ const App = {
     if (!info || !this.me) return;
     if (info.username === this.me.username) {
       let text = info.reason ? `\nПричина: ${info.reason}` : '';
-      alert(`Вы забанены администратором до ${new Date(info.until).toLocaleString('ru-RU')}.${text}`);
+      alert(`Вы забанены до ${new Date(info.until).toLocaleString('ru-RU')}.${text}`);
       setTimeout(() => { this.logout(); }, 500);
     }
   },
 
   onSessionRevoked(info) {
-    if (info && info.username === this.me?.username) {
-      alert('Ваша сессия завершена. Войдите заново.');
-      this.logout();
-    }
+    if (info && info.username === this.me?.username) { alert('Сессия завершена.'); this.logout(); }
   }
 };
 
-// ============================================================
-// USER MENU
-// ============================================================
 const UserMenu = {
   isOpen: false,
   init() { document.addEventListener('click', (e) => { const m = document.getElementById('userMenu'); const btn = document.getElementById('userBtn'); if (!m || m.style.display === 'none') return; if (m.contains(e.target) || (btn && btn.contains(e.target))) return; this.close(); }); },
@@ -705,9 +664,6 @@ const UserMenu = {
   togglePing() { Ping.refresh(); }
 };
 
-// ============================================================
-// USER SETTINGS
-// ============================================================
 const UserSettings = {
   init() {},
   open() {
@@ -718,7 +674,6 @@ const UserSettings = {
     document.getElementById('setDmClosed').checked = !!App.settings.dmClosed;
     const msg = document.getElementById('settingsMsg');
     if (msg) { msg.textContent = ''; msg.className = 'settings-msg'; }
-    // Определяем доступность удаления (10 дней с регистрации)
     const createdAt = App.me.createdAt || 0;
     const canDelete = (Date.now() - createdAt) >= 10 * 24 * 3600 * 1000;
     const delBtn = document.getElementById('deleteAccountBtn');
@@ -734,10 +689,7 @@ const UserSettings = {
     }
     modal.classList.add('active');
   },
-  close() {
-    const modal = document.getElementById('userSettingsModal');
-    if (modal) modal.classList.remove('active');
-  },
+  close() { const modal = document.getElementById('userSettingsModal'); if (modal) modal.classList.remove('active'); },
   save() {
     if (!App.socket) return;
     const showSub = document.getElementById('setShowSubseconds').checked;
@@ -748,49 +700,32 @@ const UserSettings = {
         if (msg) { msg.textContent = (res && res.msg) || 'Не удалось сохранить'; msg.className = 'settings-msg err'; }
         return;
       }
-      App.settings.showSubseconds = showSub;
-      App.settings.dmClosed = dmClosed;
+      App.settings.showSubseconds = showSub; App.settings.dmClosed = dmClosed;
       if (App.me) { App.me.showSubseconds = showSub; App.me.dmClosed = dmClosed; }
       if (msg) { msg.textContent = 'Настройки сохранены'; msg.className = 'settings-msg ok'; }
       Game.lastBoardHash = '';
     });
   },
   requestDelete() {
-    const modal = document.getElementById('deleteAccountModal');
-    if (!modal) return;
-    const msg = document.getElementById('deleteAccountMsg');
-    if (msg) { msg.textContent = ''; msg.className = 'settings-msg'; }
-    const reasonEl = document.getElementById('deleteAccountReason');
-    if (reasonEl) reasonEl.value = '';
+    const modal = document.getElementById('deleteAccountModal'); if (!modal) return;
+    const msg = document.getElementById('deleteAccountMsg'); if (msg) { msg.textContent = ''; msg.className = 'settings-msg'; }
+    const reasonEl = document.getElementById('deleteAccountReason'); if (reasonEl) reasonEl.value = '';
     modal.classList.add('active');
   },
-  closeDeleteModal() {
-    const modal = document.getElementById('deleteAccountModal');
-    if (modal) modal.classList.remove('active');
-  },
+  closeDeleteModal() { const modal = document.getElementById('deleteAccountModal'); if (modal) modal.classList.remove('active'); },
   confirmDelete() {
     const reasonEl = document.getElementById('deleteAccountReason');
     const reason = (reasonEl && reasonEl.value || '').trim();
     const msg = document.getElementById('deleteAccountMsg');
-    if (reason.length < 5) {
-      if (msg) { msg.textContent = 'Укажите причину (минимум 5 символов)'; msg.className = 'settings-msg err'; }
-      return;
-    }
-    if (!confirm('Удалить аккаунт безвозвратно? Это действие нельзя отменить.')) return;
+    if (reason.length < 5) { if (msg) { msg.textContent = 'Укажите причину (минимум 5 символов)'; msg.className = 'settings-msg err'; } return; }
+    if (!confirm('Удалить аккаунт безвозвратно?')) return;
     App.socket.emit('requestAccountDeletion', { reason }, (res) => {
-      if (!res || !res.ok) {
-        if (msg) { msg.textContent = (res && res.msg) || 'Ошибка'; msg.className = 'settings-msg err'; }
-        return;
-      }
-      alert('Запрос на удаление отправлен. Аккаунт будет удалён. Вы будете разлогинены.');
-      setTimeout(() => App.logout(), 500);
+      if (!res || !res.ok) { if (msg) { msg.textContent = (res && res.msg) || 'Ошибка'; msg.className = 'settings-msg err'; } return; }
+      alert('Аккаунт удалён.'); setTimeout(() => App.logout(), 500);
     });
   }
 };
 
-// ============================================================
-// REPORTS
-// ============================================================
 const Reports = {
   init() {},
   submit() {
@@ -800,7 +735,7 @@ const Reports = {
     const description = (document.getElementById('reportDescription').value || '').trim();
     const msg = document.getElementById('reportsMsg');
     if (!target || target.length < 2) { if (msg) { msg.textContent = 'Укажите ник игрока'; msg.className = 'reportsMsg err'; } return; }
-    if (!reason) { if (msg) { msg.textContent = 'Укажите краткую причину'; msg.className = 'reportsMsg err'; } return; }
+    if (!reason) { if (msg) { msg.textContent = 'Укажите причину'; msg.className = 'reportsMsg err'; } return; }
     if (description.length < 10) { if (msg) { msg.textContent = 'Опишите ситуацию (минимум 10 символов)'; msg.className = 'reportsMsg err'; } return; }
     App.socket.emit('submitReport', { target, reason, description }, (res) => {
       if (!res || !res.ok) { if (msg) { msg.textContent = (res && res.msg) || 'Ошибка отправки'; msg.className = 'reportsMsg err'; } return; }
@@ -812,9 +747,6 @@ const Reports = {
   }
 };
 
-// ============================================================
-// PING
-// ============================================================
 const Ping = {
   timer: null, lastPingMs: null,
   init() { this.timer = setInterval(() => { const m = document.getElementById('userMenu'); if (m && m.style.display !== 'none') this.refresh(); }, 3000); },
@@ -832,9 +764,6 @@ const Ping = {
   }
 };
 
-// ============================================================
-// ROUTER
-// ============================================================
 const Router = {
   current: { name: 'lobby', param: null },
   init() {
@@ -902,10 +831,7 @@ const Router = {
     document.getElementById('mainHeader').style.display = '';
     document.getElementById('mainContent').style.display = '';
 
-    if (name === 'landing' || name === 'autorize' || name === 'login') {
-      Router.go('lobby');
-      return;
-    }
+    if (name === 'landing' || name === 'autorize' || name === 'login') { Router.go('lobby'); return; }
 
     if (name === 'admin_panel') {
       if (!AdminPanel.isRoot()) { Router.go('lobby'); return; }
@@ -930,6 +856,7 @@ const Router = {
       Watch.autoRefreshHandle = null;
     }
     if (name !== 'arenaPage' && Arena.currentArenaId) Arena.leaveRoom();
+    if (name !== 'swissPage' && Swiss.currentSwissId) Swiss.leaveRoom();
 
     const map = {
       landing: 'landingScreen',
@@ -938,11 +865,12 @@ const Router = {
       watch: 'watchScreen',
       arenas: 'arenasScreen',
       arenaPage: 'arenaPageScreen',
+      swiss: 'swissScreen',
+      swissPage: 'swissPageScreen',
       profile: 'profileScreen',
       community: 'communityScreen',
       game: 'gameScreen',
       inbox: 'inboxScreen',
-      swiss: 'swissScreen',
       leaderboard: 'leaderboardScreen',
       reports: 'reportsScreen',
       learn: 'learnScreen',
@@ -960,6 +888,7 @@ const Router = {
         nav === name ||
         (name === 'arenaPage' && nav === 'arenas') ||
         (name === 'swiss' && nav === 'arenas') ||
+        (name === 'swissPage' && nav === 'arenas') ||
         (name === 'leaderboard' && nav === 'community') ||
         (name === 'reports' && nav === 'community') ||
         (name === 'puzzles' && nav === 'learn');
@@ -971,6 +900,8 @@ const Router = {
       case 'watch': Watch.enter(param); break;
       case 'arenas': Arena.enterList(); break;
       case 'arenaPage': Arena.enterPage(param); break;
+      case 'swiss': Swiss.enterList(); break;
+      case 'swissPage': Swiss.enterPage(param); break;
       case 'profile': Profile.enter(param); break;
       case 'community': Community.enter(); break;
       case 'game': Game.enter(param); break;
@@ -985,12 +916,10 @@ const Router = {
   }
 };
 
-// ============================================================
-// LEADERBOARD
-// ============================================================
 const Leaderboard = {
   page: 0,
   pageSize: 10,
+  category: 'blitz',
   allPlayers: [],
   myPlace: 0,
   ready: false,
@@ -1002,14 +931,26 @@ const Leaderboard = {
     this.fetch();
   },
 
+  setCategory(cat) {
+    this.category = cat;
+    this.page = 0;
+    document.querySelectorAll('.lbTab').forEach(b => b.classList.toggle('active', b.dataset.cat === cat));
+    this.fetch();
+  },
+
   fetch() {
     const meta = document.getElementById('leaderboardMeta');
     const list = document.getElementById('leaderboardList');
     if (meta) meta.textContent = 'Загрузка...';
     if (list) list.innerHTML = '';
-    App.socket.emit('getCommunityOnline', (players) => {
+    App.socket.emit('getAllPlayers', (players) => {
       const arr = Array.isArray(players) ? players.slice() : [];
-      arr.sort((a, b) => (b.rating || 0) - (a.rating || 0) || a.username.localeCompare(b.username));
+      const cat = this.category;
+      arr.sort((a, b) => {
+        const ra = a.categories && a.categories[cat] ? (a.categories[cat].rating || 0) : 0;
+        const rb = b.categories && b.categories[cat] ? (b.categories[cat].rating || 0) : 0;
+        return rb - ra || a.username.localeCompare(b.username);
+      });
       this.allPlayers = arr;
       if (App.me) {
         const idx = arr.findIndex(p => p.username === App.me.username);
@@ -1031,9 +972,10 @@ const Leaderboard = {
     if (this.page >= totalPages) this.page = totalPages - 1;
     if (this.page < 0) this.page = 0;
 
+    const catLabels = { blitz: 'Блиц', bullet: 'Пуля', rapid: 'Рапид', classical: 'Классика' };
     if (meta) {
       const myPlace = this.myPlace ? `<b>${this.myPlace}</b>` : '—';
-      meta.innerHTML = `Всего игроков: <b>${total}</b> · Ваше место: ${myPlace} · Страница ${this.page + 1} из ${totalPages}`;
+      meta.innerHTML = `Категория: <b>${catLabels[this.category]}</b> · Всего игроков: <b>${total}</b> · Ваше место: ${myPlace} · Страница ${this.page + 1} из ${totalPages}`;
     }
 
     if (!total) {
@@ -1045,13 +987,15 @@ const Leaderboard = {
         const place = start + i + 1;
         const cls = place === 1 ? 'top1' : place === 2 ? 'top2' : place === 3 ? 'top3' : '';
         const isMe = App.me && p.username === App.me.username;
-        const botTag = p.isBot ? ' 🤖' : '';
+        const cat = p.categories && p.categories[this.category] ? p.categories[this.category] : null;
+        const rating = cat ? (cat.rating || 1200) : 1200;
+        const games = cat ? (cat.games || 0) : 0;
         const onlineDot = Utils.onlineDotHtml(!!p.online);
         return `<div class="leaderboardRow ${isMe ? 'me' : ''}" onclick="Router.go('profile', '${Utils.escapeHtml(p.username)}')">
           <span class="lbPlace ${cls}">${place}</span>
-          <span class="lbName">${onlineDot}${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}${botTag}</span>
-          <span class="lbRating">${p.rating || 1200}</span>
-          <span class="lbGames">${p.games || 0} партий</span>
+          <span class="lbName">${onlineDot}${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}</span>
+          <span class="lbRating">${rating}</span>
+          <span class="lbGames">${games} партий</span>
         </div>`;
       }).join('');
     }
@@ -1074,9 +1018,6 @@ const Leaderboard = {
   }
 };
 
-// ============================================================
-// TOP ARENAS
-// ============================================================
 const TopArenas = {
   lastHash: '', timer: null,
   init() { this.timer = setInterval(() => { if (document.hidden) return; const ls = document.getElementById('lobbyScreen'); if (!ls || !ls.classList.contains('active')) return; this.refresh(); }, 5000); },
@@ -1089,15 +1030,13 @@ const TopArenas = {
         const cls = 'topArenaCard' + (a.phase === 'live' ? ' live' : '');
         const phaseText = a.phase === 'live' ? 'идёт сейчас' : 'ждёт старта';
         const botTag = a.botFriendly ? ' 🤖' : '';
-        return `<div class="${cls}" onclick="Router.go('arenaPage', '${Utils.escapeHtml(a.id)}')"><div class="taName">${Utils.escapeHtml(a.name)}${botTag}</div><div class="taInfo"><span>${a.timeControl}+${a.increment}</span><span><b>${a.participantsCount}</b> 👥 · ${phaseText}</span></div></div>`;
+        const champTag = a.mode === 'championship' ? ' 🏆' : '';
+        return `<div class="${cls}" onclick="Router.go('arenaPage', '${Utils.escapeHtml(a.id)}')"><div class="taName">${champTag}${Utils.escapeHtml(a.name)}${botTag}</div><div class="taInfo"><span>${a.timeControl}+${a.increment}</span><span><b>${a.participantsCount}</b> 👥 · ${phaseText}</span></div></div>`;
       }).join('');
     });
   }
 };
 
-// ============================================================
-// STATS
-// ============================================================
 const Stats = {
   init() {},
   refresh() { App.socket.emit('getStats', (s) => this.onStats(s)); },
@@ -1108,9 +1047,6 @@ const Stats = {
   }
 };
 
-// ============================================================
-// LOBBY
-// ============================================================
 const Lobby = {
   currentTab: 'create', known: new Map(), disappeared: new Map(),
   init() { document.querySelectorAll('[data-tab]').forEach(b => { b.onclick = () => this.switchTab(b.dataset.tab); }); },
@@ -1152,7 +1088,7 @@ const Lobby = {
       const allItems = [];
       for (const [id, l] of current) allItems.push({ kind: 'waiting', id, data: l });
       for (const [id, info] of this.disappeared) allItems.push({ kind: 'started', id, data: info.data });
-      if (!allItems.length) { el.innerHTML = `<div class="lobbyHeader"><div></div><div class="hRating">Рейтинг</div><div class="hPlayer">Игрок</div><div class="hTime">Время</div><div class="hMode">Режим</div></div><div class="arenaEmpty" style="padding:30px 20px;">Нет активных вызовов. Нажми «Создать запрос на игру» справа.</div>`; return; }
+      if (!allItems.length) { el.innerHTML = `<div class="lobbyHeader"><div></div><div class="hRating">Рейтинг</div><div class="hPlayer">Игрок</div><div class="hTime">Время</div><div class="hMode">Режим</div></div><div class="arenaEmpty" style="padding:30px 20px;">Нет активных вызовов.</div>`; return; }
       allItems.sort((a, b) => { if (a.kind !== b.kind) return a.kind === 'started' ? -1 : 1; return (b.data.time || 0) - (a.data.time || 0); });
       const header = document.createElement('div'); header.className = 'lobbyHeader';
       header.innerHTML = `<div></div><div class="hRating">Рейтинг</div><div class="hPlayer">Игрок</div><div class="hTime">Время</div><div class="hMode">Режим</div>`;
@@ -1165,7 +1101,7 @@ const Lobby = {
         const circleCls = isStarted ? 'white' : 'black';
         const rating = l.hostRating || '';
         row.innerHTML = `<div class="lColor ${circleCls}"></div><div class="lRating muted">${rating || '—'}</div><div class="lName">${Utils.nickHtml(l.host, l.hostIsAdmin, l.hostIsMod, l.isBot)}${isStarted ? '<span class="mineTag">(началась)</span>' : (isMine ? '<span class="mineTag">(ваш)</span>' : '')}</div><div class="lTime">${l.time}+${l.inc}</div><div class="lMode"><span class="modeIcon">⚔</span>Рейтинговая</div>`;
-        if (!isStarted) { row.title = isMine ? 'Нажми, чтобы отменить свой вызов' : 'Нажми, чтобы начать партию'; row.onclick = () => this.onRowClick(l, isMine); }
+        if (!isStarted) { row.title = isMine ? 'Отменить вызов' : 'Начать партию'; row.onclick = () => this.onRowClick(l, isMine); }
         wrap.appendChild(row);
       }
       el.appendChild(wrap);
@@ -1192,9 +1128,6 @@ const Lobby = {
   createCustom() { const m = +document.getElementById('customMin').value || 5; const i = +document.getElementById('customInc').value || 0; this.quickStart(m, i); }
 };
 
-// ============================================================
-// BOT
-// ============================================================
 const Bot = {
   init() { const dlg = document.getElementById('botDialog'); if (dlg) dlg.addEventListener('click', (e) => { if (e.target === dlg) this.closeDialog(); }); },
   openDialog() { const dlg = document.getElementById('botDialog'); if (!dlg) return; App.socket.emit('getBots', (list) => { if (Array.isArray(list)) App.botLevels = list.map(b => ({ level: b.level, name: b.name, title: b.title, desc: b.desc || '', rating: b.rating, initialRating: b.rating, games: b.games || 0, isMaster: b.level === 4 })); this.render(); dlg.classList.add('show'); }); },
@@ -1212,9 +1145,6 @@ const Bot = {
   startGame() { const bot = App.botLevels.find(b => b.level === App.botDialogState.level); if (!bot) return; App.socket.emit('playWithBot', { time: App.botDialogState.time, inc: App.botDialogState.inc, botName: bot.name }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; } this.closeDialog(); }); }
 };
 
-// ============================================================
-// WATCH
-// ============================================================
 const Watch = {
   watchingGameId: null, watchingGame: null, lastHash: '', lastBoardHash: '',
   watchClockHandle: null, watchClockSyncedAt: 0, watchClockW: 0, watchClockB: 0, watchClockTurn: 'w',
@@ -1246,7 +1176,7 @@ const Watch = {
     }).join('');
   },
   watch(id) {
-    if (!id || id.startsWith('sp_')) { alert('Self-play партии недоступны для просмотра'); return; }
+    if (!id || id.startsWith('sp_')) { alert('Self-play недоступен'); return; }
     if (this.watchingGameId === id) { if (Router.current.name !== 'watch') Router.go('watch', id); return; }
     if (this.watchingGameId) App.socket.emit('unwatchGame', { id: this.watchingGameId });
     this.watchingGameId = id; this.watchingGame = null; this.lastBoardHash = '';
@@ -1254,8 +1184,8 @@ const Watch = {
     const reqId = ++this.requestId;
     App.socket.emit('watchGame', { id }, (res) => {
       if (reqId !== this.requestId) return;
-      if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось начать просмотр'); this.watchingGameId = null; return; }
-      if (res.game && res.game.isSelfPlay) { alert('Self-play партии недоступны'); this.watchingGameId = null; return; }
+      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); this.watchingGameId = null; return; }
+      if (res.game && res.game.isSelfPlay) { alert('Self-play недоступен'); this.watchingGameId = null; return; }
       this.watchingGame = res.game; this.lastBoardHash = ''; this.renderBoard();
     });
   },
@@ -1289,7 +1219,7 @@ const Watch = {
       if (dc === 0) coords += `<span class="coord-r">${8 - r}</span>`;
       squares += `<div class="${cls}">${inner}${coords}</div>`;
     }
-    const finishedLine = g.finished ? `<div style="text-align:center; margin-top:10px; padding:8px 12px; background:rgba(98,153,36,.12); border-left:3px solid var(--green); border-radius:4px; color:var(--text-bright); font-size:13px;">✅ Партия завершена${g.reason ? ' · ' + Utils.escapeHtml(g.reason) : ''}</div>` : '';
+    const finishedLine = g.finished ? `<div style="text-align:center; margin-top:10px; padding:8px 12px; background:rgba(98,153,36,.12); border-left:3px solid var(--green); border-radius:4px; color:var(--text-bright); font-size:13px;">✅ Завершена${g.reason ? ' · ' + Utils.escapeHtml(g.reason) : ''}</div>` : '';
     const wBot = g.whiteIsBot ? '🤖 ' : ''; const bBot = g.blackIsBot ? '🤖 ' : '';
     box.innerHTML = `<div class="wbHeader"><div style="min-width:0; flex:1"><div class="wbTitle">Партия ${g.isArena ? 'турнира' : ''}${g.whiteIsBot || g.blackIsBot ? ' (с ботом)' : ''}</div><div class="wbSub">${g.timeControl}+${g.increment}${g.arenaName ? ' · '+Utils.escapeHtml(g.arenaName) : ''}</div></div><button class="secondary" onclick="Watch.stop()" style="flex-shrink:0">✕ Выйти</button></div>
       <div class="wbPlayers"><div class="wbPlayer ${blackActive?'active':''}"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span class="name">⚫ ${bBot}${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod, g.blackIsBot)}</span>${g.blackRating ? `<span class="rating">(${g.blackRating})</span>` : ''}</span><span class="time" id="watchTimeB">${Utils.formatTime(g.timeB)}</span></div><div class="wbPlayer ${whiteActive?'active':''}"><span style="min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><span class="name">⚪ ${wBot}${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod, g.whiteIsBot)}</span>${g.whiteRating ? `<span class="rating">(${g.whiteRating})</span>` : ''}</span><span class="time" id="watchTimeW">${Utils.formatTime(g.timeW)}</span></div></div>
@@ -1331,8 +1261,7 @@ const Watch = {
     if (!this.watchingGame || this.watchingGame.id !== lobbyId) return;
     this.watchingGame.timeW = timeW; this.watchingGame.timeB = timeB;
     this.watchClockSyncedAt = performance.now();
-    this.watchClockW = timeW;
-    this.watchClockB = timeB;
+    this.watchClockW = timeW; this.watchClockB = timeB;
     if (this.watchingGame && !this.watchingGame.finished) this.startClock();
   },
   onGameEnded({ lobbyId, result, reason }) {
@@ -1343,9 +1272,6 @@ const Watch = {
   onChatMessage(msg) { if (!this.watchingGame || this.watchingGame.id !== msg.lobbyId) return; }
 };
 
-// ============================================================
-// ARENA
-// ============================================================
 const Arena = {
   cache: [], statesCache: {}, serverOffsetMs: 0, currentArenaId: null, currentArenaState: null,
   lastListHash: '', lastStateHash: '', lastGamesHash: '', loadBusy: false,
@@ -1373,17 +1299,17 @@ const Arena = {
       el.innerHTML = '<div class="arenaEmpty" style="padding:10px; font-size:12px;">Пока нет завершённых арен</div>';
       return;
     }
-    el.innerHTML = list.map((p, i) => `
-      <div style="display:flex; align-items:center; gap:8px; padding:4px 0;">
-        <div style="width: 24px; height: 24px; border-radius: 50%; background: var(--panel-2); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-          <span style="font-size: 14px;">${p.username === 'PeshkaSasha' ? '👑' : '♟'}</span>
+    el.innerHTML = list.map((p) => `
+      <div style="display:flex; align-items:center; gap:8px; padding:4px 0; cursor:pointer;" onclick="Router.go('arenaPage', '${Utils.escapeHtml(p.arenaId)}')" title="Перейти к арене">
+        <div style="width: 24px; height: 24px; border-radius: 50%; background: rgba(255,213,79,.15); border:1px solid rgba(255,213,79,.5); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <span style="font-size: 14px;">🏆</span>
         </div>
         <div style="flex:1; min-width:0;">
           <div style="color:var(--text-bright); font-weight:600; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
             ${Utils.nickHtml(p.username, p.username === 'PeshkaSasha')}
           </div>
           <div style="color:var(--muted); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-            ${p.arenaName}
+            ${Utils.escapeHtml(p.arenaName)} · ${p.score ?? 0} очков
           </div>
         </div>
       </div>
@@ -1474,15 +1400,17 @@ const Arena = {
         const isPast = arena.clientEndsAt < localNow; const isLive = arena.status === 'live';
         const colorClass = arena.color || 'blitz';
         const myState = this.statesCache[arena.id]; const joined = myState && myState.joined;
-        const cls = 'arenaBlock ' + colorClass + (isPast && !isLive ? ' past' : '') + (isLive ? ' live' : '') + (joined ? ' joined' : '') + (arena.botFriendly ? ' botFriendly' : '');
+        const isChamp = arena.mode === 'championship';
+        const cls = 'arenaBlock ' + colorClass + (isPast && !isLive ? ' past' : '') + (isLive ? ' live' : '') + (joined ? ' joined' : '') + (isChamp ? ' championship' : '');
         const tinfo = arena.timeControl + '+' + arena.increment;
         const participantsCount = (myState && myState.participantsCount) || 0;
         const showInfo = width >= 50; const dur = Math.round((arena.clientEndsAt - arena.clientStartsAt) / 60000);
         const botMark = arena.botFriendly ? '🤖 ' : '';
+        const champMark = isChamp ? '🏆 ' : '';
         const isDisabled = App.gameActive && !App.gameEnded;
         const clickHandler = isDisabled ? '' : `onclick="Router.go('arenaPage', '${Utils.escapeHtml(arena.id)}')"`;
         const disabledClass = isDisabled ? ' disabled' : '';
-        html += '<div class="' + cls + disabledClass + '" style="left:' + left.toFixed(2) + 'px; width:' + width.toFixed(2) + 'px; cursor:' + (isDisabled?'not-allowed':'pointer') + '" ' + clickHandler + ' title="' + Utils.escapeHtml(botMark + arena.name) + ' · ' + tinfo + ' · ' + Utils.fmtMskHM(arena.clientStartsAt) + '–' + Utils.fmtMskHM(arena.clientEndsAt) + ' МСК (' + dur + ' мин)"><div class="tname">' + botMark + Utils.escapeHtml(arena.name) + '</div>' + (showInfo ? '<div class="tinfo"><span>' + tinfo + '</span><span>👥 ' + participantsCount + '</span></div>' : '') + '</div>';
+        html += '<div class="' + cls + disabledClass + '" style="left:' + left.toFixed(2) + 'px; width:' + width.toFixed(2) + 'px; cursor:' + (isDisabled?'not-allowed':'pointer') + '" ' + clickHandler + ' title="' + Utils.escapeHtml(champMark + botMark + arena.name) + ' · ' + tinfo + ' · ' + Utils.fmtMskHM(arena.clientStartsAt) + '–' + Utils.fmtMskHM(arena.clientEndsAt) + ' МСК (' + dur + ' мин)"><div class="tname">' + champMark + botMark + Utils.escapeHtml(arena.name) + '</div>' + (showInfo ? '<div class="tinfo"><span>' + tinfo + '</span><span>👥 ' + participantsCount + '</span></div>' : '') + '</div>';
       }
       html += '</div>';
     }
@@ -1536,6 +1464,33 @@ const Arena = {
     const it = document.getElementById('aInfoTitle'); if (it) it.textContent = arena.name;
     const im = document.getElementById('aInfoTime'); if (im) im.textContent = Utils.fmtMskHM(arena.startsAt) + ' – ' + Utils.fmtMskHM(arena.endsAt) + ' МСК';
     const idc = document.getElementById('aInfoDesc'); if (idc) idc.textContent = arena.description;
+    const creator = document.getElementById('aInfoCreator'); if (creator) creator.innerHTML = `Создатель: <b>${Utils.escapeHtml(state.creator || 'PeshkaSasha')}</b>`;
+
+    const modeBadge = document.getElementById('aModeBadge');
+    if (modeBadge) {
+      if (state.mode === 'championship') {
+        modeBadge.innerHTML = `<span class="ascModeBadge championship">🏆 Чемпионат · только люди</span>`;
+      } else if (state.botFriendly) {
+        modeBadge.innerHTML = `<span class="ascModeBadge hourly-bot">🤖 Люди и боты</span>`;
+      } else {
+        modeBadge.innerHTML = `<span class="ascModeBadge hourly-human">👥 Только люди</span>`;
+      }
+    }
+
+    const rulesText = document.getElementById('aRulesText');
+    if (rulesText) {
+      if (state.minRatedGames && state.minRatedGames > 0) {
+        const myGames = state.myCategoryGames || 0;
+        const catName = { bullet: 'пуле', blitz: 'блице', rapid: 'рапиде', classical: 'классике' }[state.category] || state.category;
+        const locked = myGames < state.minRatedGames;
+        rulesText.className = 'ascRulesText' + (locked ? ' locked' : '');
+        rulesText.textContent = `Нужно ≥${state.minRatedGames} рейтинговых партий в ${catName} (у вас: ${myGames})`;
+      } else {
+        rulesText.className = 'ascRulesText';
+        rulesText.textContent = 'Рейтинговые игры в этой категории';
+      }
+    }
+
     if (state.top3 && state.top3.length) this.showWinnerBanner(state.top3); else { const wb = document.getElementById('arenaWinnerBanner'); if (wb) wb.style.display = 'none'; }
   },
   updateJoinButton(state) {
@@ -1543,9 +1498,26 @@ const Arena = {
     const isPlaying = App.gameActive && !App.gameEnded;
     if (isPlaying) { wrap.innerHTML = `<button class="secondary arenaJoinBtn" disabled style="width:180px; opacity:0.5; cursor:not-allowed;">ЗАНЯТЫ ИГРОЙ</button>`; return; }
     if (state.phase === 'finished') { wrap.innerHTML = `<button class="secondary" disabled style="width:180px;">ЗАВЕРШЕНА</button>`; return; }
-    if (state.phase === 'waiting') { if (state.joined) wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.leaveCurrent()">ОТМЕНИТЬ</button>`; else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button>`; return; }
-    if (state.joined) { if (state.paused) wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.pauseCurrent()">▶ ПРОДОЛЖИТЬ</button>`; else wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.pauseCurrent()">⏸ ПАУЗА</button>`; }
-    else { wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button>`; }
+
+    const meJoined = state.joined;
+    const myGames = state.myCategoryGames || 0;
+    const minNeeded = state.minRatedGames || 0;
+    const locked = minNeeded > 0 && myGames < minNeeded && !meJoined;
+
+    if (state.phase === 'waiting') {
+      if (meJoined) wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.leaveCurrent()">ОТМЕНИТЬ</button>`;
+      else if (locked) wrap.innerHTML = `<button class="joinLockedBtn" disabled title="Нужно ≥${minNeeded} рейтинговых партий в этой категории">🔒 НУЖНО ≥${minNeeded} ПАРТИЙ</button>`;
+      else wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button>`;
+      return;
+    }
+    if (meJoined) {
+      if (state.paused) wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.pauseCurrent()">▶ ПРОДОЛЖИТЬ</button>`;
+      else wrap.innerHTML = `<button class="secondary arenaJoinBtn" onclick="Arena.pauseCurrent()">⏸ ПАУЗА</button>`;
+    } else if (locked) {
+      wrap.innerHTML = `<button class="joinLockedBtn" disabled title="Нужно ≥${minNeeded} рейтинговых партий в этой категории">🔒 НУЖНО ≥${minNeeded} ПАРТИЙ</button>`;
+    } else {
+      wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Arena.joinCurrent()">УЧАСТВОВАТЬ</button>`;
+    }
   },
   renderPairingBox(state) {
     const box = document.getElementById('arenaPairingBox'); if (!box) return;
@@ -1558,28 +1530,19 @@ const Arena = {
   renderParticipants(arena, state) {
     const body = document.getElementById('arenaTableBody'); if (!body) return;
     const pag = document.getElementById('arenaPagination'); if (!pag) return;
-
     const list = state.participants || [];
-    if (!list.length) {
-      body.innerHTML = '<div class="arenasEmpty" style="padding:20px;">Пока никто не зарегистрировался</div>';
-      pag.innerHTML = '';
-      return;
-    }
-
+    if (!list.length) { body.innerHTML = '<div class="arenasEmpty" style="padding:20px;">Пока никто не зарегистрировался</div>'; pag.innerHTML = ''; return; }
     const myName = App.me ? App.me.username : null;
     const searchEl = document.getElementById('arenaSearchInput');
     const search = ((searchEl && searchEl.value) || '').trim().toLowerCase();
     const filtered = search ? list.filter(p => p.username.toLowerCase().includes(search)) : list;
-
     const pageSize = 10;
     const totalPages = Math.ceil(filtered.length / pageSize) || 1;
     if (this.currentPage >= totalPages) this.currentPage = totalPages - 1;
     if (this.currentPage < 0) this.currentPage = 0;
-
     const startIdx = this.currentPage * pageSize;
     const endIdx = Math.min(startIdx + pageSize, filtered.length);
     const pageItems = filtered.slice(startIdx, endIdx);
-
     pag.innerHTML = `
       <button class="pageBtn" ${this.currentPage === 0 ? 'disabled' : ''} onclick="Arena.changePage(0)">|◀</button>
       <button class="pageBtn" ${this.currentPage === 0 ? 'disabled' : ''} onclick="Arena.changePage(Arena.currentPage - 1)">◀</button>
@@ -1587,7 +1550,6 @@ const Arena = {
       <button class="pageBtn" ${this.currentPage >= totalPages - 1 ? 'disabled' : ''} onclick="Arena.changePage(Arena.currentPage + 1)">▶</button>
       <button class="pageBtn" ${this.currentPage >= totalPages - 1 ? 'disabled' : ''} onclick="Arena.changePage(${totalPages - 1})">▶|</button>
     `;
-
     body.innerHTML = pageItems.map((p) => {
       const globalIdx = list.indexOf(p);
       const place = globalIdx + 1;
@@ -1595,11 +1557,7 @@ const Arena = {
       const isMe = myName && p.username === myName;
       const greenDot = p.isBot ? '<span class="pgreen" style="color:#a56ce8">🤖</span>' : (p.online ? '<span class="pgreen">●</span>' : '');
       const pauseTag = p.paused ? '<span class="ppause">⏸</span>' : '';
-
-      const streakHtml = p.winStreak >= 3
-        ? `<span class="streak-fire" title="Серия побед">🔥</span>`
-        : '';
-
+      const streakHtml = p.winStreak >= 3 ? `<span class="streak-fire" title="Серия побед">🔥</span>` : '';
       let resultsHtml = '<div class="arena-results">';
       if (p.history && p.history.length > 0) {
         for (const res of p.history) {
@@ -1608,11 +1566,8 @@ const Arena = {
           else if (res === 1) cls = 'num-draw';
           resultsHtml += `<span class="res-num ${cls}">${res}</span>`;
         }
-      } else {
-        resultsHtml += '<span style="opacity:0.2">—</span>';
-      }
+      } else { resultsHtml += '<span style="opacity:0.2">—</span>'; }
       resultsHtml += '</div>';
-
       const botCls = p.isBot ? 'botRow' : '';
       return `<div class="arenaTableRow ${isMe?'me':''} ${p.paused?'paused':''} ${botCls}" data-username="${Utils.escapeHtml(p.username)}" onclick="Arena.openPlayer('${Utils.escapeHtml(p.username)}')">
         <span class="place ${placeCls}">${place}</span>
@@ -1622,71 +1577,41 @@ const Arena = {
       </div>`;
     }).join('');
   },
-  changePage(page) {
-    this.currentPage = page;
-    this.lastStateHash = '';
-    if (this.currentArenaState && this.currentArenaId) {
-      const arena = this.cache.find(a => a.id === this.currentArenaId);
-      if (arena) this.renderParticipants(arena, this.currentArenaState);
-    }
-  },
-  filterParticipants() {
-    this.currentPage = 0;
-    if (this.currentArenaState && this.currentArenaId) {
-      const arena = this.cache.find(a => a.id === this.currentArenaId);
-      if (arena) this.renderParticipants(arena, this.currentArenaState);
-    }
-  },
+  changePage(page) { this.currentPage = page; this.lastStateHash = ''; if (this.currentArenaState && this.currentArenaId) { const arena = this.cache.find(a => a.id === this.currentArenaId); if (arena) this.renderParticipants(arena, this.currentArenaState); } },
+  filterParticipants() { this.currentPage = 0; if (this.currentArenaState && this.currentArenaId) { const arena = this.cache.find(a => a.id === this.currentArenaId); if (arena) this.renderParticipants(arena, this.currentArenaState); } },
 
   _ensureOverlay() {
-    const listEl = document.getElementById('arenaGamesList');
-    if (!listEl) return null;
-    const parent = listEl.parentElement;
-    if (!parent) return null;
-    parent.style.position = 'relative';
-    parent.style.overflow = 'hidden';
+    const listEl = document.getElementById('arenaGamesList'); if (!listEl) return null;
+    const parent = listEl.parentElement; if (!parent) return null;
+    parent.style.position = 'relative'; parent.style.overflow = 'hidden';
     let ov = document.getElementById('arenaPlayerOverlay');
-    if (!ov) {
-      ov = document.createElement('div');
-      ov.id = 'arenaPlayerOverlay';
-      ov.style.cssText = 'position:absolute; inset:0; background:var(--panel, #1e1d1a); z-index:20; display:none; overflow-y:auto; padding:10px 12px 16px; border-radius:6px; box-sizing:border-box;';
-      parent.appendChild(ov);
-    }
+    if (!ov) { ov = document.createElement('div'); ov.id = 'arenaPlayerOverlay'; ov.style.cssText = 'position:absolute; inset:0; background:var(--panel, #1e1d1a); z-index:20; display:none; overflow-y:auto; padding:10px 12px 16px; border-radius:6px; box-sizing:border-box;'; parent.appendChild(ov); }
     return ov;
   },
   _hideLeaderPanel(hide) {
-    const topEl = document.getElementById('arenaTopGame');
-    const listEl = document.getElementById('arenaGamesList');
+    const topEl = document.getElementById('arenaTopGame'); const listEl = document.getElementById('arenaGamesList');
     if (topEl) topEl.style.display = hide ? 'none' : '';
     if (listEl) listEl.style.display = hide ? 'none' : '';
   },
-
   startTopClock() {
     if (this._topClockRaf) cancelAnimationFrame(this._topClockRaf);
-    const g = this._topGame;
-    if (!g || !g.live) return;
-    this._topClockSyncedAt = performance.now();
-    this._topClockW = g.timeW;
-    this._topClockB = g.timeB;
-    this._topClockTurn = g.turn;
+    const g = this._topGame; if (!g || !g.live) return;
+    this._topClockSyncedAt = performance.now(); this._topClockW = g.timeW; this._topClockB = g.timeB; this._topClockTurn = g.turn;
     const self = this;
     function tick() {
       if (!self._topGame || !self._topGame.live) { self._topClockRaf = null; return; }
       const elapsed = (performance.now() - self._topClockSyncedAt) / 1000;
       let w = self._topClockW, b = self._topClockB;
       if (self._topClockTurn === 'w') w = Math.max(0, w - elapsed); else b = Math.max(0, b - elapsed);
-      const elW = document.getElementById('arenaTopTimeW');
-      const elB = document.getElementById('arenaTopTimeB');
+      const elW = document.getElementById('arenaTopTimeW'); const elB = document.getElementById('arenaTopTimeB');
       if (elW) elW.textContent = Utils.formatTime(w);
       if (elB) elB.textContent = Utils.formatTime(b);
       self._topClockRaf = requestAnimationFrame(tick);
     }
     this._topClockRaf = requestAnimationFrame(tick);
   },
-
   renderGamesList() {
-    const topEl = document.getElementById('arenaTopGame');
-    const listEl = document.getElementById('arenaGamesList');
+    const topEl = document.getElementById('arenaTopGame'); const listEl = document.getElementById('arenaGamesList');
     if (!listEl) return;
     App.socket.emit('getArenaGames', { arenaId: this.currentArenaId }, (res) => {
       if (!res || typeof res !== 'object') return;
@@ -1694,45 +1619,26 @@ const Arena = {
       const pcEl = document.getElementById('arenaParticipantsCount'); const vcEl = document.getElementById('arenaViewersCount');
       if (pcEl) pcEl.textContent = res.participantsCount || 0; if (vcEl) vcEl.textContent = res.chatViewersCount || 0;
       this.lastLiveGames = live; this.lastDoneGames = done;
-
       const placeMap = new Map();
-      if (this.currentArenaState && Array.isArray(this.currentArenaState.participants)) {
-        this.currentArenaState.participants.forEach((p, i) => placeMap.set(p.username, i + 1));
-      }
-
+      if (this.currentArenaState && Array.isArray(this.currentArenaState.participants)) { this.currentArenaState.participants.forEach((p, i) => placeMap.set(p.username, i + 1)); }
       if (topEl) {
         const myName = App.me ? App.me.username : null;
         const myLive = myName ? live.find(g => g.white === myName || g.black === myName) : null;
         const topGame = myLive || live[0] || null;
         if (topGame) {
-          topEl.classList.remove('arenaTopGameEmpty');
-          topEl.innerHTML = this.renderTopGame(topGame, placeMap);
-          topEl.style.cursor = 'pointer';
-          topEl.title = 'Смотреть партию';
-          topEl.onclick = () => Watch.watch(topGame.lobbyId);
-          this._topGame = topGame;
-          this.startTopClock();
+          topEl.classList.remove('arenaTopGameEmpty'); topEl.innerHTML = this.renderTopGame(topGame, placeMap);
+          topEl.style.cursor = 'pointer'; topEl.title = 'Смотреть партию'; topEl.onclick = () => Watch.watch(topGame.lobbyId);
+          this._topGame = topGame; this.startTopClock();
         } else {
-          topEl.style.cursor = 'default';
-          topEl.title = '';
-          topEl.onclick = null;
-          this._topGame = null;
+          topEl.style.cursor = 'default'; topEl.title = ''; topEl.onclick = null; this._topGame = null;
           if (this._topClockRaf) { cancelAnimationFrame(this._topClockRaf); this._topClockRaf = null; }
           const phase = this.currentArenaState && this.currentArenaState.phase;
-          if (phase === 'live' || phase === 'waiting') {
-            topEl.innerHTML = this.renderTopGamePlaceholder(phase);
-          } else {
-            topEl.innerHTML = '<div class="arenaTopGameEmpty">Сейчас никто не играет</div>';
-          }
+          if (phase === 'live' || phase === 'waiting') topEl.innerHTML = this.renderTopGamePlaceholder(phase);
+          else topEl.innerHTML = '<div class="arenaTopGameEmpty">Сейчас никто не играет</div>';
         }
       }
-
       if (this.openPlayerName) { this.renderPlayerCard(); return; }
-
-      const hash = JSON.stringify({
-        live: live.map(g => [g.lobbyId, g.fen, g.timeW, g.timeB]),
-        done: done.slice(0, 30).map(g => [g.white, g.black, g.result, g.finishedAt])
-      });
+      const hash = JSON.stringify({ live: live.map(g => [g.lobbyId, g.fen, g.timeW, g.timeB]), done: done.slice(0, 30).map(g => [g.white, g.black, g.result, g.finishedAt]) });
       if (hash === this.lastGamesHash) return; this.lastGamesHash = hash;
       if (!done.length && !live.length) { listEl.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока нет партий</div>'; return; }
       let html = '';
@@ -1763,7 +1669,6 @@ const Arena = {
       listEl.innerHTML = html;
     });
   },
-
   renderTopGamePlaceholder(phase) {
     const fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
     const state = Chess.parseFen(fen);
@@ -1780,7 +1685,6 @@ const Arena = {
       <div class="arenaTopGamePlayers"><span class="playerRow">⚪ <span class="name" style="opacity:.6;">—</span></span><span class="time">—</span></div>
       <div style="text-align:center; font-size:11px; color:var(--muted); padding:2px 0;">${label}</div>`;
   },
-
   renderTopGame(g, placeMap) {
     const state = Chess.parseFen(g.fen);
     const lm = g.lastMove;
@@ -1795,32 +1699,23 @@ const Arena = {
     const whiteActive = g.turn === 'w', blackActive = g.turn === 'b';
     const wR = g.whiteRating ? `<span class="prat">${g.whiteRating}</span>` : '';
     const bR = g.blackRating ? `<span class="prat">${g.blackRating}</span>` : '';
-    const wPlace = placeMap && placeMap.get(g.white);
-    const bPlace = placeMap && placeMap.get(g.black);
+    const wPlace = placeMap && placeMap.get(g.white); const bPlace = placeMap && placeMap.get(g.black);
     const wPlaceHtml = wPlace ? `<span class="agl-place">#${wPlace}</span>` : '';
     const bPlaceHtml = bPlace ? `<span class="agl-place">#${bPlace}</span>` : '';
     return `<div class="arenaTopGamePlayers"><span class="playerRow">${bPlaceHtml}⚫ <span class="name">${Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod)}</span>${bR}</span><span class="time" id="arenaTopTimeB" style="${blackActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeB)}</span></div>
       <div class="arenaTopGameBoard">${squares}</div>
       <div class="arenaTopGamePlayers"><span class="playerRow">${wPlaceHtml}⚪ <span class="name">${Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod)}</span>${wR}</span><span class="time" id="arenaTopTimeW" style="${whiteActive ? 'color:var(--green-2);' : ''}">${Utils.formatTime(g.timeW)}</span></div>`;
   },
-
   openPlayer(username) {
-    this.openPlayerName = username;
-    this._hideLeaderPanel(true);
-    const ov = this._ensureOverlay();
-    if (ov) ov.style.display = 'block';
+    this.openPlayerName = username; this._hideLeaderPanel(true);
+    const ov = this._ensureOverlay(); if (ov) ov.style.display = 'block';
     this.renderPlayerCard();
   },
-
   closePlayerCard() {
     this.openPlayerName = null;
-    const ov = document.getElementById('arenaPlayerOverlay');
-    if (ov) { ov.style.display = 'none'; ov.innerHTML = ''; }
-    this._hideLeaderPanel(false);
-    this.lastGamesHash = '';
-    this.renderGamesList();
+    const ov = document.getElementById('arenaPlayerOverlay'); if (ov) { ov.style.display = 'none'; ov.innerHTML = ''; }
+    this._hideLeaderPanel(false); this.lastGamesHash = ''; this.renderGamesList();
   },
-
   renderPlayerCard() {
     const ov = this._ensureOverlay(); if (!ov) return;
     if (!this.openPlayerName) { ov.style.display = 'none'; ov.innerHTML = ''; return; }
@@ -1844,7 +1739,6 @@ const Arena = {
     const perf = perfCount ? Math.round(perfSum / perfCount) : '—';
     const avgOpp = oppRatingCount ? Math.round(oppRatingSum / oppRatingCount) : '—';
     const winPct = played ? Math.round((wins / played) * 100) : 0;
-
     let html = `<div class="arenaPlayerCard">
       <div class="apc-head">
         <div class="apc-name">${Utils.nickHtml(p ? p.username : this.openPlayerName, p && p.isAdmin, p && p.isMod, p && p.isBot)}</div>
@@ -1854,7 +1748,6 @@ const Arena = {
         <div class="apc-row"><span>Сыграно партий</span><b>${played}</b></div>
         <div class="apc-row"><span>Перформанс</span><b>${perf}</b></div>
         <div class="apc-row"><span>Победы</span><b>${winPct}%</b></div>
-        <div class="apc-row"><span>Берсерк</span><b>0</b></div>
         <div class="apc-row"><span>Средний рейтинг соперников</span><b>${avgOpp}</b></div>
       </div>
       <div class="apc-games-title">Партии</div>
@@ -1877,7 +1770,6 @@ const Arena = {
     html += `</div></div>`;
     ov.innerHTML = html;
   },
-
   showWinnerBanner(top3) {
     const banner = document.getElementById('arenaWinnerBanner'); const podium = document.getElementById('awbPodium');
     if (!banner || !podium) return;
@@ -1886,13 +1778,13 @@ const Arena = {
     const order = top3.length >= 3 ? [1,0,2] : top3.map((_,i)=>i);
     const arena = this.cache.find(a => a.id === this.currentArenaId);
     const title = banner.querySelector('.awbTitle');
-    if (title) title.textContent = `${arena?.name || document.getElementById('arenaPageName')?.textContent || 'Арена'} — результаты`;
+    if (title) title.textContent = `${arena?.name || 'Арена'} — результаты`;
     podium.innerHTML = order.map(i => {
       const p = top3[i]; if (!p) return '';
-      const played = p.played ?? p.gamesPlayed ?? p.games ?? '—';
+      const played = p.played ?? p.games ?? '—';
       const perf = p.performance ?? p.perf ?? '—';
-      const winPct = p.winPct ?? p.winPercent ?? p.winPercentage ?? '—';
-      return `<div class="awbItem ${classes[i]}"><div class="place" aria-label="${i+1} место">${places[i]}</div><div class="n">${Utils.nickHtml(p.username, p.username === 'PeshkaSasha')}</div><div class="s">${p.score ?? 0} очков</div><div class="awbStats"><span>Перформанс <b>${Utils.escapeHtml(String(perf))}</b></span><span>Сыграно партий <b>${Utils.escapeHtml(String(played))}</b></span><span>Победы <b>${Utils.escapeHtml(String(winPct === '—' ? winPct : (String(winPct).includes('%') ? winPct : winPct + '%')))}</b></span></div></div>`;
+      const winPct = p.winPct ?? p.winPercent ?? '—';
+      return `<div class="awbItem ${classes[i]}"><div class="place">${places[i]}</div><div class="n">${Utils.nickHtml(p.username, p.username === 'PeshkaSasha')}</div><div class="s">${p.score ?? 0} очков</div><div class="awbStats"><span>Перформанс <b>${Utils.escapeHtml(String(perf))}</b></span><span>Сыграно партий <b>${Utils.escapeHtml(String(played))}</b></span><span>Победы <b>${Utils.escapeHtml(String(winPct))}</b></span></div></div>`;
     }).join('');
     banner.style.display = 'block';
     if (wasHidden) this.launchArenaConfetti();
@@ -1927,18 +1819,14 @@ const Arena = {
   renderChatMsg(msg) {
     const box = document.getElementById('arenaChatMessages'); if (!box) return;
     const div = document.createElement('div');
-    if (msg.system || msg.isSystem) {
-      div.className = 'msg msg-system';
-      div.textContent = msg.text;
-    } else if (msg.warning) {
-      div.className = 'msg msg-warning';
-      div.textContent = msg.text;
-    } else {
+    if (msg.system || msg.isSystem) { div.className = 'msg msg-system'; div.textContent = msg.text; }
+    else if (msg.warning) { div.className = 'msg msg-warning'; div.textContent = msg.text; }
+    else {
       div.className = 'msg'; div.dataset.msgId = msg.id || '';
       const time = Utils.fmtMskHM(msg.ts);
       let modHtml = '';
       if (App.me && App.me.isMod) modHtml = `<span class="modBtn always" title="Модерация" style="cursor:pointer;color:var(--muted);margin-left:6px;">⚙</span>`;
-      div.innerHTML = `<span class="u">${Utils.nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${Utils.escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
+      div.innerHTML = `<span class="u">${Utils.nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${Utils.renderTextWithMentions(msg.text)} <span class="t">${time}</span>${modHtml}`;
       if (App.me && App.me.isMod) { const btn = div.querySelector('.modBtn'); if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); Mod.openMenu(ev, msg.id, msg.user, 'arena', this.currentArenaId); }); }
     }
     if (window.AdminPanel) AdminPanel.decorateChatMessage(div, msg, 'arena');
@@ -1947,11 +1835,7 @@ const Arena = {
     box.scrollTop = box.scrollHeight;
   },
   onUpdate(arenaId) {
-    if (this.currentArenaId === arenaId) {
-      this.lastStateHash = '';
-      const aps = document.getElementById('arenaPageScreen');
-      if (aps && aps.classList.contains('active')) this.loadPage();
-    }
+    if (this.currentArenaId === arenaId) { this.lastStateHash = ''; const aps = document.getElementById('arenaPageScreen'); if (aps && aps.classList.contains('active')) this.loadPage(); }
     const as = document.getElementById('arenasScreen'); if (as && as.classList.contains('active')) this.refresh();
     const ls = document.getElementById('lobbyScreen'); if (ls && ls.classList.contains('active')) TopArenas.refresh();
   },
@@ -1968,9 +1852,295 @@ const Arena = {
   }
 };
 
-// ============================================================
-// PROFILE
-// ============================================================
+const Swiss = {
+  currentSwissId: null, currentState: null,
+  lastStateHash: '', listHash: '',
+  pageRefreshHandle: null, tickHandle: null,
+  currentPage: 0, standingsFilter: '',
+  timerRaf: null, breakUntil: 0, serverOffsetMs: 0,
+  chatMsgs: [],
+
+  init() {},
+
+  enterList() {
+    this.refreshList();
+  },
+
+  refreshList() {
+    App.socket.emit('getSwissList', (res) => {
+      const wrap = document.getElementById('swissListWrap'); if (!wrap) return;
+      const list = (res && res.list) || [];
+      if (res && res.serverNow) this.serverOffsetMs = res.serverNow - Date.now();
+      if (!list.length) { wrap.innerHTML = '<div class="arenasEmpty">Нет доступных турниров</div>'; return; }
+      const now = Date.now() + this.serverOffsetMs;
+      wrap.innerHTML = list.map(t => {
+        const startsAt = t.startsAt;
+        const timeStr = Utils.fmtMskHM(startsAt) + ' МСК';
+        const isLive = startsAt <= now;
+        const colorCls = t.color || 'blitz';
+        return `<div class="topArenaCard${isLive ? ' live' : ''}" onclick="Router.go('swissPage', '${Utils.escapeHtml(t.id)}')">
+          <div class="taName">🏆 ${Utils.escapeHtml(t.name)}</div>
+          <div class="taInfo"><span>${t.timeControl}+${t.increment}</span><span>${timeStr} · ${isLive ? 'уже идёт' : 'ждёт старта'}</span></div>
+        </div>`;
+      }).join('');
+    });
+  },
+
+  enterPage(swissId) {
+    if (!swissId) { Router.go('swiss'); return; }
+    if (App.gameActive && !App.gameEnded) { Router.go('lobby'); return; }
+    if (Watch.watchingGameId) Watch.stop();
+    if (this.currentSwissId && this.currentSwissId !== swissId) App.socket.emit('leaveSwissRoom', { swissId: this.currentSwissId });
+    this.currentSwissId = swissId;
+    this.lastStateHash = ''; this.chatMsgs = [];
+    const chatBox = document.getElementById('swissChatMessages'); if (chatBox) chatBox.innerHTML = '';
+    App.socket.emit('joinSwissRoom', { swissId }, (res) => {
+      if (res && res.ok && Array.isArray(res.chat)) {
+        const box = document.getElementById('swissChatMessages'); if (box) { box.innerHTML = ''; res.chat.forEach(m => this.renderChatMsg(m)); }
+      }
+    });
+    this.loadPage();
+    if (this.pageRefreshHandle) clearInterval(this.pageRefreshHandle);
+    this.pageRefreshHandle = setInterval(() => { const sps = document.getElementById('swissPageScreen'); if (sps && sps.classList.contains('active')) this.loadPage(); }, 5000);
+    if (this.tickHandle) clearInterval(this.tickHandle);
+    this.tickHandle = setInterval(() => this.tickBreak(), 1000);
+  },
+
+  leaveRoom() {
+    if (Watch.watchingGameId) Watch.stop();
+    if (this.currentSwissId) { App.socket.emit('leaveSwissRoom', { swissId: this.currentSwissId }); this.currentSwissId = null; }
+    if (this.pageRefreshHandle) { clearInterval(this.pageRefreshHandle); this.pageRefreshHandle = null; }
+    if (this.tickHandle) { clearInterval(this.tickHandle); this.tickHandle = null; }
+    if (this.timerRaf) { cancelAnimationFrame(this.timerRaf); this.timerRaf = null; }
+    this.breakUntil = 0;
+  },
+
+  loadPage() {
+    if (!this.currentSwissId) return;
+    App.socket.emit('getSwissState', { swissId: this.currentSwissId }, (state) => {
+      if (!state || !state.ok) return;
+      this.currentState = state;
+      if (state.serverNow) this.serverOffsetMs = state.serverNow - Date.now();
+      this.renderPage(state);
+    });
+  },
+
+  renderPage(state) {
+    const n = document.getElementById('swPageName'); if (n) n.textContent = state.name;
+    const sub = document.getElementById('swPageSub'); if (sub) sub.textContent = `${state.timeControl}+${state.increment} · 20 туров`;
+
+    const it = document.getElementById('swTitle'); if (it) it.textContent = state.name;
+    const im = document.getElementById('swTime'); if (im) im.textContent = Utils.fmtMskHM(state.startsAt) + ' МСК';
+    const idesc = document.getElementById('swDesc'); if (idesc) idesc.textContent = `Швейцарская система · ${state.rounds} туров`;
+    const creator = document.getElementById('swCreator'); if (creator) creator.innerHTML = `Создатель: <b>${Utils.escapeHtml(state.creator || 'PeshkaSasha')}</b>`;
+
+    const roundBadge = document.getElementById('swRoundBadge');
+    if (roundBadge) {
+      let cls = 'swissRoundBadge';
+      let text = '';
+      if (state.finished || state.phase === 'finished') { cls += ' finished'; text = '✓ Турнир завершён'; }
+      else if (state.phase === 'live') { cls += ' live'; text = `🔴 Идёт · Раунд ${state.currentRound}/${state.rounds}`; }
+      else { text = `⏳ Ожидание старта`; }
+      roundBadge.innerHTML = `<span class="${cls}">${text}</span>`;
+    }
+
+    const statusLabel = document.getElementById('swStatusLabel');
+    const statusTime = document.getElementById('swStatusTime');
+    if (statusLabel && statusTime) {
+      if (state.finished || state.phase === 'finished') {
+        statusLabel.textContent = 'Завершён';
+        statusTime.textContent = '🏁';
+      } else if (state.phase === 'live') {
+        statusLabel.textContent = 'Раунд:';
+        statusTime.textContent = `${state.currentRound}/${state.rounds}`;
+      } else {
+        statusLabel.textContent = 'Старт:';
+        statusTime.textContent = Utils.fmtMskHM(state.startsAt);
+      }
+    }
+
+    this.renderStandings(state);
+    this.renderPairs(state);
+    this.updateJoinButton(state);
+    this.updateBreakTimer(state);
+
+    const statsP = document.getElementById('swissParticipantsCount'); if (statsP) statsP.textContent = state.participantsCount || 0;
+    const statsR = document.getElementById('swissRoundNum'); if (statsR) statsR.textContent = `${state.currentRound || 0}/${state.rounds || 20}`;
+
+    if (state.finished && state.standings && state.standings.length) this.showWinnerBanner(state.standings);
+    else { const wb = document.getElementById('swissWinnerBanner'); if (wb) wb.style.display = 'none'; }
+  },
+
+  renderStandings(state) {
+    const body = document.getElementById('swissTableBody'); if (!body) return;
+    const pag = document.getElementById('swissPagination'); if (!pag) return;
+    const list = state.participants || [];
+    if (!list.length) { body.innerHTML = '<div class="arenasEmpty" style="padding:20px;">Пока никто не зарегистрировался</div>'; pag.innerHTML = ''; return; }
+    const myName = App.me ? App.me.username : null;
+    const searchEl = document.getElementById('swSearchInput');
+    const search = ((searchEl && searchEl.value) || '').trim().toLowerCase();
+    const filtered = search ? list.filter(p => p.username.toLowerCase().includes(search)) : list;
+    const pageSize = 10;
+    const totalPages = Math.ceil(filtered.length / pageSize) || 1;
+    if (this.currentPage >= totalPages) this.currentPage = totalPages - 1;
+    if (this.currentPage < 0) this.currentPage = 0;
+    const startIdx = this.currentPage * pageSize;
+    const endIdx = Math.min(startIdx + pageSize, filtered.length);
+    const pageItems = filtered.slice(startIdx, endIdx);
+
+    pag.innerHTML = `
+      <button class="pageBtn" ${this.currentPage === 0 ? 'disabled' : ''} onclick="Swiss.changePage(0)">|◀</button>
+      <button class="pageBtn" ${this.currentPage === 0 ? 'disabled' : ''} onclick="Swiss.changePage(Swiss.currentPage - 1)">◀</button>
+      <span class="pageInfo">${filtered.length ? startIdx + 1 : 0}-${endIdx} / ${filtered.length}</span>
+      <button class="pageBtn" ${this.currentPage >= totalPages - 1 ? 'disabled' : ''} onclick="Swiss.changePage(Swiss.currentPage + 1)">▶</button>
+      <button class="pageBtn" ${this.currentPage >= totalPages - 1 ? 'disabled' : ''} onclick="Swiss.changePage(${totalPages - 1})">▶|</button>
+    `;
+
+    body.innerHTML = pageItems.map((p) => {
+      const globalIdx = list.indexOf(p);
+      const place = globalIdx + 1;
+      const placeCls = place === 1 ? 'top1' : place === 2 ? 'top2' : place === 3 ? 'top3' : '';
+      const isMe = myName && p.username === myName;
+      const greenDot = p.isBot ? '<span class="pgreen" style="color:#a56ce8">🤖</span>' : (p.isOnline ? '<span class="pgreen">●</span>' : '');
+      const wdl = `${p.wins || 0}/${p.draws || 0}/${p.losses || 0}`;
+      const byeTag = p.byes > 0 ? `<span class="swBye">${p.byes}</span>` : `<span class="swBye">·</span>`;
+      return `<div class="swissTableRow ${isMe ? 'me' : ''}" onclick="Router.go('profile', '${Utils.escapeHtml(p.username)}')">
+        <span class="place ${placeCls}">${place}</span>
+        <span class="pname">${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}${greenDot}<span class="prat">(${p.rating})</span></span>
+        <span class="swScore">${p.score}</span>
+        <span class="swWDL">${wdl}</span>
+        <span class="swBuchholz">${p.buchholz ?? 0}</span>
+        ${byeTag}
+      </div>`;
+    }).join('');
+  },
+
+  renderPairs(state) {
+    const listEl = document.getElementById('swissPairsList'); if (!listEl) return;
+    const pairs = state.pairs || [];
+    if (!pairs.length) { listEl.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пары ещё не сформированы</div>'; return; }
+    listEl.innerHTML = pairs.map(pair => {
+      if (pair.type === 'bye' || !pair.black) {
+        return `<div class="swissPairCard bye">
+          <span class="pairPlayers">${Utils.nickHtml(pair.white, false, false, false)}</span>
+          <span class="byes">Бай (+1)</span>
+        </div>`;
+      }
+      const liveGame = (state.liveGames || []).find(g => (g.white === pair.white && g.black === pair.black) || (g.white === pair.black && g.black === pair.white));
+      const status = liveGame ? '▶ Идёт' : '—';
+      return `<div class="swissPairCard" ${liveGame ? `onclick="Watch.watch('${liveGame.lobbyId}')" style="cursor:pointer;"` : ''}>
+        <span class="pairPlayers">${Utils.nickHtml(pair.white, false, false, false)} <span class="vs">vs</span> ${Utils.nickHtml(pair.black, false, false, false)}</span>
+        <span class="pairStatus">${status}</span>
+      </div>`;
+    }).join('');
+  },
+
+  updateJoinButton(state) {
+    const wrap = document.getElementById('swJoinBtnWrap'); if (!wrap) return;
+    const isPlaying = App.gameActive && !App.gameEnded;
+    if (isPlaying) { wrap.innerHTML = `<button class="secondary arenaJoinBtn" disabled style="width:180px; opacity:.5; cursor:not-allowed;">ЗАНЯТЫ ИГРОЙ</button>`; return; }
+    if (state.finished || state.phase === 'finished') { wrap.innerHTML = `<button class="secondary" disabled style="width:180px;">ЗАВЕРШЁН</button>`; return; }
+    if (state.joined) { wrap.innerHTML = `<button class="secondary arenaJoinBtn" disabled style="width:180px;">ВЫ УЧАСТВУЕТЕ</button>`; return; }
+    const liveGames = (state.pairs || []).some(p => p.type !== 'bye');
+    if (liveGames && state.phase === 'live') {
+      wrap.innerHTML = `<button class="secondary arenaJoinBtn" disabled style="width:180px; opacity:.7;">ИГРАЮТСЯ ПАРТИИ</button>`;
+      return;
+    }
+    wrap.innerHTML = `<button class="primary arenaJoinBtn" onclick="Swiss.joinCurrent()">УЧАСТВОВАТЬ</button>`;
+  },
+
+  updateBreakTimer(state) {
+    const wrap = document.getElementById('swBreakTimer');
+    const val = document.getElementById('swBreakTimerValue');
+    if (!wrap || !val) return;
+    if (state.phase !== 'live' || state.finished) { wrap.style.display = 'none'; return; }
+    const stateJson = JSON.stringify(state.pairs || []);
+    if (this._lastPairs !== stateJson) {
+      this._lastPairs = stateJson;
+      const anyLive = (state.pairs || []).some(p => p.type !== 'bye');
+      if (anyLive) this.breakUntil = 0;
+    }
+    const hasLive = (state.pairs || []).some(p => p.type !== 'bye');
+    if (hasLive) { wrap.style.display = 'none'; return; }
+    if (!this.breakUntil) this.breakUntil = Date.now() + (state.breakMs || 30000);
+    wrap.style.display = 'block';
+    this.tickBreak();
+  },
+
+  tickBreak() {
+    const val = document.getElementById('swBreakTimerValue');
+    if (!val) return;
+    const now = Date.now();
+    const left = Math.max(0, this.breakUntil - now);
+    val.textContent = Utils.formatMMSS(left);
+    if (left <= 0) { val.textContent = '00:00'; }
+  },
+
+  joinCurrent() {
+    if (!this.currentSwissId) return;
+    App.socket.emit('joinSwiss', { swissId: this.currentSwissId }, (res) => {
+      if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
+      this.loadPage();
+    });
+  },
+
+  changePage(p) { this.currentPage = Math.max(0, p); if (this.currentState) this.renderStandings(this.currentState); },
+  filterStandings() { this.currentPage = 0; if (this.currentState) this.renderStandings(this.currentState); },
+
+  sendChat(e) {
+    e.preventDefault();
+    const input = document.getElementById('swissChatInput'); if (!input) return;
+    const text = input.value.trim(); if (!text || !this.currentSwissId) return;
+    App.socket.emit('swissChat', { swissId: this.currentSwissId, text });
+    input.value = '';
+  },
+
+  onChatMessage(msg) {
+    if (this.currentSwissId && msg.swissId === this.currentSwissId) this.renderChatMsg(msg);
+  },
+
+  renderChatMsg(msg) {
+    const box = document.getElementById('swissChatMessages'); if (!box) return;
+    const div = document.createElement('div');
+    if (msg.system || msg.isSystem) { div.className = 'msg msg-system'; div.textContent = msg.text; }
+    else if (msg.warning) { div.className = 'msg msg-warning'; div.textContent = msg.text; }
+    else {
+      div.className = 'msg';
+      const time = Utils.fmtMskHM(msg.ts);
+      div.innerHTML = `<span class="u">${Utils.nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${Utils.renderTextWithMentions(msg.text)} <span class="t">${time}</span>`;
+    }
+    box.appendChild(div);
+    while (box.children.length > 200) box.removeChild(box.firstChild);
+    box.scrollTop = box.scrollHeight;
+  },
+
+  onUpdate(swissId) {
+    if (this.currentSwissId === swissId) { const sps = document.getElementById('swissPageScreen'); if (sps && sps.classList.contains('active')) this.loadPage(); }
+    const s = document.getElementById('swissScreen'); if (s && s.classList.contains('active')) this.refreshList();
+  },
+
+  onFinished(swissId, standings) {
+    if (this.currentSwissId === swissId) {
+      this.loadPage();
+      if (standings && standings.length) this.showWinnerBanner(standings);
+    }
+    const s = document.getElementById('swissScreen'); if (s && s.classList.contains('active')) this.refreshList();
+  },
+
+  showWinnerBanner(standings) {
+    const banner = document.getElementById('swissWinnerBanner'); const podium = document.getElementById('swPodium');
+    if (!banner || !podium) return;
+    const top3 = standings.slice(0, 3);
+    const places = ['🏆','🏆','🏆'], classes = ['gold','silver','bronze'];
+    const order = top3.length >= 3 ? [1,0,2] : top3.map((_,i)=>i);
+    podium.innerHTML = order.map(i => {
+      const p = top3[i]; if (!p) return '';
+      return `<div class="awbItem ${classes[i]}"><div class="place">${places[i]}</div><div class="n">${Utils.nickHtml(p.username, p.username === 'PeshkaSasha')}</div><div class="s">${p.score} очков</div><div class="awbStats"><span>Победы <b>${p.wins || 0}</b></span><span>Тай-брейк <b>${p.buchholz || 0}</b></span><span>Бай <b>${p.byes || 0}</b></span></div></div>`;
+    }).join('');
+    banner.style.display = 'block';
+  }
+};
+
 const Profile = {
   gamesVisible: false, selectedCategory: 'all', chartRange: 'all', chartData: null, chartUserId: null,
   init() {},
@@ -1981,7 +2151,7 @@ const Profile = {
     if (wrap) wrap.classList.add('profileGamesHidden'); if (btn) btn.textContent = '📜 Показать партии';
     App.socket.emit('getProfile', { username: target }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
-      this.render(res.user, res.games, res.history, res.categoryHistory);
+      this.render(res.user, res.games, res.history, res.categoryHistory, res.awards);
     });
   },
   writeMessage() { const target = App.profileViewing; if (!target) return; if (App.me && target === App.me.username) { alert('Это ваш профиль'); return; } Inbox.openWith(target); },
@@ -1992,7 +2162,7 @@ const Profile = {
     if (this.gamesVisible) { wrap.classList.remove('profileGamesHidden'); btn.textContent = '📜 Скрыть партии'; }
     else { wrap.classList.add('profileGamesHidden'); btn.textContent = '📜 Показать партии'; }
   },
-  render(user, games, history, categoryHistory) {
+  render(user, games, history, categoryHistory, awards) {
     const avatarEl = document.getElementById('pAvatarBig'); if (!avatarEl) return;
     avatarEl.className = 'profileAvatar' + (user.isBot ? ' botAvatar' : '');
     avatarEl.innerHTML = (user.isAdmin ? '<span class="pCrown">👑</span>' : '') + (user.isBot ? '🤖' : user.username.charAt(0).toUpperCase());
@@ -2030,8 +2200,54 @@ const Profile = {
     }
     const writeBtn = document.getElementById('pWriteBtn');
     if (writeBtn) { if (App.me && user.username !== App.me.username && !user.isBot) writeBtn.style.display = ''; else writeBtn.style.display = 'none'; }
+
+    this.renderAwards(awards || []);
     this.chartData = { games, history, user, categoryHistory }; this.chartUserId = user.username;
     this.renderChartControls(); this.renderChart(); this.renderGamesList(games, user.username);
+  },
+  renderAwards(awards) {
+    const section = document.getElementById('awardsSection');
+    const grid = document.getElementById('awardsGrid');
+    if (!section || !grid) return;
+    if (!awards || !awards.length) { section.style.display = 'none'; grid.innerHTML = ''; return; }
+    section.style.display = 'block';
+    const shieldSvg = `<svg class="shield-svg" viewBox="0 0 100 115" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#ffd54f" />
+          <stop offset="50%" stop-color="#d99c33" />
+          <stop offset="100%" stop-color="#8b6914" />
+        </linearGradient>
+        <linearGradient id="shieldBorderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#fff59d" />
+          <stop offset="100%" stop-color="#b8860b" />
+        </linearGradient>
+        <radialGradient id="shieldHighlight" cx="50%" cy="30%" r="60%">
+          <stop offset="0%" stop-color="#fff59d" stop-opacity="0.7"/>
+          <stop offset="100%" stop-color="#b8860b" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <path d="M 50 5 L 90 20 L 88 60 Q 82 90 50 108 Q 18 90 12 60 L 10 20 Z"
+            fill="url(#shieldGrad)" stroke="url(#shieldBorderGrad)" stroke-width="3"/>
+      <path d="M 50 5 L 90 20 L 88 60 Q 82 90 50 108 Q 18 90 12 60 L 10 20 Z"
+            fill="url(#shieldHighlight)" opacity="0.6"/>
+      <path d="M 35 45 Q 50 35 65 45 L 65 65 Q 50 78 35 65 Z"
+            fill="#1a1916" opacity="0.55"/>
+      <text x="50" y="68" text-anchor="middle" font-size="26" font-weight="bold" fill="#fff59d" opacity="0.95" font-family="serif">♛</text>
+      <path d="M 20 20 Q 50 12 80 20" fill="none" stroke="#fff59d" stroke-width="1.5" opacity="0.6"/>
+    </svg>`;
+    const catLabels = { bullet: 'Пуля', blitz: 'Блиц', rapid: 'Рапид', classical: 'Классика' };
+    grid.innerHTML = awards.map(a => {
+      const catLabel = catLabels[a.category] || a.category || '';
+      const dateStr = Utils.formatDateRu(a.granted_at);
+      return `<a class="shield-award" href="#/arenaPage/${encodeURIComponent(a.arena_id)}" onclick="event.preventDefault();Router.go('arenaPage','${encodeURIComponent(a.arena_id)}');" title="${Utils.escapeHtml(a.arena_name)} — 1 место">
+        <span class="shPlace">1 место</span>
+        ${shieldSvg}
+        <div class="shCategory">${Utils.escapeHtml(catLabel)}</div>
+        <div class="shArenaName">${Utils.escapeHtml(a.arena_name)}</div>
+        <div class="shDate">${dateStr}</div>
+      </a>`;
+    }).join('');
   },
   renderChartControls() {
     const wrap = document.getElementById('chartControls'); if (!wrap) return;
@@ -2073,7 +2289,7 @@ const Profile = {
       return { ...cat, points, latest, delta: first===null || latest===null ? null : latest-first };
     });
     const visible = series.filter(s=>s.points.length);
-    if (!visible.length) { wrap.innerHTML = '<div class="ratingChartEmpty">Пока нет истории рейтинга за выбранный период</div>'; return; }
+    if (!visible.length) { wrap.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted);">Нет истории рейтинга за выбранный период</div>'; return; }
     const allValues = visible.flatMap(s=>s.points.map(p=>p.rating));
     const minV=Math.min(...allValues), maxV=Math.max(...allValues);
     const pad=Math.max(30,Math.ceil((maxV-minV)*.12));
@@ -2084,8 +2300,8 @@ const Profile = {
     const labels=[];
     for(let i=0;i<5;i++) { const day=startDay+(endDay-startDay)*i/4; labels.push(`<text x="${xOf(day)}" y="${H-8}" fill="var(--muted,#7d7a72)" font-size="11" text-anchor="middle">${new Date(day).toLocaleDateString('ru-RU',{day:'2-digit',month:'short'})}</text>`); }
     const paths=visible.map(s=>{ const path=s.points.map((p,i)=>`${i?'L':'M'}${xOf(p.day).toFixed(1)},${yOf(p.rating).toFixed(1)}`).join(' '); return `<path d="${path}" fill="none" stroke="${s.color}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>${s.points.length===1?`<circle cx="${xOf(s.points[0].day)}" cy="${yOf(s.points[0].rating)}" r="3.5" fill="${s.color}"/>`:''}`; }).join('');
-    const legend=series.map(s=>{ const value=s.latest===null?'—':s.latest; const delta=s.delta===null?'':` <em style="color:${s.delta>0?'#4ade80':s.delta<0?'#fb7185':'var(--muted)'}">${s.delta>0?'+':''}${s.delta}</em>`; return `<span class="ratingOverlayLegendItem"><i style="background:${s.color}"></i>${esc(s.label)} <b>${value}</b>${delta}</span>`; }).join('');
-    wrap.innerHTML = `<div class="ratingOverlayLegend">${legend}</div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="История рейтинга по всем режимам на одном графике" style="width:100%;height:auto;display:block">${grid.join('')}${paths}${labels.join('')}</svg>`;
+    const legend=series.map(s=>{ const value=s.latest===null?'—':s.latest; const delta=s.delta===null?'':` <em style="color:${s.delta>0?'#4ade80':s.delta<0?'#fb7185':'var(--muted)'}">${s.delta>0?'+':''}${s.delta}</em>`; return `<span style="display:inline-flex;align-items:center;gap:6px;margin-right:14px;font-size:12px;"><i style="display:inline-block;width:14px;height:3px;border-radius:2px;background:${s.color};"></i>${esc(s.label)} <b>${value}</b>${delta}</span>`; }).join('');
+    wrap.innerHTML = `<div style="margin-bottom:8px;">${legend}</div><svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${grid.join('')}${paths}${labels.join('')}</svg>`;
   },
   renderGamesList(games, username) {
     const el = document.getElementById('gamesList'); if (!el) return;
@@ -2115,9 +2331,6 @@ const Profile = {
   }
 };
 
-// ============================================================
-// COMMUNITY
-// ============================================================
 const Community = {
   init() {},
   enter() { App.socket.emit('getCommunityOnline', (players) => this.render(players)); },
@@ -2130,9 +2343,6 @@ const Community = {
   }
 };
 
-// ============================================================
-// INBOX
-// ============================================================
 const Inbox = {
   dialogs: [], activeWith: null, history: [], unread: 0, loaded: false,
   init() {},
@@ -2147,8 +2357,7 @@ const Inbox = {
       const row = document.createElement('div');
       row.className = 'msgDialogRow' + (this.activeWith === other ? ' active' : '') + (unread ? ' unread' : '');
       row.dataset.with = other;
-      const online = App.onlinePlayers && App.onlinePlayers.has && App.onlinePlayers.has(other);
-      row.innerHTML = `<div class="msgDialogAvatar">${Utils.escapeHtml(other.charAt(0).toUpperCase())}<span class="${online ? 'dotOnline' : 'dotOffline'}"></span></div><div class="msgDialogMeta"><div class="msgDialogName">${Utils.escapeHtml(other)}</div><div class="msgDialogPreview">${Utils.escapeHtml(lastText)}</div></div>${unread ? `<span class="msgDialogBadge">${unread}</span>` : ''}`;
+      row.innerHTML = `<div class="msgDialogAvatar">${Utils.escapeHtml(other.charAt(0).toUpperCase())}<span class="dotOffline"></span></div><div class="msgDialogMeta"><div class="msgDialogName">${Utils.escapeHtml(other)}</div><div class="msgDialogPreview">${Utils.escapeHtml(lastText)}</div></div>${unread ? `<span class="msgDialogBadge">${unread}</span>` : ''}`;
       row.addEventListener('click', () => this.selectDialog(other));
       frag.appendChild(row);
     }
@@ -2161,7 +2370,7 @@ const Inbox = {
     if (App.me && name === App.me.username) { alert('Нельзя написать самому себе'); return; }
     App.socket.emit('getPlayerCard', { username: name }, (res) => { if (!res || !res.ok) { alert('Игрок не найден'); return; } inp.value = ''; const row = document.getElementById('msgNewRow'); if (row) row.style.display = 'none'; this.selectDialog(name); });
   },
-  selectDialog(other, open) {
+  selectDialog(other) {
     this.activeWith = other;
     const nameEl = document.getElementById('inboxChatName'); const openBtn = document.getElementById('inboxOpenProfile'); const delBtn = document.getElementById('inboxDelete');
     if (nameEl) nameEl.textContent = other; if (openBtn) openBtn.style.display = ''; if (delBtn) delBtn.style.display = '';
@@ -2182,10 +2391,7 @@ const Inbox = {
       if (dateStr !== lastDate) { const div = document.createElement('div'); div.className = 'msgDateDivider'; div.textContent = dateStr; frag.appendChild(div); lastDate = dateStr; }
       const mine = (m.from_user === App.me.username);
       const div = document.createElement('div'); div.className = 'msgBubble ' + (mine ? 'me' : 'them');
-      if (m.from_user === 'Система' || m.from_user === 'PeshkaSasha') {
-        div.style.border = '1px solid ' + (m.color || '#ff4d4f');
-        div.style.color = m.color || '#ff4d4f';
-      }
+      if (m.from_user === 'Система' || m.from_user === 'PeshkaSasha') { div.style.border = '1px solid ' + (m.color || '#ff4d4f'); div.style.color = m.color || '#ff4d4f'; }
       div.textContent = m.text;
       const time = document.createElement('span'); time.className = 'msgTime'; time.textContent = Utils.fmtTimeHM(ts); div.appendChild(time);
       frag.appendChild(div);
@@ -2203,7 +2409,6 @@ const Inbox = {
     if (Router.current.name === 'inbox' && this.activeWith === other) {
       this.history.push({ id: msg.id, from_user: msg.from, to_user: msg.to, text: msg.text, created_at: msg.ts, read_at: msg.readAt, color: msg.color || '' });
       this.renderHistory();
-      if (msg.from !== App.me.username) { App.socket.emit('msgGetHistory', { with: other, markRead: true }, (res) => { if (res && res.ok) { this.history = res.history; this.renderHistory(); } }); }
     } else if (msg.from !== App.me.username) Sounds.msg();
     this.loadDialogs();
   },
@@ -2221,9 +2426,6 @@ const Inbox = {
   setUnread(count) { this.unread = count || 0; const badge = document.getElementById('msgBadge'); const um = document.getElementById('umInboxCount'); if (badge) { badge.textContent = this.unread > 99 ? '99+' : this.unread; badge.style.display = this.unread > 0 ? 'flex' : 'none'; } if (um) um.textContent = this.unread > 0 ? this.unread : ''; }
 };
 
-// ============================================================
-// MOD MENU
-// ============================================================
 const Mod = {
   el: null,
   openMenu(ev, msgId, username, scope, scopeId) {
@@ -2250,9 +2452,6 @@ const Mod = {
 };
 document.addEventListener('click', (e) => { if (Mod.el && !Mod.el.contains(e.target)) Mod.close(); });
 
-// ============================================================
-// BANNERS
-// ============================================================
 const Banners = {
   rematchFrom: null, drawFrom: null,
   init() {
@@ -2275,9 +2474,6 @@ const Banners = {
   hideDraw() { this.drawFrom = null; const b = document.getElementById('drawOfferBanner'); if (b) b.style.display = 'none'; }
 };
 
-// ============================================================
-// GAME
-// ============================================================
 const Game = {
   selected: null, legalMoves: [], moveHistory: [], moveFens: [], viewIndex: -1,
   lastMove: null, boardFlipped: false, pendingDrawOffer: false, rematchRequested: false,
@@ -2362,6 +2558,10 @@ const Game = {
       if (rematchBtn) rematchBtn.style.display = 'none';
       if (pauseBtn) { pauseBtn.style.display = 'block'; pauseBtn.textContent = (Arena.currentArenaState && Arena.currentArenaState.paused) ? '▶ ПРОДОЛЖИТЬ' : '⏸ ПАУЗА'; }
       if (findBtn) { findBtn.textContent = 'ПЕРЕЙТИ В ТУРНИР'; findBtn.onclick = () => { const arenaId = App.currentArenaId; if (!arenaId) { this.hideResultBar(); Router.go('arenas'); return; } App.socket.emit('continueArenaPairing', { arenaId }, (res) => { if (!res || !res.ok) { alert((res && res.msg) || 'Не удалось вернуться в турнир'); return; } this.hideResultBar(); Router.go('arenaPage', arenaId); }); }; }
+    } else if (App.currentGameIsSwiss) {
+      if (rematchBtn) rematchBtn.style.display = 'none';
+      if (pauseBtn) pauseBtn.style.display = 'none';
+      if (findBtn) { findBtn.textContent = 'ПЕРЕЙТИ В ТУРНИР'; findBtn.onclick = () => { const swissId = App.currentSwissId; if (!swissId) { this.hideResultBar(); Router.go('swiss'); return; } this.hideResultBar(); Router.go('swissPage', swissId); }; }
     } else {
       if (rematchBtn) { rematchBtn.style.display = 'block'; rematchBtn.disabled = false; }
       if (pauseBtn) pauseBtn.style.display = 'none';
@@ -2390,6 +2590,7 @@ const Game = {
     this.reset();
     App.lobbyId = null; App.gameActive = false; App.gameEnded = false;
     App.currentGameIsArena = false; App.currentArenaId = null; App.currentArenaName = null;
+    App.currentGameIsSwiss = false; App.currentSwissId = null; App.currentSwissName = null;
     try { localStorage.removeItem('kingside_active_lobby'); } catch (e) {}
     this.updateBackToGameBtn(); Router.go('lobby'); Lobby.switchTab('create');
   },
@@ -2404,30 +2605,24 @@ const Game = {
     App.inc = s.inc;
     App.myTime = App.myColor === 'w' ? s.timeW : s.timeB; App.oppTime = App.myColor === 'w' ? s.timeB : s.timeW;
     App.currentFen = s.fen;
-
     this.moveHistory = []; this.moveFens = []; this.viewIndex = -1; this.lastMove = null;
-
     if (Array.isArray(s.history) && s.history.length > 0) {
-      const tempHistory = [];
-      const tempFens = [];
+      const tempHistory = []; const tempFens = [];
       const startFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
       let currentState = Chess.parseFen(startFen);
-
       for (const h of s.history) {
         if (!h.from || !h.to) continue;
         const san = h.san || Chess.toSAN(currentState, h.from, h.to);
         tempHistory.push(san);
-
         currentState = Chess.applyMove(currentState, h.from, h.to);
         tempFens.push(Chess.toFen(currentState));
       }
-
       this.moveHistory = tempHistory;
       this.moveFens = tempFens;
     }
-
     App.gameEnded = !!s.finished; App.gameActive = !s.finished;
     App.currentGameIsArena = !!s.arenaId; App.currentArenaId = s.arenaId || null; App.currentArenaName = s.arenaName || null;
+    App.currentGameIsSwiss = !!s.swissId; App.currentSwissId = s.swissId || null; App.currentSwissName = s.swissName || null;
     this.lastBoardHash = '';
     const bn = document.getElementById('bottomName'); if (bn) bn.innerHTML = Utils.nickHtml(App.me.username, App.me.isAdmin, App.me.isMod, App.me.isBot);
     const br = document.getElementById('bottomRating'); if (br) br.textContent = App.me.rating;
@@ -2527,14 +2722,8 @@ const Game = {
       App.myTime = m; App.oppTime = o;
       const tt = document.getElementById('topTime'); const bt = document.getElementById('bottomTime');
       const showSub = !!App.settings.showSubseconds;
-      if (tt) {
-        if (showSub && App.oppTime < 10) { tt.textContent = Utils.formatTimeSmart(App.oppTime, true); tt.classList.add('subseconds'); }
-        else { tt.textContent = Utils.formatTime(App.oppTime); tt.classList.remove('subseconds'); }
-      }
-      if (bt) {
-        if (showSub && App.myTime < 10) { bt.textContent = Utils.formatTimeSmart(App.myTime, true); bt.classList.add('subseconds'); }
-        else { bt.textContent = Utils.formatTime(App.myTime); bt.classList.remove('subseconds'); }
-      }
+      if (tt) { if (showSub && App.oppTime < 10) { tt.textContent = Utils.formatTimeSmart(App.oppTime, true); tt.classList.add('subseconds'); } else { tt.textContent = Utils.formatTime(App.oppTime); tt.classList.remove('subseconds'); } }
+      if (bt) { if (showSub && App.myTime < 10) { bt.textContent = Utils.formatTimeSmart(App.myTime, true); bt.classList.add('subseconds'); } else { bt.textContent = Utils.formatTime(App.myTime); bt.classList.remove('subseconds'); } }
       const tc = document.getElementById('topClock'); if (tc) tc.classList.toggle('low', App.oppTime <= 20);
       const bc = document.getElementById('bottomClock'); if (bc) bc.classList.toggle('low', App.myTime <= 20);
       requestAnimationFrame(tick);
@@ -2602,16 +2791,10 @@ const Game = {
     const state = Chess.parseFen(App.currentFen);
     if (state.turn !== App.myColor) return;
     const p = state.board[this.premove.from[0]][this.premove.from[1]];
-    if (!p || Chess.isWhite(p) !== (App.myColor === 'w')) {
-      this.premove = null; this.lastBoardHash = ''; this.renderBoard();
-      return;
-    }
+    if (!p || Chess.isWhite(p) !== (App.myColor === 'w')) { this.premove = null; this.lastBoardHash = ''; this.renderBoard(); return; }
     const legal = Chess.legalMovesFor(state, this.premove.from[0], this.premove.from[1]);
     const ok = legal.some(([r, c]) => r === this.premove.to[0] && c === this.premove.to[1]);
-    if (!ok) {
-      this.premove = null; this.lastBoardHash = ''; this.renderBoard();
-      return;
-    }
+    if (!ok) { this.premove = null; this.lastBoardHash = ''; this.renderBoard(); return; }
     const mv = this.premove;
     this.premove = null;
     this.lastBoardHash = '';
@@ -2721,27 +2904,12 @@ const Game = {
     const box = document.getElementById('chatMessages'); if (!box) return;
     if (msg.id && this.chatMsgIds.has(msg.id)) return; if (msg.id) this.chatMsgIds.add(msg.id);
     const div = document.createElement('div');
-    if (msg.system || msg.isSystem) {
-      div.className = 'msg msg-system';
-      div.textContent = msg.text;
-      box.appendChild(div);
-      while (box.children.length > 50) box.removeChild(box.firstChild);
-      box.scrollTop = box.scrollHeight;
-      return;
-    }
-    if (msg.warning) {
-      div.className = 'msg msg-warning';
-      div.textContent = msg.text;
-      Sounds.warn();
-      box.appendChild(div);
-      while (box.children.length > 50) box.removeChild(box.firstChild);
-      box.scrollTop = box.scrollHeight;
-      return;
-    }
+    if (msg.system || msg.isSystem) { div.className = 'msg msg-system'; div.textContent = msg.text; box.appendChild(div); while (box.children.length > 50) box.removeChild(box.firstChild); box.scrollTop = box.scrollHeight; return; }
+    if (msg.warning) { div.className = 'msg msg-warning'; div.textContent = msg.text; Sounds.warn(); box.appendChild(div); while (box.children.length > 50) box.removeChild(box.firstChild); box.scrollTop = box.scrollHeight; return; }
     div.className = 'msg'; div.dataset.msgId = msg.id || '';
     const time = Utils.fmtMskHM(msg.ts);
     let modHtml = ''; if (App.me && App.me.isMod) modHtml = `<span class="modBtn" title="Модерация">⚙</span>`;
-    div.innerHTML = `<span class="u">${Utils.nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${Utils.escapeHtml(msg.text)} <span class="t">${time}</span>${modHtml}`;
+    div.innerHTML = `<span class="u">${Utils.nickHtml(msg.user, msg.userIsAdmin, msg.userIsMod)}:</span> ${Utils.renderTextWithMentions(msg.text)} <span class="t">${time}</span>${modHtml}`;
     if (App.me && App.me.isMod) { const btn = div.querySelector('.modBtn'); if (btn) btn.addEventListener('click', (ev) => { ev.stopPropagation(); Mod.openMenu(ev, msg.id, msg.user, 'game', App.lobbyId); }); }
     if (window.AdminPanel) AdminPanel.decorateChatMessage(div, msg, 'game');
     box.appendChild(div);
@@ -2763,24 +2931,16 @@ const Game = {
     const el2 = document.querySelector(`#arenaChatMessages .msg[data-msg-id="${msgId}"]`); if (el2) el2.remove();
   },
   onDrawDeclined() { const bar = document.getElementById('statusBar'); if (bar) { bar.className = 'statusYellow'; bar.textContent = 'Соперник отклонил ничью'; } this.pendingDrawOffer = false; },
-  onRematchDeclined() {
-    this.rematchRequested = false; this.stopRematchSpinner();
-    const btn = document.getElementById('grRematchBtn'); if (btn) { btn.disabled = false; btn.classList.remove('accept'); btn.textContent = 'РЕВАНШ'; }
-    const bar = document.getElementById('statusBar'); if (bar) { bar.className = 'statusYellow'; bar.textContent = 'Соперник отклонил реванш'; }
-  },
-  onOpponentOnline(username) {
-    if (username === App.opponentName) { App.opponentOnline = true; const strip = document.getElementById('topName'); if (strip) strip.innerHTML = Utils.onlineDotHtml(true) + Utils.nickHtml(App.opponentName, App.opponentIsAdmin, false, App.opponentIsBot); }
-  },
-  onOpponentOffline(username) {
-    if (username === App.opponentName) { App.opponentOnline = false; const strip = document.getElementById('topName'); if (strip) strip.innerHTML = Utils.onlineDotHtml(false) + Utils.nickHtml(App.opponentName, App.opponentIsAdmin, false, App.opponentIsBot); }
-  },
+  onRematchDeclined() { this.rematchRequested = false; this.stopRematchSpinner(); const btn = document.getElementById('grRematchBtn'); if (btn) { btn.disabled = false; btn.classList.remove('accept'); btn.textContent = 'РЕВАНШ'; } const bar = document.getElementById('statusBar'); if (bar) { bar.className = 'statusYellow'; bar.textContent = 'Соперник отклонил реванш'; } },
+  onOpponentOnline(username) { if (username === App.opponentName) { App.opponentOnline = true; const strip = document.getElementById('topName'); if (strip) strip.innerHTML = Utils.onlineDotHtml(true) + Utils.nickHtml(App.opponentName, App.opponentIsAdmin, false, App.opponentIsBot); } },
+  onOpponentOffline(username) { if (username === App.opponentName) { App.opponentOnline = false; const strip = document.getElementById('topName'); if (strip) strip.innerHTML = Utils.onlineDotHtml(false) + Utils.nickHtml(App.opponentName, App.opponentIsAdmin, false, App.opponentIsBot); } },
   onOpponentLeft() { if (!App.gameActive) return; alert('Соперник отключился'); this.updateBackToGameBtn(); },
 
   onGameStart(payload) {
-    if (payload.lobbyId && payload.lobbyId.startsWith('sp_')) { console.warn('[Game] Получен gameStart для self-play, игнорируем'); return; }
-    if (payload.isSelfPlay) { console.warn('[Game] Получен gameStart с isSelfPlay, игнорируем'); return; }
-    if (App.gameActive && !App.gameEnded && App.lobbyId && payload.lobbyId && payload.lobbyId !== App.lobbyId) { console.warn('[Game] Игнорирую gameStart для чужого lobbyId', payload.lobbyId, 'текущий', App.lobbyId); return; }
-    const { color, opponent, opponentRating, time, inc, lobbyId, fen, chat, arenaId, arenaName, opponentIsAdmin, opponentIsMod, opponentOnline, opponentIsBot, isBot: isBotFlag } = payload;
+    if (payload.lobbyId && payload.lobbyId.startsWith('sp_')) return;
+    if (payload.isSelfPlay) return;
+    if (App.gameActive && !App.gameEnded && App.lobbyId && payload.lobbyId && payload.lobbyId !== App.lobbyId) return;
+    const { color, opponent, opponentRating, time, inc, lobbyId, fen, chat, arenaId, arenaName, swissId, swissName, opponentIsAdmin, opponentIsMod, opponentOnline, opponentIsBot, isBot: isBotFlag } = payload;
     if (lobbyId) App.lobbyId = lobbyId;
     App.myColor = color || 'w'; App.inc = inc || 0;
     App.opponentName = opponent || 'Соперник'; App.opponentRating = opponentRating || null;
@@ -2791,6 +2951,7 @@ const Game = {
     App.currentFen = fen || 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
     App.gameActive = true; App.gameEnded = false;
     App.currentGameIsArena = !!arenaId; App.currentArenaId = arenaId || null; App.currentArenaName = arenaName || null;
+    App.currentGameIsSwiss = !!swissId; App.currentSwissId = swissId || null; App.currentSwissName = swissName || null;
     this.reset(); this.hideResultBar();
     const bn = document.getElementById('bottomName'); if (bn) bn.innerHTML = Utils.nickHtml(App.me.username, App.me.isAdmin, App.me.isMod, App.me.isBot);
     const br = document.getElementById('bottomRating'); if (br) br.textContent = App.me.rating;
@@ -2814,18 +2975,13 @@ const Game = {
     if (!lobbyId || lobbyId !== App.lobbyId) return;
     if (!App.gameActive || App.gameEnded) return;
     if (App.currentFen === fen) return;
-
     const prevFen = App.currentFen;
     App.currentFen = fen;
     this.selected = null; this.legalMoves = []; this.viewIndex = -1;
     if (from && to) { this.lastMove = { from, to }; if (!san) { try { const prevState = Chess.parseFen(prevFen); san = Chess.toSAN(prevState, from, to); } catch (e) {} } }
-
     const lastHistIdx = this.moveHistory.length - 1;
-    if (this.moveHistory[lastHistIdx] === san && this.moveFens[lastHistIdx] === fen) {
-    } else {
-      if (san) { this.moveHistory.push(san); this.moveFens.push(fen); }
-    }
-
+    if (this.moveHistory[lastHistIdx] === san && this.moveFens[lastHistIdx] === fen) {}
+    else { if (san) { this.moveHistory.push(san); this.moveFens.push(fen); } }
     this.renderMoves(); this.lastBoardHash = ''; this.renderBoard();
     const state = Chess.parseFen(App.currentFen);
     if (san) Sounds.moveBySan(san);
@@ -2851,9 +3007,6 @@ const Game = {
   }
 };
 
-// ============================================================
-// ADMIN PANEL
-// ============================================================
 const AdminPanel = {
   users: [], tab: 'users', banCheckTimer: null,
   isRoot() { return !!(App.me && App.me.username === 'PeshkaSasha' && App.me.isAdmin); },
@@ -2864,8 +3017,7 @@ const AdminPanel = {
     const main = document.getElementById('mainContent'); if (main) main.style.display = 'none';
     const color = document.getElementById('adminPrivateColor'); if (color && !color.value) color.value = '#ff4d4f';
     const root = document.getElementById('adminTopDropdown'); if (root) root.style.display = '';
-    this.refresh(); this.setTab(this.tab || 'users');
-    this.loadCurrentBans();
+    this.refresh(); this.setTab(this.tab || 'users'); this.loadCurrentBans();
   },
   hidePage() { const page = document.getElementById('adminPage'); if (page) page.style.display = 'none'; this.closeTopMenu(); },
   close() { if (location.hash.replace(/^#\/?/, '').split('/')[0] === 'admin_panel') Router.go('lobby'); else this.hidePage(); },
@@ -2888,15 +3040,10 @@ const AdminPanel = {
     if (location.hash.replace(/^#\/?/, '').split('/')[0] !== 'admin_panel') { this.tab = section; Router.go('admin_panel'); return; }
     this.setTab(section);
   },
-  status(message, bad = false) {
-    const el = document.getElementById('adminPanelStatus');
-    if (el) { el.textContent = message || ''; el.style.color = bad ? '#ff8c91' : '#8ddca4'; }
-  },
-  setTab(tab, btn) {
+  status(message, bad = false) { const el = document.getElementById('adminPanelStatus'); if (el) { el.textContent = message || ''; el.style.color = bad ? '#ff8c91' : '#8ddca4'; } },
+  setTab(tab) {
     this.tab = tab;
-    const usersTab = document.getElementById('adminUsersTab');
-    const banTab = document.getElementById('adminBanTab');
-    const chatTab = document.getElementById('adminChatTab');
+    const usersTab = document.getElementById('adminUsersTab'); const banTab = document.getElementById('adminBanTab'); const chatTab = document.getElementById('adminChatTab');
     if (usersTab) usersTab.style.display = tab === 'users' ? '' : 'none';
     if (banTab) banTab.style.display = tab === 'ban' ? '' : 'none';
     if (chatTab) chatTab.style.display = tab === 'users' || tab === 'ban' ? 'none' : '';
@@ -2919,9 +3066,7 @@ const AdminPanel = {
     App.socket.emit('adminListUsers', res => {
       if (!res || !res.ok) { this.status((res && res.msg) || 'Не удалось загрузить игроков', true); return; }
       this.users = res.users || [];
-      this.renderUsers();
-      this.populateRecipient();
-      this.loadDmSetting();
+      this.renderUsers(); this.populateRecipient(); this.loadDmSetting();
       this.status('Список обновлён');
     });
   },
@@ -2952,19 +3097,13 @@ const AdminPanel = {
       </div>`;
     }).join('');
   },
-  quickBan(encoded) {
-    const username = decodeURIComponent(encoded);
-    this.setTab('ban');
-    const inp = document.getElementById('banInput');
-    if (inp) { inp.value = username; this.checkBanPlayer(); }
-  },
+  quickBan(encoded) { const username = decodeURIComponent(encoded); this.setTab('ban'); const inp = document.getElementById('banInput'); if (inp) { inp.value = username; this.checkBanPlayer(); } },
   setRole(encoded) {
     const username = decodeURIComponent(encoded);
     const role = document.getElementById('adminRole-' + encodeURIComponent(username))?.value;
     App.socket.emit('adminSetRole', { username, role }, res => {
       if (!res || !res.ok) { this.status((res && res.msg) || 'Ошибка назначения роли', true); return; }
-      this.status('Роль обновлена: ' + username);
-      this.refresh();
+      this.status('Роль обновлена: ' + username); this.refresh();
     });
   },
   checkBanPlayer() {
@@ -2973,49 +3112,34 @@ const AdminPanel = {
     if (!input || !statusEl) return;
     const username = input.value.trim();
     if (!username) { statusEl.textContent = ''; statusEl.className = 'banStatus'; return; }
-    statusEl.className = 'banStatus checking';
-    statusEl.textContent = 'Проверяю...';
+    statusEl.className = 'banStatus checking'; statusEl.textContent = 'Проверяю...';
     this.banCheckTimer = setTimeout(() => {
       App.socket.emit('adminCheckPlayer', { username }, (res) => {
         if (!res) { statusEl.className = 'banStatus notfound'; statusEl.textContent = 'Нет ответа'; return; }
-        if (!res.ok) {
-          statusEl.className = 'banStatus notfound';
-          statusEl.textContent = 'Игрок не найден';
-          return;
-        }
+        if (!res.ok) { statusEl.className = 'banStatus notfound'; statusEl.textContent = 'Игрок не найден'; return; }
         if (res.banned) {
           statusEl.className = 'banStatus banned';
           const scopes = [];
-          if (res.scopes && res.scopes.chat) scopes.push('чат');
-          if (res.scopes && res.scopes.play) scopes.push('игра');
-          if (res.scopes && res.scopes.arena) scopes.push('турниры');
+          if (res.scopes?.chat) scopes.push('чат');
+          if (res.scopes?.play) scopes.push('игра');
+          if (res.scopes?.arena) scopes.push('турниры');
           statusEl.textContent = `🚫 Забанен до ${new Date(res.until).toLocaleString('ru-RU')}${scopes.length ? ' · ' + scopes.join(', ') : ''}${res.reason ? ' · ' + res.reason : ''}`;
-        } else {
-          statusEl.className = 'banStatus free';
-          statusEl.textContent = '✓ Свободен';
-        }
+        } else { statusEl.className = 'banStatus free'; statusEl.textContent = '✓ Свободен'; }
       });
     }, 350);
   },
   submitBan() {
     const username = (document.getElementById('banInput').value || '').trim();
     const hours = Number(document.getElementById('banHours').value || 0);
-    const scopes = {
-      chat: !!document.getElementById('banScopeChat').checked,
-      play: !!document.getElementById('banScopePlay').checked,
-      arena: !!document.getElementById('banScopeArena').checked
-    };
+    const scopes = { chat: !!document.getElementById('banScopeChat').checked, play: !!document.getElementById('banScopePlay').checked, arena: !!document.getElementById('banScopeArena').checked };
     const reason = (document.getElementById('banReason').value || '').trim();
     if (!username) { this.status('Введите ник игрока', true); return; }
     if (!hours || hours < 1 || hours > 8760) { this.status('Срок бана: от 1 до 8760 часов', true); return; }
     if (!scopes.chat && !scopes.play && !scopes.arena) { this.status('Выберите хотя бы одну область бана', true); return; }
-    if (!reason) { this.status('Введите описание бана — оно уйдёт игроку в ЛС', true); return; }
+    if (!reason) { this.status('Введите описание бана', true); return; }
     App.socket.emit('adminBan', { username, hours, scopes, reason }, res => {
       if (!res || !res.ok) { this.status((res && res.msg) || 'Ошибка бана', true); return; }
-      this.status(`Забанен: ${username} на ${hours} ч.`);
-      this.resetBanForm();
-      this.loadCurrentBans();
-      this.refresh();
+      this.status(`Забанен: ${username} на ${hours} ч.`); this.resetBanForm(); this.loadCurrentBans(); this.refresh();
     });
   },
   resetBanForm() {
@@ -3054,9 +3178,7 @@ const AdminPanel = {
     const username = decodeURIComponent(encoded);
     App.socket.emit('adminUnban', { username }, res => {
       if (!res || !res.ok) { this.status((res && res.msg) || 'Ошибка разбана', true); return; }
-      this.status('Блокировка снята: ' + username);
-      this.loadCurrentBans();
-      this.refresh();
+      this.status('Блокировка снята: ' + username); this.loadCurrentBans(); this.refresh();
     });
   },
   deleteAccount(encoded) {
@@ -3064,8 +3186,7 @@ const AdminPanel = {
     if (!confirm(`Безвозвратно удалить аккаунт ${username}?`)) return;
     App.socket.emit('adminDeleteAccount', { username }, res => {
       if (!res || !res.ok) { this.status((res && res.msg) || 'Ошибка удаления', true); return; }
-      this.status('Аккаунт удалён: ' + username);
-      this.refresh();
+      this.status('Аккаунт удалён: ' + username); this.refresh();
     });
   },
   populateRecipient() {
@@ -3076,30 +3197,24 @@ const AdminPanel = {
   },
   loadDmSetting() {
     if (!this.isRoot() || !App.socket) return;
-    App.socket.emit('adminGetDmSetting', res => {
-      const c = document.getElementById('adminDmClosed');
-      if (res && res.ok && c) c.checked = !!res.closed;
-    });
-    App.socket.emit('adminGetChatInterval', res => {
-      const input = document.getElementById('adminChatInterval');
-      if (res && res.ok && input) input.value = Number(res.seconds) || 0;
-    });
+    App.socket.emit('adminGetDmSetting', res => { const c = document.getElementById('adminDmClosed'); if (res && res.ok && c) c.checked = !!res.closed; });
+    App.socket.emit('adminGetChatInterval', res => { const input = document.getElementById('adminChatInterval'); if (res && res.ok && input) input.value = Number(res.seconds) || 0; });
   },
   saveChatInterval() {
     if (!this.isRoot() || !App.socket) return;
     const input = document.getElementById('adminChatInterval');
     const seconds = Number(input?.value);
-    if (!Number.isInteger(seconds) || seconds < 0 || seconds > 120) { this.status('Интервал должен быть от 0 до 120 секунд', true); return; }
+    if (!Number.isInteger(seconds) || seconds < 0 || seconds > 120) { this.status('Интервал 0-120 секунд', true); return; }
     App.socket.emit('adminSetChatInterval', { seconds }, res => {
-      if (!res || !res.ok) { this.status((res && res.msg) || 'Не удалось сохранить интервал', true); return; }
+      if (!res || !res.ok) { this.status((res && res.msg) || 'Не удалось сохранить', true); return; }
       if (input) input.value = res.seconds;
-      this.status(seconds === 0 ? 'Ограничение частоты сообщений отключено' : `Интервал чата: ${seconds} сек.`);
+      this.status(seconds === 0 ? 'Ограничение отключено' : `Интервал: ${seconds} сек.`);
     });
   },
   setDmClosed(closed) {
     App.socket.emit('adminSetDmSetting', { closed: !!closed }, res => {
-      if (!res || !res.ok) { this.status((res && res.msg) || 'Не удалось изменить настройку ЛС', true); this.loadDmSetting(); return; }
-      this.status(closed ? 'Входящие ЛС для вас отключены' : 'Входящие ЛС для вас включены');
+      if (!res || !res.ok) { this.status((res && res.msg) || 'Ошибка', true); this.loadDmSetting(); return; }
+      this.status(closed ? 'Входящие ЛС отключены' : 'Входящие ЛС включены');
     });
   },
   addPrivateMessage() {
@@ -3107,12 +3222,12 @@ const AdminPanel = {
     const text = (document.getElementById('adminPrivateText')?.value || '').trim();
     const color = document.getElementById('adminPrivateColor')?.value || '#ff4d4f';
     const to = document.getElementById('adminPrivateRecipient')?.value || '';
-    if (!to) { this.status('Выберите игрока, которому отправить сообщение', true); return; }
-    if (!text) { this.status('Введите текст личного сообщения', true); return; }
+    if (!to) { this.status('Выберите игрока', true); return; }
+    if (!text) { this.status('Введите текст', true); return; }
     App.socket.emit('adminSendPrivateMessage', { to, text, color }, res => {
-      if (!res || !res.ok) { this.status((res && res.msg) || 'Не удалось отправить личное сообщение', true); return; }
+      if (!res || !res.ok) { this.status((res && res.msg) || 'Ошибка отправки', true); return; }
       const inp = document.getElementById('adminPrivateText'); if (inp) inp.value = '';
-      this.status(`Личное сообщение отправлено игроку ${to}`);
+      this.status(`ЛС отправлено игроку ${to}`);
     });
   },
   ensureChatTools(box, scope) {
@@ -3120,16 +3235,11 @@ const AdminPanel = {
     const tools = document.createElement('div');
     tools.className = 'adminChatInlineTools';
     tools.dataset.scope = scope;
-    const label = document.createElement('span');
-    label.textContent = 'Выбрано: ';
-    const count = document.createElement('b');
-    count.className = 'adminInlineSelectedCount';
-    count.textContent = '0';
+    const label = document.createElement('span'); label.textContent = 'Выбрано: ';
+    const count = document.createElement('b'); count.className = 'adminInlineSelectedCount'; count.textContent = '0';
     label.appendChild(count);
     const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'adminInlineDeleteSelected';
-    btn.textContent = '🗑 Удалить выбранные';
+    btn.type = 'button'; btn.className = 'adminInlineDeleteSelected'; btn.textContent = '🗑 Удалить выбранные';
     btn.addEventListener('click', () => this.deleteSelected(scope));
     tools.append(label, btn);
     box.prepend(tools);
@@ -3142,133 +3252,73 @@ const AdminPanel = {
     const hotspot = document.createElement('label');
     hotspot.className = 'adminSelectHotspot';
     hotspot.title = 'Выбрать сообщение для удаления';
-    hotspot.setAttribute('aria-label', 'Выбрать сообщение для удаления');
     const cb = document.createElement('input');
-    cb.type = 'checkbox';
-    cb.className = 'adminSelectMsg';
-    cb.title = 'Выбрать сообщение для удаления';
-    cb.dataset.msgId = String(msg.id);
-    cb.dataset.scope = scope;
-    cb.addEventListener('change', () => {
-      hotspot.classList.toggle('is-selected', cb.checked);
-      this.updateSelectedCount();
-    });
+    cb.type = 'checkbox'; cb.className = 'adminSelectMsg'; cb.title = 'Выбрать';
+    cb.dataset.msgId = String(msg.id); cb.dataset.scope = scope;
+    cb.addEventListener('change', () => { hotspot.classList.toggle('is-selected', cb.checked); this.updateSelectedCount(); });
     hotspot.appendChild(cb);
     const first = div.firstChild;
-    if (first) div.insertBefore(hotspot, first);
-    else div.appendChild(hotspot);
+    if (first) div.insertBefore(hotspot, first); else div.appendChild(hotspot);
   },
   updateSelectedCount() {
     const selected = [...document.querySelectorAll('.adminSelectMsg:checked')];
     document.querySelectorAll('.adminInlineSelectedCount').forEach(el => {
-      const tools = el.closest('.adminChatInlineTools');
-      const scope = tools?.dataset.scope;
+      const tools = el.closest('.adminChatInlineTools'); const scope = tools?.dataset.scope;
       const n = selected.filter(c => c.dataset.scope === scope).length;
       el.textContent = String(n);
       if (tools) tools.style.display = n > 0 ? 'flex' : 'none';
-    });
-    document.querySelectorAll('.adminSelectMsg').forEach(cb => {
-      const hot = cb.closest('.adminSelectHotspot');
-      if (hot) hot.classList.toggle('is-selected', cb.checked);
     });
     const el = document.getElementById('adminSelectedCount');
     if (el) el.textContent = String(selected.length);
   },
   deleteSelected(scope) {
     const selected = [...document.querySelectorAll('.adminSelectMsg:checked')].filter(c => !scope || c.dataset.scope === scope);
-    if (!selected.length) { this.status('Сначала отметьте сообщения галочками в чате', true); return; }
-    if (!confirm(`Удалить выбранные сообщения (${selected.length}) у всех участников?`)) return;
+    if (!selected.length) { this.status('Отметьте сообщения', true); return; }
+    if (!confirm(`Удалить (${selected.length}) сообщений?`)) return;
     const groups = new Map();
-    for (const c of selected) {
-      const key = c.dataset.scope === 'arena' ? 'arena' : 'game';
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push(c.dataset.msgId);
-    }
+    for (const c of selected) { const key = c.dataset.scope === 'arena' ? 'arena' : 'game'; if (!groups.has(key)) groups.set(key, []); groups.get(key).push(c.dataset.msgId); }
     let pending = groups.size, failed = false;
     for (const [kind, msgIds] of groups) {
-      const payload = kind === 'arena'
-        ? { scope: 'arena', arenaId: Arena.currentArenaId, msgIds }
-        : { scope: 'game', lobbyId: App.lobbyId, msgIds };
+      const payload = kind === 'arena' ? { scope: 'arena', arenaId: Arena.currentArenaId, msgIds } : { scope: 'game', lobbyId: App.lobbyId, msgIds };
       App.socket.emit('adminBulkDeleteChat', payload, res => {
         if (!res || !res.ok) { failed = true; this.status((res && res.msg) || 'Ошибка удаления', true); }
         else selected.filter(c => c.dataset.scope === (kind === 'arena' ? 'arena' : 'game') && msgIds.includes(c.dataset.msgId)).forEach(c => c.closest('.msg')?.remove());
         pending--;
-        if (!pending) {
-          if (!failed) this.status('Удалено сообщений: ' + selected.length);
-          this.updateSelectedCount();
-        }
+        if (!pending) { if (!failed) this.status('Удалено: ' + selected.length); this.updateSelectedCount(); }
       });
     }
   }
 };
 
-// ============================================================
-// LANDING PAGE LOGIC
-// ============================================================
 const Landing = {
-  currentGame: null,
-  clockRaf: null,
-  clockSyncedAt: 0,
-  clockW: 0,
-  clockB: 0,
-  clockTurn: 'w',
-
+  currentGame: null, clockRaf: null, clockSyncedAt: 0, clockW: 0, clockB: 0, clockTurn: 'w',
   init() {
     this.renderDemoBoard();
-
     App.socket.emit('getStats', (stats) => {
       if (!stats) return;
-      const online = document.getElementById('landingStatOnline');
-      const totalGames = document.getElementById('landingStatTotalGames');
-      const activeGames = document.getElementById('landingStatActiveGames');
+      const online = document.getElementById('landingStatOnline'); const totalGames = document.getElementById('landingStatTotalGames'); const activeGames = document.getElementById('landingStatActiveGames');
       if (online) online.textContent = stats.online || 0;
       if (totalGames) totalGames.textContent = stats.games || 0;
       if (activeGames) activeGames.textContent = stats.activeGames || 0;
     });
-
-    App.socket.emit('getLiveGames', (list) => {
-      this.onLiveGamesUpdate(list);
-    });
-
+    App.socket.emit('getLiveGames', (list) => this.onLiveGamesUpdate(list));
     App.socket.emit('getCommunityOnline', (players) => {
       if (!players) return;
       const top = players.sort((a, b) => b.rating - a.rating).slice(0, 8);
       const list = document.getElementById('landingTopPlayers');
       if (list) {
-        if (!top.length) {
-          list.innerHTML = '<div class="players-empty">Пока нет игроков в рейтинге.<br>Стань первым!</div>';
-          return;
-        }
-        list.innerHTML = top.map(p => `
-          <div class="player">
-            <div class="avatar">${p.username[0].toUpperCase()}</div>
-            <div class="info">
-              <b>${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}</b>
-              <span>${p.online ? 'В сети' : 'Не в сети'}</span>
-            </div>
-            <div class="rating">${p.rating}</div>
-          </div>
-        `).join('');
+        if (!top.length) { list.innerHTML = '<div class="players-empty">Пока нет игроков в рейтинге.<br>Стань первым!</div>'; return; }
+        list.innerHTML = top.map(p => `<div class="player"><div class="avatar">${p.username[0].toUpperCase()}</div><div class="info"><b>${Utils.nickHtml(p.username, p.isAdmin, p.isMod, p.isBot)}</b><span>${p.online ? 'В сети' : 'Не в сети'}</span></div><div class="rating">${p.rating}</div></div>`).join('');
       }
     });
   },
-
   onLiveGamesUpdate(list) {
     if (this.currentGame && !this.currentGame.finished) return;
-
     const realGames = (list || []).filter(g => !g.isArena && !g.isSelfPlay);
     const game = realGames.length > 0 ? realGames[0] : null;
-
     if (game) {
       this.currentGame = game;
-      App.socket.emit('watchGame', { id: game.id }, (res) => {
-        if (res && res.ok) {
-          this.currentGame = res.game;
-          this.renderDemoBoard();
-          this.updatePlayers();
-          this.startClock();
-        }
-      });
+      App.socket.emit('watchGame', { id: game.id }, (res) => { if (res && res.ok) { this.currentGame = res.game; this.renderDemoBoard(); this.updatePlayers(); this.startClock(); } });
     } else {
       this.renderDemoBoard();
       document.getElementById('landingTopName').textContent = 'Ожидание партии...';
@@ -3279,75 +3329,49 @@ const Landing = {
       document.getElementById('landingBottomClock').classList.remove('active');
     }
   },
-
   renderDemoBoard() {
-    const board = document.getElementById('demoBoard');
-    if (!board) return;
-
+    const board = document.getElementById('demoBoard'); if (!board) return;
     let fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-    if (this.currentGame && this.currentGame.fen) {
-      fen = this.currentGame.fen;
-    }
-
+    if (this.currentGame && this.currentGame.fen) fen = this.currentGame.fen;
     const state = Chess.parseFen(fen);
     let html = '';
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        const isLight = (r + c) % 2 === 0;
-        const p = state.board[r][c];
-        html += `<div class="sq ${isLight ? 'light' : 'dark'}">`;
-        if (p) html += `<span class="piece">${Chess.pieceSvg(p)}</span>`;
-        html += `</div>`;
-      }
+    for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) {
+      const isLight = (r + c) % 2 === 0; const p = state.board[r][c];
+      html += `<div class="sq ${isLight ? 'light' : 'dark'}">`;
+      if (p) html += `<span class="piece">${Chess.pieceSvg(p)}</span>`;
+      html += `</div>`;
     }
     board.innerHTML = html;
   },
-
   updatePlayers() {
     if (!this.currentGame) return;
     const g = this.currentGame;
-
     document.getElementById('landingTopName').innerHTML = Utils.nickHtml(g.black, g.blackIsAdmin, g.blackIsMod);
     document.getElementById('landingTopRating').textContent = g.blackRating || '';
     document.getElementById('landingTopClock').textContent = Utils.formatTime(g.timeB || 0);
-
     document.getElementById('landingBottomName').innerHTML = Utils.nickHtml(g.white, g.whiteIsAdmin, g.whiteIsMod);
     document.getElementById('landingBottomRating').textContent = g.whiteRating || '';
     document.getElementById('landingBottomClock').textContent = Utils.formatTime(g.timeW || 0);
-
     document.getElementById('landingTopClock').classList.toggle('active', g.turn === 'b');
     document.getElementById('landingBottomClock').classList.toggle('active', g.turn === 'w');
   },
-
   startClock() {
     if (this.clockRaf) cancelAnimationFrame(this.clockRaf);
     if (!this.currentGame) return;
-
-    this.clockSyncedAt = performance.now();
-    this.clockW = this.currentGame.timeW || 0;
-    this.clockB = this.currentGame.timeB || 0;
-    this.clockTurn = this.currentGame.turn || 'w';
-
+    this.clockSyncedAt = performance.now(); this.clockW = this.currentGame.timeW || 0; this.clockB = this.currentGame.timeB || 0; this.clockTurn = this.currentGame.turn || 'w';
     const self = this;
     function tick() {
       if (!self.currentGame || self.currentGame.finished) { self.clockRaf = null; return; }
-
       const elapsed = (performance.now() - self.clockSyncedAt) / 1000;
       let w = self.clockW, b = self.clockB;
-
-      if (self.clockTurn === 'w') w = Math.max(0, w - elapsed);
-      else b = Math.max(0, b - elapsed);
-
-      const elW = document.getElementById('landingBottomClock');
-      const elB = document.getElementById('landingTopClock');
+      if (self.clockTurn === 'w') w = Math.max(0, w - elapsed); else b = Math.max(0, b - elapsed);
+      const elW = document.getElementById('landingBottomClock'); const elB = document.getElementById('landingTopClock');
       if (elW) elW.textContent = Utils.formatTime(w);
       if (elB) elB.textContent = Utils.formatTime(b);
-
       self.clockRaf = requestAnimationFrame(tick);
     }
     this.clockRaf = requestAnimationFrame(tick);
   },
-
   onBoardUpdate({ lobbyId, fen, turn, from, to, timeW, timeB }) {
     if (!this.currentGame || this.currentGame.id !== lobbyId) return;
     this.currentGame.fen = fen;
@@ -3355,55 +3379,27 @@ const Landing = {
     if (from && to) this.currentGame.lastMove = { from, to };
     if (typeof timeW === 'number') this.currentGame.timeW = timeW;
     if (typeof timeB === 'number') this.currentGame.timeB = timeB;
-
-    this.renderDemoBoard();
-    this.updatePlayers();
-
-    if (!this.currentGame.finished) {
-      this.clockSyncedAt = performance.now();
-      this.clockW = timeW || this.currentGame.timeW;
-      this.clockB = timeB || this.currentGame.timeB;
-      this.clockTurn = turn || this.currentGame.turn;
-    }
+    this.renderDemoBoard(); this.updatePlayers();
+    if (!this.currentGame.finished) { this.clockSyncedAt = performance.now(); this.clockW = timeW || this.currentGame.timeW; this.clockB = timeB || this.currentGame.timeB; this.clockTurn = turn || this.currentGame.turn; }
   },
-
   onTimeUpdate({ lobbyId, timeW, timeB }) {
     if (!this.currentGame || this.currentGame.id !== lobbyId) return;
-    this.currentGame.timeW = timeW;
-    this.currentGame.timeB = timeB;
-    this.clockSyncedAt = performance.now();
-    this.clockW = timeW;
-    this.clockB = timeB;
+    this.currentGame.timeW = timeW; this.currentGame.timeB = timeB;
+    this.clockSyncedAt = performance.now(); this.clockW = timeW; this.clockB = timeB;
   },
-
   onGameEnded({ lobbyId, result, reason }) {
     if (!this.currentGame || this.currentGame.id !== lobbyId) return;
-    this.currentGame.finished = true;
-    this.currentGame.result = result;
-    this.currentGame.reason = reason;
+    this.currentGame.finished = true; this.currentGame.result = result; this.currentGame.reason = reason;
     if (this.clockRaf) { cancelAnimationFrame(this.clockRaf); this.clockRaf = null; }
-
-    setTimeout(() => {
-      App.socket.emit('getLiveGames', (list) => this.onLiveGamesUpdate(list));
-    }, 5000);
+    setTimeout(() => { App.socket.emit('getLiveGames', (list) => this.onLiveGamesUpdate(list)); }, 5000);
   },
-
-  openAuth(mode) {
-    document.getElementById('authModal').classList.add('active');
-    Auth.switchTab(mode);
-  },
-
-  closeAuth() {
-    document.getElementById('authModal').classList.remove('active');
-  }
+  openAuth(mode) { document.getElementById('authModal').classList.add('active'); Auth.switchTab(mode); },
+  closeAuth() { document.getElementById('authModal').classList.remove('active'); }
 };
 
-// ============================================================
-// BOOTSTRAP
-// ============================================================
 document.addEventListener('DOMContentLoaded', () => {
   window.App = App; window.Router = Router; window.Lobby = Lobby; window.Bot = Bot;
-  window.Watch = Watch; window.Arena = Arena; window.Profile = Profile; window.Community = Community;
+  window.Watch = Watch; window.Arena = Arena; window.Swiss = Swiss; window.Profile = Profile; window.Community = Community;
   window.Game = Game; window.Banners = Banners; window.Mod = Mod; window.Utils = Utils;
   window.UserMenu = UserMenu; window.Inbox = Inbox; window.Ping = Ping; window.Auth = Auth; window.AdminPanel = AdminPanel;
   window.Landing = Landing; window.Rules = Rules; window.Leaderboard = Leaderboard;
@@ -3413,23 +3409,11 @@ document.addEventListener('DOMContentLoaded', () => {
   App.init();
 
   const rulesModal = document.getElementById('rulesModal');
-  if (rulesModal) {
-    rulesModal.addEventListener('click', (e) => {
-      if (e.target === rulesModal) Rules.close();
-    });
-  }
+  if (rulesModal) rulesModal.addEventListener('click', (e) => { if (e.target === rulesModal) Rules.close(); });
   const settingsModal = document.getElementById('userSettingsModal');
-  if (settingsModal) {
-    settingsModal.addEventListener('click', (e) => {
-      if (e.target === settingsModal) UserSettings.close();
-    });
-  }
+  if (settingsModal) settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) UserSettings.close(); });
   const deleteModal = document.getElementById('deleteAccountModal');
-  if (deleteModal) {
-    deleteModal.addEventListener('click', (e) => {
-      if (e.target === deleteModal) UserSettings.closeDeleteModal();
-    });
-  }
+  if (deleteModal) deleteModal.addEventListener('click', (e) => { if (e.target === deleteModal) UserSettings.closeDeleteModal(); });
 
   setTimeout(() => {
     if (!App.me) {
@@ -3437,19 +3421,13 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('mainHeader').style.display = 'none';
       document.getElementById('mainContent').style.display = 'none';
       document.getElementById('adminPage').style.display = 'none';
-      if (!location.hash || location.hash === '#' || location.hash === '#/') {
-        Router.go('landing');
-      } else {
-        Router.handle();
-      }
+      if (!location.hash || location.hash === '#' || location.hash === '#/') { Router.go('landing'); }
+      else { Router.handle(); }
       Landing.init();
     }
   }, 100);
 });
 
-// ============================================================
-// HOVER CARD
-// ============================================================
 (function() {
   let hoverTimer = null, hoverName = '';
   function ensureCard() { let card = document.getElementById('playerHoverCard'); if (!card) { card = document.createElement('div'); card.id = 'playerHoverCard'; document.body.appendChild(card); } return card; }
@@ -3461,7 +3439,7 @@ document.addEventListener('DOMContentLoaded', () => {
       let left = r.left; if (left + cardW + 8 > window.innerWidth) left = window.innerWidth - cardW - 8; if (left < 8) left = 8;
       card.style.left = left + 'px'; card.style.top = Math.min(window.innerHeight - 180, r.bottom + 7) + 'px';
       card.style.display = 'block';
-      card.innerHTML = `<div class="phName">${Utils.escapeHtml(username)}</div><div style="color:var(--muted)">Загрузка статистики…</div>`;
+      card.innerHTML = `<div class="phName">${Utils.escapeHtml(username)}</div><div style="color:var(--muted)">Загрузка…</div>`;
       App.socket.emit('getPlayerCard', { username }, (res) => {
         if (hoverName !== username || !res || !res.ok) return;
         const u = res.user;
