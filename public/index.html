@@ -14,6 +14,9 @@ body.login-active #mainContent { display: none !important; }
 </head>
 <body>
 
+<!-- ================================================================ -->
+<!-- ЛЕНДИНГ -->
+<!-- ================================================================ -->
 <section id="landingScreen" class="screen">
   <div class="landing-page">
     <header class="landing-header">
@@ -87,6 +90,9 @@ body.login-active #mainContent { display: none !important; }
   </div>
 </section>
 
+<!-- ================================================================ -->
+<!-- МОДАЛКА АВТОРИЗАЦИИ -->
+<!-- ================================================================ -->
 <div id="authModal" class="auth-modal-overlay">
   <div class="auth-card">
     <div class="auth-tabs">
@@ -132,6 +138,9 @@ body.login-active #mainContent { display: none !important; }
   </div>
 </div>
 
+<!-- ================================================================ -->
+<!-- МОДАЛКА ПРАВИЛ -->
+<!-- ================================================================ -->
 <div id="rulesModal" class="rules-modal">
   <div class="rules-box">
     <div class="rules-header">
@@ -143,6 +152,9 @@ body.login-active #mainContent { display: none !important; }
   </div>
 </div>
 
+<!-- ================================================================ -->
+<!-- СБРОС ПАРОЛЯ -->
+<!-- ================================================================ -->
 <section id="autorizeScreen" class="screen login-page" style="display: none;"></section>
 
 <section id="resetScreen" class="screen login-page" style="display: none;">
@@ -164,6 +176,9 @@ body.login-active #mainContent { display: none !important; }
   </div>
 </section>
 
+<!-- ================================================================ -->
+<!-- ШАПКА -->
+<!-- ================================================================ -->
 <header class="topbar" id="mainHeader" style="display: none;">
   <div class="logo" onclick="Router.go('lobby')"><span class="mark">♔</span> KingSide</div>
   <nav id="mainNav">
@@ -237,6 +252,9 @@ body.login-active #mainContent { display: none !important; }
   </div>
 </div>
 
+<!-- ================================================================ -->
+<!-- МОДАЛКА НАСТРОЕК ПОЛЬЗОВАТЕЛЯ -->
+<!-- ================================================================ -->
 <div id="userSettingsModal" class="modal-overlay">
   <div class="settings-box">
     <div class="settings-head">
@@ -277,6 +295,7 @@ body.login-active #mainContent { display: none !important; }
   </div>
 </div>
 
+<!-- Модалка удаления аккаунта -->
 <div id="deleteAccountModal" class="modal-overlay">
   <div class="modal-box">
     <h3>Удаление аккаунта</h3>
@@ -290,6 +309,9 @@ body.login-active #mainContent { display: none !important; }
   </div>
 </div>
 
+<!-- ================================================================ -->
+<!-- АДМИН-ПАНЕЛЬ -->
+<!-- ================================================================ -->
 <main id="adminPage" class="adminPage" style="display:none;">
   <section class="adminPanel" aria-labelledby="adminPanelTitle">
     <header class="adminPanelHeader">
@@ -302,7 +324,6 @@ body.login-active #mainContent { display: none !important; }
       <button data-admin-tab="chat" onclick="AdminPanel.setTab('chat',this)">🧹 Чат</button>
       <button data-admin-tab="private" onclick="AdminPanel.setTab('private',this)">✉ ЛС</button>
       <button data-admin-tab="settings" onclick="AdminPanel.setTab('settings',this)">⚙ Настройки</button>
-      <button data-admin-tab="swiss" onclick="AdminPanel.setTab('swiss',this)">🏆 Швейцарка</button>
     </div>
 
     <div id="adminUsersTab">
@@ -393,6 +414,7 @@ body.login-active #mainContent { display: none !important; }
           <button type="button" onclick="AdminPanel.saveChatInterval()">Сохранить</button>
         </div>
         <p class="adminMuted">Интервал применяется к обычным игрокам в игровом и аренном чате и проверяется сервером.</p>
+        <p class="adminMuted">Настройка ЛС сохраняется на сервере. Даже при отключённых входящих ЛС вы можете писать игрокам сами.</p>
       </section>
       <section id="adminModerationSection">
         <hr id="adminChatModerationAnchor">
@@ -401,52 +423,13 @@ body.login-active #mainContent { display: none !important; }
         <div class="adminMuted">Всего выбрано в открытых чатах: <span id="adminSelectedCount">0</span></div>
       </section>
     </div>
-
-    <div id="adminSwissTab" style="display:none;">
-      <section>
-        <h3>Создать швейцарский турнир</h3>
-        <p class="adminMuted">Турнир будет создан сразу. Игроки смогут регистрироваться до старта.</p>
-        <div class="swissCreateBox" style="padding:12px;background:var(--panel-2);">
-          <div class="swissCreateGrid">
-            <label>Название
-              <input id="swissCreateName" placeholder="Например: Швейцарка Blitz" maxlength="80">
-            </label>
-            <label>Категория
-              <select id="swissCreateCategory">
-                <option value="bullet">Пуля</option>
-                <option value="blitz" selected>Блиц</option>
-                <option value="rapid">Рапид</option>
-                <option value="classical">Классика</option>
-              </select>
-            </label>
-            <label>Контроль (минут)
-              <input id="swissCreateTime" type="number" min="1" max="60" value="3">
-            </label>
-            <label>Инкремент (сек)
-              <input id="swissCreateInc" type="number" min="0" max="60" value="2">
-            </label>
-            <label>Туров (1-30)
-              <input id="swissCreateRounds" type="number" min="1" max="30" value="20">
-            </label>
-            <label>Старт (дата и время)
-              <input id="swissCreateStart" type="datetime-local">
-            </label>
-            <label>Перерыв между турами (сек)
-              <input id="swissCreateBreak" type="number" min="5" max="300" value="20">
-            </label>
-          </div>
-          <div class="swissCreateActions">
-            <button class="primary" onclick="AdminPanel.createSwissTournament()">Создать турнир</button>
-          </div>
-          <div id="swissCreateMsg" class="adminMuted" style="margin-top:8px;"></div>
-        </div>
-      </section>
-    </div>
-
     <div id="adminPanelStatus" class="adminStatus" aria-live="polite"></div>
   </section>
 </main>
 
+<!-- ================================================================ -->
+<!-- ОСНОВНОЙ КОНТЕНТ -->
+<!-- ================================================================ -->
 <main id="mainContent" style="display: none;">
 
   <section id="lobbyScreen" class="screen">
@@ -499,8 +482,8 @@ body.login-active #mainContent { display: none !important; }
           <div style="cursor:pointer; padding:2px 0;">Вопросы и ответы про Арену</div>
           <div style="cursor:pointer; padding:2px 0;">Лиги &amp; Битвы стримеров</div>
         </div>
-        <div class="sideTitle" style="margin-bottom:8px;">🏆 Лучшие игроки арен</div>
-        <div id="bestPlayersList" class="leadersGrid">
+        <div class="sideTitle" style="margin-bottom:8px;">Лучшие игроки</div>
+        <div id="bestPlayersList" style="display:flex; flex-direction:column; gap:6px;">
           <div class="arenaEmpty" style="padding:10px; font-size:12px;">Загрузка...</div>
         </div>
       </div>
@@ -522,11 +505,9 @@ body.login-active #mainContent { display: none !important; }
           <div class="ascTitle" id="aInfoTitle">—</div>
           <div class="ascTime" id="aInfoTime">—</div>
           <div class="ascDesc" id="aInfoDesc">—</div>
-          <div class="ascCreator" id="aInfoCreator">Создатель: —</div>
-          <div id="aModeBadge"></div>
           <div class="ascRules">
             <div class="ascRulesLabel">Условия участия:</div>
-            <div class="ascRulesText" id="aRulesText">Рейтинговые игры в этой категории</div>
+            <div class="ascRulesText">Рейтинговые игры в этой категории</div>
           </div>
         </div>
         <div class="arenaChatBox">
@@ -583,109 +564,23 @@ body.login-active #mainContent { display: none !important; }
   </section>
 
   <section id="swissScreen" class="screen">
-    <div style="max-width:1200px; margin:0 auto; padding:0 16px;">
-      <div class="arenasHeader">
-        <div class="ahLeft"><h1>Турниры швейцарской системы</h1></div>
-        <button class="primary" onclick="Swiss.refreshList()">↻ Обновить</button>
-      </div>
-      <div id="swissListWrap"><div class="arenasEmpty">Загрузка...</div></div>
-    </div>
-  </section>
-
-  <section id="swissPageScreen" class="screen">
-    <div class="swissPage">
-      <aside class="swissLeft">
-        <div class="swissStatusCard">
-          <div class="ascIcon">🏆</div>
-          <div class="ascTitle" id="swTitle">—</div>
-          <div class="ascTime" id="swTime">—</div>
-          <div class="ascDesc" id="swDesc">—</div>
-          <div class="ascCreator" id="swCreator">Создатель: —</div>
-          <div id="swRoundBadge"></div>
-          <div id="swBreakTimer" style="display:none;">
-            <div class="swissBreakLabel">Перерыв до след. тура:</div>
-            <div class="swissBreakTimer" id="swBreakTimerValue">--:--</div>
-          </div>
-          <div class="ascRules">
-            <div class="ascRulesLabel">Условия участия:</div>
-            <div class="ascRulesText">Открыто для всех · 20 туров</div>
-          </div>
-        </div>
-        <div class="arenaChatBox">
-          <div class="arenaChatHeader"><span>💬 Чат турнира</span></div>
-          <div class="arenaChatMessages" id="swissChatMessages"></div>
-          <form class="arenaChatForm" onsubmit="Swiss.sendChat(event)">
-            <input id="swissChatInput" placeholder="Будьте вежливы!" maxlength="300" autocomplete="off">
-            <button type="submit">→</button>
-          </form>
-        </div>
-      </aside>
-
-      <main class="swissCenter">
-        <div class="arenaTopBar">
-          <div class="arenaTopLeft">
-            <div class="arenaTrophy">🏆</div>
-            <div style="min-width:0; flex:1;">
-              <h2 class="arenaPageName" id="swPageName">—</h2>
-              <div class="arenaPageSub" id="swPageSub">—</div>
-            </div>
-            <div class="arenaStatusIndicator">
-              <span class="arenaStatusLabel" id="swStatusLabel">Раунд:</span>
-              <span class="arenaStatusTime" id="swStatusTime">--/--</span>
-            </div>
-          </div>
-        </div>
-        <div class="arenaPairingBox" id="swPairingBox" style="display:none;"></div>
-        <div class="arenaParticipantsHeader">
-          <div class="arenaSearch"><input id="swSearchInput" placeholder="🔍 Поиск игрока" oninput="Swiss.filterStandings()"></div>
-          <div id="swJoinBtnWrap"><button class="primary arenaJoinBtn" onclick="Swiss.joinCurrent()">УЧАСТВОВАТЬ</button></div>
-        </div>
-        <div class="arenaParticipantsTable">
-          <div class="swissTableHeader">
-            <span>#</span>
-            <span>Игрок</span>
-            <span class="hRight">Очки</span>
-            <span class="hCenter">+/-/=</span>
-            <span class="hRight hBuchholz">ТБ</span>
-            <span class="hCenter hBye">Бай</span>
-          </div>
-          <div class="arenaTableBody" id="swissTableBody"><div class="arenasEmpty">Загрузка...</div></div>
-          <div class="arenaPagination" id="swissPagination"></div>
-        </div>
-        <div class="arenaWinnerBanner" id="swissWinnerBanner" style="display:none;">
-          <div class="awbTitle">🏆 Турнир завершён!</div>
-          <div class="awbPodium" id="swPodium"></div>
-        </div>
-      </main>
-
-      <aside class="swissRight">
-        <div class="arenaRightCol">
-          <div class="arenaGamesHeader">📋 ПАРЫ ТЕКУЩЕГО ТУРА</div>
-          <div class="arenaGamesList" id="swissPairsList"><div class="arenasEmpty" style="padding:20px 10px;">Пока нет пар</div></div>
-          <div class="arenaStatsBox" id="swissStatsBox">
-            <span>👥 Участников: <b id="swissParticipantsCount">0</b></span>
-            <span>🏁 Раунд: <b id="swissRoundNum">0/20</b></span>
-          </div>
-        </div>
-      </aside>
+    <div class="stubPage">
+      <div class="stubIcon">🏆</div>
+      <h2>Турниры швейцарской системы</h2>
+      <p>Этот раздел скоро появится. Следите за обновлениями!</p>
     </div>
   </section>
 
   <section id="leaderboardScreen" class="screen">
     <div class="leaderboardPage">
       <h1 class="leaderboardTitle">Рейтинг игроков</h1>
-      <div class="lbTabs" id="leaderboardTabs">
-        <button class="lbTab active" data-cat="blitz" onclick="Leaderboard.setCategory('blitz')"><span class="lbTabIcon">⚡</span> Блиц</button>
-        <button class="lbTab" data-cat="bullet" onclick="Leaderboard.setCategory('bullet')"><span class="lbTabIcon">🔫</span> Пуля</button>
-        <button class="lbTab" data-cat="rapid" onclick="Leaderboard.setCategory('rapid')"><span class="lbTabIcon">⏱</span> Рапид</button>
-        <button class="lbTab" data-cat="classical" onclick="Leaderboard.setCategory('classical')"><span class="lbTabIcon">🐢</span> Классика</button>
-      </div>
       <div class="leaderboardMeta" id="leaderboardMeta">Загрузка...</div>
       <div class="leaderboardList" id="leaderboardList"></div>
       <div class="leaderboardPagination" id="leaderboardPagination"></div>
     </div>
   </section>
 
+  <!-- РЕПОРТ -->
   <section id="reportsScreen" class="screen">
     <div class="reportsPage">
       <h1 class="reportsTitle">🚩 Отправить репорт</h1>
@@ -735,12 +630,6 @@ body.login-active #mainContent { display: none !important; }
           </div>
         </div>
       </div>
-
-      <div class="awardsSection" id="awardsSection" style="display:none;">
-        <div class="awardsTitle">🏆 Щиты и награды</div>
-        <div class="awardsGrid" id="awardsGrid"></div>
-      </div>
-
       <button class="profileShowGamesBtn" id="showGamesBtn" onclick="Profile.toggleGames()">📜 Показать партии</button>
       <div class="profileGamesHidden" id="profileGamesWrap">
         <h3 style="margin:16px 0 8px; color:var(--text-bright); font-weight:500">Последние партии</h3>
@@ -846,8 +735,14 @@ body.login-active #mainContent { display: none !important; }
   </section>
 </main>
 
+<!-- ================================================================ -->
+<!-- ПЛАВАЮЩАЯ КНОПКА "?" -->
+<!-- ================================================================ -->
 <button id="rulesFab" class="rules-fab" title="Правила платформы" onclick="Rules.open()">?</button>
 
+<!-- ================================================================ -->
+<!-- МОДАЛКА БОТА -->
+<!-- ================================================================ -->
 <div id="botDialog" class="botModal">
   <div class="botModalBox">
     <h3>🤖 Игра с компьютером</h3>
