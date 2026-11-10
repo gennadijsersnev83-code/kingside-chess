@@ -405,29 +405,17 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .lobbyStatItem b { font-size:18px; font-weight:700; color:var(--text-bright); line-height:1.1; }
 
 .siteFooterStats {
-  position:fixed;
-  right:16px;
-  bottom:16px;
   display:flex;
-  flex-direction:column;
-  gap:6px;
-  z-index:150;
+  justify-content:center;
+  gap:16px;
+  margin-top:16px;
   font-size:13px;
-  background:rgba(24,23,20,0.72);
-  border:1px solid var(--border);
-  border-radius:8px;
-  padding:10px 14px;
-  backdrop-filter:blur(6px);
-  box-shadow:0 6px 20px rgba(0,0,0,.35);
-  pointer-events:none;
+  color:var(--muted);
 }
-.siteFooterStats .sfRow { display:flex; align-items:center; gap:8px; color:var(--muted); }
+.siteFooterStats .sfRow { display:flex; align-items:center; gap:6px; }
 .siteFooterStats .sfRow b { color:var(--text-bright); font-weight:700; font-size:14px; }
 .siteFooterStats .sfRow .sfIcon { font-size:14px; }
-@media (max-width:700px) {
-  .siteFooterStats { right:8px; bottom:56px; padding:6px 10px; font-size:11px; }
-  .siteFooterStats .sfRow b { font-size:12px; }
-}
+@media (max-width:700px) { .siteFooterStats { font-size:11px; gap:10px; margin-top:10px; } .siteFooterStats .sfRow b { font-size:12px; } }
 
 .gameWrap { display:grid; grid-template-columns:280px 480px 280px; gap:16px; align-items:start; justify-content:center; margin:0 auto; }
 @media (max-width:1120px) { .gameWrap { grid-template-columns:240px minmax(0,1fr) 260px; } }
