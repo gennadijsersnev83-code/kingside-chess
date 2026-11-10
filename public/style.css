@@ -115,20 +115,23 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .statsBox .statRow .val { color:var(--accent); font-weight:700; font-size:16px; }
 .statsBox .statRow.live .val { color:var(--green-2); }
 
-.lobbyCenter { background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden; display:flex; flex-direction:column; align-self:stretch; min-height:0; }
-.lobbyCenter .tabs { display:flex; background:var(--panel-2); border-bottom:1px solid var(--border); }
+.lobbyCenter { background:var(--panel); border:1px solid var(--border); border-radius:8px; overflow:hidden; display:flex; flex-direction:column; align-self:stretch; min-height:0; position:relative; }
+.lobbyCenter .tabs { display:flex; background:var(--panel-2); border-bottom:1px solid var(--border); position:relative; z-index:2; }
 .lobbyCenter .tabs button { flex:1; background:transparent; border:none; border-radius:0; color:var(--muted); padding:14px 12px; font-weight:600; text-transform:uppercase; font-size:12px; letter-spacing:.5px; border-bottom:2px solid transparent; cursor:pointer; }
 .lobbyCenter .tabs button:hover { color:var(--text-bright); background:transparent; }
 .lobbyCenter .tabs button.active { color:var(--accent); border-bottom-color:var(--accent); background:transparent; }
-.lobbyContent { padding:0; min-height:480px; height:100%; display:flex; flex-direction:column; flex:1 1 auto; }
+.lobbyContent { padding:0; min-height:480px; height:100%; display:flex; flex-direction:column; flex:1 1 auto; position:relative; z-index:1; }
 .lobbyContent > .activeGamePanel { flex:1 1 auto; min-height:0; }
 .lobbyContent > .quickGrid, .lobbyContent > #customGamePanel { flex:0 0 auto; }
 .lobbyContent > .lobbyList, .lobbyContent > .lobbyHeader { flex:0 0 auto; }
 
+.lobbyBgKnight { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; z-index:0; overflow:hidden; opacity:0.08; }
+.lobbyBgKnight svg { width:80%; max-width:520px; height:auto; color:var(--text-bright); transform:rotate(-12deg); }
+
 .quickGrid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); grid-auto-rows:1fr; gap:8px; padding:16px; flex:1 1 auto; min-height:0; height:100%; align-content:stretch; box-sizing:border-box; }
 @media (max-width:560px) { .quickGrid { grid-template-columns:repeat(2,1fr); padding:10px; } }
-.quickBtn { background:var(--panel-2); border:1px solid var(--border); border-radius:6px; padding:18px 8px; color:var(--text-bright); cursor:pointer; transition:.15s; text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; min-width:0; }
-.quickBtn:hover { background:var(--panel-hover); border-color:var(--accent); transform:translateY(-1px); }
+.quickBtn { background:rgba(45,44,41,0.55); border:1px solid var(--border); border-radius:6px; padding:18px 8px; color:var(--text-bright); cursor:pointer; transition:.15s; text-align:center; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; min-width:0; }
+.quickBtn:hover { background:rgba(52,50,46,0.7); border-color:var(--accent); transform:translateY(-1px); }
 .quickBtn .qb-time { font-size:26px; font-weight:300; color:var(--text-bright); letter-spacing:.5px; }
 .quickBtn .qb-name { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
 .quickBtn.custom .qb-time { font-size:20px; color:var(--accent); }
@@ -249,6 +252,8 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaChatMessages .msg .u { color:var(--accent); font-weight:600; }
 .arenaChatMessages .msg .t { color:var(--muted); font-size:11px; margin-left:6px; }
 .arenaChatMessages .sys { color:var(--muted); font-size:12px; font-style:italic; }
+.arenaChatMessages .msg .chat-profile-link { color:#4a9ce8; text-decoration:underline; cursor:pointer; }
+.arenaChatMessages .msg .chat-profile-link:hover { color:#69b0f0; }
 .arenaChatForm { display:flex; border-top:1px solid var(--border); padding-top:10px; }
 .arenaChatForm input { flex:1; border:none; background:transparent; padding:8px 0; font-size:13px; color:var(--text-bright); outline:none; }
 .arenaChatForm button { border:none; background:transparent; color:var(--muted); cursor:pointer; font-size:16px; padding:0 8px; }
@@ -271,6 +276,8 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .arenaSearch input:focus { border-color:var(--accent); }
 .arenaJoinBtn { width:200px; height:36px; padding:0 16px; font-weight:700; font-size:14px; letter-spacing:.5px; background:var(--green); color:#fff; border:none; border-radius:4px; cursor:pointer; transition:.15s; flex-shrink:0; }
 .arenaJoinBtn:hover { background:var(--green-2); }
+.arenaJoinBtn:disabled,
+.arenaJoinBtn[disabled] { background:#3a3a3a; color:#7d7a72; cursor:not-allowed; opacity:.7; }
 .arenaJoinBtn.secondary { background:var(--panel-2); color:var(--text-bright); border:1px solid var(--border); }
 .arenaParticipantsTable { background:transparent; border:none; border-radius:0; overflow:hidden; display:flex; flex-direction:column; flex:1; }
 .arenaTableBody { flex:1; overflow-y:auto; overflow-x:hidden; max-height:520px; }
@@ -397,6 +404,31 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .lobbyStatItem { display:flex; flex-direction:column; align-items:center; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
 .lobbyStatItem b { font-size:18px; font-weight:700; color:var(--text-bright); line-height:1.1; }
 
+.siteFooterStats {
+  position:fixed;
+  right:16px;
+  bottom:16px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  z-index:150;
+  font-size:13px;
+  background:rgba(24,23,20,0.72);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:10px 14px;
+  backdrop-filter:blur(6px);
+  box-shadow:0 6px 20px rgba(0,0,0,.35);
+  pointer-events:none;
+}
+.siteFooterStats .sfRow { display:flex; align-items:center; gap:8px; color:var(--muted); }
+.siteFooterStats .sfRow b { color:var(--text-bright); font-weight:700; font-size:14px; }
+.siteFooterStats .sfRow .sfIcon { font-size:14px; }
+@media (max-width:700px) {
+  .siteFooterStats { right:8px; bottom:56px; padding:6px 10px; font-size:11px; }
+  .siteFooterStats .sfRow b { font-size:12px; }
+}
+
 .gameWrap { display:grid; grid-template-columns:280px 480px 280px; gap:16px; align-items:start; justify-content:center; margin:0 auto; }
 @media (max-width:1120px) { .gameWrap { grid-template-columns:240px minmax(0,1fr) 260px; } }
 @media (max-width:940px) { .gameWrap { grid-template-columns:1fr; max-width:520px; } .col-chat { order:3; } .col-info { order:2; } .col-board { order:1; } }
@@ -509,6 +541,8 @@ button:disabled { opacity:.5; cursor:not-allowed; }
   border-radius: 4px;
 }
 #chatMessages .msg.msg-warning .u, .arenaChatMessages .msg.msg-warning .u { color: #ffb74d !important; }
+#chatMessages .msg .chat-profile-link, .arenaChatMessages .msg .chat-profile-link { color:#4a9ce8; text-decoration:underline; cursor:pointer; }
+#chatMessages .msg .chat-profile-link:hover, .arenaChatMessages .msg .chat-profile-link:hover { color:#69b0f0; }
 #chatForm { display:flex; border-top:1px solid var(--border); }
 #chatForm input { flex:1; border:none; border-radius:0; background:transparent; padding:10px 12px; font-size:13px; }
 #chatForm button { border-radius:0; padding:0 16px; font-size:14px; border:none; background:transparent; color:var(--muted); cursor:pointer; min-width:48px; min-height:40px; }
@@ -530,6 +564,23 @@ button:disabled { opacity:.5; cursor:not-allowed; }
 .roleBadge.mod { color:var(--role-mod); }
 .roleBadge.dev { color:var(--role-dev); }
 .muteBadge { display:inline-flex; align-items:center; gap:4px; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; border:1px solid #ff9c3a; color:#ff9c3a; }
+.profileShieldsBox { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 4px; padding:0; }
+.shieldItem {
+  display:inline-flex; align-items:center; gap:6px; padding:6px 10px;
+  background:linear-gradient(135deg,#3d2f16,#241c0c);
+  border:1px solid rgba(255,190,55,.55); border-radius:8px;
+  color:var(--gold); font-size:12px; font-weight:600; cursor:pointer;
+  transition:transform .15s ease,box-shadow .15s ease,filter .15s ease;
+  position:relative; overflow:hidden;
+}
+.shieldItem::before { content:'🛡'; font-size:16px; filter:drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
+.shieldItem .sw-place { font-weight:800; }
+.shieldItem .sw-arena { color:#e8e6e3; font-weight:500; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.shieldItem:hover { transform:translateY(-2px); box-shadow:0 6px 16px rgba(255,190,55,.45); filter:brightness(1.15); }
+.shieldItem.gold { border-color:#e9b83f; background:linear-gradient(135deg,#5a4319,#2b1f0a); }
+.shieldItem.silver { border-color:#aeb8c0; color:#d0d9df; background:linear-gradient(135deg,#3d4248,#1e2124); }
+.shieldItem.bronze { border-color:#bd8052; color:#e6b086; background:linear-gradient(135deg,#402c1a,#211509); }
+.shieldItem.silver::before, .shieldItem.bronze::before { filter:drop-shadow(0 1px 2px rgba(0,0,0,.5)); }
 .profileMain { display:grid; grid-template-columns:minmax(0,1fr) 320px; gap:16px; margin-bottom:16px; }
 @media (max-width:800px) { .profileMain { grid-template-columns:1fr; } }
 .profileMainLeft { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px; min-width:0; }
@@ -773,9 +824,6 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
 
 @media (max-width:600px) { .arenaTableRow { grid-template-columns:22px minmax(0,1fr) minmax(48px,auto) minmax(28px,auto); gap:4px; padding-left:6px; padding-right:6px; height:34px; } .arenaTableRow .pname { gap:4px; } .historyBlock { gap:3px; } .arena-results { gap:3px; } .res-num { font-size:12px; } .scoreVal { font-size:14px; } }
 
-/* ============================================================
-   ЛЕНДИНГ
-   ============================================================ */
 #landingScreen { background:var(--bg, #161512); min-height:100vh; display:none; flex-direction:column; }
 #landingScreen.active { display:flex; }
 .landing-page { max-width:1200px; margin:0 auto; width:100%; padding:0 20px; display:flex; flex-direction:column; flex:1; }
@@ -841,9 +889,6 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
   .landing-header { flex-direction:column; gap:16px; padding:16px; margin:0 -20px; }
 }
 
-/* ============================================================
-   БАЗОВЫЕ СТИЛИ МОДЕРАЦИИ ЧАТА
-   ============================================================ */
 #chatMessages .msg { position:relative; }
 #chatMessages .msg .modBtn { color:var(--muted); margin-left:6px; cursor:pointer; font-size:11px; opacity:0; transition:opacity .15s; user-select:none; }
 #chatMessages .msg:hover .modBtn { opacity:1; }
@@ -862,9 +907,6 @@ header.topbar .iconBtn .badge { position:absolute; top:-5px; right:-5px; min-wid
 .modMenu .sep { height:1px; background:var(--border); margin:4px 0; }
 .modMenu .lbl { color:var(--muted); font-size:11px; padding:6px 14px 2px; text-transform:uppercase; letter-spacing:.5px; }
 
-/* ============================================================
-   НАВИГАЦИЯ
-   ============================================================ */
 header.topbar nav { display:flex; gap:2px; flex:1; min-width:0; overflow:visible; align-items:stretch; }
 header.topbar nav .nav-dropdown { position:relative; display:flex; }
 header.topbar nav .nav-dropdown > a { display:flex; align-items:center; gap:4px; }
@@ -896,18 +938,14 @@ header.topbar nav .nav-menu a {
   cursor:pointer;
 }
 header.topbar nav .nav-menu a:hover { background:var(--panel-hover); color:var(--accent); }
+header.topbar nav .nav-menu a.swiss-nav-link { white-space:pre-line; line-height:1.25; }
+header.topbar nav .nav-menu a.swiss-nav-link::first-line { line-height:1.25; }
 
-/* ============================================================
-   ЗАГЛУШКИ
-   ============================================================ */
 .stubPage { max-width:640px; margin:60px auto; text-align:center; padding:20px; }
 .stubIcon { font-size:64px; margin-bottom:16px; opacity:.8; }
 .stubPage h2 { color:var(--text-bright); font-weight:500; margin:0 0 12px; font-size:26px; }
 .stubPage p { color:var(--muted); font-size:15px; line-height:1.5; }
 
-/* ============================================================
-   ПРАВИЛА
-   ============================================================ */
 .rules-fab {
   position:fixed;
   right:20px;
@@ -1005,13 +1043,14 @@ header.topbar nav .nav-menu a:hover { background:var(--panel-hover); color:var(-
 .checkbox-row .rules-link:hover { text-decoration:underline; }
 .checkbox-error { font-size:12px; color:#ff6b6b; margin-left:24px; margin-bottom:8px; display:none; }
 
-/* ============================================================
-   ЛИДЕРБОРД
-   ============================================================ */
 .leaderboardPage { max-width:860px; margin:0 auto; padding:24px 16px; }
 .leaderboardTitle { font-size:28px; font-weight:600; color:var(--text-bright); margin:0 0 6px; }
 .leaderboardMeta { color:var(--muted); font-size:13px; margin-bottom:18px; }
 .leaderboardMeta b { color:var(--accent); }
+.leaderboardFilter { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 16px; }
+.leaderboardFilter button { background:var(--panel-2); border:1px solid var(--border); color:var(--text); padding:7px 14px; font-size:13px; font-weight:600; border-radius:6px; cursor:pointer; min-height:34px; transition:.15s; }
+.leaderboardFilter button:hover { background:var(--panel-hover); color:var(--text-bright); }
+.leaderboardFilter button.active { background:var(--accent); color:#161512; border-color:var(--accent); }
 .leaderboardList { display:flex; flex-direction:column; gap:6px; }
 .leaderboardRow {
   display:grid;
@@ -1033,13 +1072,11 @@ header.topbar nav .nav-menu a:hover { background:var(--panel-hover); color:var(-
 .leaderboardRow .lbPlace.top3 { color:#d4904a; }
 .leaderboardRow .lbName { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; color:var(--text-bright); }
 .leaderboardRow .lbRating { font-weight:700; color:var(--accent-2); text-align:right; }
+.leaderboardRow .lbRating .lbProv { color:var(--muted); font-size:12px; font-weight:600; margin-left:2px; }
 .leaderboardRow .lbGames { color:var(--muted); font-size:12px; text-align:right; }
 .leaderboardPagination { display:flex; justify-content:center; align-items:center; gap:10px; margin-top:18px; flex-wrap:wrap; }
 .leaderboardPagination .pageInfo { color:var(--muted); font-size:13px; min-width:80px; text-align:center; }
 
-/* ============================================================
-   АДМИН-ПАНЕЛЬ
-   ============================================================ */
 .adminPage { max-width:1100px; margin:0 auto; padding:24px 16px; }
 .adminPanel { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:20px; }
 .adminPanelHeader { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; gap:12px; }
@@ -1093,9 +1130,6 @@ header.topbar nav .nav-menu a:hover { background:var(--panel-hover); color:var(-
 .adminDmSetting input { width:16px; height:16px; accent-color:var(--accent); }
 .adminPanel hr { border:none; border-top:1px solid var(--border); margin:18px 0; }
 
-/* ============================================================
-   БАН-ПАНЕЛЬ
-   ============================================================ */
 .banPanel { display:flex; flex-direction:column; gap:14px; }
 .banRow { display:flex; flex-direction:column; gap:6px; }
 .banRow input, .banRow textarea { background:var(--panel-2); border:1px solid var(--border); color:var(--text-bright); border-radius:4px; padding:9px 12px; font-size:14px; }
@@ -1153,9 +1187,6 @@ header.topbar nav .nav-menu a:hover { background:var(--panel-hover); color:var(-
 .banCurrentItem button { padding:6px 10px; font-size:12px; border:1px solid var(--red); color:#ff6b6b; background:rgba(165,48,48,.1); border-radius:4px; font-weight:600; cursor:pointer; min-height:30px; }
 .banCurrentItem button:hover { background:rgba(165,48,48,.2); }
 
-/* ============================================================
-   МАССОВОЕ УДАЛЕНИЕ СООБЩЕНИЙ
-   ============================================================ */
 .adminChatInlineTools { display:none; align-items:center; gap:10px; padding:8px 10px; background:var(--panel); border:1px solid var(--border); border-radius:6px; margin-bottom:8px; font-size:12px; color:var(--muted); }
 .adminChatInlineTools b { color:var(--accent); }
 .adminChatInlineTools .adminInlineDeleteSelected { background:var(--red); border:1px solid var(--red); color:#fff; font-weight:700; font-size:12px; padding:6px 12px; border-radius:4px; cursor:pointer; min-height:30px; }
@@ -1177,9 +1208,6 @@ header.topbar nav .nav-menu a:hover { background:var(--panel-hover); color:var(-
 .adminTopMenu button { display:block; width:100%; text-align:left; background:transparent; border:none; border-radius:0; color:var(--text-bright); padding:9px 16px; font-size:13px; cursor:pointer; min-height:34px; }
 .adminTopMenu button:hover { background:var(--panel-hover); color:var(--accent); }
 
-/* ============================================================
-   НАСТРОЙКИ ПОЛЬЗОВАТЕЛЯ
-   ============================================================ */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.78); display:none; align-items:center; justify-content:center; z-index:2000; padding:16px; }
 .modal-overlay.active { display:flex; }
 .settings-box {
@@ -1278,9 +1306,6 @@ header.topbar nav .nav-menu a:hover { background:var(--panel-hover); color:var(-
 .modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }
 .modal-actions button { padding:9px 16px; font-weight:600; font-size:13px; }
 
-/* ============================================================
-   РЕПОРТЫ
-   ============================================================ */
 .reportsPage {
   max-width:640px;
   margin:0 auto;
@@ -1342,9 +1367,68 @@ header.topbar nav .nav-menu a:hover { background:var(--panel-hover); color:var(-
   line-height:1.5;
 }
 
-/* ============================================================
-   АДАПТИВ ДЛЯ НОВЫХ БЛОКОВ
-   ============================================================ */
+.swissPage { max-width:1100px; margin:0 auto; padding:24px 16px; }
+.swissHeader { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:18px; }
+.swissTitle { font-size:28px; font-weight:600; color:var(--text-bright); margin:0 0 6px; }
+.swissSub { color:var(--muted); font-size:13px; }
+.swissAdminCard { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:16px 18px; margin-bottom:20px; }
+.swissAdminCard h3 { margin:0 0 12px; color:var(--text-bright); font-size:16px; }
+.swissFormRow { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:10px; margin-bottom:10px; }
+.swissFormRow input, .swissFormRow select { background:var(--panel-2); border:1px solid var(--border); color:var(--text-bright); border-radius:4px; padding:9px 12px; font-size:13px; }
+.swissSection { margin-bottom:24px; }
+.swissSection h3 { color:var(--accent-2); font-size:16px; margin:0 0 10px; }
+.swissCard { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px 14px; margin-bottom:8px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.swissCard:hover { border-color:var(--accent); background:var(--panel-hover); }
+.swissCard .swName { color:var(--text-bright); font-weight:600; }
+.swissCard .swMeta { color:var(--muted); font-size:12px; margin-top:3px; }
+.swissCard .swBadge { background:var(--panel-2); border:1px solid var(--border); color:var(--text); font-size:11px; font-weight:700; padding:3px 8px; border-radius:10px; text-transform:uppercase; }
+.swissCard .swBadge.live { background:rgba(125,190,48,.15); color:#7dbe30; border-color:rgba(125,190,48,.4); }
+.swissCard .swBadge.finished { background:rgba(229,72,77,.1); color:#ff9c9c; border-color:rgba(229,72,77,.3); }
+.swissEmpty { color:var(--muted); text-align:center; padding:20px; font-size:13px; }
+
+.swissTournamentPage { max-width:1100px; margin:0 auto; padding:24px 16px; }
+.swissTourHeader { display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+.swissTourName { font-size:26px; font-weight:600; color:var(--text-bright); margin:0 0 6px; }
+.swissTourMeta { color:var(--muted); font-size:13px; }
+.swissTourActions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.swissPairingNote { background:rgba(191,129,29,.08); border-left:3px solid var(--accent); border-radius:6px; padding:10px 14px; margin-bottom:14px; font-size:13px; color:var(--text-bright); display:flex; gap:10px; align-items:center; }
+.swissPairingNote .spinner { width:14px; height:14px; border-radius:50%; border:2px solid rgba(255,255,255,.25); border-top-color:var(--accent); animation:spin .9s linear infinite; }
+.swissGrid { display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr); gap:16px; }
+@media (max-width:900px) { .swissGrid { grid-template-columns:1fr; } }
+.swissStandings { background:var(--panel); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+.swissStandingsHeader { padding:12px 14px; background:var(--panel-2); border-bottom:1px solid var(--border); font-size:13px; color:var(--text-bright); font-weight:700; display:flex; justify-content:space-between; }
+.swissStandingsRow { display:grid; grid-template-columns:32px minmax(0,1fr) 60px 50px 40px; gap:8px; padding:8px 14px; font-size:13px; border-bottom:1px solid rgba(58,56,51,.35); align-items:center; }
+.swissStandingsRow:last-child { border-bottom:none; }
+.swissStandingsRow .swPlace { color:var(--muted); font-weight:700; }
+.swissStandingsRow .swPlace.top1 { color:#ffd54f; }
+.swissStandingsRow .swPlace.top2 { color:#d0d9df; }
+.swissStandingsRow .swPlace.top3 { color:#d4904a; }
+.swissStandingsRow .swName { color:var(--text-bright); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.swissStandingsRow .swRating { color:var(--muted); font-size:12px; text-align:right; }
+.swissStandingsRow .swScore { color:var(--accent-2); font-weight:700; text-align:right; }
+.swissStandingsRow .swTie { color:var(--muted); font-size:12px; text-align:right; }
+.swissStandingsHeader .swHdr { display:grid; grid-template-columns:32px minmax(0,1fr) 60px 50px 40px; gap:8px; padding:0 14px; font-size:11px; color:var(--muted); }
+.swissStandingsHeader .swHdr > span:nth-child(3),
+.swissStandingsHeader .swHdr > span:nth-child(4),
+.swissStandingsHeader .swHdr > span:nth-child(5) { text-align:right; }
+.swissSideBlock { background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:14px; }
+.swissSideBlock h4 { margin:0 0 10px; color:var(--text-bright); font-size:14px; font-weight:700; }
+.swissResultsRow { display:flex; align-items:center; gap:8px; padding:6px 0; font-size:12px; border-bottom:1px solid rgba(58,56,51,.3); }
+.swissResultsRow:last-child { border-bottom:none; }
+.swissResultsRow .srRes { font-weight:700; flex-shrink:0; min-width:40px; color:var(--muted); }
+.swissResultsRow .srRes.w { color:#6ee787; }
+.swissResultsRow .srRes.b { color:#ff8a8a; }
+.swissResultsRow .srRes.d { color:var(--accent); }
+.swissResultsRow .srNames { flex:1; min-width:0; color:var(--text-bright); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.swissResultsRow .srRound { color:var(--muted); font-size:11px; flex-shrink:0; }
+.swissPairingBox { background:rgba(98,153,36,.06); border-left:3px solid var(--green-2); border-radius:6px; padding:10px 14px; margin-bottom:14px; font-size:13px; color:var(--text-bright); }
+.swissPairingBox .spinner { display:inline-block; width:14px; height:14px; border-radius:50%; border:2px solid rgba(255,255,255,.25); border-top-color:var(--green-2); animation:spin .9s linear infinite; margin-right:8px; vertical-align:middle; }
+.swissBtn { background:var(--green); border:none; color:#fff; padding:9px 18px; border-radius:6px; font-weight:700; font-size:13px; cursor:pointer; }
+.swissBtn:hover { background:var(--green-2); }
+.swissBtn.secondary { background:var(--panel-2); color:var(--text-bright); border:1px solid var(--border); }
+.swissBtn:disabled,
+.swissBtn[disabled] { opacity:.55; cursor:not-allowed; }
+
 @media (max-width:700px) {
   header.topbar nav { overflow-x:auto; }
   header.topbar nav .nav-dropdown:hover .nav-menu { display:none; }
@@ -1361,4 +1445,5 @@ header.topbar nav .nav-menu a:hover { background:var(--panel-hover); color:var(-
   .adminUserRow select { max-width:100%; }
   .settings-box { max-height:92vh; }
   .reportActions { flex-direction:column; align-items:stretch; }
+  .swissGrid { grid-template-columns:1fr; }
 }
