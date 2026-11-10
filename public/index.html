@@ -435,6 +435,10 @@ body.login-active #mainContent { display: none !important; }
           <span class="lobbyStatItem"><b id="statGames">0</b> партий</span>
           <span class="lobbyStatItem"><b id="statActive">0</b> сейчас</span>
         </div>
+        <div id="siteFooterStats" class="siteFooterStats" style="display:none;">
+          <div class="sfRow"><span class="sfIcon">👥</span><b id="footerStatOnline">0</b> игроков</div>
+          <div class="sfRow"><span class="sfIcon">♟</span><b id="footerStatGames">0</b> партий</div>
+        </div>
       </aside>
     </div>
   </section>
@@ -563,6 +567,7 @@ body.login-active #mainContent { display: none !important; }
             <option value="10">Рапид 10+0</option>
             <option value="30">Классика 30+0</option>
           </select>
+          <input id="swissCreateStartsAt" type="datetime-local" title="Время начала турнира">
           <button class="swissBtn" onclick="Swiss.createTournament()">Создать</button>
         </div>
       </div>
@@ -764,11 +769,6 @@ body.login-active #mainContent { display: none !important; }
 </main>
 
 <button id="rulesFab" class="rules-fab" title="Правила платформы" onclick="Rules.open()">?</button>
-
-<div id="siteFooterStats" class="siteFooterStats" style="display:none;">
-  <div class="sfRow"><span class="sfIcon">👥</span><b id="footerStatOnline">0</b> игроков</div>
-  <div class="sfRow"><span class="sfIcon">♟</span><b id="footerStatGames">0</b> партий</div>
-</div>
 
 <div id="botDialog" class="botModal">
   <div class="botModalBox">
