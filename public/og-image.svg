@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#161512"/>
+  <text x="600" y="260" font-family="'Segoe UI Symbol', 'Apple Symbols', serif" font-size="240" text-anchor="middle" fill="#bf811d">♞</text>
+  <text x="600" y="420" font-family="'Segoe UI', 'Roboto', 'Arial', sans-serif" font-size="80" font-weight="800" text-anchor="middle" fill="#e8e6e3">King<tspan fill="#bf811d">Side</tspan></text>
+  <text x="600" y="500" font-family="'Segoe UI', 'Roboto', 'Arial', sans-serif" font-size="36" text-anchor="middle" fill="#bfbdb6">Шахматы онлайн · Турниры · Рейтинг</text>
+</svg>
