@@ -121,7 +121,6 @@ function updateGlicko2(rating, rd, vol, results, elapsedDays = 0) {
 }
 function glicko2PhiJ(phi) { return glicko2G(phi); }
 
-// --- Основная БД ---
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
@@ -151,12 +150,10 @@ if (process.env.DATABASE_URL_WATCHER) {
 
 let db = { users: {}, totalGames: 0 };
 
-// NEW: антиспам-состояние (в памяти)
-// username -> { warnedAt, warnings, lastWarningAt }
 const spamWarnings = new Map();
-const SPAM_WINDOW_MS = 10 * 1000;       // окно частых сообщений
-const SPAM_THRESHOLD = 5;                // >= 5 сообщений за 10 сек
-const SPAM_WARN_RESET_MS = 2 * 60 * 1000; // через 2 мин предупреждение сбрасывается
+const SPAM_WINDOW_MS = 10 * 1000;
+const SPAM_THRESHOLD = 5;
+const SPAM_WARN_RESET_MS = 2 * 60 * 1000;
 
 async function initDB() {
   await pool.query(`CREATE TABLE IF NOT EXISTS users (
@@ -219,6 +216,17 @@ async function initDB() {
     id SERIAL PRIMARY KEY, reporter TEXT NOT NULL, target TEXT NOT NULL, reason TEXT NOT NULL, description TEXT DEFAULT '', created_at BIGINT NOT NULL, resolved BOOLEAN DEFAULT FALSE
   );`);
   await pool.query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS user_shields (
+    id SERIAL PRIMARY KEY, username TEXT NOT NULL, arena_id TEXT NOT NULL, arena_name TEXT NOT NULL,
+    category TEXT NOT NULL, place INTEGER NOT NULL, awarded_at BIGINT NOT NULL
+  );`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_user_shields_username ON user_shields (username, awarded_at DESC);`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS swiss_tournaments (
+    id TEXT PRIMARY KEY, name TEXT NOT NULL, creator TEXT NOT NULL, rounds INTEGER NOT NULL,
+    time_control REAL NOT NULL, increment INTEGER NOT NULL, starts_at BIGINT NOT NULL,
+    phase TEXT NOT NULL DEFAULT 'upcoming', participants JSONB DEFAULT '[]',
+    standings JSONB DEFAULT '[]', results JSONB DEFAULT '[]', created_at BIGINT NOT NULL
+  );`);
 
   if (arenaPool) {
     try {
@@ -238,9 +246,11 @@ async function initDB() {
           top3 JSONB,
           participants JSONB,
           finished_games JSONB,
+          creator TEXT DEFAULT 'PeshkaSasha',
           created_at BIGINT NOT NULL DEFAULT 0
         );
       `);
+      await arenaPool.query(`ALTER TABLE arena_history ADD COLUMN IF NOT EXISTS creator TEXT DEFAULT 'PeshkaSasha';`);
       await arenaPool.query(`CREATE INDEX IF NOT EXISTS idx_arena_history_ends_at ON arena_history (ends_at DESC);`);
       console.log('[ArenaDB] Таблица arena_history готова');
     } catch (e) {
@@ -427,7 +437,6 @@ function publicUser(name) {
 function isUserOnline(username) { for (const [, name] of online.entries()) if (name === username) return true; return false; }
 function socketsOfUser(username) { const list = []; for (const [sid, name] of online.entries()) if (name === username) list.push(sid); return list; }
 
-// NEW: проверка активного бана по scope
 function banActiveFor(user, scope) {
   if (!user) return false;
   if (!user.isBanned) return false;
@@ -929,6 +938,49 @@ async function finishGame(lobbyId, result, reason) {
   broadcastOnline(); broadcastLiveGames();
 }
 
+const CATEGORY_NAMES = { bullet: 'Пуля', blitz: 'Блиц', rapid: 'Рапид', classical: 'Классика' };
+const CATEGORY_COLORS = { bullet: 'bullet', blitz: 'blitz', rapid: 'rapid', classical: 'classical' };
+
+const CHAMPIONSHIP_TIMES = {
+  bullet:    { dayOfMonth: 10, startHourMsk: 14, durationMin: 237 },
+  blitz:     { dayOfMonth: 11, startHourMsk: 14, durationMin: 237 },
+  rapid:     { dayOfMonth: 12, startHourMsk: 14, durationMin: 237 },
+  classical: { dayOfMonth: 13, startHourMsk: 14, durationMin: 237 }
+};
+
+function mskMonthStart(ts) {
+  const p = mskParts(ts);
+  return fromMsk(p.y, p.mo, 1, 0, 0, 0);
+}
+function nextChampionshipStart(category, now) {
+  const cfg = CHAMPIONSHIP_TIMES[category];
+  const p = mskParts(now);
+  let candidate = fromMsk(p.y, p.mo, cfg.dayOfMonth, cfg.startHourMsk, 0, 0);
+  if (candidate <= now) {
+    candidate = fromMsk(p.y, p.mo + 1, cfg.dayOfMonth, cfg.startHourMsk, 0, 0);
+  }
+  return candidate;
+}
+function championshipInstancesForMonth(category, monthStartMsk) {
+  const cfg = CHAMPIONSHIP_TIMES[category];
+  const p = mskParts(monthStartMsk);
+  const start = fromMsk(p.y, p.mo, cfg.dayOfMonth, cfg.startHourMsk, 0, 0);
+  const endsAt = roundToMinute(start + cfg.durationMin * 60 * 1000);
+  return { start, endsAt };
+}
+
+function categoryFromTournamentId(id) {
+  const m = /^champ-(\w+)-/.exec(id);
+  return m ? m[1] : null;
+}
+function isChampionshipArenaId(id) {
+  return typeof id === 'string' && id.startsWith('champ-');
+}
+
+function championshipName(category) {
+  return 'Чемпионат по ' + (CATEGORY_NAMES[category] || category);
+}
+
 const ARENA_TEMPLATES = [
   { id: 'bullet1_human', name: 'Пуля 1+0', description: '1+0 · рейтинговая', timeControl: 1, increment: 0, durationMin: 27, repeat: 'bullet1_human', color: 'bullet', botFriendly: false, lane: 0 },
   { id: 'bullet1_bots', name: 'Пуля 1+0 (Боты)', description: '1+0 · люди и боты', timeControl: 1, increment: 0, durationMin: 27, repeat: 'bullet1_bots', color: 'bullet', botFriendly: true, lane: 0 },
@@ -1003,7 +1055,9 @@ function getOrCreateArenaState(instance) {
     id: instance.id, templateId: instance.templateId, name: instance.name,
     description: instance.description, timeControl: instance.timeControl, increment: instance.increment,
     startsAt: instance.startsAt, endsAt: instance.endsAt, color: instance.color,
-    botFriendly: !!instance.botFriendly,
+    botFriendly: !!instance.botFriendly, creator: instance.creator || 'PeshkaSasha',
+    minCategoryGames: instance.minCategoryGames || 0,
+    isChampionship: !!instance.isChampionship,
     phase: 'waiting', participants: new Map(), finished: false, top3: null,
     pairingInterval: null, cleanupTimer: null, pairingNow: null,
     activeLobbies: new Set(), chat: [], chatViewers: new Set(), finishedGames: [],
@@ -1173,6 +1227,12 @@ function botJoinArena(botName, arenaId) {
   const state = arenas.get(arenaId);
   if (!state || state.finished || state.phase === 'finished') return false;
   if (state.participants.has(botName)) return false;
+  if (state.minCategoryGames > 0) {
+    const bu = db.users[botName];
+    const cat = state.color;
+    const played = bu && bu.categories && bu.categories[cat] ? (bu.categories[cat].games || 0) : 0;
+    if (played < state.minCategoryGames) return false;
+  }
   const botUser = db.users[botName];
   state.participants.set(botName, {
     username: botName, rating: botUser ? botUser.rating : 1200,
@@ -1242,7 +1302,7 @@ function botBehaviorTick() {
     }
     const r = Math.random();
     if (r < 0.7) {
-      const candidates = [...arenas.values()].filter(s => !s.finished && s.botFriendly && (s.phase === 'live' || s.phase === 'waiting') && !s.participants.has(bot.name));
+      const candidates = [...arenas.values()].filter(s => !s.finished && s.botFriendly && (s.phase === 'live' || s.phase === 'waiting') && !s.participants.has(bot.name) && !s.isChampionship);
       if (candidates.length) {
         candidates.sort((a, b) => {
           const aLive = a.phase === 'live' ? 0 : 1, bLive = b.phase === 'live' ? 0 : 1;
@@ -1274,7 +1334,7 @@ function watcherTick() {
   }
 
   if (beh.state === 'idle' || beh.state === 'in_arena') {
-    const allArenas = [...arenas.values()].filter(s => !s.finished && s.botFriendly && !s.participants.has(WATCHER_NAME));
+    const allArenas = [...arenas.values()].filter(s => !s.finished && s.botFriendly && !s.participants.has(WATCHER_NAME) && !s.isChampionship);
     const withHumans = allArenas.filter(s => {
       for (const p of s.participants.values()) if (!p.isBot) return true;
       return false;
@@ -1587,12 +1647,16 @@ async function saveArenaToDB(state) {
     console.log(`[ArenaDB] Арена ${state.id} не сохранена — меньше 2 участников (${participantsArray.length})`);
     return;
   }
+  if (!state.finishedGames || state.finishedGames.length < 1) {
+    console.log(`[ArenaDB] Арена ${state.id} не сохранена — нет сыгранных партий`);
+    return;
+  }
   const top3 = state.top3 || [];
   const finishedGames = state.finishedGames || [];
   try {
     await arenaPool.query(
-      `INSERT INTO arena_history (id, template_id, name, description, time_control, increment, color, bot_friendly, starts_at, ends_at, phase, top3, participants, finished_games, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+      `INSERT INTO arena_history (id, template_id, name, description, time_control, increment, color, bot_friendly, starts_at, ends_at, phase, top3, participants, finished_games, creator, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
        ON CONFLICT (id) DO UPDATE SET
          phase = EXCLUDED.phase,
          top3 = EXCLUDED.top3,
@@ -1603,12 +1667,34 @@ async function saveArenaToDB(state) {
         state.timeControl, state.increment, state.color, !!state.botFriendly,
         state.startsAt, state.endsAt, state.phase || 'finished',
         JSON.stringify(top3), JSON.stringify(participantsArray), JSON.stringify(finishedGames),
+        state.creator || 'PeshkaSasha',
         Date.now()
       ]
     );
     console.log(`[ArenaDB] Арена ${state.id} сохранена (${participantsArray.length} участников, top3: ${top3.length})`);
   } catch (e) {
     console.error('[ArenaDB] Ошибка сохранения арены:', e.message);
+  }
+}
+
+async function awardShields(state) {
+  if (!state || !state.top3 || !state.top3.length) return;
+  if (state.finishedGames && state.finishedGames.length < 1) return;
+  const cat = state.color;
+  const arenaId = state.id;
+  const arenaName = state.name;
+  const awardedAt = Date.now();
+  for (let i = 0; i < state.top3.length; i++) {
+    const p = state.top3[i];
+    if (!p || !p.username) continue;
+    if (db.users[p.username] && db.users[p.username].isBot) continue;
+    try {
+      await pool.query(
+        `INSERT INTO user_shields (username, arena_id, arena_name, category, place, awarded_at)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [p.username, arenaId, arenaName, cat, i + 1, awardedAt]
+      );
+    } catch (e) { console.error('[Shield]', e.message); }
   }
 }
 
@@ -1649,6 +1735,7 @@ function finishArena(state) {
   io.emit('arenaUpdate', { arenaId: state.id });
 
   saveArenaToDB(state).catch(e => console.error('[ArenaDB] saveArenaToDB error:', e.message));
+  awardShields(state).catch(e => console.error('[Shield] awardShields error:', e.message));
 
   state.cleanupTimer = setTimeout(() => {
     arenas.delete(state.id);
@@ -1660,16 +1747,14 @@ function getRecentArenaWinners() {
   for (const state of arenas.values()) {
     if (!state.finished) continue;
     if (!state.top3 || !state.top3.length) continue;
-    const tpl = ARENA_TEMPLATES.find(t => t.id === state.templateId);
-    if (!tpl) continue;
-    if (tpl.timeControl === 10 && tpl.increment === 0 && tpl.name.includes('Рапид')) relevant.push(state);
-    else if (tpl.timeControl === 3 && tpl.increment === 2 && tpl.name.includes('Блиц')) relevant.push(state);
+    if (!state.finishedGames || state.finishedGames.length < 1) continue;
+    relevant.push(state);
   }
   relevant.sort((a, b) => b.endsAt - a.endsAt);
-  const top3List = [];
+  const list = [];
   for (const arena of relevant) {
     for (let i = 0; i < Math.min(3, arena.top3.length); i++) {
-      top3List.push({
+      list.push({
         place: i + 1,
         username: arena.top3[i].username,
         rating: arena.top3[i].rating,
@@ -1678,9 +1763,28 @@ function getRecentArenaWinners() {
         arenaId: arena.id
       });
     }
-    if (top3List.length >= 9) break;
+    if (list.length >= 9) break;
   }
-  return top3List;
+  return list;
+}
+
+function getShieldsForUser(username) {
+  return userShieldsCache.get(username) || [];
+}
+let userShieldsCache = new Map();
+async function loadAllShields() {
+  try {
+    const r = await pool.query(`SELECT username, arena_id, arena_name, category, place, awarded_at FROM user_shields ORDER BY awarded_at DESC`);
+    const map = new Map();
+    for (const row of r.rows) {
+      if (!map.has(row.username)) map.set(row.username, []);
+      map.get(row.username).push({
+        arenaId: row.arena_id, arenaName: row.arena_name, category: row.category,
+        place: row.place, awardedAt: Number(row.awarded_at)
+      });
+    }
+    userShieldsCache = map;
+  } catch (e) { console.error('[Shields] loadAllShields:', e.message); }
 }
 
 function getArenaSchedule(hoursAhead) {
@@ -1689,7 +1793,55 @@ function getArenaSchedule(hoursAhead) {
   const finishedCutoff = now - 60 * 60 * 1000;
   const end = now + hoursAhead * 3600 * 1000;
   const result = [];
+
+  const championshipDaysByCat = {};
+  for (const cat of Object.keys(CHAMPIONSHIP_TIMES)) {
+    const cfg = CHAMPIONSHIP_TIMES[cat];
+    const p = mskParts(now);
+    let monthStart = fromMsk(p.y, p.mo, 1, 0, 0, 0);
+    for (let m = 0; m < 3; m++) {
+      const p2 = mskParts(monthStart);
+      const start = fromMsk(p2.y, p2.mo, cfg.dayOfMonth, cfg.startHourMsk, 0, 0);
+      const endsAt = roundToMinute(start + cfg.durationMin * 60 * 1000);
+      if (endsAt < now - 7 * 24 * 3600 * 1000) { monthStart = fromMsk(p2.y, p2.mo + 1, 1, 0, 0, 0); continue; }
+      if (start > end) { monthStart = fromMsk(p2.y, p2.mo + 1, 1, 0, 0, 0); continue; }
+      if (!championshipDaysByCat[cat]) championshipDaysByCat[cat] = [];
+      championshipDaysByCat[cat].push({ start, endsAt });
+      monthStart = fromMsk(p2.y, p2.mo + 1, 1, 0, 0, 0);
+      if (championshipDaysByCat[cat].length >= 3) break;
+    }
+  }
+  const blockedBy = { bullet: [], blitz: [], rapid: [], classical: [] };
+  for (const cat of Object.keys(championshipDaysByCat)) {
+    for (const inst of championshipDaysByCat[cat]) {
+      const blockStart = inst.start - 4 * 3600 * 1000;
+      const blockEnd = inst.start;
+      blockedBy[cat].push({ blockStart, blockEnd });
+      const status = now < inst.start ? 'upcoming' : (now < inst.endsAt ? 'live' : 'finished');
+      if (status === 'finished' && inst.endsAt < finishedCutoff) continue;
+      const tplId = `champ-${cat}-${inst.start}`;
+      const instance = {
+        id: tplId, templateId: `champ-${cat}`,
+        name: 'Чемпионат по ' + CATEGORY_NAMES[cat],
+        description: 'Ежемесячный чемпионат · ' + CATEGORY_NAMES[cat],
+        timeControl: cat === 'bullet' ? 1 : cat === 'blitz' ? 3 : cat === 'rapid' ? 10 : 30,
+        increment: 0,
+        durationMin: Math.round((inst.endsAt - inst.start) / 60000),
+        color: cat,
+        startsAt: inst.start, endsAt: inst.endsAt, status,
+        botFriendly: true, lane: 6,
+        isChampionship: true, creator: 'PeshkaSasha',
+        minCategoryGames: 20
+      };
+      result.push(instance);
+      if (status === 'live' || (status === 'upcoming' && inst.start - now < 24 * 3600 * 1000)) {
+        getOrCreateArenaState(instance);
+      }
+    }
+  }
+
   for (const tpl of ARENA_TEMPLATES) {
+    const catForTpl = tpl.color;
     const scanStart = now - tpl.durationMin * 60 * 1000 - 60 * 1000;
     let t = nextStartFor(tpl, scanStart);
     const step = stepFor(tpl);
@@ -1697,12 +1849,17 @@ function getArenaSchedule(hoursAhead) {
     while (t <= end && safety < 300) {
       safety++;
       const endsAt = roundToMinute(t + tpl.durationMin * 60 * 1000);
+      let blocked = false;
+      for (const b of (blockedBy[catForTpl] || [])) {
+        if (t < b.blockEnd && endsAt > b.blockStart) { blocked = true; break; }
+      }
+      if (blocked) { t += step; continue; }
       let status;
       if (t > now) status = 'upcoming';
       else if (now < endsAt) status = 'live';
       else status = 'finished';
       if (status === 'finished' && endsAt < finishedCutoff) { t += step; continue; }
-      const instance = { id: `${tpl.id}-${t}`, templateId: tpl.id, name: tpl.name, description: tpl.description, timeControl: tpl.timeControl, increment: tpl.increment, durationMin: tpl.durationMin, color: tpl.color, startsAt: t, endsAt, status, botFriendly: !!tpl.botFriendly, lane: tpl.lane };
+      const instance = { id: `${tpl.id}-${t}`, templateId: tpl.id, name: tpl.name, description: tpl.description, timeControl: tpl.timeControl, increment: tpl.increment, durationMin: tpl.durationMin, color: tpl.color, startsAt: t, endsAt, status, botFriendly: !!tpl.botFriendly, lane: tpl.lane, creator: 'PeshkaSasha', minCategoryGames: 0, isChampionship: false };
       result.push(instance);
       const createAheadMs = 24 * 3600 * 1000;
       if (status === 'live' || (status === 'upcoming' && t - now < createAheadMs)) getOrCreateArenaState(instance);
@@ -1762,7 +1919,6 @@ function clearMute(username) {
   return true;
 }
 
-// NEW: отправка системного сообщения в чат игры
 function sendSystemMessageToLobby(lobbyId, text, opts) {
   const l = lobbies.get(lobbyId); if (!l) return;
   const msg = {
@@ -1780,7 +1936,6 @@ function sendSystemMessageToLobby(lobbyId, text, opts) {
   emitToGameAndWatchers(lobbyId, 'chatMessage', msg);
 }
 
-// NEW: отправка ЛС от "Система" игроку (используется для бан-причины и удаления аккаунта)
 async function sendSystemDM(toUser, text, color) {
   if (!db.users[toUser]) return false;
   try {
@@ -1800,12 +1955,10 @@ async function sendSystemDM(toUser, text, color) {
   } catch (e) { console.error('[sendSystemDM]', e.message); return false; }
 }
 
-// NEW: отправка системного ЛС админу (для репортов и причины удаления)
 async function sendSystemDMToAdmin(text) {
   return sendSystemDM('PeshkaSasha', text, '#ff4d4f');
 }
 
-// NEW: проверка спама в чате
 function checkSpamAndWarn(username, scope, scopeId) {
   const u = db.users[username];
   if (!u || u.isBot) return;
@@ -1818,9 +1971,7 @@ function checkSpamAndWarn(username, scope, scopeId) {
   s.timestamps.push(now);
 
   if (s.timestamps.length >= SPAM_THRESHOLD) {
-    // Проверяем, было ли недавнее предупреждение
     if (s.warnedAt && now - s.warnedAt < SPAM_WARN_RESET_MS) {
-      // Уже предупреждали — автобан 30 минут
       const banUntil = now + 30 * 60 * 1000;
       u.isBanned = true;
       u.bannedUntil = banUntil;
@@ -1838,7 +1989,6 @@ function checkSpamAndWarn(username, scope, scopeId) {
       s.timestamps = []; s.warnedAt = 0;
       io.to(socketsOfUser(username)).emit('banned', { username, until: banUntil, reason: u.banReason });
     } else {
-      // Первое предупреждение
       s.warnedAt = now;
       s.timestamps = [];
       sendSystemDM(username, `Предупреждение: ${username}, вы слишком часто пишете в чат. Продолжение — автобан до 30 минут.`, '#ffb74d');
@@ -2208,6 +2358,7 @@ async function loadFinishedArenaFromDB(arenaId) {
       phase: row.phase || 'finished',
       top3: row.top3 || [],
       finished: true,
+      creator: row.creator || 'PeshkaSasha',
       participants: new Map((row.participants || []).map(p => [p.username, {
         username: p.username, rating: p.rating, score: p.score || 0,
         wins: p.wins || 0, draws: p.draws || 0, losses: p.losses || 0,
@@ -2278,6 +2429,255 @@ app.get('/api/delete-account', async (req, res) => {
     res.status(500).send('Внутренняя ошибка сервера');
   }
 });
+
+function categoryGamesForUser(username, category) {
+  const u = db.users[username];
+  if (!u || !u.categories || !u.categories[category]) return 0;
+  return u.categories[category].games || 0;
+}
+
+const swissTournaments = new Map();
+let swissTickTimer = null;
+
+function swissLevelCategory(timeControl) {
+  if (timeControl < 3) return 'bullet';
+  if (timeControl < 10) return 'blitz';
+  if (timeControl < 30) return 'rapid';
+  return 'classical';
+}
+function swissBreakDurationMs(timeControl) {
+  if (timeControl < 3) return 10 * 1000;
+  if (timeControl < 10) return 20 * 1000;
+  if (timeControl < 30) return 40 * 1000;
+  return 60 * 1000;
+}
+
+async function saveSwissToDB(state) {
+  try {
+    await pool.query(
+      `INSERT INTO swiss_tournaments (id, name, creator, rounds, time_control, increment, starts_at, phase, participants, standings, results, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       ON CONFLICT (id) DO UPDATE SET
+         phase = EXCLUDED.phase,
+         participants = EXCLUDED.participants,
+         standings = EXCLUDED.standings,
+         results = EXCLUDED.results`,
+      [
+        state.id, state.name, state.creator, state.rounds, state.timeControl, state.increment,
+        state.startsAt, state.phase,
+        JSON.stringify([...state.participants.values()].map(p => ({
+          username: p.username, rating: p.rating, isBot: !!p.isBot,
+          score: p.score, wins: p.wins, draws: p.draws, losses: p.losses,
+          tiebreak: p.tiebreak || 0, results: p.results || []
+        }))),
+        JSON.stringify(state.standings || []),
+        JSON.stringify(state.results || []),
+        Date.now()
+      ]
+    );
+  } catch (e) { console.error('[Swiss] saveSwissToDB:', e.message); }
+}
+
+function createSwissState({ id, name, rounds, timeControl, increment, startsAt }) {
+  return {
+    id, name, creator: 'PeshkaSasha',
+    rounds: Math.max(1, Math.min(40, rounds | 0)),
+    timeControl, increment,
+    startsAt: startsAt || Date.now(),
+    phase: 'waiting',
+    participants: new Map(),
+    standings: [],
+    results: [],
+    currentRound: 0,
+    roundEndsAt: null,
+    roundLobbies: new Set(),
+    nextRoundAt: null
+  };
+}
+
+function swissPairingRound(state) {
+  const players = [...state.participants.values()].filter(p => !p.isBye);
+  const sorted = players.sort((a, b) => (b.score - a.score) || (b.tiebreak - a.tiebreak) || (b.rating - a.rating));
+  const used = new Set();
+  const pairs = [];
+  const scored = sorted.filter(p => p.results && p.results.length > 0);
+  for (let i = 0; i < scored.length; i++) {
+    const a = scored[i];
+    if (used.has(a.username)) continue;
+    for (let j = i + 1; j < scored.length; j++) {
+      const b = scored[j];
+      if (used.has(b.username)) continue;
+      if (!a.opponents) a.opponents = new Set();
+      if (a.opponents.has(b.username)) continue;
+      if (used.has(b.username)) continue;
+      used.add(a.username); used.add(b.username);
+      if (!a.opponents) a.opponents = new Set();
+      if (!b.opponents) b.opponents = new Set();
+      a.opponents.add(b.username); b.opponents.add(a.username);
+      pairs.push([a, b]);
+      break;
+    }
+  }
+  const rest = sorted.filter(p => !used.has(p.username));
+  for (let i = 0; i + 1 < rest.length; i += 2) {
+    const a = rest[i], b = rest[i + 1];
+    if (used.has(a.username) || used.has(b.username)) continue;
+    if (!a.opponents) a.opponents = new Set();
+    if (a.opponents.has(b.username)) continue;
+    used.add(a.username); used.add(b.username);
+    if (!b.opponents) b.opponents = new Set();
+    a.opponents.add(b.username); b.opponents.add(a.username);
+    pairs.push([a, b]);
+  }
+  const restAfter = rest.filter(p => !used.has(p.username));
+  for (const p of restAfter) {
+    p.byes = (p.byes || 0) + 1;
+    p.score += 1;
+    p.wins += 1;
+    p.results.push({ opp: null, score: 1, bye: true });
+    p.isBye = true;
+  }
+  return pairs;
+}
+
+function swissStartRound(state) {
+  if (state.phase !== 'waiting') return;
+  state.phase = 'live';
+  state.currentRound = 1;
+  const pairs = swissPairingRound(state);
+  state.currentRoundPairs = pairs;
+  state.roundEndsAt = Date.now() + swissBreakDurationMs(state.timeControl);
+  for (const [a, b] of pairs) {
+    const isBotGame = a.isBot || b.isBot;
+    const lobbyId = 'swiss_' + state.id + '_' + state.currentRound + '_' + Math.random().toString(36).slice(2, 6);
+    const hostIsWhite = Math.random() < 0.5;
+    lobbies.set(lobbyId, {
+      id: lobbyId,
+      host: a.username, hostSocket: a.isBot ? null : (a.socketId || null),
+      guest: b.username, guestSocket: b.isBot ? null : (b.socketId || null),
+      hostColor: hostIsWhite ? 'w' : 'b', guestColor: hostIsWhite ? 'b' : 'w',
+      time: state.timeControl, inc: state.increment,
+      timeW: state.timeControl * 60, timeB: state.timeControl * 60,
+      turn: 'w', fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+      started: true, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
+      createdAt: Date.now(), arenaId: null, arenaName: null, swissId: state.id,
+      isBot: isBotGame,
+      botColor: a.isBot ? (hostIsWhite ? 'w' : 'b') : (b.isBot ? (hostIsWhite ? 'b' : 'w') : null),
+      botName: a.isBot ? a.username : (b.isBot ? b.username : null),
+      botColor2: null, botName2: null,
+      history: [], positionCounts: new Map()
+    });
+    registerPosition(lobbies.get(lobbyId));
+    state.roundLobbies.add(lobbyId);
+    if (!a.isBot) { const s = io.sockets.sockets.get(a.socketId); if (s) { s.join(lobbyId); s.emit('gameStart', { color: hostIsWhite ? 'w' : 'b', opponent: b.username, opponentRating: b.rating, opponentIsAdmin: isAdmin(b.username), opponentIsMod: isMod(b.username), opponentIsBot: !!b.isBot, opponentOnline: true, time: state.timeControl, inc: state.increment, lobbyId, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', chat: [], isArena: false, swissId: state.id, isBot: isBotGame }); } }
+    if (!b.isBot) { const s = io.sockets.sockets.get(b.socketId); if (s) { s.join(lobbyId); s.emit('gameStart', { color: hostIsWhite ? 'b' : 'w', opponent: a.username, opponentRating: a.rating, opponentIsAdmin: isAdmin(a.username), opponentIsMod: isMod(a.username), opponentIsBot: !!a.isBot, opponentOnline: true, time: state.timeControl, inc: state.increment, lobbyId, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', chat: [], isArena: false, swissId: state.id, isBot: isBotGame }); } }
+    if (isBotGame) setTimeout(() => scheduleBotMove(lobbyId), 300);
+  }
+  io.emit('swissUpdate', { swissId: state.id });
+}
+
+function swissHandleRoundResult(state, a, b, resultA) {
+  if (!state.results) state.results = [];
+  const resultStr = resultA === 1 ? '1-0' : (resultA === 0 ? '0-1' : '½-½');
+  state.results.push({
+    round: state.currentRound,
+    white: a.username, black: b.username, result: resultStr,
+    finishedAt: Date.now()
+  });
+  a.score += resultA;
+  b.score += 1 - resultA;
+  a.results = a.results || []; b.results = b.results || [];
+  a.results.push({ opp: b.username, score: resultA });
+  b.results.push({ opp: a.username, score: 1 - resultA });
+  a.tiebreak = (a.tiebreak || 0) + (resultA === 1 ? (b.score || 0) : 0);
+  b.tiebreak = (b.tiebreak || 0) + ((1 - resultA) === 1 ? (a.score || 0) : 0);
+}
+
+async function swissCompleteRound(state) {
+  state.currentRound++;
+  if (state.currentRound > state.rounds) {
+    swissFinish(state);
+    return;
+  }
+  const pairs = swissPairingRound(state);
+  if (!pairs.length) {
+    swissFinish(state);
+    return;
+  }
+  state.currentRoundPairs = pairs;
+  state.roundEndsAt = Date.now() + swissBreakDurationMs(state.timeControl) + 30000;
+  state.phase = 'break';
+  io.emit('swissUpdate', { swissId: state.id });
+  await saveSwissToDB(state);
+  setTimeout(() => {
+    if (state.phase !== 'break') return;
+    state.phase = 'live';
+    for (const [a, b] of pairs) {
+      const isBotGame = a.isBot || b.isBot;
+      const lobbyId = 'swiss_' + state.id + '_' + state.currentRound + '_' + Math.random().toString(36).slice(2, 6);
+      const hostIsWhite = Math.random() < 0.5;
+      lobbies.set(lobbyId, {
+        id: lobbyId,
+        host: a.username, hostSocket: a.isBot ? null : (a.socketId || null),
+        guest: b.username, guestSocket: b.isBot ? null : (b.socketId || null),
+        hostColor: hostIsWhite ? 'w' : 'b', guestColor: hostIsWhite ? 'b' : 'w',
+        time: state.timeControl, inc: state.increment,
+        timeW: state.timeControl * 60, timeB: state.timeControl * 60,
+        turn: 'w', fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
+        started: true, finished: false, lastTick: Date.now(), chat: [], drawOffer: null,
+        createdAt: Date.now(), arenaId: null, arenaName: null, swissId: state.id,
+        isBot: isBotGame,
+        botColor: a.isBot ? (hostIsWhite ? 'w' : 'b') : (b.isBot ? (hostIsWhite ? 'b' : 'w') : null),
+        botName: a.isBot ? a.username : (b.isBot ? b.username : null),
+        botColor2: null, botName2: null,
+        history: [], positionCounts: new Map()
+      });
+      registerPosition(lobbies.get(lobbyId));
+      state.roundLobbies.add(lobbyId);
+      if (!a.isBot) { const s = io.sockets.sockets.get(a.socketId); if (s) { s.join(lobbyId); s.emit('gameStart', { color: hostIsWhite ? 'w' : 'b', opponent: b.username, opponentRating: b.rating, opponentIsAdmin: isAdmin(b.username), opponentIsMod: isMod(b.username), opponentIsBot: !!b.isBot, opponentOnline: true, time: state.timeControl, inc: state.increment, lobbyId, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', chat: [], isArena: false, swissId: state.id, isBot: isBotGame }); } }
+      if (!b.isBot) { const s = io.sockets.sockets.get(b.socketId); if (s) { s.join(lobbyId); s.emit('gameStart', { color: hostIsWhite ? 'b' : 'w', opponent: a.username, opponentRating: a.rating, opponentIsAdmin: isAdmin(a.username), opponentIsMod: isMod(a.username), opponentIsBot: !!a.isBot, opponentOnline: true, time: state.timeControl, inc: state.increment, lobbyId, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', chat: [], isArena: false, swissId: state.id, isBot: isBotGame }); } }
+      if (isBotGame) setTimeout(() => scheduleBotMove(lobbyId), 300);
+    }
+    io.emit('swissUpdate', { swissId: state.id });
+  }, swissBreakDurationMs(state.timeControl));
+}
+
+function swissFinish(state) {
+  state.phase = 'finished';
+  const standings = [...state.participants.values()].sort((a, b) => (b.score - a.score) || (b.tiebreak - a.tiebreak) || (b.rating - a.rating));
+  state.standings = standings.map((p, i) => ({
+    place: i + 1, username: p.username, rating: p.rating, score: p.score,
+    wins: p.wins, draws: p.draws, losses: p.losses, tiebreak: p.tiebreak || 0
+  }));
+  saveSwissToDB(state).catch(() => {});
+  io.emit('swissFinished', { swissId: state.id });
+  io.emit('swissUpdate', { swissId: state.id });
+}
+
+function swissTick() {
+  const now = Date.now();
+  for (const state of swissTournaments.values()) {
+    if (state.phase === 'waiting' && now >= state.startsAt && state.participants.size >= 2) {
+      swissStartRound(state);
+    }
+  }
+}
+
+function onSwissGameEnd(lobby, result, whiteName, blackName) {
+  const state = swissTournaments.get(lobby.swissId);
+  if (!state || state.phase !== 'live') return;
+  const white = state.participants.get(whiteName);
+  const black = state.participants.get(blackName);
+  if (!white || !black) return;
+  const resultA = result === 'w' ? 1 : (result === 'b' ? 0 : 0.5);
+  swissHandleRoundResult(state, white, black, resultA);
+  state.roundLobbies.delete(lobby.id);
+  io.emit('swissUpdate', { swissId: state.id });
+  saveSwissToDB(state).catch(() => {});
+  if (state.roundLobbies.size === 0 && state.phase === 'live') {
+    swissCompleteRound(state);
+  }
+}
 
 io.on('connection', (socket) => {
   socket.emit('stats', {
@@ -2415,6 +2815,7 @@ io.on('connection', (socket) => {
       }));
       for (const r of historyRes.rows) history.push({ ts: Number(r.finished_at), rating: r.white === username ? r.white_after : r.black_after });
       const user = publicUser(username); user.online = isUserOnline(username) || !!u.isBot;
+      user.shields = getShieldsForUser(username);
       cb({ ok: true, user, games, history, categoryHistory });
     } catch (err) { cb({ ok: false, msg: 'Ошибка базы данных' }); }
   });
@@ -2431,6 +2832,7 @@ io.on('connection', (socket) => {
     if (!user) return cb({ ok: false });
     user.online = isUserOnline(username) || !!user.isBot || username === WATCHER_NAME;
     if (username === WATCHER_NAME) user.isBot = true;
+    user.shields = getShieldsForUser(username);
     cb({ ok: true, user });
   });
   socket.on('getTopArenas', (cb) => { if (typeof cb === 'function') cb(getTopLiveArenas()); });
@@ -2517,7 +2919,6 @@ io.on('connection', (socket) => {
   socket.on('createLobby', ({ time, inc }, cb) => {
     if (typeof cb !== 'function') return;
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
-    // NEW: проверка ban по scope play
     if (banActiveFor(db.users[socket.username], 'play')) {
       const u = db.users[socket.username];
       return cb({ ok: false, msg: `Вы забанены в игре с другими игроками до ${new Date(u.bannedUntil).toLocaleString('ru-RU')}${u.banReason ? '. Причина: ' + u.banReason : ''}` });
@@ -2636,7 +3037,6 @@ io.on('connection', (socket) => {
   socket.on('joinLobby', ({ id }, cb) => {
     if (typeof cb !== 'function') return;
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
-    // NEW: проверка ban play
     if (banActiveFor(db.users[socket.username], 'play')) {
       const u = db.users[socket.username];
       return cb({ ok: false, msg: `Вы забанены в игре с другими игроками до ${new Date(u.bannedUntil).toLocaleString('ru-RU')}${u.banReason ? '. Причина: ' + u.banReason : ''}` });
@@ -2766,7 +3166,6 @@ io.on('connection', (socket) => {
     if (!l || !socket.username) return;
     if (l.isSelfPlay) return;
 
-    // NEW: проверка бана по scope chat
     if (banActiveFor(db.users[socket.username], 'chat')) {
       socket.emit('chatError', { msg: 'Вы забанены в чате.' });
       return;
@@ -2779,7 +3178,6 @@ io.on('connection', (socket) => {
     const msg = { id: 'm' + Date.now() + Math.random().toString(36).slice(2, 6), user: socket.username, userIsAdmin: isAdmin(socket.username), userIsMod: isMod(socket.username), text, ts: Date.now() };
     l.chat.push(msg); if (l.chat.length > 50) l.chat.shift();
     emitToGameAndWatchers(lobbyId, 'chatMessage', msg);
-    // NEW: антиспам-проверка
     checkSpamAndWarn(socket.username, 'game', lobbyId);
   });
 
@@ -2999,7 +3397,7 @@ io.on('connection', (socket) => {
     if (!state) {
       state = await loadFinishedArenaFromDB(arenaId);
       if (!state) {
-        return cb({ joined: false, paused: false, participants: [], participantsCount: 0, phase: 'finished', timeLeftMin: 0, timeLeftMs: 0, top3: null, pairingNow: null, startsAt: 0, endsAt: 0, serverNow: Date.now(), botFriendly: false, chatViewersCount: 0 });
+        return cb({ joined: false, paused: false, participants: [], participantsCount: 0, phase: 'finished', timeLeftMin: 0, timeLeftMs: 0, top3: null, pairingNow: null, startsAt: 0, endsAt: 0, serverNow: Date.now(), botFriendly: false, chatViewersCount: 0, creator: 'PeshkaSasha', minCategoryGames: 0 });
       }
     }
     for (const p of state.participants.values()) {
@@ -3026,6 +3424,8 @@ io.on('connection', (socket) => {
       history: p.history || []
     })).sort((a, b) => b.score - a.score || b.rating - a.rating);
     const meP = socket.username ? state.participants.get(socket.username) : null;
+    let myGamesInCat = 0;
+    if (socket.username) myGamesInCat = categoryGamesForUser(socket.username, state.color);
     cb({
       joined: !!meP, paused: !!(meP && meP.paused), participants,
       participantsCount: participants.length, phase: state.phase,
@@ -3033,7 +3433,12 @@ io.on('connection', (socket) => {
       timeLeftMin: Math.round(Math.max(0, state.endsAt - Date.now()) / 60000),
       top3: state.top3, pairingNow: state.pairingNow,
       startsAt: state.startsAt, endsAt: state.endsAt, serverNow: Date.now(),
-      botFriendly: !!state.botFriendly, chatViewersCount: (state.chatViewers && state.chatViewers.size) || 0
+      botFriendly: !!state.botFriendly, chatViewersCount: (state.chatViewers && state.chatViewers.size) || 0,
+      creator: state.creator || 'PeshkaSasha',
+      minCategoryGames: state.minCategoryGames || 0,
+      myCategoryGames: myGamesInCat,
+      category: state.color,
+      isChampionship: !!state.isChampionship
     });
   });
 
@@ -3110,7 +3515,6 @@ io.on('connection', (socket) => {
   socket.on('joinArena', ({ arenaId }, cb) => {
     if (typeof cb !== 'function') return;
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
-    // NEW: проверка ban arena
     if (banActiveFor(db.users[socket.username], 'arena')) {
       const u = db.users[socket.username];
       return cb({ ok: false, msg: `Вы забанены в турнирах до ${new Date(u.bannedUntil).toLocaleString('ru-RU')}${u.banReason ? '. Причина: ' + u.banReason : ''}` });
@@ -3119,6 +3523,12 @@ io.on('connection', (socket) => {
     if (!state) return cb({ ok: false, msg: 'Арена не найдена' });
     if (state.finished || state.phase === 'finished') return cb({ ok: false, msg: 'Арена завершена' });
     if (state.participants.has(socket.username)) return cb({ ok: true, msg: 'Уже участвуете' });
+    if (state.minCategoryGames > 0) {
+      const played = categoryGamesForUser(socket.username, state.color);
+      if (played < state.minCategoryGames) {
+        return cb({ ok: false, msg: `Для участия нужно не менее ${state.minCategoryGames} рейтинговых партий в категории «${CATEGORY_NAMES[state.color] || state.color}» (у вас ${played}).` });
+      }
+    }
     state.participants.set(socket.username, {
       username: socket.username,
       rating: db.users[socket.username] ? db.users[socket.username].rating : 1200,
@@ -3200,7 +3610,6 @@ io.on('connection', (socket) => {
     const msg = { id: 'a' + Date.now() + Math.random().toString(36).slice(2, 6), user: socket.username, userIsAdmin: isAdmin(socket.username), userIsMod: isMod(socket.username), text, ts: Date.now(), arenaId };
     state.chat.push(msg); if (state.chat.length > 300) state.chat.shift();
     io.to('arena:' + arenaId).emit('arenaChatMessage', msg);
-    // NEW: антиспам
     checkSpamAndWarn(socket.username, 'arena', arenaId);
   });
 
@@ -3246,7 +3655,6 @@ io.on('connection', (socket) => {
     if (to === 'PeshkaSasha' && adminDmClosed && !isAdmin(socket.username)) return cb({ ok: false, msg: 'Администратор временно отключил входящие личные сообщения' });
 
     const target = db.users[to];
-    // NEW: если у получателя стоит запрет ЛС, пропускаем только модераторов и админа
     if (target && target.dmClosed && !isMod(socket.username)) {
       return cb({ ok: false, msg: 'Игрок запретил приём личных сообщений' });
     }
@@ -3394,14 +3802,12 @@ io.on('connection', (socket) => {
     u.deleteRequestedAt = Date.now();
     await saveUser(socket.username);
 
-    // NEW: причина удаления уходит админу в ЛС
     try {
       await sendSystemDMToAdmin(`🗑 Игрок ${socket.username} запросил удаление аккаунта.\nПричина: ${r}`);
     } catch (e) {}
 
     try {
       if (u.email) await sendAccountDeletionEmail(u.email, socket.username, token);
-      // NEW: удаляем аккаунт сразу, чтобы не ждать 10 дней повторно
       await pool.query('DELETE FROM users WHERE username = $1', [socket.username]);
       delete db.users[socket.username];
       for (const sid of socketsOfUser(socket.username)) {
@@ -3418,7 +3824,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ============= REPORTS =============
   socket.on('submitReport', async ({ target, reason, description }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
@@ -3440,7 +3845,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ============= ADMIN: ban =============
   socket.on('adminCheckPlayer', ({ username }, cb) => {
     if (typeof cb !== 'function') return;
     if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Нет прав' });
@@ -3489,7 +3893,6 @@ io.on('connection', (socket) => {
     try {
       u.isBanned = true; u.bannedUntil = bannedUntil; u.banScopes = scopesArr; u.banReason = banReason;
       await saveUser(username);
-      // Уведомляем игрока в ЛС от «Система»
       const scopesRu = scopesArr.map(s => s === 'chat' ? 'чат' : s === 'play' ? 'игра с игроками' : 'турниры').join(', ');
       await sendSystemDM(username, `🚫 Вы забанены администратором до ${new Date(bannedUntil).toLocaleString('ru-RU')}.\nОбласти: ${scopesRu}\nПричина: ${banReason}`, '#ff4d4f');
       for (const sid of socketsOfUser(username)) {
@@ -3498,11 +3901,6 @@ io.on('connection', (socket) => {
           targetSocket.emit('banned', { username, until: bannedUntil, scopes: scopesArr, reason: banReason });
         }
       }
-      // Если забанен чат — выкидываем из всех чатов
-      if (scopesArr.includes('chat')) {
-        // Ничего дополнительно, chat-проверка работает при следующем сообщении
-      }
-      // Если забанен play/arena — режем активные партии/арены
       if (scopesArr.includes('play')) {
         for (const [id, l] of lobbies.entries()) {
           if (l.finished || l.isSelfPlay) continue;
@@ -3683,6 +4081,94 @@ io.on('connection', (socket) => {
     cb({ ok: true, deleted: found.length });
   });
 
+  socket.on('swissCreateTournament', ({ name, rounds, timeControl, increment }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Только главный администратор может создавать швейцарские турниры' });
+    if (typeof name !== 'string' || name.trim().length < 3) return cb({ ok: false, msg: 'Название минимум 3 символа' });
+    rounds = Number(rounds);
+    if (!Number.isInteger(rounds) || rounds < 1 || rounds > 40) return cb({ ok: false, msg: 'Количество туров: 1–40' });
+    timeControl = Number(timeControl);
+    increment = Number(increment) || 0;
+    if (!Number.isFinite(timeControl) || timeControl <= 0 || timeControl > 60) return cb({ ok: false, msg: 'Некорректный контроль времени' });
+    const id = 'swiss_' + genId();
+    const state = createSwissState({ id, name: name.trim(), rounds, timeControl, increment, startsAt: Date.now() + 60 * 1000 });
+    swissTournaments.set(id, state);
+    saveSwissToDB(state).catch(() => {});
+    io.emit('swissUpdate', { swissId: id });
+    cb({ ok: true, id });
+  });
+
+  socket.on('swissListTournaments', (cb) => {
+    if (typeof cb !== 'function') return;
+    const list = [...swissTournaments.values()].map(s => ({
+      id: s.id, name: s.name, creator: s.creator, rounds: s.rounds,
+      timeControl: s.timeControl, increment: s.increment, startsAt: s.startsAt,
+      phase: s.phase, participantsCount: s.participants.size,
+      currentRound: s.currentRound, standings: s.standings || []
+    }));
+    list.sort((a, b) => a.startsAt - b.startsAt);
+    cb({ ok: true, list });
+  });
+
+  socket.on('swissGetState', ({ swissId }, cb) => {
+    if (typeof cb !== 'function') return;
+    const s = swissTournaments.get(swissId);
+    if (!s) return cb({ ok: false, msg: 'Турнир не найден' });
+    const participants = [...s.participants.values()].map(p => ({
+      username: p.username, rating: p.rating, score: p.score,
+      wins: p.wins, draws: p.draws, losses: p.losses,
+      tiebreak: p.tiebreak || 0, isBot: !!p.isBot,
+      online: p.isBot ? true : (p.socketId && io.sockets.sockets.has(p.socketId)),
+      results: p.results || []
+    }));
+    const standings = participants.slice().sort((a, b) => (b.score - a.score) || (b.tiebreak - a.tiebreak) || (b.rating - a.rating));
+    cb({
+      ok: true, id: s.id, name: s.name, creator: s.creator, rounds: s.rounds,
+      timeControl: s.timeControl, increment: s.increment, startsAt: s.startsAt,
+      phase: s.phase, currentRound: s.currentRound, participants,
+      standings, results: s.results || [],
+      participantsCount: participants.length
+    });
+  });
+
+  socket.on('swissJoin', ({ swissId }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
+    const s = swissTournaments.get(swissId);
+    if (!s) return cb({ ok: false, msg: 'Турнир не найден' });
+    if (s.phase !== 'waiting') return cb({ ok: false, msg: 'Регистрация уже закрыта' });
+    if (s.participants.has(socket.username)) return cb({ ok: true, msg: 'Уже участвуете' });
+    s.participants.set(socket.username, {
+      username: socket.username, rating: db.users[socket.username] ? db.users[socket.username].rating : 1200,
+      score: 0, wins: 0, draws: 0, losses: 0, tiebreak: 0, results: [],
+      socketId: socket.id, isBot: false, opponents: new Set(), byes: 0
+    });
+    for (const bot of BOTS.filter(b => !b.hidden)) {
+      if (s.participants.has(bot.name)) continue;
+      if (Math.random() < 0.5) continue;
+      s.participants.set(bot.name, {
+        username: bot.name, rating: db.users[bot.name] ? db.users[bot.name].rating : 1200,
+        score: 0, wins: 0, draws: 0, losses: 0, tiebreak: 0, results: [],
+        socketId: 'BOT:' + bot.name, isBot: true, opponents: new Set(), byes: 0
+      });
+    }
+    io.emit('swissUpdate', { swissId });
+    saveSwissToDB(s).catch(() => {});
+    cb({ ok: true });
+  });
+
+  socket.on('swissLeave', ({ swissId }, cb) => {
+    if (typeof cb !== 'function') cb = () => {};
+    const s = swissTournaments.get(swissId);
+    if (!s) return cb({ ok: false, msg: 'Турнир не найден' });
+    if (s.phase !== 'waiting') return cb({ ok: false, msg: 'Нельзя покинуть турнир после старта' });
+    if (s.participants.delete(socket.username)) {
+      io.emit('swissUpdate', { swissId });
+      saveSwissToDB(s).catch(() => {});
+    }
+    cb({ ok: true });
+  });
+
   socket.on('disconnect', () => {
     const name = socket.username;
     if (name) {
@@ -3699,11 +4185,17 @@ io.on('connection', (socket) => {
         io.to('arena:' + state.id).emit('arenaUpdate', { arenaId: state.id });
       }
     }
+    for (const s of swissTournaments.values()) {
+      if (s.participants && s.participants.has(name)) {
+        const p = s.participants.get(name);
+        if (p && !p.isBot) p.socketId = null;
+      }
+    }
   });
 });
 
 (async () => {
-  try { await initDB(); await loadDB(); }
+  try { await initDB(); await loadDB(); await loadAllShields(); }
   catch (err) { console.error('[DB] Ошибка инициализации:', err.message); }
 
   if (watcherDbPool) {
@@ -3746,6 +4238,8 @@ io.on('connection', (socket) => {
     }
     if (!busy) watcherPool.playGames(1);
   }, 30000);
+
+  setInterval(swissTick, 5000);
 
   getArenaSchedule(48);
   const PORT = process.env.PORT || 3000;
