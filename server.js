@@ -558,18 +558,34 @@ function onlinePlayersList() {
   return [...byName.values()].sort((a, b) => Number(b.isBot) - Number(a.isBot) || b.rating - a.rating || a.username.localeCompare(b.username));
 }
 function countOnline() { return onlinePlayersList().length; }
-function broadcastOnline() {
-  const players = onlinePlayersList();
+
+let _statsCache = { value: null, ts: 0 };
+function getCachedStats() {
+  const now = Date.now();
+  if (_statsCache.value && now - _statsCache.ts < 2000) return _statsCache.value;
   const counts = countWaitingLobbies();
-  io.emit('stats', {
-    online: players.length,
+  _statsCache.value = {
+    online: countOnline(),
     games: db.totalGames,
     activeGames: countActiveLobbies(),
     waitingLobbies: counts.human,
     waitingBotLobbies: counts.bot,
     waitingMax: MAX_HUMAN_WAITING
+  };
+  _statsCache.ts = now;
+  return _statsCache.value;
+}
+
+let _broadcastOnlinePending = false;
+function broadcastOnline() {
+  if (_broadcastOnlinePending) return;
+  _broadcastOnlinePending = true;
+  setImmediate(() => {
+    _broadcastOnlinePending = false;
+    const players = onlinePlayersList();
+    io.emit('communityOnline', players);
+    io.emit('stats', getCachedStats());
   });
-  io.emit('communityOnline', players);
 }
 function broadcastLobbies() { io.emit('lobbiesUpdate'); }
 
@@ -674,8 +690,22 @@ function buildGamesList() {
   });
   return list;
 }
-function broadcastLiveGames() { try { io.emit('liveGamesUpdate', buildGamesList()); } catch (e) {} }
-setInterval(broadcastLiveGames, 3000);
+let _liveGamesPending = false;
+let _liveGamesLastEmit = 0;
+function broadcastLiveGames(force) {
+  if (!force) {
+    const now = Date.now();
+    if (now - _liveGamesLastEmit < 1500 || _liveGamesPending) return;
+  }
+  if (_liveGamesPending) return;
+  _liveGamesPending = true;
+  setImmediate(() => {
+    _liveGamesPending = false;
+    _liveGamesLastEmit = Date.now();
+    try { io.emit('liveGamesUpdate', buildGamesList()); } catch (e) {}
+  });
+}
+setInterval(() => broadcastLiveGames(true), 5000);
 
 const PIECE_VALUES = { 'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000 };
 function botParseFen(fen) {
@@ -925,6 +955,7 @@ async function finishGame(lobbyId, result, reason) {
     isArena: !!l.arenaId, arenaId: l.arenaId || null, arenaName: l.arenaName || null, isBot: isBotGame
   });
   if (l.arenaId) { try { handleArenaGameEnd(l.arenaId, lobbyId, result, whiteName, blackName); } catch (e) {} }
+  if (l.swissId) { try { handleSwissGameEnd(l.swissId, lobbyId, result, whiteName, blackName); } catch (e) {} }
   setTimeout(() => {
     const cur = lobbies.get(lobbyId);
     if (cur) {
@@ -2496,40 +2527,38 @@ function createSwissState({ id, name, rounds, timeControl, increment, startsAt }
 }
 
 function swissPairingRound(state) {
-  const players = [...state.participants.values()].filter(p => !p.isBye);
-  const sorted = players.sort((a, b) => (b.score - a.score) || (b.tiebreak - a.tiebreak) || (b.rating - a.rating));
+  const players = [...state.participants.values()].filter(p => !p.isBye && !p.isPlaying);
+  const sorted = players.sort((a, b) => (b.score - a.score) || ((b.tiebreak || 0) - (a.tiebreak || 0)) || (b.rating - a.rating));
   const used = new Set();
   const pairs = [];
-  const scored = sorted.filter(p => p.results && p.results.length > 0);
-  for (let i = 0; i < scored.length; i++) {
-    const a = scored[i];
+
+  for (let i = 0; i < sorted.length; i++) {
+    const a = sorted[i];
     if (used.has(a.username)) continue;
-    for (let j = i + 1; j < scored.length; j++) {
-      const b = scored[j];
+    
+    let bestB = null;
+    for (let j = i + 1; j < sorted.length; j++) {
+      const b = sorted[j];
       if (used.has(b.username)) continue;
       if (!a.opponents) a.opponents = new Set();
       if (a.opponents.has(b.username)) continue;
-      if (used.has(b.username)) continue;
-      used.add(a.username); used.add(b.username);
-      if (!a.opponents) a.opponents = new Set();
-      if (!b.opponents) b.opponents = new Set();
-      a.opponents.add(b.username); b.opponents.add(a.username);
-      pairs.push([a, b]);
+      
+      bestB = b;
       break;
     }
+    
+    if (bestB) {
+      used.add(a.username);
+      used.add(bestB.username);
+      if (!a.opponents) a.opponents = new Set();
+      if (!bestB.opponents) bestB.opponents = new Set();
+      a.opponents.add(bestB.username);
+      bestB.opponents.add(a.username);
+      pairs.push([a, bestB]);
+    }
   }
-  const rest = sorted.filter(p => !used.has(p.username));
-  for (let i = 0; i + 1 < rest.length; i += 2) {
-    const a = rest[i], b = rest[i + 1];
-    if (used.has(a.username) || used.has(b.username)) continue;
-    if (!a.opponents) a.opponents = new Set();
-    if (a.opponents.has(b.username)) continue;
-    used.add(a.username); used.add(b.username);
-    if (!b.opponents) b.opponents = new Set();
-    a.opponents.add(b.username); b.opponents.add(a.username);
-    pairs.push([a, b]);
-  }
-  const restAfter = rest.filter(p => !used.has(p.username));
+
+  const restAfter = sorted.filter(p => !used.has(p.username));
   for (const p of restAfter) {
     p.byes = (p.byes || 0) + 1;
     p.score += 1;
@@ -2545,12 +2574,22 @@ function swissStartRound(state) {
   state.phase = 'live';
   state.currentRound = 1;
   const pairs = swissPairingRound(state);
+  
+  console.log(`[Swiss] Турнир ${state.id} начался. Создано пар: ${pairs.length}`);
+  
+  if (pairs.length === 0) {
+    swissFinish(state); 
+    return;
+  }
+
   state.currentRoundPairs = pairs;
   state.roundEndsAt = Date.now() + swissBreakDurationMs(state.timeControl);
+  
   for (const [a, b] of pairs) {
     const isBotGame = a.isBot || b.isBot;
     const lobbyId = 'swiss_' + state.id + '_' + state.currentRound + '_' + Math.random().toString(36).slice(2, 6);
     const hostIsWhite = Math.random() < 0.5;
+    
     lobbies.set(lobbyId, {
       id: lobbyId,
       host: a.username, hostSocket: a.isBot ? null : (a.socketId || null),
@@ -2569,8 +2608,21 @@ function swissStartRound(state) {
     });
     registerPosition(lobbies.get(lobbyId));
     state.roundLobbies.add(lobbyId);
-    if (!a.isBot) { const s = io.sockets.sockets.get(a.socketId); if (s) { s.join(lobbyId); s.emit('gameStart', { color: hostIsWhite ? 'w' : 'b', opponent: b.username, opponentRating: b.rating, opponentIsAdmin: isAdmin(b.username), opponentIsMod: isMod(b.username), opponentIsBot: !!b.isBot, opponentOnline: true, time: state.timeControl, inc: state.increment, lobbyId, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', chat: [], isArena: false, swissId: state.id, isBot: isBotGame }); } }
-    if (!b.isBot) { const s = io.sockets.sockets.get(b.socketId); if (s) { s.join(lobbyId); s.emit('gameStart', { color: hostIsWhite ? 'b' : 'w', opponent: a.username, opponentRating: a.rating, opponentIsAdmin: isAdmin(a.username), opponentIsMod: isMod(a.username), opponentIsBot: !!a.isBot, opponentOnline: true, time: state.timeControl, inc: state.increment, lobbyId, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', chat: [], isArena: false, swissId: state.id, isBot: isBotGame }); } }
+    
+    if (!a.isBot) { 
+      const s = io.sockets.sockets.get(a.socketId); 
+      if (s) { 
+        s.join(lobbyId); 
+        s.emit('gameStart', { color: hostIsWhite ? 'w' : 'b', opponent: b.username, opponentRating: b.rating, opponentIsAdmin: isAdmin(b.username), opponentIsMod: isMod(b.username), opponentIsBot: !!b.isBot, opponentOnline: true, time: state.timeControl, inc: state.increment, lobbyId, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', chat: [], isArena: false, swissId: state.id, isBot: isBotGame }); 
+      } 
+    }
+    if (!b.isBot) { 
+      const s = io.sockets.sockets.get(b.socketId); 
+      if (s) { 
+        s.join(lobbyId); 
+        s.emit('gameStart', { color: hostIsWhite ? 'b' : 'w', opponent: a.username, opponentRating: a.rating, opponentIsAdmin: isAdmin(a.username), opponentIsMod: isMod(a.username), opponentIsBot: !!a.isBot, opponentOnline: true, time: state.timeControl, inc: state.increment, lobbyId, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', chat: [], isArena: false, swissId: state.id, isBot: isBotGame }); 
+      } 
+    }
     if (isBotGame) setTimeout(() => scheduleBotMove(lobbyId), 300);
   }
   io.emit('swissUpdate', { swissId: state.id });
@@ -2609,6 +2661,7 @@ async function swissCompleteRound(state) {
   state.phase = 'break';
   io.emit('swissUpdate', { swissId: state.id });
   await saveSwissToDB(state);
+  
   setTimeout(() => {
     if (state.phase !== 'break') return;
     state.phase = 'live';
@@ -2616,6 +2669,7 @@ async function swissCompleteRound(state) {
       const isBotGame = a.isBot || b.isBot;
       const lobbyId = 'swiss_' + state.id + '_' + state.currentRound + '_' + Math.random().toString(36).slice(2, 6);
       const hostIsWhite = Math.random() < 0.5;
+      
       lobbies.set(lobbyId, {
         id: lobbyId,
         host: a.username, hostSocket: a.isBot ? null : (a.socketId || null),
@@ -2634,8 +2688,21 @@ async function swissCompleteRound(state) {
       });
       registerPosition(lobbies.get(lobbyId));
       state.roundLobbies.add(lobbyId);
-      if (!a.isBot) { const s = io.sockets.sockets.get(a.socketId); if (s) { s.join(lobbyId); s.emit('gameStart', { color: hostIsWhite ? 'w' : 'b', opponent: b.username, opponentRating: b.rating, opponentIsAdmin: isAdmin(b.username), opponentIsMod: isMod(b.username), opponentIsBot: !!b.isBot, opponentOnline: true, time: state.timeControl, inc: state.increment, lobbyId, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', chat: [], isArena: false, swissId: state.id, isBot: isBotGame }); } }
-      if (!b.isBot) { const s = io.sockets.sockets.get(b.socketId); if (s) { s.join(lobbyId); s.emit('gameStart', { color: hostIsWhite ? 'b' : 'w', opponent: a.username, opponentRating: a.rating, opponentIsAdmin: isAdmin(a.username), opponentIsMod: isMod(a.username), opponentIsBot: !!a.isBot, opponentOnline: true, time: state.timeControl, inc: state.increment, lobbyId, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', chat: [], isArena: false, swissId: state.id, isBot: isBotGame }); } }
+      
+      if (!a.isBot) { 
+        const s = io.sockets.sockets.get(a.socketId); 
+        if (s) { 
+          s.join(lobbyId); 
+          s.emit('gameStart', { color: hostIsWhite ? 'w' : 'b', opponent: b.username, opponentRating: b.rating, opponentIsAdmin: isAdmin(b.username), opponentIsMod: isMod(b.username), opponentIsBot: !!b.isBot, opponentOnline: true, time: state.timeControl, inc: state.increment, lobbyId, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', chat: [], isArena: false, swissId: state.id, isBot: isBotGame }); 
+        } 
+      }
+      if (!b.isBot) { 
+        const s = io.sockets.sockets.get(b.socketId); 
+        if (s) { 
+          s.join(lobbyId); 
+          s.emit('gameStart', { color: hostIsWhite ? 'b' : 'w', opponent: a.username, opponentRating: a.rating, opponentIsAdmin: isAdmin(a.username), opponentIsMod: isMod(a.username), opponentIsBot: !!a.isBot, opponentOnline: true, time: state.timeControl, inc: state.increment, lobbyId, fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', chat: [], isArena: false, swissId: state.id, isBot: isBotGame }); 
+        } 
+      }
       if (isBotGame) setTimeout(() => scheduleBotMove(lobbyId), 300);
     }
     io.emit('swissUpdate', { swissId: state.id });
@@ -2658,20 +2725,21 @@ function swissTick() {
   const now = Date.now();
   for (const state of swissTournaments.values()) {
     if (state.phase === 'waiting' && now >= state.startsAt && state.participants.size >= 2) {
+      console.log(`[Swiss] Автостарт турнира ${state.id} (время пришло)`);
       swissStartRound(state);
     }
   }
 }
 
-function onSwissGameEnd(lobby, result, whiteName, blackName) {
-  const state = swissTournaments.get(lobby.swissId);
+function handleSwissGameEnd(swissId, lobbyId, result, whiteName, blackName) {
+  const state = swissTournaments.get(swissId);
   if (!state || state.phase !== 'live') return;
   const white = state.participants.get(whiteName);
   const black = state.participants.get(blackName);
   if (!white || !black) return;
   const resultA = result === 'w' ? 1 : (result === 'b' ? 0 : 0.5);
   swissHandleRoundResult(state, white, black, resultA);
-  state.roundLobbies.delete(lobby.id);
+  state.roundLobbies.delete(lobbyId);
   io.emit('swissUpdate', { swissId: state.id });
   saveSwissToDB(state).catch(() => {});
   if (state.roundLobbies.size === 0 && state.phase === 'live') {
@@ -2680,12 +2748,7 @@ function onSwissGameEnd(lobby, result, whiteName, blackName) {
 }
 
 io.on('connection', (socket) => {
-  socket.emit('stats', {
-    online: countOnline(), games: db.totalGames, activeGames: countActiveLobbies(),
-    waitingLobbies: countWaitingLobbies().human,
-    waitingBotLobbies: countWaitingLobbies().bot,
-    waitingMax: MAX_HUMAN_WAITING
-  });
+  socket.emit('stats', getCachedStats());
   socket.emit('liveGamesUpdate', buildGamesList());
 
   socket.on('checkUsername', async ({ username }, cb) => {
@@ -2822,8 +2885,7 @@ io.on('connection', (socket) => {
 
   socket.on('getStats', (cb) => {
     if (typeof cb !== 'function') return;
-    const counts = countWaitingLobbies();
-    cb({ online: countOnline(), games: db.totalGames, activeGames: countActiveLobbies(), waitingLobbies: counts.human, waitingBotLobbies: counts.bot, waitingMax: MAX_HUMAN_WAITING });
+    cb(getCachedStats());
   });
   socket.on('getCommunityOnline', (cb) => { if (typeof cb === 'function') cb(onlinePlayersList()); });
   socket.on('getPlayerCard', ({ username }, cb) => {
@@ -4081,17 +4143,17 @@ io.on('connection', (socket) => {
     cb({ ok: true, deleted: found.length });
   });
 
-  socket.on('swissCreateTournament', ({ name, rounds, timeControl, increment }, cb) => {
+  socket.on('swissCreateTournament', ({ name, rounds, timeControl, increment, startsAt }, cb) => {
     if (typeof cb !== 'function') cb = () => {};
-    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Только главный администратор может создавать швейцарские турниры' });
+    if (!isAdmin(socket.username)) return cb({ ok: false, msg: 'Только админ может создавать' });
     if (typeof name !== 'string' || name.trim().length < 3) return cb({ ok: false, msg: 'Название минимум 3 символа' });
-    rounds = Number(rounds);
-    if (!Number.isInteger(rounds) || rounds < 1 || rounds > 40) return cb({ ok: false, msg: 'Количество туров: 1–40' });
-    timeControl = Number(timeControl);
+    rounds = Number(rounds) || 20;
+    timeControl = Number(timeControl) || 3;
     increment = Number(increment) || 0;
-    if (!Number.isFinite(timeControl) || timeControl <= 0 || timeControl > 60) return cb({ ok: false, msg: 'Некорректный контроль времени' });
+    const startMs = startsAt ? Number(startsAt) : Date.now() + 60000;
+
     const id = 'swiss_' + genId();
-    const state = createSwissState({ id, name: name.trim(), rounds, timeControl, increment, startsAt: Date.now() + 60 * 1000 });
+    const state = createSwissState({ id, name: name.trim(), rounds, timeControl, increment, startsAt: startMs });
     swissTournaments.set(id, state);
     saveSwissToDB(state).catch(() => {});
     io.emit('swissUpdate', { swissId: id });
@@ -4136,13 +4198,15 @@ io.on('connection', (socket) => {
     if (!socket.username) return cb({ ok: false, msg: 'Не авторизован' });
     const s = swissTournaments.get(swissId);
     if (!s) return cb({ ok: false, msg: 'Турнир не найден' });
-    if (s.phase !== 'waiting') return cb({ ok: false, msg: 'Регистрация уже закрыта' });
+    if (s.phase !== 'waiting') return cb({ ok: false, msg: 'Регистрация закрыта' });
     if (s.participants.has(socket.username)) return cb({ ok: true, msg: 'Уже участвуете' });
+    
     s.participants.set(socket.username, {
       username: socket.username, rating: db.users[socket.username] ? db.users[socket.username].rating : 1200,
       score: 0, wins: 0, draws: 0, losses: 0, tiebreak: 0, results: [],
       socketId: socket.id, isBot: false, opponents: new Set(), byes: 0
     });
+    
     for (const bot of BOTS.filter(b => !b.hidden)) {
       if (s.participants.has(bot.name)) continue;
       if (Math.random() < 0.5) continue;
@@ -4152,6 +4216,7 @@ io.on('connection', (socket) => {
         socketId: 'BOT:' + bot.name, isBot: true, opponents: new Set(), byes: 0
       });
     }
+    
     io.emit('swissUpdate', { swissId });
     saveSwissToDB(s).catch(() => {});
     cb({ ok: true });
