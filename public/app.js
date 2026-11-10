@@ -1216,13 +1216,14 @@ const Watch = {
     this.refresh(true);
     if (gameId) this.watch(gameId);
     if (this.autoRefreshHandle) clearInterval(this.autoRefreshHandle);
-    this.autoRefreshHandle = setInterval(() => { const ws = document.getElementById('watchScreen'); if (ws && ws.classList.contains('active')) this.refresh(false); }, 3000);
+    this.autoRefreshHandle = setInterval(() => { const ws = document.getElementById('watchScreen'); if (ws && ws.classList.contains('active')) this.refresh(false); }, 5000);
   },
   refresh(force) { App.socket.emit('getLiveGames', (list) => { this.refreshFromList(list); }); },
   refreshFromList(list) {
     const box = document.getElementById('watchListBody'); if (!box) return;
     list = (list || []).filter(g => !g.isSelfPlay && !(g.id && g.id.startsWith('sp_')));
-    const hash = JSON.stringify(list); if (hash === this.lastHash) return; this.lastHash = hash;
+    const hash = JSON.stringify(list.map(g => ({ id: g.id, w: g.white, b: g.black, t: g.turn, f: g.fen })));
+    if (hash === this.lastHash) return; this.lastHash = hash;
     if (!list.length) { box.innerHTML = '<div class="arenasEmpty" style="padding:20px 10px;">Пока никто не играет</div>'; return; }
     box.innerHTML = list.map(g => {
       const cls = 'watchRow' + (g.isArena ? ' isArena' : '') + (g.isBotGame ? ' isBotGame' : '');
@@ -1396,7 +1397,7 @@ const Arena = {
     if (this.statusTickHandle) clearInterval(this.statusTickHandle);
     this.statusTickHandle = setInterval(() => this.tickStatus(), 1000);
     if (this.gamesRefreshHandle) clearInterval(this.gamesRefreshHandle);
-    this.gamesRefreshHandle = setInterval(() => { const aps = document.getElementById('arenaPageScreen'); if (aps && aps.classList.contains('active')) this.renderGamesList(); }, 1000);
+    this.gamesRefreshHandle = setInterval(() => { const aps = document.getElementById('arenaPageScreen'); if (aps && aps.classList.contains('active')) this.renderGamesList(); }, 4000);
     this._ensureOverlay();
   },
   leaveRoom() {
@@ -1691,8 +1692,8 @@ const Arena = {
     this._topClockB = g.timeB;
     this._topClockTurn = g.turn;
     const self = this;
-    function tick() {
-      if (!self._topGame || !self._topGame.live) { self._topClockRaf = null; return; }
+    this._topClockRaf = setInterval(() => {
+      if (!self._topGame || !self._topGame.live) { clearInterval(self._topClockRaf); self._topClockRaf = null; return; }
       const elapsed = (performance.now() - self._topClockSyncedAt) / 1000;
       let w = self._topClockW, b = self._topClockB;
       if (self._topClockTurn === 'w') w = Math.max(0, w - elapsed); else b = Math.max(0, b - elapsed);
@@ -1700,9 +1701,7 @@ const Arena = {
       const elB = document.getElementById('arenaTopTimeB');
       if (elW) elW.textContent = Utils.formatTime(w);
       if (elB) elB.textContent = Utils.formatTime(b);
-      self._topClockRaf = requestAnimationFrame(tick);
-    }
-    this._topClockRaf = requestAnimationFrame(tick);
+    }, 200);
   },
 
   renderGamesList() {
@@ -1738,7 +1737,7 @@ const Arena = {
           topEl.title = '';
           topEl.onclick = null;
           this._topGame = null;
-          if (this._topClockRaf) { cancelAnimationFrame(this._topClockRaf); this._topClockRaf = null; }
+          if (this._topClockRaf) { clearInterval(this._topClockRaf); this._topClockRaf = null; }
           const phase = this.currentArenaState && this.currentArenaState.phase;
           if (phase === 'live' || phase === 'waiting') {
             topEl.innerHTML = this.renderTopGamePlaceholder(phase);
@@ -1751,7 +1750,7 @@ const Arena = {
       if (this.openPlayerName) { this.renderPlayerCard(); return; }
 
       const hash = JSON.stringify({
-        live: live.map(g => [g.lobbyId, g.fen, g.timeW, g.timeB]),
+        live: live.map(g => [g.lobbyId, g.fen, g.turn]),
         done: done.slice(0, 30).map(g => [g.white, g.black, g.result, g.finishedAt])
       });
       if (hash === this.lastGamesHash) return; this.lastGamesHash = hash;
@@ -2022,7 +2021,7 @@ const Swiss = {
     this.pageTimer = setInterval(() => {
       const s = document.getElementById('swissScreen');
       if (s && s.classList.contains('active') && !this.currentDetailId) this.refreshList();
-    }, 5000);
+    }, 8000);
   },
   refreshList() {
     App.socket.emit('swissListTournaments', (res) => {
@@ -2067,7 +2066,7 @@ const Swiss = {
     this.detailTimer = setInterval(() => {
       const s = document.getElementById('swissScreen');
       if (s && s.classList.contains('active') && this.currentDetailId) this.fetchDetail();
-    }, 4000);
+    }, 8000);
   },
   fetchDetail() {
     if (!this.currentDetailId) return;
@@ -2185,14 +2184,18 @@ const Swiss = {
     const nameEl = document.getElementById('swissCreateName');
     const roundsEl = document.getElementById('swissCreateRounds');
     const tcEl = document.getElementById('swissCreateTC');
-    if (!nameEl || !roundsEl || !tcEl) return;
+    const startsEl = document.getElementById('swissCreateStartsAt');
+    if (!nameEl || !roundsEl || !tcEl || !startsEl) return;
     const name = (nameEl.value || '').trim();
     const rounds = Number(roundsEl.value) || 20;
     const tcRaw = tcEl.value;
     let timeControl, increment;
     if (tcRaw === '3+2') { timeControl = 3; increment = 2; }
     else { timeControl = Number(tcRaw); increment = 0; }
-    App.socket.emit('swissCreateTournament', { name, rounds, timeControl, increment }, (res) => {
+    const startsAtVal = startsEl.value;
+    if (!startsAtVal) { alert('Укажите время начала турнира'); return; }
+    const startsAt = new Date(startsAtVal).getTime();
+    App.socket.emit('swissCreateTournament', { name, rounds, timeControl, increment, startsAt }, (res) => {
       if (!res || !res.ok) { alert((res && res.msg) || 'Ошибка'); return; }
       nameEl.value = '';
       this.refreshList();
